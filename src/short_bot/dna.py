@@ -5,6 +5,9 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+from short_bot.claude_cli import run_json
+from short_bot.locale import LANGUAGE_NAMES
+
 
 ARCHETYPES = ["newscast", "tabloid", "magazine", "kinetic", "dark-tech", "stadium", "meme"]
 
@@ -56,3 +59,114 @@ class DnaSpec(BaseModel):
     category_icon: str = ""
     search_query_template: str = "{header_top} {header_bottom} {category}"
     persona_summary: str = Field(max_length=400)
+
+
+def build_dna_prompt(
+    name: str,
+    keywords: list[str],
+    language: str,
+    topic_hint: str = "",
+    target_audience: str = "",
+) -> str:
+    lang_name = LANGUAGE_NAMES.get(language, language)
+    return f"""Sen bir YouTube Shorts kanalının görsel/içerik kimliğini (DNA) tasarlıyorsun.
+
+KANAL BİLGİLERİ:
+- İsim: {name}
+- Dil: {lang_name}
+- Keyword'ler: {", ".join(keywords)}
+- Konu ipucu: {topic_hint}
+- Hedef kitle: {target_audience}
+
+GÖREV: Bu kanal için bir DNA üret. Kararlarını kanalın konusuna ve dilin
+kültürel bağlamına göre yap.
+
+ARCHETYPE SEÇİMİ (1 tane seç):
+- newscast → resmi haber, politika, ekonomi, son dakika kritik
+- tabloid → magazin, sansasyon, ünlü, skandal, viral dedikodu
+- magazine → kültür, sanat, lifestyle, weekend, romantik, zarif
+- kinetic → istatistik, alıntı, motivasyon, tek-vurgu, özlü söz
+- dark-tech → teknoloji, AI, oyun, hacker, fütürist, cyber
+- stadium → spor (futbol/basketbol/F1/...), heyecan, dinamik
+- meme → mizah, komedi, troll, viral video, gençlik
+
+DİL UYUMU:
+- voice/style/forbidden alanlarını {lang_name} dilinde yaz
+- headline_style_hint da o dilde
+- persona_summary tamamen o dilde
+
+PALETTE KARARLARI (archetype'a uygun ama kanala özgü override yapabilirsin):
+- newscast: kırmızı/lacivert/altın
+- tabloid: sarı/kırmızı/siyah, yüksek kontrast
+- magazine: bej/krem/burgundy/altın, sıcak
+- kinetic: tek vurgu rengi (neon yeşil/mor/mavi) + siyah
+- dark-tech: cyan/magenta/yeşil neon + koyu mor/siyah
+- stadium: takım/spor renkleri (yeşil/sarı, kırmızı/lacivert vb.)
+- meme: parlak mavi/sarı/pembe, Impact-vibe
+
+FONT KARARLARI:
+- headline: archetype'a uygun (newscast→Inter, tabloid→Bebas Neue,
+  magazine→Playfair Display, kinetic→Anton, dark-tech→JetBrains Mono,
+  stadium→Oswald, meme→Impact)
+- body: okunabilir genelci (Inter veya Roboto)
+- google_imports: Google Fonts URL fragment formatında ("Inter:wght@400;700;900",
+  "Bebas+Neue", "Playfair+Display:ital@1")
+
+TONE KARARLARI:
+- voice: 2-5 sıfat dizisi
+- style: 2-4 sıfat dizisi
+- forbidden: bu kanalda ASLA olmayacak 3-7 yaklaşım
+- sentence_max_words: archetype'a göre 8-22 arası
+- paragraph_sentences: [min, max], magazine için (5,7), tabloid için (2,3) gibi
+- body_max_chars: 50 (kinetic) — 600 (magazine) arası
+- headline_style_hint: bu kanalın tipik başlık formatı (1 cümle açıklama)
+
+BANNER/HIGHLIGHT/CHIP:
+- banner_shape: flat | ribbon | slanted | sharp
+- highlight_style: bg-flat | underline | marker | neon
+- chip_style: rounded | sharp | pill
+
+CATEGORY_ICON:
+- 1 emoji veya kısa unicode (örn. 💼 / 🎬 / ⚽ / 💻)
+
+SEARCH_QUERY_TEMPLATE:
+- DDG image search format string
+- Default: "{{header_top}} {{header_bottom}} {{category}}"
+- Spor için: "{{header_top}} {{category}} football match"
+- Tech için: "{{header_top}} technology"
+
+ÇIKTI: SADECE aşağıdaki JSON formatında yanıtla, başka metin yazma:
+{{
+  "archetype": "...",
+  "palette": {{"primary": "#...", "accent": "#...", "bg_gradient": ["#...","#..."],
+              "body_bg": ["#...","#..."], "text_main": "#...", "text_muted": "#..."}},
+  "fonts": {{"headline": "...", "body": "...", "google_imports": [...]}},
+  "tone": {{"voice": "...", "style": "...", "forbidden": [...],
+           "sentence_max_words": <int>, "paragraph_sentences": [<int>,<int>],
+           "body_max_chars": <int>, "headline_style_hint": "..."}},
+  "banner_shape": "...",
+  "highlight_style": "...",
+  "chip_style": "...",
+  "category_icon": "...",
+  "search_query_template": "...",
+  "persona_summary": "..."
+}}
+"""
+
+
+def generate_dna(
+    *,
+    name: str,
+    keywords: list[str],
+    language: str,
+    topic_hint: str = "",
+    target_audience: str = "",
+    claude_path: str = "claude",
+    model: str = "opus",
+) -> DnaSpec:
+    prompt = build_dna_prompt(name, keywords, language, topic_hint, target_audience)
+    return run_json(
+        prompt, DnaSpec,
+        claude_path=claude_path, model=model,
+        retries=2, timeout_s=180,
+    )
