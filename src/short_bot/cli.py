@@ -167,6 +167,184 @@ def _cmd_create_channel(args) -> int:
     return 0
 
 
+def _add_regenerate_dna(sub):
+    p = sub.add_parser(
+        "regenerate-dna",
+        help="Re-run DNA generation for an existing channel, overwrite YAML + CSS",
+    )
+    p.add_argument("--channel", required=True, help="Channel slug")
+    p.add_argument("--config-dir", default="config")
+    p.add_argument("--templates-dir", default="templates")
+    p.add_argument("--topic-hint", default="", help="Free-form topic brief")
+    p.add_argument("--target-audience", default="", help="Free-form audience brief")
+    p.set_defaults(func=_cmd_regenerate_dna)
+
+
+def _add_rebuild_css(sub):
+    p = sub.add_parser(
+        "rebuild-css",
+        help="Rebuild CSS from existing DNA in channel YAML (no LLM call)",
+    )
+    p.add_argument("--channel", required=True, help="Channel slug")
+    p.add_argument("--config-dir", default="config")
+    p.add_argument("--templates-dir", default="templates")
+    p.set_defaults(func=_cmd_rebuild_css)
+
+
+def _add_migrate_channel(sub):
+    p = sub.add_parser(
+        "migrate-channel",
+        help="Re-save an existing channel YAML with the current schema (backward-compat migration)",
+    )
+    p.add_argument("--channel", required=True, help="Channel slug")
+    p.add_argument("--config-dir", default="config")
+    p.add_argument("--templates-dir", default="templates")
+    p.add_argument(
+        "--with-dna",
+        action="store_true",
+        help="Also regenerate DNA via LLM after migrating",
+    )
+    p.add_argument("--topic-hint", default="", help="Free-form topic brief (used with --with-dna)")
+    p.add_argument("--target-audience", default="", help="Free-form audience brief (used with --with-dna)")
+    p.set_defaults(func=_cmd_migrate_channel)
+
+
+def _cmd_regenerate_dna(args) -> int:
+    """Load channel, call generate_dna, write updated YAML + new CSS."""
+    config_dir = Path(args.config_dir)
+    templates_dir = Path(args.templates_dir)
+    yaml_path = config_dir / "channels" / f"{args.channel}.yaml"
+
+    if not yaml_path.exists():
+        print(f"Error: channel '{args.channel}' not found at {yaml_path}", file=sys.stderr)
+        return 1
+
+    channel = load_channel(yaml_path)
+    settings = load_settings(config_dir / "settings.yaml")
+
+    print(f"Regenerating DNA for '{channel.name}' via {settings.claude_models.get('dna', 'opus')}...")
+    try:
+        dna = generate_dna(
+            name=channel.name,
+            keywords=list(channel.keywords),
+            language=channel.language,
+            topic_hint=getattr(args, "topic_hint", ""),
+            target_audience=getattr(args, "target_audience", ""),
+            claude_path=settings.claude_cli_path,
+            model=settings.claude_models.get("dna", "opus"),
+        )
+    except Exception as e:
+        print(f"Error: DNA generation failed: {e}", file=sys.stderr)
+        return 4
+
+    print(f"  → archetype={dna.archetype}")
+    print(f"  → palette: primary={dna.palette.primary} accent={dna.palette.accent}")
+
+    css = build_css_override(dna)
+    css_path = templates_dir / "css" / f"{args.channel}.css"
+    css_path.parent.mkdir(parents=True, exist_ok=True)
+    css_path.write_text(css, encoding="utf-8")
+    print(f"  wrote {css_path}")
+
+    # Rebuild ChannelConfig with updated DNA (use dataclasses.replace for frozen dataclass)
+    import dataclasses
+    updated = dataclasses.replace(
+        channel,
+        dna=dna,
+        template=dna.archetype,
+        colors={
+            "primary": dna.palette.primary,
+            "accent": dna.palette.accent,
+            "bg_gradient": dna.palette.bg_gradient,
+        },
+    )
+    save_channel(yaml_path, updated)
+    print(f"  wrote {yaml_path}")
+    return 0
+
+
+def _cmd_rebuild_css(args) -> int:
+    """Load channel YAML, build CSS from existing DNA — no LLM call."""
+    config_dir = Path(args.config_dir)
+    templates_dir = Path(args.templates_dir)
+    yaml_path = config_dir / "channels" / f"{args.channel}.yaml"
+
+    if not yaml_path.exists():
+        print(f"Error: channel '{args.channel}' not found at {yaml_path}", file=sys.stderr)
+        return 1
+
+    channel = load_channel(yaml_path)
+
+    if channel.dna is None:
+        print(
+            f"Error: channel '{args.channel}' has no DNA block in YAML. "
+            "Run regenerate-dna first.",
+            file=sys.stderr,
+        )
+        return 2
+
+    css = build_css_override(channel.dna)
+    css_path = templates_dir / "css" / f"{args.channel}.css"
+    css_path.parent.mkdir(parents=True, exist_ok=True)
+    css_path.write_text(css, encoding="utf-8")
+    print(f"  wrote {css_path}")
+    return 0
+
+
+def _cmd_migrate_channel(args) -> int:
+    """Re-save channel YAML with current schema; optionally regenerate DNA with --with-dna."""
+    config_dir = Path(args.config_dir)
+    yaml_path = config_dir / "channels" / f"{args.channel}.yaml"
+
+    if not yaml_path.exists():
+        print(f"Error: channel '{args.channel}' not found at {yaml_path}", file=sys.stderr)
+        return 1
+
+    # load_channel handles all backward-compat (template:default → newscast, language defaults to tr)
+    channel = load_channel(yaml_path)
+    print(f"Loaded '{channel.name}' (slug={channel.slug}, language={channel.language}, template={channel.template})")
+
+    if getattr(args, "with_dna", False):
+        settings = load_settings(config_dir / "settings.yaml")
+        print(f"Regenerating DNA via {settings.claude_models.get('dna', 'opus')}...")
+        try:
+            dna = generate_dna(
+                name=channel.name,
+                keywords=list(channel.keywords),
+                language=channel.language,
+                topic_hint=getattr(args, "topic_hint", ""),
+                target_audience=getattr(args, "target_audience", ""),
+                claude_path=settings.claude_cli_path,
+                model=settings.claude_models.get("dna", "opus"),
+            )
+        except Exception as e:
+            print(f"Error: DNA generation failed: {e}", file=sys.stderr)
+            return 4
+
+        import dataclasses
+        channel = dataclasses.replace(
+            channel,
+            dna=dna,
+            template=dna.archetype,
+            colors={
+                "primary": dna.palette.primary,
+                "accent": dna.palette.accent,
+                "bg_gradient": dna.palette.bg_gradient,
+            },
+        )
+
+        templates_dir = Path(args.templates_dir)
+        css = build_css_override(dna)
+        css_path = templates_dir / "css" / f"{args.channel}.css"
+        css_path.parent.mkdir(parents=True, exist_ok=True)
+        css_path.write_text(css, encoding="utf-8")
+        print(f"  wrote {css_path}")
+
+    save_channel(yaml_path, channel)
+    print(f"  wrote {yaml_path} (migrated)")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="short-bot")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -174,6 +352,9 @@ def main(argv: list[str] | None = None) -> int:
     _add_init(sub)
     _add_list(sub)
     _add_create_channel(sub)
+    _add_regenerate_dna(sub)
+    _add_rebuild_css(sub)
+    _add_migrate_channel(sub)
     args = parser.parse_args(argv)
     return args.func(args)
 

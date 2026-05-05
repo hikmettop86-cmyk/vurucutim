@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from short_bot.cli import _cmd_create_channel
+from short_bot.cli import _cmd_create_channel, _cmd_regenerate_dna, _cmd_rebuild_css, _cmd_migrate_channel
 from short_bot.dna import DnaSpec, DnaPalette, DnaFonts, DnaTone
 
 
@@ -81,3 +81,141 @@ def test_create_channel_invalid_language_returns_error(cli_env):
     })()
     rc = _cmd_create_channel(args)
     assert rc != 0
+
+
+def _write_channel_yaml(cli_env, slug="test-kanal"):
+    """Write a minimal valid channel YAML for tests that need an existing channel."""
+    yaml_content = f"""\
+slug: {slug}
+name: Test Kanal
+keywords: [a, b, c]
+language: tr
+schedule_cron: "0 8,14,20 * * *"
+duration_s: 6
+min_score: 6.0
+max_candidates_per_run: 10
+template: newscast
+colors:
+  primary: "#c81e1e"
+  accent: "#ffea3b"
+  bg_gradient: ["#1a3b6b", "#0a1a3b"]
+handle: "@test-kanal"
+output_dir: output/{slug}
+enabled: true
+cta:
+  enabled: false
+  text: ""
+  icons: []
+  duration_s: 0
+  show_handle: false
+"""
+    yaml_path = cli_env / "config" / "channels" / f"{slug}.yaml"
+    yaml_path.write_text(yaml_content, encoding="utf-8")
+    return yaml_path
+
+
+def test_regenerate_dna_overwrites_yaml_and_css(cli_env):
+    """regenerate-dna should call generate_dna, update YAML and write CSS."""
+    slug = "test-kanal"
+    yaml_path = _write_channel_yaml(cli_env, slug)
+    css_dir = cli_env / "templates" / "css"
+
+    fake = _fake_dna(archetype="newscast")
+    args = type("Args", (), {
+        "channel": slug,
+        "config_dir": "config",
+        "templates_dir": "templates",
+        "topic_hint": "",
+        "target_audience": "",
+    })()
+    with patch("short_bot.cli.generate_dna", return_value=fake) as mock_gen:
+        rc = _cmd_regenerate_dna(args)
+
+    assert rc == 0
+    mock_gen.assert_called_once()
+    css_path = css_dir / f"{slug}.css"
+    assert css_path.exists()
+    assert "--primary: #c81e1e" in css_path.read_text(encoding="utf-8")
+    updated_yaml = yaml_path.read_text(encoding="utf-8")
+    assert "dna:" in updated_yaml
+
+
+def test_rebuild_css_no_llm_call(cli_env):
+    """rebuild-css must NOT call generate_dna; it only builds CSS from existing dna in YAML."""
+    import yaml as _yaml
+
+    slug = "test-kanal"
+    yaml_path = _write_channel_yaml(cli_env, slug)
+
+    # Add dna block directly to YAML
+    fake = _fake_dna(archetype="newscast")
+    data = _yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
+    data["dna"] = fake.model_dump(mode="json")
+    yaml_path.write_text(
+        _yaml.safe_dump(data, allow_unicode=True, sort_keys=False, default_flow_style=False),
+        encoding="utf-8",
+    )
+
+    args = type("Args", (), {
+        "channel": slug,
+        "config_dir": "config",
+        "templates_dir": "templates",
+    })()
+    with patch("short_bot.cli.generate_dna") as mock_gen:
+        rc = _cmd_rebuild_css(args)
+
+    assert rc == 0
+    mock_gen.assert_not_called()
+    css_path = cli_env / "templates" / "css" / f"{slug}.css"
+    assert css_path.exists()
+    assert "--primary: #c81e1e" in css_path.read_text(encoding="utf-8")
+
+
+def test_migrate_channel_adds_language_field(cli_env):
+    """migrate-channel (without --with-dna) should save YAML with language field, no LLM."""
+    slug = "legacy-kanal"
+
+    # Write a legacy-style YAML without 'language' field
+    legacy_yaml = """\
+slug: legacy-kanal
+name: Legacy Kanal
+keywords: [x, y]
+schedule_cron: "0 8 * * *"
+duration_s: 6
+min_score: 6.0
+max_candidates_per_run: 10
+template: default
+colors:
+  primary: "#c81e1e"
+  accent: "#ffea3b"
+  bg_gradient: ["#1a3b6b", "#0a1a3b"]
+handle: "@legacy-kanal"
+output_dir: output/legacy-kanal
+enabled: true
+cta:
+  enabled: false
+  text: ""
+  icons: []
+  duration_s: 0
+  show_handle: false
+"""
+    yaml_path = cli_env / "config" / "channels" / f"{slug}.yaml"
+    yaml_path.write_text(legacy_yaml, encoding="utf-8")
+
+    args = type("Args", (), {
+        "channel": slug,
+        "config_dir": "config",
+        "templates_dir": "templates",
+        "with_dna": False,
+        "topic_hint": "",
+        "target_audience": "",
+    })()
+    with patch("short_bot.cli.generate_dna") as mock_gen:
+        rc = _cmd_migrate_channel(args)
+
+    assert rc == 0
+    mock_gen.assert_not_called()
+    updated = yaml_path.read_text(encoding="utf-8")
+    assert "language:" in updated
+    # template: default → newscast backward-compat
+    assert "newscast" in updated
