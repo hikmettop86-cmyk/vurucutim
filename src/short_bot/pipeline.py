@@ -37,6 +37,8 @@ from short_bot.generated_db import (
 )
 from short_bot.image_picker import pick_image_for_generator
 
+_GENERATOR_TOPIC_DIST_DAYS = 7   # window for topic_distribution Sonnet hint
+
 
 @dataclass
 class RunResult:
@@ -299,7 +301,7 @@ def _run_generator(*, channel, run_id, log, eng, settings,
     forbidden = recent_generated_texts(
         eng, channel.slug, limit=channel.generator.forbidden_lookback,
     )
-    topic_dist = topic_distribution(eng, channel.slug, days=7)
+    topic_dist = topic_distribution(eng, channel.slug, days=_GENERATOR_TOPIC_DIST_DAYS)
     log.info(f"  → forbidden={len(forbidden)} topic_dist={topic_dist}")
 
     fuzzy_threshold = (channel.generator.fuzzy_threshold
