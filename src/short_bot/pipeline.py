@@ -1,0 +1,198 @@
+"""Pipeline orchestrator: runs all 8 stages, persists to DB, writes per-run log."""
+from __future__ import annotations
+
+import logging
+import re
+import shutil
+import tempfile
+import time
+import unicodedata
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+
+from filelock import FileLock, Timeout
+
+from short_bot.config import ChannelConfig, Settings
+from short_bot.db import (
+    init_db, mark_processed, record_short, record_rss_item,
+    start_run, finish_run,
+)
+from short_bot.models import RenderJob
+from short_bot.fetcher import fetch_rss
+from short_bot.dedup import filter_new
+from short_bot.scorer import score_items, select_top
+from short_bot.extractor import extract_article
+from short_bot.script_writer import write_script
+from short_bot.assets import download_and_blur_thumb, pick_music
+from short_bot.renderer import render_frames
+from short_bot.composer import compose_video
+
+
+@dataclass
+class RunResult:
+    run_id: int
+    status: str           # 'success' | 'failed' | 'no_candidates'
+    short_path: Path | None
+    error: str | None
+
+
+def _slugify(text: str, max_len: int = 60) -> str:
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(c for c in text if not unicodedata.combining(c))
+    text = re.sub(r"[^a-zA-Z0-9]+", "-", text).strip("-").lower()
+    return text[:max_len] or "haber"
+
+
+def _setup_logger(log_path: Path) -> logging.Logger:
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    logger = logging.getLogger(f"shortbot.run.{log_path.stem}")
+    logger.setLevel(logging.INFO)
+    logger.handlers = []
+    fh = logging.FileHandler(log_path, encoding="utf-8")
+    fh.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+    logger.addHandler(fh)
+    sh = logging.StreamHandler()
+    sh.setFormatter(logging.Formatter("[%(levelname)s] %(message)s"))
+    logger.addHandler(sh)
+    return logger
+
+
+def run_pipeline(
+    *,
+    channel: ChannelConfig,
+    settings: Settings,
+    db_path: Path,
+    music_root: Path,
+    templates_dir: Path,
+    cache_dir: Path,
+    logs_dir: Path,
+    lock_dir: Path | None = None,
+    trigger: str = "cli",
+) -> RunResult:
+    eng = init_db(db_path)
+    log_path = logs_dir / f"{datetime.utcnow():%Y%m%d_%H%M%S}_{channel.slug}.log"
+    log_rel = str(log_path)
+    log = _setup_logger(log_path)
+    run_id = start_run(eng, channel.slug, trigger=trigger, log_path=log_rel)
+
+    lock_dir = Path(lock_dir) if lock_dir else Path("data/locks")
+    lock_path = lock_dir / f"{channel.slug}.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    lock = FileLock(str(lock_path), timeout=0)
+
+    try:
+        with lock:
+            log.info(f"=== run {run_id} channel={channel.slug} trigger={trigger} ===")
+
+            log.info("[1/8] fetch_rss")
+            items = fetch_rss(channel.keywords, channel.rss_locale)
+            log.info(f"  → {len(items)} items")
+
+            log.info("[2/8] dedup")
+            new_items = filter_new(eng, items, channel.slug,
+                                    fuzzy_threshold=settings.fuzzy_dedup_threshold)
+            log.info(f"  → {len(new_items)} new")
+            for old in items:
+                if old not in new_items:
+                    record_rss_item(eng, guid=old.guid, channel=channel.slug,
+                                    title=old.title, link=old.link, source=old.source,
+                                    pub_date=old.pub_date, thumb_url=old.thumb_url,
+                                    score=None, status="duplicate")
+
+            if not new_items:
+                log.info("no candidates → finish")
+                finish_run(eng, run_id, status="no_candidates", short_id=None, error=None)
+                return RunResult(run_id=run_id, status="no_candidates", short_path=None, error=None)
+
+            log.info("[3/8] score_items")
+            candidates = new_items[:channel.max_candidates_per_run]
+            scored = score_items(candidates, claude_path=settings.claude_cli_path)
+            for s in scored:
+                record_rss_item(eng, guid=s.item.guid, channel=channel.slug,
+                                title=s.item.title, link=s.item.link, source=s.item.source,
+                                pub_date=s.item.pub_date, thumb_url=s.item.thumb_url,
+                                score=s.score, status="below_threshold")
+            top = select_top(scored, min_score=channel.min_score, n=1)
+            if not top:
+                log.info(f"no item ≥ {channel.min_score} → finish")
+                finish_run(eng, run_id, status="no_candidates", short_id=None, error=None)
+                return RunResult(run_id=run_id, status="no_candidates", short_path=None, error=None)
+            picked = top[0]
+            log.info(f"  → picked {picked.item.guid} (score={picked.score})")
+
+            log.info("[4/8] extract_article")
+            body = extract_article(picked.item.link)
+            if body is None:
+                body = picked.item.description or picked.item.title
+                log.warning("  trafilatura empty → fallback description")
+            log.info(f"  → body {len(body)} chars")
+
+            log.info("[5/8] write_script")
+            script = write_script(picked.item, body, claude_path=settings.claude_cli_path)
+            log.info(f"  → {script.header_top} | {script.header_bottom}")
+
+            log.info("[6/8] assets")
+            bg = None
+            if picked.item.thumb_url:
+                bg = download_and_blur_thumb(picked.item.thumb_url, cache_dir)
+            music = pick_music(music_root, mood=script.mood)
+            log.info(f"  → bg={'cached' if bg else 'none'} music={music.name}")
+
+            log.info("[7/8] render_frames")
+            job = RenderJob(
+                script=script,
+                bg_image_path=bg,
+                music_path=music,
+                channel_colors=channel.colors,
+                handle=channel.handle,
+                duration_s=channel.duration_s,
+                cta_enabled=channel.cta_enabled,
+                cta_text=channel.cta_text,
+                cta_icons=channel.cta_icons,
+                cta_duration_s=channel.cta_duration_s,
+                cta_show_handle=channel.cta_show_handle,
+            )
+
+            with tempfile.TemporaryDirectory() as tmpd:
+                frames_dir = Path(tmpd) / "frames"
+                t0 = time.perf_counter()
+                template_path = templates_dir / f"{channel.template}.html.j2"
+                render_frames(job, template_path, frames_dir,
+                              fps=30, browser=settings.playwright_browser)
+
+                log.info("[8/8] compose_video")
+                out_dir = Path(channel.output_dir) / channel.slug
+                out_dir.mkdir(parents=True, exist_ok=True)
+                slug = _slugify(picked.item.title)
+                out_path = out_dir / f"{datetime.utcnow():%Y-%m-%d}_{slug}.mp4"
+                compose_video(frames_dir, music, out_path,
+                              fps=30, ffmpeg_path=settings.ffmpeg_path)
+                render_ms = int((time.perf_counter() - t0) * 1000)
+                log.info(f"  → {out_path.name} ({render_ms}ms)")
+
+            mark_processed(eng, picked.item.guid, picked.item.title, channel.slug)
+            short_id = record_short(eng,
+                channel=channel.slug, rss_item_guid=picked.item.guid,
+                title=script.header_top + " " + script.header_bottom,
+                file_path=str(out_path), duration_s=channel.duration_s,
+                script_json=script.model_dump_json(), render_ms=render_ms,
+            )
+            record_rss_item(eng, guid=picked.item.guid, channel=channel.slug,
+                            title=picked.item.title, link=picked.item.link,
+                            source=picked.item.source, pub_date=picked.item.pub_date,
+                            thumb_url=picked.item.thumb_url,
+                            score=picked.score, status="selected")
+            finish_run(eng, run_id, status="success", short_id=short_id, error=None)
+            log.info(f"=== success short_id={short_id} ===")
+            return RunResult(run_id=run_id, status="success", short_path=out_path, error=None)
+
+    except Timeout:
+        finish_run(eng, run_id, status="failed", short_id=None,
+                   error="lock busy: pipeline already running for this channel")
+        return RunResult(run_id=run_id, status="failed", short_path=None,
+                         error="lock busy")
+    except Exception as e:
+        log.exception("pipeline failed")
+        finish_run(eng, run_id, status="failed", short_id=None, error=str(e))
+        return RunResult(run_id=run_id, status="failed", short_path=None, error=str(e))
