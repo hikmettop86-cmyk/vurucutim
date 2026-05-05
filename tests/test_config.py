@@ -187,3 +187,136 @@ def test_load_channel_invalid_language_raises(tmp_path):
     )
     with pytest.raises(ValueError, match="language"):
         load_channel(tmp_path / "ch.yaml")
+
+
+def test_load_channel_with_dna_block(tmp_path):
+    yaml_text = """slug: test
+name: Test
+language: de
+keywords: [a]
+schedule_cron: '0 * * * *'
+duration_s: 30
+min_score: 8.0
+max_candidates_per_run: 30
+template: stadium
+colors:
+  primary: '#0a4d2a'
+  accent: '#ffd700'
+  bg_gradient: ['#1a8b3a','#0a4d1a']
+handle: '@x'
+output_dir: output/test
+enabled: true
+cta: {enabled: false, text: '', icons: [], duration_s: 0, show_handle: false}
+dna:
+  archetype: stadium
+  palette:
+    primary: '#0a4d2a'
+    accent: '#ffd700'
+    bg_gradient: ['#1a8b3a','#0a4d1a']
+    body_bg: ['#0a1a0a','#000000']
+  fonts:
+    headline: 'Bebas Neue'
+    body: 'Inter'
+    google_imports: ['Bebas+Neue']
+  tone:
+    voice: 'leidenschaftlich'
+    style: 'dynamisch'
+    forbidden: []
+    sentence_max_words: 14
+    paragraph_sentences: [3, 4]
+    body_max_chars: 280
+    headline_style_hint: ''
+  banner_shape: slanted
+  highlight_style: marker
+  chip_style: pill
+  category_icon: '⚽'
+  search_query_template: '{header_top} football'
+  persona_summary: 'Spor kanalı'
+"""
+    (tmp_path / "ch.yaml").write_text(yaml_text, encoding="utf-8")
+    c = load_channel(tmp_path / "ch.yaml")
+    assert c.template == "stadium"
+    assert c.dna is not None
+    assert c.dna.archetype == "stadium"
+    assert c.dna.palette.primary == "#0a4d2a"
+    assert c.dna.tone.body_max_chars == 280
+
+
+def test_load_channel_no_dna_block_returns_none(tmp_path):
+    (tmp_path / "ch.yaml").write_text(
+        "slug: test\nname: Test\nlanguage: tr\nkeywords: []\n"
+        "schedule_cron: ''\nduration_s: 30\nmin_score: 0\n"
+        "max_candidates_per_run: 1\ntemplate: newscast\n"
+        "colors: {primary: '#000000', accent: '#ffffff', bg_gradient: ['#000000','#111111']}\n"
+        "handle: '@x'\noutput_dir: x\nenabled: true\n"
+        "cta: {enabled: false, text: '', icons: [], duration_s: 0, show_handle: false}\n",
+        encoding="utf-8",
+    )
+    c = load_channel(tmp_path / "ch.yaml")
+    assert c.dna is None
+    assert c.template == "newscast"
+
+
+def test_load_channel_template_dna_archetype_mismatch_raises(tmp_path):
+    yaml_text = """slug: test
+name: Test
+language: tr
+keywords: []
+schedule_cron: ''
+duration_s: 30
+min_score: 0
+max_candidates_per_run: 1
+template: newscast
+colors: {primary: '#000000', accent: '#ffffff', bg_gradient: ['#000000','#111111']}
+handle: '@x'
+output_dir: x
+enabled: true
+cta: {enabled: false, text: '', icons: [], duration_s: 0, show_handle: false}
+dna:
+  archetype: tabloid
+  palette:
+    primary: '#ffea3b'
+    accent: '#c81e1e'
+    bg_gradient: ['#ffea3b','#ff9999']
+    body_bg: ['#ffffff','#eeeeee']
+  fonts: {headline: Inter, body: Inter, google_imports: []}
+  tone: {voice: x, style: y, forbidden: [], sentence_max_words: 14, paragraph_sentences: [2,3], body_max_chars: 200, headline_style_hint: ''}
+  banner_shape: flat
+  highlight_style: bg-flat
+  chip_style: rounded
+  category_icon: ''
+  search_query_template: '{header_top}'
+  persona_summary: ''
+"""
+    (tmp_path / "ch.yaml").write_text(yaml_text, encoding="utf-8")
+    with pytest.raises(ValueError, match="template.*archetype"):
+        load_channel(tmp_path / "ch.yaml")
+
+
+def test_load_channel_legacy_template_default_maps_to_newscast(tmp_path):
+    """Backward-compat: 'template: default' should be loaded as 'newscast'."""
+    (tmp_path / "ch.yaml").write_text(
+        "slug: test\nname: Test\nlanguage: tr\nkeywords: []\n"
+        "schedule_cron: ''\nduration_s: 30\nmin_score: 0\n"
+        "max_candidates_per_run: 1\ntemplate: default\n"
+        "colors: {primary: '#000000', accent: '#ffffff', bg_gradient: ['#000000','#111111']}\n"
+        "handle: '@x'\noutput_dir: x\nenabled: true\n"
+        "cta: {enabled: false, text: '', icons: [], duration_s: 0, show_handle: false}\n",
+        encoding="utf-8",
+    )
+    c = load_channel(tmp_path / "ch.yaml")
+    assert c.template == "newscast"
+
+
+def test_load_channel_with_script_model_override(tmp_path):
+    (tmp_path / "ch.yaml").write_text(
+        "slug: test\nname: Test\nlanguage: tr\nkeywords: []\n"
+        "schedule_cron: ''\nduration_s: 30\nmin_score: 0\n"
+        "max_candidates_per_run: 1\ntemplate: newscast\nscript_model: sonnet\n"
+        "colors: {primary: '#000000', accent: '#ffffff', bg_gradient: ['#000000','#111111']}\n"
+        "handle: '@x'\noutput_dir: x\nenabled: true\n"
+        "cta: {enabled: false, text: '', icons: [], duration_s: 0, show_handle: false}\n",
+        encoding="utf-8",
+    )
+    c = load_channel(tmp_path / "ch.yaml")
+    assert c.script_model == "sonnet"

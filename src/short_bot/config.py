@@ -5,6 +5,7 @@ import re
 
 import yaml
 
+from short_bot.dna import DnaSpec
 from short_bot.locale import RSS_LOCALES, SUPPORTED_LANGUAGES
 
 SLUG_RE = re.compile(r"^[a-z0-9\-]+$")
@@ -43,6 +44,8 @@ class ChannelConfig:
     cta_duration_s: int
     cta_show_handle: bool
     language: str = "tr"
+    dna: DnaSpec | None = None
+    script_model: str | None = None
 
 
 def load_settings(path: Path) -> Settings:
@@ -74,6 +77,19 @@ def load_channel(path: Path) -> ChannelConfig:
         )
     rss_locale = data.get("rss_locale") or RSS_LOCALES[language]
 
+    # Backward-compat: 'template: default' → 'newscast'
+    template = data.get("template", "newscast")
+    if template == "default":
+        template = "newscast"
+
+    # Optional DNA block
+    dna_data = data.get("dna")
+    dna = DnaSpec.model_validate(dna_data) if dna_data else None
+    if dna is not None and dna.archetype != template:
+        raise ValueError(
+            f"channel.template ({template!r}) must match dna.archetype ({dna.archetype!r})"
+        )
+
     cta = data.get("cta", {})
     return ChannelConfig(
         slug=slug,
@@ -84,7 +100,7 @@ def load_channel(path: Path) -> ChannelConfig:
         duration_s=int(data["duration_s"]),
         min_score=float(data["min_score"]),
         max_candidates_per_run=int(data["max_candidates_per_run"]),
-        template=data["template"],
+        template=template,
         colors=dict(data["colors"]),
         handle=data["handle"],
         output_dir=data["output_dir"],
@@ -95,6 +111,8 @@ def load_channel(path: Path) -> ChannelConfig:
         cta_duration_s=int(cta.get("duration_s", 4)),
         cta_show_handle=bool(cta.get("show_handle", True)),
         language=language,
+        dna=dna,
+        script_model=data.get("script_model"),
     )
 
 
@@ -122,6 +140,11 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
             "show_handle": cfg.cta_show_handle,
         },
     }
+    if cfg.script_model:
+        data["script_model"] = cfg.script_model
+    if cfg.dna is not None:
+        # mode='json' → tuple becomes list, ready for YAML round-trip
+        data["dna"] = cfg.dna.model_dump(mode="json")
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     Path(path).write_text(
         yaml.safe_dump(data, allow_unicode=True, sort_keys=False, default_flow_style=False),
