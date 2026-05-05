@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<title>Short</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1080px; height: 1920px; overflow: hidden; background: #000;
+    font-family: 'Inter', -apple-system, sans-serif; color: #fff; }
+
+  .stage { position: relative; width: 1080px; height: 1920px; }
+
+  /* HEADER (top banner) */
+  .header {
+    background: linear-gradient(90deg, {{ colors.primary }}, {{ colors.primary_light }});
+    padding: 70px 50px 60px;
+    text-align: center;
+    font-weight: 900;
+    font-size: 130px;
+    line-height: 1.0;
+    letter-spacing: 1px;
+    box-shadow: 0 12px 0 rgba(0,0,0,.4);
+    position: relative;
+  }
+  .header .top { display: block; }
+  .header .bot { display: block; margin-top: 8px; }
+  .header .badge {
+    position: absolute; top: 24px; right: 24px;
+    background: #000; color: {{ colors.accent }};
+    font-size: 28px; font-weight: 800; letter-spacing: 1px;
+    padding: 10px 16px; border-radius: 8px;
+  }
+
+  /* PHOTO band */
+  .photo {
+    position: relative;
+    height: 720px;
+    background: linear-gradient(135deg, {{ colors.bg_gradient[0] }}, {{ colors.bg_gradient[1] }});
+    overflow: hidden;
+  }
+  .photo .bg-img {
+    position: absolute; inset: 0;
+    background-image: url('{{ bg_image_url|default("") }}');
+    background-size: cover; background-position: center;
+    {% if not bg_image_url %}display: none;{% endif %}
+  }
+  .photo .vignette { position: absolute; inset: 0;
+    background: radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,.55) 100%); }
+  .photo .corner {
+    position: absolute; top: 30px; left: 30px;
+    background: rgba(0,0,0,.78); color: #fff;
+    font-size: 30px; padding: 10px 18px; border-radius: 8px;
+    font-weight: 700; letter-spacing: 1px;
+  }
+  .photo .yellow {
+    position: absolute; bottom: 40px; left: 0; right: 0;
+    background: linear-gradient(90deg, {{ colors.accent }}, #ffcc00);
+    color: #000; padding: 28px 50px;
+    font-weight: 900; font-size: 64px; line-height: 1.05;
+    text-align: center;
+    transform: skewY(-1.5deg);
+    box-shadow: 0 8px 0 rgba(0,0,0,.4);
+  }
+
+  /* BODY paragraph */
+  .body {
+    background: linear-gradient(180deg, #1a1a2a, #0a0a1a);
+    padding: 60px 60px 200px;
+    font-size: 56px;
+    line-height: 1.55;
+    font-weight: 600;
+    color: #fff;
+  }
+  .body .hl-r { background: {{ colors.primary }}; color: #fff;
+    padding: 2px 14px; border-radius: 6px; font-weight: 700; }
+  .body .hl-y { background: {{ colors.accent }}; color: #000;
+    padding: 2px 14px; border-radius: 6px; font-weight: 700; }
+
+  /* PROGRESS bar */
+  .progress {
+    position: absolute; left: 0; right: 0; bottom: 84px; height: 8px;
+    background: rgba(255,255,255,.18);
+  }
+  .progress::after {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+    background: linear-gradient(90deg, {{ colors.accent }}, {{ colors.primary }});
+    animation: fill {{ duration_s }}s linear forwards;
+  }
+  @keyframes fill { from { width: 0; } to { width: 100%; } }
+
+  /* HANDLE */
+  .handle {
+    position: absolute; left: 0; right: 0; bottom: 30px;
+    text-align: center; color: #fff; opacity: .9;
+    font-size: 34px; font-weight: 600;
+  }
+
+  /* CTA overlay (last cta_duration_s seconds) */
+  {% if cta.enabled %}
+  .cta {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    background: linear-gradient(180deg, transparent, rgba(0,0,0,.92) 30%);
+    padding: 80px 60px 130px;
+    text-align: center;
+    opacity: 0;
+    transform: translateY(40px);
+    animation:
+      cta-in 0.5s ease-out {{ duration_s - cta.duration_s }}s forwards,
+      cta-out 0.5s ease-in {{ duration_s - 0.5 }}s forwards;
+  }
+  {% if cta.show_handle %}
+  .cta .handle-line { font-size: 48px; font-weight: 800; margin-bottom: 18px;
+    color: {{ colors.accent }}; }
+  {% endif %}
+  .cta .row {
+    display: flex; align-items: center; justify-content: center;
+    gap: 24px;
+    background: linear-gradient(90deg, {{ colors.primary }}, #ff5050);
+    padding: 28px 40px; border-radius: 16px;
+    box-shadow: 0 10px 0 rgba(0,0,0,.4);
+    font-size: 52px; font-weight: 900; letter-spacing: 1px;
+  }
+  .cta .icon { font-size: 64px; animation: pulse 0.9s infinite ease-in-out; }
+  @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.18); } }
+  @keyframes cta-in { to { opacity: 1; transform: translateY(0); } }
+  @keyframes cta-out { to { opacity: 0; transform: translateY(-10px); } }
+  /* Dim body during CTA so it's readable */
+  .body { animation: dim 0.5s ease-in {{ duration_s - cta.duration_s }}s forwards; }
+  @keyframes dim { to { opacity: 0.15; } }
+  {% endif %}
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="header">
+    <span class="badge">{{ category|default("HABER") }}</span>
+    <span class="top">{{ script.header_top }}</span>
+    <span class="bot">{{ script.header_bottom }}</span>
+  </div>
+
+  <div class="photo">
+    <div class="bg-img"></div>
+    <div class="vignette"></div>
+    <div class="corner">{{ script.category }}</div>
+    <div class="yellow">{{ script.photo_overlay }}</div>
+  </div>
+
+  <div class="body">{{ body_html|safe }}</div>
+
+  <div class="progress"></div>
+  <div class="handle">{{ handle }}</div>
+
+  {% if cta.enabled %}
+  <div class="cta">
+    {% if cta.show_handle %}<div class="handle-line">{{ handle }}</div>{% endif %}
+    <div class="row">
+      {% for icon in cta.icons %}<span class="icon">{{ icon }}</span>{% endfor %}
+      <span>{{ cta.text }}</span>
+    </div>
+  </div>
+  {% endif %}
+</div>
+</body>
+</html>
