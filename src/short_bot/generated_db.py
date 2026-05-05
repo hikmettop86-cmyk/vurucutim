@@ -16,6 +16,11 @@ from sqlalchemy.engine import Engine
 # (Wiring happens in Task 2; until then this table won't be auto-created.)
 metadata = MetaData()
 
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
 generated_items = Table(
     "generated_items", metadata,
     Column("id", Integer, primary_key=True, autoincrement=True),
@@ -24,14 +29,14 @@ generated_items = Table(
     Column("text_hash", String(64), nullable=False),
     Column("topic_tag", String, nullable=False),
     Column("language", String, nullable=False),
-    Column("created_at", DateTime, nullable=False),
+    Column("created_at", DateTime, nullable=False, default=_utcnow),
     Column("short_id", Integer),  # soft-ref to shorts.id; no FK across MetaData objects
     Column("status", String, nullable=False, default="used"),  # used | discarded
-    UniqueConstraint("channel", "text_hash", name="ix_generated_unique_hash"),
+    UniqueConstraint("channel", "text_hash", name="idx_generated_unique_hash"),
 )
-Index("ix_generated_recent", generated_items.c.channel,
+Index("idx_generated_recent", generated_items.c.channel,
       generated_items.c.created_at.desc())
-Index("ix_generated_topic", generated_items.c.channel,
+Index("idx_generated_topic", generated_items.c.channel,
       generated_items.c.topic_tag, generated_items.c.created_at.desc())
 
 
@@ -42,6 +47,7 @@ _WS_RE = re.compile(r"\s+")
 # In Turkish: İ → i (dotted I), I → ı (dotless i).
 # Python's str.lower() maps I → i (not ı), so we pre-substitute.
 _TR_UPPER_MAP = str.maketrans("İI", "iı")
+
 
 
 def normalize_for_hash(text: str) -> str:
@@ -63,10 +69,6 @@ def text_hash(text: str) -> str:
     return hashlib.sha256(normalize_for_hash(text).encode("utf-8")).hexdigest()
 
 
-def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
-
-
 def insert_generated(
     eng: Engine, *,
     channel: str, text: str, topic_tag: str, language: str,
@@ -78,7 +80,7 @@ def insert_generated(
         result = conn.execute(generated_items.insert().values(
             channel=channel, text=text, text_hash=h,
             topic_tag=topic_tag, language=language,
-            created_at=_utcnow(), short_id=short_id, status=status,
+            short_id=short_id, status=status,
         ))
         return result.inserted_primary_key[0]
 
