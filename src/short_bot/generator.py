@@ -34,7 +34,8 @@ def build_generator_prompt(
     topic_distribution: dict[str, int],
 ) -> str:
     ph = get_phrases(channel.language)
-    assert channel.generator is not None, "generator config required"
+    if channel.generator is None:
+        raise ValueError("build_generator_prompt requires channel.generator")
 
     if forbidden_texts:
         lines = "\n".join(f"{i+1}. {t!r}" for i, t in enumerate(forbidden_texts))
@@ -51,13 +52,13 @@ def build_generator_prompt(
     if topic_distribution:
         # Order ascending — least-used first, marked
         sorted_dist = sorted(topic_distribution.items(), key=lambda kv: kv[1])
-        max_count = max(topic_distribution.values()) if topic_distribution else 0
+        max_count = max(topic_distribution.values())
         lines = []
         for tag, count in sorted_dist:
             if count == 0:
-                marker = " ← HİÇ KULLANILMAMIŞ" if channel.language == "tr" else " ← UNUSED"
+                marker = ph["marker_unused"]
             elif count <= max_count // 3:
-                marker = " ← AZ" if channel.language == "tr" else " ← LOW"
+                marker = ph["marker_low"]
             else:
                 marker = ""
             lines.append(f"- {tag}: {count}{marker}")
@@ -69,7 +70,7 @@ def build_generator_prompt(
 
 {ph['channel_id']}:
 - {ph['topic']}: {channel.generator.topic}
-- {ph['language']}: {ph['language']}
+- {ph['language_label']}: {ph['language_name']}
 - Persona: {dna.persona_summary}
 - Voice: {dna.tone.voice}
 - Style: {dna.tone.style}
