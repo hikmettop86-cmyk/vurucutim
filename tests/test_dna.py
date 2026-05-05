@@ -276,3 +276,24 @@ def test_dna_custom_css_max_length_enforced():
             persona_summary="x",
             custom_css=long_css,
         )
+
+
+def test_build_css_appends_custom_css_when_present():
+    dna = _sample_dna(custom_css="body { background: red; }")
+    css = build_css_override(dna)
+    assert "/* Channel custom_css (Opus-generated) */" in css
+    assert "body { background: red; }" in css
+    # Ordering: custom_css must come AFTER structural rules
+    assert css.index("--primary") < css.index("/* Channel custom_css")
+
+
+def test_build_css_omits_custom_css_section_when_empty():
+    dna = _sample_dna(custom_css="")
+    css = build_css_override(dna)
+    assert "Channel custom_css" not in css
+
+
+def test_build_css_omits_custom_css_section_when_whitespace_only():
+    dna = _sample_dna(custom_css="   \n\n  ")
+    css = build_css_override(dna)
+    assert "Channel custom_css" not in css

@@ -294,4 +294,6 @@ html, body, .body, .handle, .stage {{ font-family: '{dna.fonts.body}', sans-seri
 .persistent {{ {_chip_css(dna.chip_style).replace(';', ' !important;')} }}
 .persistent.like, .persistent.sub {{ {_chip_css(dna.chip_style).replace(';', ' !important;')} }}
 """
+    if dna.custom_css.strip():
+        css += f"\n/* Channel custom_css (Opus-generated) */\n{dna.custom_css}\n"
     return css
