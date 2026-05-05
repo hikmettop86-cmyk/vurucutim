@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/">
+  <channel>
+    <title>Google News</title>
+    <link>https://news.google.com</link>
+    <description>tr</description>
+    <item>
+      <title>Merkez Bankası faizi 250 baz puan indirdi - Reuters TR</title>
+      <link>https://news.google.com/articles/CBMxxx</link>
+      <guid isPermaLink="false">CBMxxx</guid>
+      <pubDate>Tue, 05 May 2026 13:42:00 GMT</pubDate>
+      <description>&lt;p&gt;Karar piyasada şok etkisi yarattı.&lt;/p&gt;</description>
+      <source url="https://reuters.com">Reuters TR</source>
+      <media:thumbnail url="https://lh3.googleusercontent.com/proxy/abc.jpg" />
+    </item>
+    <item>
+      <title>Dolar 41 lirayı geçti - Habertürk</title>
+      <link>https://news.google.com/articles/CBMyyy</link>
+      <guid isPermaLink="false">CBMyyy</guid>
+      <pubDate>Tue, 05 May 2026 13:38:00 GMT</pubDate>
+      <description>Borsa sert düştü.</description>
+      <source url="https://haberturk.com">Habertürk</source>
+    </item>
+  </channel>
+</rss>
