@@ -39,7 +39,7 @@ def run_json(
     *,
     claude_path: str = "claude",
     retries: int = 2,
-    timeout_s: int = 90,
+    timeout_s: int = 180,
 ) -> T:
     """Invoke `claude -p PROMPT --output-format text` and parse output as JSON validating against `schema`.
 

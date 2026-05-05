@@ -5,7 +5,7 @@ rss_locale: "hl=tr&gl=TR&ceid=TR:tr"
 schedule_cron: "0 2,6,10,14,18,22 * * *"
 duration_s: 30
 min_score: 8.0
-max_candidates_per_run: 30
+max_candidates_per_run: 10
 template: default
 colors:
   primary: "#c81e1e"
