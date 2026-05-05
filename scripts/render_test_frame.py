@@ -45,7 +45,7 @@ def main():
         },
         handle="@HaberShortsTR",
         duration_s=6,
-        cta_enabled=True,
+        cta_enabled=False,
         cta_text="BEĞEN · ABONE OL · PAYLAŞ",
         cta_icons=["❤️", "🔔", "↗️"],
         cta_duration_s=3,
@@ -58,11 +58,11 @@ def main():
     out_dir = Path("tmp")
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # 3 timestamps: content (1.5s), early CTA entry (3.5s), CTA loop mid-cycle (5s)
+    # 3 timestamps: early (1s), mid (3.5s), end (5.8s) — should all look identical now
     timestamps_ms = {
-        "content_1500ms.png": 1500,
-        "cta_3500ms.png": 3500,
-        "cta_5000ms.png": 5000,
+        "v1_1000ms.png": 1000,
+        "v1_3500ms.png": 3500,
+        "v1_5800ms.png": 5800,
     }
 
     with sync_playwright() as p:

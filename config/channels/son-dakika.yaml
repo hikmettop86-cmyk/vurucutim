@@ -15,7 +15,9 @@ handle: "@HaberShortsTR"
 output_dir: output/son-dakika
 enabled: true
 cta:
-  enabled: true
+  # End-screen CTA is disabled — persistent BEĞEN/ABONE chips are shown throughout
+  # the video instead, so the viewer never gets a "video is ending" signal.
+  enabled: false
   text: "BEĞEN · ABONE OL · PAYLAŞ"
   icons: ["❤️", "🔔", "↗️"]
   duration_s: 3
