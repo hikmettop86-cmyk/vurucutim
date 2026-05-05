@@ -51,7 +51,7 @@ Sonuç: 7 archetype × ∞ override × 5 dil = pratik olarak her kanal kendine �
 | 4 | Diller | TR, EN, DE, ES, FR (5 dil) | Kullanıcı'nın belirlediği başlangıç set; Inter font Latin Extended hepsini destekler |
 | 5 | Opus üretim zamanı | Sadece kanal yaratılırken (deterministik) | Kanal "tanınabilir" kalsın; her Short'ta Opus pahalı + tutarsız |
 | 6 | Script schema | Tek Pydantic Script + archetype-specific prompt instructions | 7 ayrı schema bakım derdi; tek schema esnek + maliyetsiz |
-| 7 | Model split | Opus = DNA gen, Sonnet = scoring/script/image-verify | Opus yaratıcı tek-seferlik için ideal; Sonnet hızlı tekrarlı için yeterli |
+| 7 | Model split | Opus = DNA gen, **Haiku 4.5** = scoring/script/image-verify (default) | Opus yaratıcı tek-seferlik için ideal; Haiku 5x ucuz + yapılandırılmış JSON ve vision destekli; opsiyonel per-channel `script_model: sonnet` override |
 | 8 | CSS override yöntemi | Deterministik Python (DNA → CSS), inline injection (`{{ dna_css\|safe }}`) | LLM CSS yazımı israf + tutarsız; inline injection Playwright base URL sorununu önler |
 | 9 | Backward-compat | Mevcut son-dakika.yaml çalışmaya devam | language yoksa "tr", dna yoksa default fallback'ler |
 
@@ -257,9 +257,28 @@ dna:
 
 ```yaml
 claude_models:
-  dna: opus
-  default: sonnet
+  dna: opus              # creative, 1× per channel
+  default: haiku         # scoring, script, image verify — hepsi haiku
 ```
+
+**Per-channel script model override (opsiyonel):**
+
+Bir kanalda script kalitesinden memnun değilsen YAML'a ekle:
+
+```yaml
+# config/channels/<slug>.yaml
+script_model: sonnet     # bu kanalda script writing için Sonnet kullan
+```
+
+`ChannelConfig`'e `script_model: str | None = None` alanı eklenir. None ise `settings.claude_models["default"]` kullanılır. Override varsa `script_writer.write_script()` o modelle çağrılır.
+
+**Maliyet tahmini (1 kanal, günde 6 short, 1 yıl):**
+- DNA: Opus × 1-2 call/yıl ≈ negligible
+- Script + Score + Image-verify: Haiku × ~5000 call/yıl ≈ **~$3-5/yıl**
+- Script Sonnet'e upgrade edilirse: ~$8-12/yıl
+- Tamamı Sonnet (eski plan): ~$30-40/yıl
+
+Haiku'yla başla, kalitesinden memnun değilsen ilgili kanalda script_model upgrade et.
 
 ## 6. DNA Üretim Akışı
 
