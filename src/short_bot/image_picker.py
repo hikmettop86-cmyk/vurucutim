@@ -89,16 +89,21 @@ def pick_image_for_script(
 ) -> Path | None:
     """Search -> download candidates -> verify with Claude -> return first OK image path.
 
-    Returns None if no candidate passes verification or search yields nothing.
+    Tries DuckDuckGo first; if that returns nothing (rate limit, network), falls back
+    to Wikimedia Commons API.
     """
     cache_dir = Path(cache_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
 
     query = build_search_query(script)
-    logger.info(f"image search: {query!r}")
+    logger.info(f"image search (DDG): {query!r}")
     candidates = search_images(query, max_results=max_candidates)
     if not candidates:
-        logger.info("no image candidates from DDG")
+        logger.info("DDG returned 0 candidates; trying Wikimedia Commons")
+        from short_bot.wikimedia_search import search_images_commons
+        candidates = search_images_commons(query, max_results=max_candidates)
+    if not candidates:
+        logger.info("no image candidates from any source")
         return None
 
     for i, cand in enumerate(candidates):

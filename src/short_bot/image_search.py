@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass
 from urllib.parse import urlparse
 
 try:
-    from duckduckgo_search import DDGS
+    from ddgs import DDGS
 except ImportError:
     DDGS = None  # type: ignore[assignment,misc]
 
@@ -35,29 +36,47 @@ def search_images(
     max_results: int = 5,
     min_width: int = 800,
     safesearch: str = "moderate",
+    max_attempts: int = 3,
 ) -> list[ImageCandidate]:
     """Return up to max_results image candidates ordered by DDG relevance.
 
     Filters: width >= min_width, blocked domains skipped.
+    Retries up to max_attempts with exponential backoff on rate-limit / network errors.
     """
     if DDGS is None:
-        logger.error("duckduckgo-search not installed")
-        raise RuntimeError("duckduckgo-search not installed")
+        logger.error("ddgs package not installed")
+        raise RuntimeError("ddgs package not installed")
 
+    last_err: Exception | None = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            with DDGS() as ddgs:
+                raw_results = list(ddgs.images(
+                    query,
+                    safesearch=safesearch,
+                    size="Large",
+                    max_results=max_results * 4,
+                ))
+            return _filter_results(raw_results, min_width=min_width, max_results=max_results)
+        except Exception as e:
+            err_text = str(e).lower()
+            last_err = e
+            if "ratelimit" in err_text or "403" in err_text or "429" in err_text:
+                # exponential backoff: 4s, 8s, 16s
+                if attempt < max_attempts:
+                    time.sleep(4 * (2 ** (attempt - 1)))
+                    continue
+            logger.warning(f"DDG image search failed (attempt {attempt}): {e}")
+            if attempt < max_attempts:
+                time.sleep(2)
+                continue
+    logger.warning(f"DDG image search exhausted retries: {last_err}")
+    return []
+
+
+def _filter_results(raw_results, *, min_width: int, max_results: int) -> list[ImageCandidate]:
     out: list[ImageCandidate] = []
-    try:
-        with DDGS() as ddgs:
-            results = ddgs.images(
-                query,
-                safesearch=safesearch,
-                size="Large",       # prefer large images
-                max_results=max_results * 4,  # over-fetch, we filter
-            )
-    except Exception as e:
-        logger.warning(f"DDG image search failed: {e}")
-        return []
-
-    for r in results or []:
+    for r in raw_results or []:
         url = r.get("image") or ""
         if not url:
             continue

@@ -63,9 +63,25 @@ def test_pick_returns_none_when_all_rejected(tmp_path):
 
 
 def test_pick_returns_none_on_no_candidates(tmp_path):
-    with patch("short_bot.image_picker.search_images", return_value=[]):
+    with patch("short_bot.image_picker.search_images", return_value=[]), \
+         patch("short_bot.wikimedia_search.search_images_commons", return_value=[]):
         result = pick_image_for_script(_script(), tmp_path / "img", claude_path="claude")
     assert result is None
+
+
+def test_pick_uses_wikimedia_when_ddg_empty(tmp_path):
+    wiki_cand = ImageCandidate(
+        url="https://upload.wikimedia.org/test.jpg",
+        title="t", source_domain="upload.wikimedia.org",
+        width=1280, height=720, thumbnail=None,
+    )
+    with patch("short_bot.image_picker.search_images", return_value=[]), \
+         patch("short_bot.wikimedia_search.search_images_commons", return_value=[wiki_cand]), \
+         patch("short_bot.image_picker._download", return_value=True), \
+         patch("short_bot.image_picker._verify_with_claude",
+               return_value=_Verdict(appropriate=True, reason="good fit")):
+        result = pick_image_for_script(_script(), tmp_path / "img", claude_path="claude")
+    assert result is not None
 
 
 def test_pick_skips_candidate_when_download_fails(tmp_path):

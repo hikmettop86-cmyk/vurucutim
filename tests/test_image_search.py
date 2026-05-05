@@ -58,3 +58,26 @@ def test_search_images_returns_empty_on_ddg_failure():
     with patch("short_bot.image_search.DDGS", side_effect=RuntimeError("network")):
         candidates = search_images("test")
     assert candidates == []
+
+
+def test_search_images_retries_on_ratelimit():
+    """403 ratelimit on first attempt, then succeeds."""
+    fake_results = [_ddg_result("https://example.com/a.jpg")]
+
+    call_count = {"n": 0}
+
+    def fake_ddgs():
+        call_count["n"] += 1
+        m = MagicMock()
+        if call_count["n"] == 1:
+            m.__enter__.return_value.images.side_effect = Exception("Ratelimit 403")
+        else:
+            m.__enter__.return_value.images.return_value = fake_results
+        m.__exit__.return_value = False
+        return m
+
+    with patch("short_bot.image_search.DDGS", side_effect=fake_ddgs), \
+         patch("short_bot.image_search.time.sleep"):  # don't actually wait
+        candidates = search_images("test", max_results=2, max_attempts=2)
+    assert len(candidates) == 1
+    assert call_count["n"] == 2
