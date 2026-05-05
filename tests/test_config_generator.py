@@ -133,3 +133,4 @@ def test_save_channel_roundtrip_generator(tmp_path):
     assert cfg2.content_source == "generator"
     assert cfg2.generator.topic == cfg.generator.topic
     assert cfg2.generator.forbidden_lookback == 50
+    assert cfg2.generator.fuzzy_threshold == 0.85
