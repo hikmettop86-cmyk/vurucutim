@@ -83,6 +83,37 @@ def load_channel(path: Path) -> ChannelConfig:
     )
 
 
+def save_channel(path: Path, cfg: ChannelConfig) -> None:
+    """Write a ChannelConfig back to YAML (inverse of load_channel)."""
+    data = {
+        "slug": cfg.slug,
+        "name": cfg.name,
+        "keywords": list(cfg.keywords),
+        "rss_locale": cfg.rss_locale,
+        "schedule_cron": cfg.schedule_cron,
+        "duration_s": cfg.duration_s,
+        "min_score": cfg.min_score,
+        "max_candidates_per_run": cfg.max_candidates_per_run,
+        "template": cfg.template,
+        "colors": dict(cfg.colors),
+        "handle": cfg.handle,
+        "output_dir": cfg.output_dir,
+        "enabled": cfg.enabled,
+        "cta": {
+            "enabled": cfg.cta_enabled,
+            "text": cfg.cta_text,
+            "icons": list(cfg.cta_icons),
+            "duration_s": cfg.cta_duration_s,
+            "show_handle": cfg.cta_show_handle,
+        },
+    }
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    Path(path).write_text(
+        yaml.safe_dump(data, allow_unicode=True, sort_keys=False, default_flow_style=False),
+        encoding="utf-8",
+    )
+
+
 def list_channels(channels_dir: Path, enabled_only: bool = False) -> list[ChannelConfig]:
     out = []
     for p in sorted(Path(channels_dir).glob("*.yaml")):

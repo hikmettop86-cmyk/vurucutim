@@ -89,3 +89,32 @@ def test_list_channels_includes_disabled_when_not_filtered(tmp_path):
     chans = list_channels(tmp_path, enabled_only=False)
     slugs = {c.slug for c in chans}
     assert slugs == {"a", "b"}
+
+
+def test_save_channel_round_trips(tmp_path):
+    """ChannelConfig → save → load should preserve all fields including Turkish chars and emojis."""
+    from short_bot.config import save_channel
+    src_path = tmp_path / "orig.yaml"
+    src_path.write_text(
+        "slug: test-rt\nname: 'Türkçe Ad'\nkeywords: ['son dakika', 'asgari ücret']\n"
+        "rss_locale: hl=tr&gl=TR&ceid=TR:tr\nschedule_cron: '0 * * * *'\n"
+        "duration_s: 30\nmin_score: 8.0\nmax_candidates_per_run: 10\ntemplate: default\n"
+        "colors:\n  primary: '#c81e1e'\n  accent: '#ffea3b'\n  bg_gradient: ['#1a3b6b', '#0a1a3b']\n"
+        "handle: '@RoundTrip'\noutput_dir: output/test-rt\nenabled: true\n"
+        "cta:\n  enabled: true\n  text: 'BEĞEN · ABONE OL · PAYLAŞ'\n  icons: ['❤️', '🔔', '↗️']\n  duration_s: 4\n  show_handle: true\n",
+        encoding="utf-8",
+    )
+    original = load_channel(src_path)
+
+    out_path = tmp_path / "saved.yaml"
+    save_channel(out_path, original)
+    loaded = load_channel(out_path)
+
+    assert loaded.slug == original.slug
+    assert loaded.name == "Türkçe Ad"
+    assert loaded.keywords == ["son dakika", "asgari ücret"]
+    assert loaded.colors == original.colors
+    assert loaded.cta_text == "BEĞEN · ABONE OL · PAYLAŞ"
+    assert loaded.cta_icons == ["❤️", "🔔", "↗️"]
+    assert loaded.cta_duration_s == 4
+    assert loaded.handle == "@RoundTrip"
