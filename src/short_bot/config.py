@@ -56,7 +56,7 @@ def load_settings(path: Path) -> Settings:
         claude_cli_path=data["claude_cli_path"],
         playwright_browser=data.get("playwright_browser", "chromium"),
         web_host=web.get("host", "127.0.0.1"),
-        web_port=int(web.get("port", 5000)),
+        web_port=int(web.get("port", 5005)),
         fuzzy_dedup_threshold=float(data.get("fuzzy_dedup_threshold", 0.85)),
         log_level=data.get("log_level", "INFO"),
         claude_models=dict(data.get("claude_models", {"dna": "opus", "default": "haiku"})),
