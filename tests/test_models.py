@@ -1,4 +1,3 @@
-from datetime import datetime
 import pytest
 from pydantic import ValidationError
 
@@ -54,3 +53,32 @@ def test_script_mood_validates():
             highlights=[],
             category="X", mood="dance-party",
         )
+
+
+def test_script_body_paragraph_min_length():
+    with pytest.raises(ValidationError):
+        Script(
+            header_top="A", header_bottom="B", photo_overlay="C",
+            body_paragraph="kısa",  # < 20 chars
+            highlights=[], category="X", mood="neutral",
+        )
+
+
+def test_script_highlights_max_length():
+    body = "Yeterince uzun bir paragraf metni içerik için."
+    h = Highlight(text="metni", color="red")
+    with pytest.raises(ValidationError):
+        Script(
+            header_top="A", header_bottom="B", photo_overlay="C",
+            body_paragraph=body, category="X", mood="neutral",
+            highlights=[h] * 9,  # > 8 max
+        )
+
+
+def test_script_default_highlights_empty():
+    s = Script(
+        header_top="A", header_bottom="B", photo_overlay="C",
+        body_paragraph="Yeterince uzun bir paragraf metni icin asgari kosul.",
+        category="X", mood="neutral",
+    )
+    assert s.highlights == []
