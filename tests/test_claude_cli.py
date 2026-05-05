@@ -74,3 +74,29 @@ def test_run_json_retries_on_timeout_then_succeeds():
          patch("short_bot.claude_cli.time.sleep"):  # don't actually sleep
         r = run_json("p", _Out, claude_path="claude", retries=2)
     assert r.score == 5.0
+
+
+def test_run_json_passes_model_flag():
+    payload = {"score": 7.0, "why": "ok"}
+    captured = {}
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        return _fake_proc(json.dumps(payload))
+
+    with patch("short_bot.claude_cli.subprocess.run", side_effect=fake_run):
+        run_json("p", _Out, claude_path="claude", model="opus", retries=1)
+    assert "--model" in captured["cmd"]
+    assert "opus" in captured["cmd"]
+
+
+def test_run_json_default_model_omits_flag():
+    captured = {}
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        return _fake_proc(json.dumps({"score": 5, "why": "x"}))
+
+    with patch("short_bot.claude_cli.subprocess.run", side_effect=fake_run):
+        run_json("p", _Out, claude_path="claude", model="default", retries=1)
+    assert "--model" not in captured["cmd"]

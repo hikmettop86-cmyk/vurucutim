@@ -38,6 +38,7 @@ def run_json(
     schema: type[T],
     *,
     claude_path: str = "claude",
+    model: str = "default",
     retries: int = 2,
     timeout_s: int = 180,
 ) -> T:
@@ -47,6 +48,7 @@ def run_json(
         prompt: prompt text passed to claude via -p
         schema: Pydantic BaseModel subclass to validate the parsed JSON against
         claude_path: path to claude CLI binary (default 'claude' resolves via PATH)
+        model: Claude model to use (e.g. 'opus', 'sonnet', 'haiku'); default 'default' omits the --model flag
         retries: total number of attempts (NOT retries-after-first); minimum useful value is 1
         timeout_s: per-attempt subprocess timeout in seconds
 
@@ -58,8 +60,11 @@ def run_json(
 
     for attempt in range(1, retries + 1):
         try:
+            cmd = [claude_path, "-p", prompt, "--output-format", "text"]
+            if model != "default":
+                cmd += ["--model", model]
             proc = subprocess.run(
-                [claude_path, "-p", prompt, "--output-format", "text"],
+                cmd,
                 capture_output=True,
                 text=True,
                 encoding="utf-8",

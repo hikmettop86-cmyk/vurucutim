@@ -6,3 +6,6 @@ web:
   port: 5000
 fuzzy_dedup_threshold: 0.85
 log_level: INFO
+claude_models:
+  dna: opus              # creative, 1× per channel
+  default: haiku         # scoring, script, image verify

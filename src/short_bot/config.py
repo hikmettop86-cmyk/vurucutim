@@ -17,6 +17,7 @@ class Settings:
     web_port: int
     fuzzy_dedup_threshold: float
     log_level: str
+    claude_models: dict
 
 
 @dataclass(frozen=True)
@@ -52,6 +53,7 @@ def load_settings(path: Path) -> Settings:
         web_port=int(web.get("port", 5000)),
         fuzzy_dedup_threshold=float(data.get("fuzzy_dedup_threshold", 0.85)),
         log_level=data.get("log_level", "INFO"),
+        claude_models=dict(data.get("claude_models", {"dna": "opus", "default": "haiku"})),
     )
 
 

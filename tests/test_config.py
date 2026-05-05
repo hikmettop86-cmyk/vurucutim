@@ -118,3 +118,26 @@ def test_save_channel_round_trips(tmp_path):
     assert loaded.cta_icons == ["❤️", "🔔", "↗️"]
     assert loaded.cta_duration_s == 4
     assert loaded.handle == "@RoundTrip"
+
+
+def test_load_settings_default_claude_models(tmp_path):
+    (tmp_path / "settings.yaml").write_text(
+        "ffmpeg_path: ffmpeg\nclaude_cli_path: claude\nplaywright_browser: chromium\n"
+        "web: {host: 127.0.0.1, port: 5000}\n"
+        "fuzzy_dedup_threshold: 0.85\nlog_level: INFO\n",
+        encoding="utf-8",
+    )
+    s = load_settings(tmp_path / "settings.yaml")
+    assert s.claude_models == {"dna": "opus", "default": "haiku"}
+
+
+def test_load_settings_custom_claude_models(tmp_path):
+    (tmp_path / "settings.yaml").write_text(
+        "ffmpeg_path: ffmpeg\nclaude_cli_path: claude\nplaywright_browser: chromium\n"
+        "web: {host: 127.0.0.1, port: 5000}\n"
+        "fuzzy_dedup_threshold: 0.85\nlog_level: INFO\n"
+        "claude_models:\n  dna: opus\n  default: sonnet\n",
+        encoding="utf-8",
+    )
+    s = load_settings(tmp_path / "settings.yaml")
+    assert s.claude_models["default"] == "sonnet"

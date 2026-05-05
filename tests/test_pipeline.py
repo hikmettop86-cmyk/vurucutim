@@ -15,6 +15,7 @@ def _settings():
         ffmpeg_path="ffmpeg", claude_cli_path="claude", playwright_browser="chromium",
         web_host="127.0.0.1", web_port=5000,
         fuzzy_dedup_threshold=0.85, log_level="INFO",
+        claude_models={"dna": "opus", "default": "haiku"},
     )
 
 
