@@ -81,7 +81,11 @@ def preview(slug):
         dna = dna.model_copy(update={"fonts": dna.fonts.model_copy(update=fonts_update)})
 
     # Top-level Literal fields
+    valid_archetypes = {"newscast", "tabloid", "magazine", "kinetic",
+                        "dark-tech", "stadium", "meme"}
     top_update = {}
+    if request.args.get("archetype") in valid_archetypes:
+        top_update["archetype"] = request.args["archetype"]
     if request.args.get("banner_shape") in {"flat", "ribbon", "slanted", "sharp"}:
         top_update["banner_shape"] = request.args["banner_shape"]
     if request.args.get("highlight_style") in {"bg-flat", "underline", "marker", "neon"}:
@@ -92,6 +96,11 @@ def preview(slug):
         top_update["category_icon"] = request.args["category_icon"][:4]
     if top_update:
         dna = dna.model_copy(update=top_update)
+
+    # Template comes from archetype override if present, else channel default
+    template_name = (request.args.get("archetype")
+                     if request.args.get("archetype") in valid_archetypes
+                     else cfg.template)
 
     script = _load_sample_script(cfg.language)
     job = RenderJob(
@@ -106,7 +115,7 @@ def preview(slug):
         language=cfg.language, cta_enabled=False,
     )
     dna_css = build_css_override(dna)
-    template_path = current_app.config["SHORTBOT_TEMPLATES_DIR"] / f"{cfg.template}.html.j2"
+    template_path = current_app.config["SHORTBOT_TEMPLATES_DIR"] / f"{template_name}.html.j2"
     html = build_html(job, template_path,
                       ui_labels=ui_labels_for(cfg.language),
                       dna_css=dna_css)
