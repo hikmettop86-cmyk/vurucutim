@@ -174,9 +174,19 @@ def test_build_css_includes_root_variables():
 
 
 def test_build_css_no_google_imports_skips_import_line():
-    dna = _sample_dna(fonts=DnaFonts(headline="Inter", body="Inter", google_imports=[]))
+    """When chosen fonts are NOT in the auto-import map (system fonts), no @import emitted."""
+    dna = _sample_dna(fonts=DnaFonts(headline="Impact", body="Georgia", google_imports=[]))
     css = build_css_override(dna)
     assert "@import" not in css
+
+
+def test_build_css_auto_imports_recognized_fonts():
+    """Picking a font like Bebas Neue auto-adds its Google Fonts import."""
+    dna = _sample_dna(fonts=DnaFonts(headline="Bebas Neue", body="Roboto", google_imports=[]))
+    css = build_css_override(dna)
+    assert "Bebas+Neue" in css
+    assert "Roboto" in css
+    assert "fonts.googleapis.com" in css
 
 
 def test_banner_shape_helpers_return_unique_strings():

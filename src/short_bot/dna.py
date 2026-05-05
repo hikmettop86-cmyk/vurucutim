@@ -204,13 +204,44 @@ def _chip_css(style: str) -> str:
     }.get(style, "border-radius: 12px;")
 
 
+_GOOGLE_FONT_PARAM: dict[str, str] = {
+    # Sans-serif
+    "Inter": "Inter:wght@400;500;600;700;900",
+    "Roboto": "Roboto:wght@400;700;900",
+    "Montserrat": "Montserrat:wght@400;700;900",
+    "Lato": "Lato:wght@400;700;900",
+    "Open Sans": "Open+Sans:wght@400;700",
+    # Display / Headline
+    "Bebas Neue": "Bebas+Neue",
+    "Anton": "Anton",
+    "Oswald": "Oswald:wght@400;600;700",
+    "Impact": "",   # system font, no Google import needed
+    # Serif
+    "Playfair Display": "Playfair+Display:ital,wght@0,400;0,700;1,400;1,700",
+    "Source Serif 4": "Source+Serif+4:wght@400;600;700",
+    "Georgia": "",  # system font
+    # Mono
+    "JetBrains Mono": "JetBrains+Mono:wght@400;700",
+}
+
+
 def build_css_override(dna: DnaSpec) -> str:
     """Generate templates/css/<slug>.css content from DNA. Pure Python, no LLM."""
+    # Build Google Fonts @import — combine explicit google_imports with
+    # auto-added fonts from headline/body picks (so picker dropdowns just work).
+    auto_imports = []
+    for font_name in (dna.fonts.headline, dna.fonts.body):
+        param = _GOOGLE_FONT_PARAM.get(font_name)
+        if param and param not in auto_imports:
+            auto_imports.append(param)
+    all_imports = list(dna.fonts.google_imports) + [
+        x for x in auto_imports if x not in dna.fonts.google_imports
+    ]
     google = ""
-    if dna.fonts.google_imports:
+    if all_imports:
         google = (
             "@import url('https://fonts.googleapis.com/css2?"
-            + "&".join(f"family={x}" for x in dna.fonts.google_imports)
+            + "&".join(f"family={x}" for x in all_imports)
             + "&display=swap');\n"
         )
     p = dna.palette
@@ -229,6 +260,10 @@ def build_css_override(dna: DnaSpec) -> str:
 .header {{ {_banner_shape_css(dna.banner_shape)} }}
 .body .hl-r {{ {_highlight_css(dna.highlight_style, p.primary, "#fff")} }}
 .body .hl-y {{ {_highlight_css(dna.highlight_style, p.accent, "#000")} }}
-.persistent {{ {_chip_css(dna.chip_style)} }}
+/* Override fonts directly (templates hardcode font-family; using !important for chip too) */
+html, body, .body, .handle, .stage {{ font-family: '{dna.fonts.body}', sans-serif !important; }}
+.header, .header .top, .header .bot, .stage-badge, h1, h2, h3 {{ font-family: '{dna.fonts.headline}', sans-serif !important; }}
+.persistent {{ {_chip_css(dna.chip_style).replace(';', ' !important;')} }}
+.persistent.like, .persistent.sub {{ {_chip_css(dna.chip_style).replace(';', ' !important;')} }}
 """
     return css
