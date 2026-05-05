@@ -1,0 +1,25 @@
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+build/
+dist/
+
+# project artifacts
+output/*
+!output/.gitkeep
+data/*.sqlite
+data/cache/*
+!data/cache/.gitkeep
+data/locks/*
+!data/locks/.gitkeep
+logs/*
+!logs/.gitkeep
+!logs/runs/
+logs/runs/*
+!logs/runs/.gitkeep
+
+# brainstorm/spec working files
+.superpowers/

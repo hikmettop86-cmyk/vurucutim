@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "short-bot"
+version = "0.1.0"
+description = "RSS → YouTube Shorts video generator"
+requires-python = ">=3.11"
+dependencies = [
+    "feedparser>=6.0",
+    "trafilatura>=1.6",
+    "requests>=2.31",
+    "pydantic>=2.5",
+    "jinja2>=3.1",
+    "playwright>=1.40",
+    "pillow>=10.1",
+    "ffmpeg-python>=0.2",
+    "sqlalchemy>=2.0",
+    "pyyaml>=6.0",
+    "python-dateutil>=2.8",
+    "filelock>=3.13",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "pytest-cov>=4.1",
+    "pytest-mock>=3.12",
+]
+
+[project.scripts]
+short-bot = "short_bot.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"
