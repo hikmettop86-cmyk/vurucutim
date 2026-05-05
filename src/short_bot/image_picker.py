@@ -19,6 +19,7 @@ from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel
 
 from short_bot.claude_cli import ClaudeCliError, run_json
+from short_bot.config import ChannelConfig
 from short_bot.image_search import ImageCandidate, search_images
 from short_bot.models import Script
 
@@ -80,12 +81,27 @@ def _verify_with_claude(image_path: Path, script: Script, claude_path: str) -> _
         return None
 
 
+def build_search_query_for_channel(script: Script, channel: ChannelConfig) -> str:
+    """Build DDG image search query using channel.dna.search_query_template if set."""
+    template = (
+        channel.dna.search_query_template if channel.dna is not None
+        else "{header_top} {header_bottom} {category}"
+    )
+    return template.format(
+        header_top=script.header_top,
+        header_bottom=script.header_bottom,
+        category=script.category,
+        photo_overlay=script.photo_overlay,
+    ).strip()
+
+
 def pick_image_for_script(
     script: Script,
     cache_dir: Path,
     *,
     claude_path: str = "claude",
     max_candidates: int = 3,
+    channel: ChannelConfig | None = None,
 ) -> Path | None:
     """Search -> download candidates -> verify with Claude -> return first OK image path.
 
@@ -95,7 +111,8 @@ def pick_image_for_script(
     cache_dir = Path(cache_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
 
-    query = build_search_query(script)
+    query = (build_search_query_for_channel(script, channel)
+             if channel is not None else build_search_query(script))
     logger.info(f"image search (DDG): {query!r}")
     candidates = search_images(query, max_results=max_candidates)
     if not candidates:
