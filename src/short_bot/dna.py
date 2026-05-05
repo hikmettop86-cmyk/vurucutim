@@ -59,6 +59,7 @@ class DnaSpec(BaseModel):
     category_icon: str = ""
     search_query_template: str = "{header_top} {header_bottom} {category}"
     persona_summary: str = Field(max_length=400)
+    custom_css: str = Field(default="", max_length=8000)
 
 
 def build_dna_prompt(

@@ -213,3 +213,46 @@ def test_chip_styles_return_distinct_border_radius():
     pill = _chip_css("pill")
     assert "border-radius" in rounded
     assert rounded != sharp != pill
+
+
+def test_dna_custom_css_default_empty():
+    """custom_css defaults to empty string when not provided."""
+    dna = DnaSpec(
+        archetype="newscast",
+        palette=DnaPalette(primary="#c81e1e", accent="#ffea3b",
+                           bg_gradient=["#1a3b6b","#0a1a3b"],
+                           body_bg=["#1a1a2a","#0a0a1a"]),
+        fonts=DnaFonts(),
+        tone=DnaTone(voice="x", style="y"),
+        persona_summary="x",
+    )
+    assert dna.custom_css == ""
+
+
+def test_dna_custom_css_accepts_value():
+    dna = DnaSpec(
+        archetype="newscast",
+        palette=DnaPalette(primary="#c81e1e", accent="#ffea3b",
+                           bg_gradient=["#1a3b6b","#0a1a3b"],
+                           body_bg=["#1a1a2a","#0a0a1a"]),
+        fonts=DnaFonts(),
+        tone=DnaTone(voice="x", style="y"),
+        persona_summary="x",
+        custom_css="body { background: url(data:image/svg+xml,...); }",
+    )
+    assert "background:" in dna.custom_css
+
+
+def test_dna_custom_css_max_length_enforced():
+    long_css = "/* x */" * 1500   # ~9000 chars, exceeds 8000 limit
+    with pytest.raises(ValidationError):
+        DnaSpec(
+            archetype="newscast",
+            palette=DnaPalette(primary="#c81e1e", accent="#ffea3b",
+                               bg_gradient=["#1a3b6b","#0a1a3b"],
+                               body_bg=["#1a1a2a","#0a0a1a"]),
+            fonts=DnaFonts(),
+            tone=DnaTone(voice="x", style="y"),
+            persona_summary="x",
+            custom_css=long_css,
+        )
