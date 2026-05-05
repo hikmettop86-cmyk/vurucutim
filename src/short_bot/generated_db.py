@@ -3,18 +3,15 @@ from __future__ import annotations
 
 import hashlib
 import re
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
 from sqlalchemy import (
     Column, DateTime, ForeignKey, Index, Integer, MetaData, String, Table, Text,
-    UniqueConstraint, and_, func, select,
+    UniqueConstraint,
 )
-from sqlalchemy.engine import Engine
 
 
-# Reuse the same MetaData object so init_db sees both tables.
-# (db.py imports this and adds to its create_all run.)
+# Separate MetaData object — db.py's init_db will call create_all on this.
+# (Wiring happens in Task 2; until then this table won't be auto-created.)
 metadata = MetaData()
 
 generated_items = Table(
@@ -34,10 +31,6 @@ Index("ix_generated_recent", generated_items.c.channel,
       generated_items.c.created_at.desc())
 Index("ix_generated_topic", generated_items.c.channel,
       generated_items.c.topic_tag, generated_items.c.created_at.desc())
-
-
-def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
 
 
 _PUNCT_RE = re.compile(r"[^\w\s]", flags=re.UNICODE)
