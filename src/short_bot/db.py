@@ -87,6 +87,9 @@ def init_db(db_path: Path | str) -> Engine:
         conn.exec_driver_sql("PRAGMA busy_timeout=5000")
         conn.exec_driver_sql("PRAGMA foreign_keys=ON")
     metadata.create_all(eng)
+    # Also create generator-mode tables (separate MetaData object)
+    from short_bot.generated_db import metadata as generator_metadata
+    generator_metadata.create_all(eng)
     return eng
 
 
