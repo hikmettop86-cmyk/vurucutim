@@ -170,3 +170,65 @@ def generate_dna(
         claude_path=claude_path, model=model,
         retries=2, timeout_s=180,
     )
+
+
+def _banner_shape_css(shape: str) -> str:
+    """Return CSS rule string for the given banner shape."""
+    return {
+        "flat":    "border-radius: 0; clip-path: none;",
+        "ribbon":  "clip-path: polygon(0 0, 100% 0, 100% 80%, 50% 100%, 0 80%);",
+        "slanted": "transform: skewY(-1deg); transform-origin: top left;",
+        "sharp":   "clip-path: polygon(0 0, 100% 0, 95% 100%, 5% 100%);",
+    }.get(shape, "")
+
+
+def _highlight_css(style: str, bg_color: str, fg_color: str) -> str:
+    """Return CSS rule string for the given highlight style."""
+    if style == "bg-flat":
+        return f"background: {bg_color}; color: {fg_color}; padding: 2px 14px; border-radius: 6px; font-weight: 700;"
+    if style == "underline":
+        return f"color: {bg_color}; text-decoration: underline; text-decoration-thickness: 6px; text-underline-offset: 4px; font-weight: 700;"
+    if style == "marker":
+        return f"background: linear-gradient(180deg, transparent 50%, {bg_color} 50%); color: {fg_color}; padding: 0 8px; font-weight: 700;"
+    if style == "neon":
+        return f"color: {bg_color}; text-shadow: 0 0 8px {bg_color}, 0 0 16px {bg_color}; font-weight: 700;"
+    return ""
+
+
+def _chip_css(style: str) -> str:
+    """Return CSS rule string for the given chip style (border-radius only)."""
+    return {
+        "rounded": "border-radius: 12px;",
+        "sharp":   "border-radius: 2px;",
+        "pill":    "border-radius: 999px;",
+    }.get(style, "border-radius: 12px;")
+
+
+def build_css_override(dna: DnaSpec) -> str:
+    """Generate templates/css/<slug>.css content from DNA. Pure Python, no LLM."""
+    google = ""
+    if dna.fonts.google_imports:
+        google = (
+            "@import url('https://fonts.googleapis.com/css2?"
+            + "&".join(f"family={x}" for x in dna.fonts.google_imports)
+            + "&display=swap');\n"
+        )
+    p = dna.palette
+    css = f"""{google}:root {{
+  --primary: {p.primary};
+  --accent: {p.accent};
+  --bg-grad-1: {p.bg_gradient[0]};
+  --bg-grad-2: {p.bg_gradient[1]};
+  --body-bg-1: {p.body_bg[0]};
+  --body-bg-2: {p.body_bg[1]};
+  --text-main: {p.text_main};
+  --text-muted: {p.text_muted};
+  --font-headline: '{dna.fonts.headline}', sans-serif;
+  --font-body: '{dna.fonts.body}', sans-serif;
+}}
+.header {{ {_banner_shape_css(dna.banner_shape)} }}
+.body .hl-r {{ {_highlight_css(dna.highlight_style, p.primary, "#fff")} }}
+.body .hl-y {{ {_highlight_css(dna.highlight_style, p.accent, "#000")} }}
+.persistent {{ {_chip_css(dna.chip_style)} }}
+"""
+    return css

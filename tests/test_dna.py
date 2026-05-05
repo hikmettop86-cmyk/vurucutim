@@ -5,6 +5,7 @@ from unittest.mock import patch
 from short_bot.dna import (
     ARCHETYPES, DnaSpec, DnaPalette, DnaFonts, DnaTone,
     generate_dna, build_dna_prompt,
+    build_css_override, _banner_shape_css, _highlight_css, _chip_css,
 )
 
 
@@ -141,3 +142,64 @@ def test_generate_dna_default_model_is_opus():
     with patch("short_bot.dna.run_json", return_value=fake) as m:
         generate_dna(name="x", keywords=["y"], language="tr")
     assert m.call_args.kwargs["model"] == "opus"
+
+
+def _sample_dna(**overrides):
+    base = dict(
+        archetype="newscast",
+        palette=DnaPalette(primary="#c81e1e", accent="#ffea3b",
+                           bg_gradient=["#1a3b6b","#0a1a3b"],
+                           body_bg=["#1a1a2a","#0a0a1a"]),
+        fonts=DnaFonts(headline="Bebas Neue", body="Inter",
+                       google_imports=["Bebas+Neue", "Inter:wght@400;700;900"]),
+        tone=DnaTone(voice="x", style="y"),
+        category_icon="📰", persona_summary="x",
+    )
+    base.update(overrides)
+    return DnaSpec(**base)
+
+
+def test_build_css_includes_google_import():
+    css = build_css_override(_sample_dna())
+    assert "fonts.googleapis.com" in css
+    assert "Bebas+Neue" in css
+
+
+def test_build_css_includes_root_variables():
+    css = build_css_override(_sample_dna())
+    assert "--primary: #c81e1e" in css
+    assert "--accent: #ffea3b" in css
+    assert "--bg-grad-1: #1a3b6b" in css
+    assert "--font-headline: 'Bebas Neue'" in css
+
+
+def test_build_css_no_google_imports_skips_import_line():
+    dna = _sample_dna(fonts=DnaFonts(headline="Inter", body="Inter", google_imports=[]))
+    css = build_css_override(dna)
+    assert "@import" not in css
+
+
+def test_banner_shape_helpers_return_unique_strings():
+    flat = _banner_shape_css("flat")
+    ribbon = _banner_shape_css("ribbon")
+    slanted = _banner_shape_css("slanted")
+    sharp = _banner_shape_css("sharp")
+    assert len({flat, ribbon, slanted, sharp}) == 4
+
+
+def test_highlight_styles_return_distinct_css():
+    bg = _highlight_css("bg-flat", "#ff0000", "#ffffff")
+    underline = _highlight_css("underline", "#ff0000", "#ffffff")
+    marker = _highlight_css("marker", "#ff0000", "#ffffff")
+    neon = _highlight_css("neon", "#ff0000", "#ffffff")
+    assert len({bg, underline, marker, neon}) == 4
+    # underline should mention text-decoration
+    assert "underline" in underline.lower() or "text-decoration" in underline.lower()
+
+
+def test_chip_styles_return_distinct_border_radius():
+    rounded = _chip_css("rounded")
+    sharp = _chip_css("sharp")
+    pill = _chip_css("pill")
+    assert "border-radius" in rounded
+    assert rounded != sharp != pill
