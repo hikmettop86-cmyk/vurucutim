@@ -239,74 +239,60 @@
   /* Body dim during CTA so it stays focused */
   .body { animation: dim 0.3s ease-in {{ duration_s - cta.duration_s }}s forwards; }
   @keyframes dim { to { opacity: 0.05; } }
+  {% endif %}
 
-  /* 4-corner "ABONE OL!" badges — meme-style begging, looping flash */
-  .corner-cta {
+  /* Persistent corner chips — visible THROUGHOUT video (always reminding to like/subscribe) */
+  .persistent {
     position: absolute;
-    background: linear-gradient(135deg, #ff3b3b, #c81e1e);
-    color: #fff;
-    font-size: 38px;
-    font-weight: 900;
-    padding: 14px 24px;
-    border-radius: 10px;
     display: flex;
     align-items: center;
     gap: 12px;
+    font-weight: 900;
+    font-size: 36px;
     letter-spacing: 1px;
-    box-shadow: 0 6px 0 rgba(0,0,0,.55), 0 0 28px rgba(255,59,59,.5);
-    opacity: 0;
-    z-index: 45;
+    padding: 14px 22px;
+    border-radius: 12px;
+    color: #fff;
+    box-shadow: 0 5px 0 rgba(0,0,0,.5), 0 0 20px rgba(0,0,0,.3);
+    z-index: 35;
     text-shadow: 0 2px 0 rgba(0,0,0,.4);
   }
-  .corner-cta .arrow { font-size: 46px; }
-  .corner-cta.tl { top: 60px;    left:  60px;  transform: translate(-40px,-40px) rotate(-6deg) scale(.8); }
-  .corner-cta.tr { top: 60px;    right: 60px;  transform: translate( 40px,-40px) rotate( 6deg) scale(.8); }
-  .corner-cta.bl { bottom: 90px; left:  60px;  transform: translate(-40px, 40px) rotate( 6deg) scale(.8); }
-  .corner-cta.br { bottom: 90px; right: 60px;  transform: translate( 40px, 40px) rotate(-6deg) scale(.8); }
+  .persistent .ic { font-size: 44px; }
 
-  @keyframes corner-tl-in { to { opacity: 1; transform: translate(0,0) rotate(-6deg) scale(1); } }
-  @keyframes corner-tr-in { to { opacity: 1; transform: translate(0,0) rotate( 6deg) scale(1); } }
-  @keyframes corner-bl-in { to { opacity: 1; transform: translate(0,0) rotate( 6deg) scale(1); } }
-  @keyframes corner-br-in { to { opacity: 1; transform: translate(0,0) rotate(-6deg) scale(1); } }
-
-  /* Looping pulse — each corner has different delay so they "chase" */
-  @keyframes corner-pulse-tl {
-    0%, 70%, 100% { filter: brightness(1); transform: rotate(-6deg) scale(1); }
-    35% { filter: brightness(1.4); transform: rotate(-6deg) scale(1.12); }
+  /* BEĞEN — bottom-left, dark chip with red accent */
+  .persistent.like {
+    bottom: 112px; left: 24px;
+    background: linear-gradient(135deg, rgba(0,0,0,.88), rgba(40,0,0,.92));
+    border: 3px solid #ff3b3b;
+    animation: like-beat 1.5s ease-in-out infinite;
   }
-  @keyframes corner-pulse-tr {
-    0%, 70%, 100% { filter: brightness(1); transform: rotate( 6deg) scale(1); }
-    35% { filter: brightness(1.4); transform: rotate( 6deg) scale(1.12); }
-  }
-  @keyframes corner-pulse-bl {
-    0%, 70%, 100% { filter: brightness(1); transform: rotate( 6deg) scale(1); }
-    35% { filter: brightness(1.4); transform: rotate( 6deg) scale(1.12); }
-  }
-  @keyframes corner-pulse-br {
-    0%, 70%, 100% { filter: brightness(1); transform: rotate(-6deg) scale(1); }
-    35% { filter: brightness(1.4); transform: rotate(-6deg) scale(1.12); }
+  @keyframes like-beat {
+    0%, 100% { transform: scale(1); }
+    20% { transform: scale(1.12); }
+    40% { transform: scale(0.98); }
+    60% { transform: scale(1.08); }
   }
 
-  .corner-cta.tl {
-    animation:
-      corner-tl-in 0.35s cubic-bezier(.34,1.56,.64,1) {{ duration_s - cta.duration_s + 0.10 }}s forwards,
-      corner-pulse-tl 1.2s ease-in-out {{ duration_s - cta.duration_s + 0.45 }}s infinite;
+  /* ABONE OL — bottom-right, red gradient chip */
+  .persistent.sub {
+    bottom: 112px; right: 24px;
+    background: linear-gradient(135deg, #ff2d2d, #c81e1e);
+    border: 3px solid #ffea3b;
+    animation: sub-glow 1.5s ease-in-out infinite;
   }
-  .corner-cta.tr {
-    animation:
-      corner-tr-in 0.35s cubic-bezier(.34,1.56,.64,1) {{ duration_s - cta.duration_s + 0.20 }}s forwards,
-      corner-pulse-tr 1.2s ease-in-out {{ duration_s - cta.duration_s + 0.75 }}s infinite;
+  @keyframes sub-glow {
+    0%, 100% { transform: scale(1); box-shadow: 0 5px 0 rgba(0,0,0,.5), 0 0 20px rgba(255,45,45,.4); }
+    50% { transform: scale(1.08); box-shadow: 0 5px 0 rgba(0,0,0,.5), 0 0 36px rgba(255,234,59,.7); }
   }
-  .corner-cta.bl {
-    animation:
-      corner-bl-in 0.35s cubic-bezier(.34,1.56,.64,1) {{ duration_s - cta.duration_s + 0.30 }}s forwards,
-      corner-pulse-bl 1.2s ease-in-out {{ duration_s - cta.duration_s + 1.05 }}s infinite;
+
+  /* Hide persistent chips during the final CTA fullscreen overlay (CTA covers them anyway, but cleaner) */
+  {% if cta.enabled %}
+  .persistent {
+    animation-fill-mode: both;
   }
-  .corner-cta.br {
-    animation:
-      corner-br-in 0.35s cubic-bezier(.34,1.56,.64,1) {{ duration_s - cta.duration_s + 0.40 }}s forwards,
-      corner-pulse-br 1.2s ease-in-out {{ duration_s - cta.duration_s + 1.35 }}s infinite;
-  }
+  .persistent.like { animation: like-beat 1.5s ease-in-out infinite, fade-out 0.3s ease-in {{ duration_s - cta.duration_s }}s forwards; }
+  .persistent.sub  { animation: sub-glow  1.5s ease-in-out infinite, fade-out 0.3s ease-in {{ duration_s - cta.duration_s }}s forwards; }
+  @keyframes fade-out { to { opacity: 0; } }
   {% endif %}
 </style>
 </head>
@@ -330,13 +316,13 @@
   <div class="progress"></div>
   <div class="handle">{{ handle }}</div>
 
+  <!-- Persistent corner chips (visible throughout video, fade out only when end CTA opens) -->
+  <div class="persistent like"><span class="ic">❤️</span><span>BEĞEN</span></div>
+  <div class="persistent sub"><span class="ic">🔔</span><span>ABONE OL</span></div>
+
   {% if cta.enabled %}
   <div class="preflash"></div>
   <div class="cta">
-    <div class="corner-cta tl"><span class="arrow">↘</span><span>ABONE OL!</span></div>
-    <div class="corner-cta tr"><span>ABONE OL!</span><span class="arrow">↙</span></div>
-    <div class="corner-cta bl"><span class="arrow">↗</span><span>ABONE OL!</span></div>
-    <div class="corner-cta br"><span>ABONE OL!</span><span class="arrow">↖</span></div>
     {% if cta.show_handle %}<div class="handle-line">{{ handle }}</div>{% endif %}
     <div class="sub-btn">
       <span class="bell">🔔</span>
