@@ -75,9 +75,10 @@ runs = Table(
 
 def init_db(db_path: Path | str) -> Engine:
     """Create engine, enable WAL + FK + busy_timeout, create schema if absent."""
-    Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+    db_path = Path(db_path).resolve()    # absolute, avoids cwd surprises
+    db_path.parent.mkdir(parents=True, exist_ok=True)
     eng = create_engine(
-        f"sqlite:///{db_path}",
+        f"sqlite:///{db_path.as_posix()}",
         future=True,
         connect_args={"check_same_thread": False},
     )

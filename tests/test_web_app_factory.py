@@ -14,7 +14,8 @@ def test_create_app_returns_flask(tmp_path):
     db_path = tmp_path / "x.sqlite"
     app = create_app(config_dir=cfg_dir, db_path=db_path, scheduler=False)
     assert app is not None
-    assert app.config["SQLALCHEMY_DATABASE_URI"] == f"sqlite:///{db_path}"
+    # URI is normalized to absolute POSIX path (Windows-safe)
+    assert app.config["SQLALCHEMY_DATABASE_URI"] == f"sqlite:///{db_path.resolve().as_posix()}"
 
 
 def test_app_has_blueprints(tmp_path):

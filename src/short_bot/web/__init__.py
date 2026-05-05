@@ -30,7 +30,7 @@ def create_app(
 ) -> Flask:
     """Construct the Flask app. `scheduler=False` for tests."""
     config_dir = Path(config_dir)
-    db_path = Path(db_path)
+    db_path = Path(db_path).resolve()    # absolute, avoids cwd surprises
 
     # Ensure schema exists (Phase 1+2 init_db is idempotent + adds pragmas)
     init_db(db_path)
@@ -40,7 +40,8 @@ def create_app(
         template_folder="templates",
         static_folder="static",
     )
-    app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
+    # Use POSIX path for SQLite URI: avoids backslash mangling on Windows
+    app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path.as_posix()}"
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["SECRET_KEY"] = "dev-key-change-me"   # dev only; localhost-only
 
