@@ -4,13 +4,26 @@
 <a href="/channels" class="text-claude-muted hover:text-claude-text text-sm">&larr; Kanallar</a>
 <h1 class="font-serif text-3xl font-bold mt-2 mb-6">+ Yeni Kanal</h1>
 
-<div class="grid grid-cols-2 gap-6">
+<div x-data="{ source: 'rss' }" class="grid grid-cols-2 gap-6">
   <form id="wizard-form" hx-post="/channels/new/generate" hx-target="#preview" hx-indicator="#loading"
         class="space-y-4">
+
+    <fieldset class="border border-claude-border rounded-lg p-3">
+      <legend class="text-xs text-claude-muted uppercase px-2">Kanal Türü</legend>
+      <label class="flex items-center gap-2 cursor-pointer">
+        <input type="radio" name="content_source" value="rss" x-model="source" checked>
+        <span>📰 Haber (RSS)</span>
+      </label>
+      <label class="flex items-center gap-2 cursor-pointer mt-1">
+        <input type="radio" name="content_source" value="generator" x-model="source">
+        <span>✨ Üretici (Sonnet ile sıfırdan)</span>
+      </label>
+    </fieldset>
+
     <h2 class="font-serif text-lg font-bold">Temel Bilgi</h2>
 
     <label class="block">
-      <span class="text-xs text-claude-muted uppercase">Kanal &#304;sim</span>
+      <span class="text-xs text-claude-muted uppercase">Kanal İsim</span>
       <input type="text" name="name" required
              class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
     </label>
@@ -26,11 +39,18 @@
       </select>
     </label>
 
-    <label class="block">
+    <label class="block" x-show="source === 'rss'">
       <span class="text-xs text-claude-muted uppercase">Keywords (virgülle)</span>
-      <input type="text" name="keywords" required
+      <input type="text" name="keywords"
              placeholder="Bundesliga, Bayern, Champions League"
              class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text placeholder:text-claude-muted">
+    </label>
+
+    <label class="block" x-show="source === 'generator'">
+      <span class="text-xs text-claude-muted uppercase">Konu (en az 1 cümle)</span>
+      <textarea name="generator_topic" rows="3"
+                placeholder='Sevgi ve aşk üzerine kısa, vurucu sözler — günlük instagram alıntısı tarzında.'
+                class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text placeholder:text-claude-muted"></textarea>
     </label>
 
     <label class="block">
