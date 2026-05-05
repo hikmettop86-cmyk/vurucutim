@@ -9,9 +9,16 @@
 </div>
 
 <form method="POST" class="grid grid-cols-2 gap-6"
-      x-data='{ primary: "{{ c.dna.palette.primary if c.dna else c.colors.primary }}",
-                accent: "{{ c.dna.palette.accent if c.dna else c.colors.accent }}",
-                fontHeadline: "{{ c.dna.fonts.headline if c.dna else "Inter" }}" }'>
+      x-data='{
+        primary: "{{ c.dna.palette.primary if c.dna else c.colors.primary }}",
+        accent: "{{ c.dna.palette.accent if c.dna else c.colors.accent }}",
+        fontHeadline: "{{ c.dna.fonts.headline if c.dna else "Inter" }}",
+        fontBody: "{{ c.dna.fonts.body if c.dna else "Inter" }}",
+        bannerShape: "{{ c.dna.banner_shape if c.dna else "flat" }}",
+        highlightStyle: "{{ c.dna.highlight_style if c.dna else "bg-flat" }}",
+        chipStyle: "{{ c.dna.chip_style if c.dna else "rounded" }}",
+        categoryIcon: "{{ c.dna.category_icon if c.dna else "" }}"
+      }'>
   <div class="space-y-4">
     <h2 class="font-serif text-lg font-bold">Temel</h2>
     <label class="block">
@@ -76,7 +83,8 @@
       </label>
       <label class="block">
         <span class="text-xs text-claude-muted uppercase">Body font</span>
-        <select name="dna_font_body" class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
+        <select name="dna_font_body" x-model="fontBody"
+                class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
           {% for f in ["Inter", "Roboto", "Lato", "Open Sans", "Montserrat", "Georgia"] %}
             <option value="{{ f }}" {% if c.dna.fonts.body == f %}selected{% endif %}>{{ f }}</option>
           {% endfor %}
@@ -89,7 +97,7 @@
       <div class="flex gap-2 mt-1">
         {% for s in ["flat", "ribbon", "slanted", "sharp"] %}
           <label class="flex-1">
-            <input type="radio" name="dna_banner_shape" value="{{ s }}"
+            <input type="radio" name="dna_banner_shape" value="{{ s }}" x-model="bannerShape"
                    {% if c.dna.banner_shape == s %}checked{% endif %} class="hidden peer">
             <div class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border peer-checked:bg-claude-accent peer-checked:text-white peer-checked:border-claude-accent px-3 py-2 rounded-lg text-center text-sm cursor-pointer">{{ s }}</div>
           </label>
@@ -102,7 +110,7 @@
       <div class="flex gap-2 mt-1">
         {% for s in ["bg-flat", "underline", "marker", "neon"] %}
           <label class="flex-1">
-            <input type="radio" name="dna_highlight_style" value="{{ s }}"
+            <input type="radio" name="dna_highlight_style" value="{{ s }}" x-model="highlightStyle"
                    {% if c.dna.highlight_style == s %}checked{% endif %} class="hidden peer">
             <div class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border peer-checked:bg-claude-accent peer-checked:text-white peer-checked:border-claude-accent px-3 py-2 rounded-lg text-center text-sm cursor-pointer">{{ s }}</div>
           </label>
@@ -115,7 +123,7 @@
       <div class="flex gap-2 mt-1">
         {% for s in ["rounded", "sharp", "pill"] %}
           <label class="flex-1">
-            <input type="radio" name="dna_chip_style" value="{{ s }}"
+            <input type="radio" name="dna_chip_style" value="{{ s }}" x-model="chipStyle"
                    {% if c.dna.chip_style == s %}checked{% endif %} class="hidden peer">
             <div class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border peer-checked:bg-claude-accent peer-checked:text-white peer-checked:border-claude-accent px-3 py-2 rounded-lg text-center text-sm cursor-pointer">{{ s }}</div>
           </label>
@@ -125,7 +133,8 @@
 
     <label class="block">
       <span class="text-xs text-claude-muted uppercase">Category icon</span>
-      <input type="text" name="dna_category_icon" value="{{ c.dna.category_icon }}"
+      <input type="text" name="dna_category_icon" x-model="categoryIcon"
+             value="{{ c.dna.category_icon }}"
              maxlength="4" class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-24 mt-1 text-2xl text-center text-claude-text">
     </label>
     {% endif %}
@@ -139,7 +148,7 @@
     <h2 class="font-serif text-lg font-bold mb-4">Önizleme</h2>
     <div class="relative bg-black rounded-lg overflow-hidden mx-auto"
          style="width: 100%; max-width: 360px; aspect-ratio: 9/16;">
-      <iframe x-bind:src="`/preview/{{ c.slug }}?primary=${encodeURIComponent(primary)}&accent=${encodeURIComponent(accent)}&font_headline=${encodeURIComponent(fontHeadline)}`"
+      <iframe x-bind:src="`/preview/{{ c.slug }}?primary=${encodeURIComponent(primary)}&accent=${encodeURIComponent(accent)}&font_headline=${encodeURIComponent(fontHeadline)}&font_body=${encodeURIComponent(fontBody)}&banner_shape=${encodeURIComponent(bannerShape)}&highlight_style=${encodeURIComponent(highlightStyle)}&chip_style=${encodeURIComponent(chipStyle)}&category_icon=${encodeURIComponent(categoryIcon)}`"
               src="/preview/{{ c.slug }}"
               scrolling="no"
               class="absolute top-0 left-0 border-0"

@@ -49,16 +49,35 @@ def preview(slug):
 
     dna = cfg.dna or _default_dna_for(cfg.template, cfg)
 
-    # Apply query param overrides (color picker live tweaks)
+    # Apply query param overrides (color picker / dropdown / pill live tweaks)
+    palette_update = {}
     if request.args.get("primary"):
-        dna = dna.model_copy(update={"palette": dna.palette.model_copy(
-            update={"primary": request.args["primary"]})})
+        palette_update["primary"] = request.args["primary"]
     if request.args.get("accent"):
-        dna = dna.model_copy(update={"palette": dna.palette.model_copy(
-            update={"accent": request.args["accent"]})})
+        palette_update["accent"] = request.args["accent"]
+    if palette_update:
+        dna = dna.model_copy(update={"palette": dna.palette.model_copy(update=palette_update)})
+
+    fonts_update = {}
     if request.args.get("font_headline"):
-        dna = dna.model_copy(update={"fonts": dna.fonts.model_copy(
-            update={"headline": request.args["font_headline"]})})
+        fonts_update["headline"] = request.args["font_headline"]
+    if request.args.get("font_body"):
+        fonts_update["body"] = request.args["font_body"]
+    if fonts_update:
+        dna = dna.model_copy(update={"fonts": dna.fonts.model_copy(update=fonts_update)})
+
+    # Top-level Literal fields
+    top_update = {}
+    if request.args.get("banner_shape") in {"flat", "ribbon", "slanted", "sharp"}:
+        top_update["banner_shape"] = request.args["banner_shape"]
+    if request.args.get("highlight_style") in {"bg-flat", "underline", "marker", "neon"}:
+        top_update["highlight_style"] = request.args["highlight_style"]
+    if request.args.get("chip_style") in {"rounded", "sharp", "pill"}:
+        top_update["chip_style"] = request.args["chip_style"]
+    if request.args.get("category_icon") is not None:
+        top_update["category_icon"] = request.args["category_icon"][:4]
+    if top_update:
+        dna = dna.model_copy(update=top_update)
 
     script = _load_sample_script(cfg.language)
     job = RenderJob(
