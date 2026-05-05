@@ -305,7 +305,8 @@ def _run_generator(*, channel, run_id, log, eng, settings,
     log.info(f"  → forbidden={len(forbidden)} topic_dist={topic_dist}")
 
     fuzzy_threshold = (channel.generator.fuzzy_threshold
-                       or settings.fuzzy_dedup_threshold)
+                       if channel.generator.fuzzy_threshold is not None
+                       else settings.fuzzy_dedup_threshold)
 
     last_text = ""
     chosen_result = None
