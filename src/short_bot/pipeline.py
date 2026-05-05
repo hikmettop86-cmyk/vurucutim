@@ -114,140 +114,19 @@ def run_pipeline(
     try:
         try:
             with lock:
-                log.info(f"=== run {run_id} channel={channel.slug} trigger={trigger} ===")
-
-                log.info("[1/8] fetch_rss")
-                items = fetch_rss(channel.keywords, channel.rss_locale)
-                log.info(f"  → {len(items)} items")
-
-                log.info("[2/8] dedup")
-                new_items = filter_new(eng, items, channel.slug,
-                                        fuzzy_threshold=settings.fuzzy_dedup_threshold)
-                log.info(f"  → {len(new_items)} new")
-                # Record only fuzzy-similar dropped items (not GUID-exact duplicates,
-                # which would bloat rss_items on every poll for the same headline)
-                from short_bot.db import is_processed
-                new_guids = {n.guid for n in new_items}
-                for old in items:
-                    if old.guid in new_guids:
-                        continue
-                    if is_processed(eng, old.guid, channel.slug):
-                        continue  # GUID-exact, already in processed_items, skip
-                    # Fuzzy-similar: log it for the panel
-                    record_rss_item(eng, guid=old.guid, channel=channel.slug,
-                                    title=old.title, link=old.link, source=old.source,
-                                    pub_date=old.pub_date, thumb_url=old.thumb_url,
-                                    score=None, status="duplicate")
-
-                if not new_items:
-                    log.info("no candidates → finish")
-                    finish_run(eng, run_id, status="no_candidates", short_id=None, error=None)
-                    return RunResult(run_id=run_id, status="no_candidates", short_path=None, error=None)
-
-                log.info("[3/8] score_items")
-                candidates = new_items[:channel.max_candidates_per_run]
-                scored = score_items(candidates, claude_path=settings.claude_cli_path)
-                top = select_top(scored, min_score=channel.min_score, n=1)
-                picked_guid = top[0].item.guid if top else None
-                for s in scored:
-                    status = "selected" if s.item.guid == picked_guid else "below_threshold"
-                    record_rss_item(eng, guid=s.item.guid, channel=channel.slug,
-                                    title=s.item.title, link=s.item.link, source=s.item.source,
-                                    pub_date=s.item.pub_date, thumb_url=s.item.thumb_url,
-                                    score=s.score, status=status)
-                if not top:
-                    log.info(f"no item ≥ {channel.min_score} → finish")
-                    # Show top 3 for calibration / debug
-                    top_seen = sorted(scored, key=lambda s: s.score, reverse=True)[:3]
-                    for i, s in enumerate(top_seen, 1):
-                        log.info(f"  top#{i} score={s.score:.1f} | {s.item.title[:80]}")
-                    finish_run(eng, run_id, status="no_candidates", short_id=None, error=None)
-                    return RunResult(run_id=run_id, status="no_candidates", short_path=None, error=None)
-                picked = top[0]
-                log.info(f"  → picked {picked.item.guid} (score={picked.score})")
-
-                log.info("[4/8] extract_article")
-                body = extract_article(picked.item.link)
-                if body is None:
-                    body = picked.item.description or picked.item.title
-                    log.warning("  trafilatura empty → fallback description")
-                log.info(f"  → body {len(body)} chars")
-
-                log.info("[5/8] write_script")
-                script_model = channel.script_model or settings.claude_models.get("default", "default")
-                script = write_script(picked.item, body, claude_path=settings.claude_cli_path,
-                                      channel=channel, model=script_model)
-                log.info(f"  → {script.header_top} | {script.header_bottom}")
-
-                log.info("[6/8] assets")
-                bg = None
-                if picked.item.thumb_url:
-                    bg = download_and_blur_thumb(picked.item.thumb_url, cache_dir)
-                if bg is None:
-                    # Fallback: search DDG + verify with Claude vision
-                    from short_bot.image_picker import pick_image_for_script
-                    images_cache = cache_dir / "images"
-                    bg = pick_image_for_script(script, images_cache,
-                                                claude_path=settings.claude_cli_path,
-                                                channel=channel)
-                    if bg:
-                        log.info(f"  ddg image accepted: {bg.name}")
-                music = pick_music(music_root, mood=script.mood)
-                log.info(f"  → bg={'cached' if bg else 'none'} music={music.name}")
-
-                log.info("[7/8] render_frames")
-                job = RenderJob(
-                    script=script,
-                    bg_image_path=bg,
-                    music_path=music,
-                    channel_colors=channel.colors,
-                    handle=channel.handle,
-                    duration_s=channel.duration_s,
-                    language=channel.language,
-                    cta_enabled=channel.cta_enabled,
-                    cta_text=channel.cta_text,
-                    cta_icons=channel.cta_icons,
-                    cta_duration_s=channel.cta_duration_s,
-                    cta_show_handle=channel.cta_show_handle,
+                log.info(f"=== run {run_id} channel={channel.slug} "
+                         f"trigger={trigger} source={channel.content_source} ===")
+                if channel.content_source == "generator":
+                    return _run_generator(
+                        channel=channel, run_id=run_id, log=log, eng=eng,
+                        settings=settings, music_root=music_root,
+                        templates_dir=templates_dir, cache_dir=cache_dir,
+                    )
+                return _run_rss(
+                    channel=channel, run_id=run_id, log=log, eng=eng,
+                    settings=settings, music_root=music_root,
+                    templates_dir=templates_dir, cache_dir=cache_dir,
                 )
-
-                with tempfile.TemporaryDirectory() as tmpd:
-                    frames_dir = Path(tmpd) / "frames"
-                    t0 = time.perf_counter()
-                    template_path = templates_dir / f"{channel.template}.html.j2"
-                    ui_labels = ui_labels_for(channel.language)
-                    dna_css_path = Path("templates") / "css" / f"{channel.slug}.css"
-                    dna_css = dna_css_path.read_text(encoding="utf-8") if dna_css_path.exists() else ""
-                    render_frames(job, template_path, frames_dir,
-                                  fps=30, browser=settings.playwright_browser,
-                                  ui_labels=ui_labels, dna_css=dna_css)
-
-                    log.info("[8/8] compose_video")
-                    out_dir = Path(channel.output_dir)
-                    out_dir.mkdir(parents=True, exist_ok=True)
-                    slug = _slugify(picked.item.title)
-                    out_path = out_dir / f"{datetime.now(timezone.utc):%Y-%m-%d}_{slug}.mp4"
-
-                    # Build SFX schedule for CTA window
-                    sfx_overlays = _build_cta_sfx(channel)
-
-                    compose_video(frames_dir, music, out_path,
-                                  fps=30, ffmpeg_path=settings.ffmpeg_path,
-                                  sfx_overlays=sfx_overlays)
-                    render_ms = int((time.perf_counter() - t0) * 1000)
-                    log.info(f"  → {out_path.name} ({render_ms}ms)")
-
-                mark_processed(eng, picked.item.guid, picked.item.title, channel.slug)
-                short_id = record_short(eng,
-                    channel=channel.slug, rss_item_guid=picked.item.guid,
-                    title=script.header_top + " " + script.header_bottom,
-                    file_path=str(out_path), duration_s=channel.duration_s,
-                    script_json=script.model_dump_json(), render_ms=render_ms,
-                )
-                finish_run(eng, run_id, status="success", short_id=short_id, error=None)
-                log.info(f"=== success short_id={short_id} ===")
-                return RunResult(run_id=run_id, status="success", short_path=out_path, error=None)
-
         except Timeout:
             finish_run(eng, run_id, status="failed", short_id=None,
                        error="lock busy: pipeline already running for this channel")
@@ -267,3 +146,145 @@ def run_pipeline(
             log.removeHandler(h)
         # Dispose engine to release the SQLite connection pool (CLI use case)
         eng.dispose()
+
+
+def _run_rss(*, channel, run_id, log, eng, settings,
+             music_root, templates_dir, cache_dir) -> RunResult:
+    """Existing 8-stage RSS pipeline body, extracted verbatim. Returns RunResult."""
+    log.info("[1/8] fetch_rss")
+    items = fetch_rss(channel.keywords, channel.rss_locale)
+    log.info(f"  → {len(items)} items")
+
+    log.info("[2/8] dedup")
+    new_items = filter_new(eng, items, channel.slug,
+                            fuzzy_threshold=settings.fuzzy_dedup_threshold)
+    log.info(f"  → {len(new_items)} new")
+    # Record only fuzzy-similar dropped items (not GUID-exact duplicates,
+    # which would bloat rss_items on every poll for the same headline)
+    from short_bot.db import is_processed
+    new_guids = {n.guid for n in new_items}
+    for old in items:
+        if old.guid in new_guids:
+            continue
+        if is_processed(eng, old.guid, channel.slug):
+            continue  # GUID-exact, already in processed_items, skip
+        # Fuzzy-similar: log it for the panel
+        record_rss_item(eng, guid=old.guid, channel=channel.slug,
+                        title=old.title, link=old.link, source=old.source,
+                        pub_date=old.pub_date, thumb_url=old.thumb_url,
+                        score=None, status="duplicate")
+
+    if not new_items:
+        log.info("no candidates → finish")
+        finish_run(eng, run_id, status="no_candidates", short_id=None, error=None)
+        return RunResult(run_id=run_id, status="no_candidates", short_path=None, error=None)
+
+    log.info("[3/8] score_items")
+    candidates = new_items[:channel.max_candidates_per_run]
+    scored = score_items(candidates, claude_path=settings.claude_cli_path)
+    top = select_top(scored, min_score=channel.min_score, n=1)
+    picked_guid = top[0].item.guid if top else None
+    for s in scored:
+        status = "selected" if s.item.guid == picked_guid else "below_threshold"
+        record_rss_item(eng, guid=s.item.guid, channel=channel.slug,
+                        title=s.item.title, link=s.item.link, source=s.item.source,
+                        pub_date=s.item.pub_date, thumb_url=s.item.thumb_url,
+                        score=s.score, status=status)
+    if not top:
+        log.info(f"no item ≥ {channel.min_score} → finish")
+        # Show top 3 for calibration / debug
+        top_seen = sorted(scored, key=lambda s: s.score, reverse=True)[:3]
+        for i, s in enumerate(top_seen, 1):
+            log.info(f"  top#{i} score={s.score:.1f} | {s.item.title[:80]}")
+        finish_run(eng, run_id, status="no_candidates", short_id=None, error=None)
+        return RunResult(run_id=run_id, status="no_candidates", short_path=None, error=None)
+    picked = top[0]
+    log.info(f"  → picked {picked.item.guid} (score={picked.score})")
+
+    log.info("[4/8] extract_article")
+    body = extract_article(picked.item.link)
+    if body is None:
+        body = picked.item.description or picked.item.title
+        log.warning("  trafilatura empty → fallback description")
+    log.info(f"  → body {len(body)} chars")
+
+    log.info("[5/8] write_script")
+    script_model = channel.script_model or settings.claude_models.get("default", "default")
+    script = write_script(picked.item, body, claude_path=settings.claude_cli_path,
+                          channel=channel, model=script_model)
+    log.info(f"  → {script.header_top} | {script.header_bottom}")
+
+    log.info("[6/8] assets")
+    bg = None
+    if picked.item.thumb_url:
+        bg = download_and_blur_thumb(picked.item.thumb_url, cache_dir)
+    if bg is None:
+        # Fallback: search DDG + verify with Claude vision
+        from short_bot.image_picker import pick_image_for_script
+        images_cache = cache_dir / "images"
+        bg = pick_image_for_script(script, images_cache,
+                                    claude_path=settings.claude_cli_path,
+                                    channel=channel)
+        if bg:
+            log.info(f"  ddg image accepted: {bg.name}")
+    music = pick_music(music_root, mood=script.mood)
+    log.info(f"  → bg={'cached' if bg else 'none'} music={music.name}")
+
+    log.info("[7/8] render_frames")
+    job = RenderJob(
+        script=script,
+        bg_image_path=bg,
+        music_path=music,
+        channel_colors=channel.colors,
+        handle=channel.handle,
+        duration_s=channel.duration_s,
+        language=channel.language,
+        cta_enabled=channel.cta_enabled,
+        cta_text=channel.cta_text,
+        cta_icons=channel.cta_icons,
+        cta_duration_s=channel.cta_duration_s,
+        cta_show_handle=channel.cta_show_handle,
+    )
+
+    with tempfile.TemporaryDirectory() as tmpd:
+        frames_dir = Path(tmpd) / "frames"
+        t0 = time.perf_counter()
+        template_path = templates_dir / f"{channel.template}.html.j2"
+        ui_labels = ui_labels_for(channel.language)
+        dna_css_path = Path("templates") / "css" / f"{channel.slug}.css"
+        dna_css = dna_css_path.read_text(encoding="utf-8") if dna_css_path.exists() else ""
+        render_frames(job, template_path, frames_dir,
+                      fps=30, browser=settings.playwright_browser,
+                      ui_labels=ui_labels, dna_css=dna_css)
+
+        log.info("[8/8] compose_video")
+        out_dir = Path(channel.output_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        slug = _slugify(picked.item.title)
+        out_path = out_dir / f"{datetime.now(timezone.utc):%Y-%m-%d}_{slug}.mp4"
+
+        # Build SFX schedule for CTA window
+        sfx_overlays = _build_cta_sfx(channel)
+
+        compose_video(frames_dir, music, out_path,
+                      fps=30, ffmpeg_path=settings.ffmpeg_path,
+                      sfx_overlays=sfx_overlays)
+        render_ms = int((time.perf_counter() - t0) * 1000)
+        log.info(f"  → {out_path.name} ({render_ms}ms)")
+
+    mark_processed(eng, picked.item.guid, picked.item.title, channel.slug)
+    short_id = record_short(eng,
+        channel=channel.slug, rss_item_guid=picked.item.guid,
+        title=script.header_top + " " + script.header_bottom,
+        file_path=str(out_path), duration_s=channel.duration_s,
+        script_json=script.model_dump_json(), render_ms=render_ms,
+    )
+    finish_run(eng, run_id, status="success", short_id=short_id, error=None)
+    log.info(f"=== success short_id={short_id} ===")
+    return RunResult(run_id=run_id, status="success", short_path=out_path, error=None)
+
+
+def _run_generator(*, channel, run_id, log, eng, settings,
+                   music_root, templates_dir, cache_dir) -> RunResult:
+    """Generator pipeline body (Task 11 fills this in)."""
+    raise NotImplementedError("filled in Task 11")
