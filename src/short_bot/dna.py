@@ -136,6 +136,32 @@ SEARCH_QUERY_TEMPLATE:
 - Spor için: "{{header_top}} {{category}} football match"
 - Tech için: "{{header_top}} technology"
 
+ÖZGÜR CSS (custom_css):
+Yapısal alanları (palette, fonts, banner_shape, vb.) yukarıda doldurduktan sonra,
+kanala özel görsel zenginlik için ek bir CSS bloğu yaz.
+
+✓ İZİNLİ:
+- background-image / repeating gradient / pattern (body, .stage, ::before, ::after)
+- ::before / ::after dekoratif elementler (HER selector için)
+- text-shadow, -webkit-text-stroke, gradient text (.header .top, .header .bot, .body)
+- filter / mix-blend-mode / box-shadow / border-radius
+- photo treatment (.photo border, mask, filter)
+- chip dekorasyonu (.persistent ::before/::after, decorative borders)
+- Custom @keyframes (sadece YENİ dekoratif elementler için)
+
+✗ YASAKLI (KESİNLİKLE DOKUNMA — render bozar):
+- position / top / bottom / left / right / width / height değerleri
+  .header, .body, .persistent, .progress, .handle, .stage selector'larında
+- z-index 100'den büyük (CTA layer çakışmaması için)
+- mevcut @keyframes'leri (fill, ken-burns vb) override etme
+
+ÖRNEK:
+- Magazine: bg radial-gradient + .photo polaroid frame + .body italic
+- Tech: bg scanline pattern + .header text-stroke + .persistent neon glow
+- Romance: bg pink gradient + heart pattern overlay + script font shadow
+
+Çıktı: 1500-3000 karakter arası ham CSS, başka açıklama yazma. Boş bırakma.
+
 ÇIKTI: SADECE aşağıdaki JSON formatında yanıtla, başka metin yazma:
 {{
   "archetype": "...",
@@ -150,7 +176,8 @@ SEARCH_QUERY_TEMPLATE:
   "chip_style": "...",
   "category_icon": "...",
   "search_query_template": "...",
-  "persona_summary": "..."
+  "persona_summary": "...",
+  "custom_css": "<1500-3000 karakter ham CSS>"
 }}
 """
 

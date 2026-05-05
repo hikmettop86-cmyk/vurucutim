@@ -243,6 +243,26 @@ def test_dna_custom_css_accepts_value():
     assert "background:" in dna.custom_css
 
 
+def test_build_dna_prompt_includes_custom_css_section():
+    p = build_dna_prompt(name="Test", keywords=["x"], language="tr")
+    assert "ÖZGÜR CSS" in p
+    assert "custom_css" in p
+
+
+def test_build_dna_prompt_lists_forbidden_css_properties():
+    p = build_dna_prompt(name="Test", keywords=["x"], language="tr")
+    assert "position" in p
+    assert "YASAKLI" in p
+    assert ".header" in p
+    assert ".body" in p
+    assert ".persistent" in p
+
+
+def test_build_dna_prompt_json_schema_includes_custom_css():
+    p = build_dna_prompt(name="Test", keywords=["x"], language="tr")
+    assert '"custom_css"' in p
+
+
 def test_dna_custom_css_max_length_enforced():
     long_css = "/* x */" * 1500   # ~9000 chars, exceeds 8000 limit
     with pytest.raises(ValidationError):
