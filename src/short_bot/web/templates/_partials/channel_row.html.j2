@@ -1,5 +1,12 @@
 <tr class="border-b border-claude-border hover:bg-claude-surface-alt" id="channel-{{ c.slug }}">
-  <td class="p-3 font-mono text-xs">{{ c.slug }}</td>
+  <td class="p-3 font-mono text-xs">
+    {{ c.slug }}
+    {% if c.content_source == 'generator' %}
+      <span title="Generator (Sonnet)" class="text-claude-accent ml-1">✨</span>
+    {% else %}
+      <span title="RSS" class="text-claude-muted ml-1">📰</span>
+    {% endif %}
+  </td>
   <td class="p-3">{{ c.name }}</td>
   <td class="p-3">{{ c.language }}</td>
   <td class="p-3 text-claude-muted">{{ c.template }}</td>
