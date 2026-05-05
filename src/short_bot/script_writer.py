@@ -19,7 +19,7 @@ Görev: Bu haberi 3-katmanlı bir Short videoya dönüştür. SADECE aşağıdak
   "header_top":      "<üst satır, 1-3 kelime, BÜYÜK HARF, dikkat çekici>",
   "header_bottom":   "<alt satır, 1-3 kelime, BÜYÜK HARF>",
   "photo_overlay":   "<fotoğraf üzeri sarı bantta görünecek, 2-5 kelime, BÜYÜK HARF, somut sayı/etki>",
-  "body_paragraph":  "<haberi 4-6 cümlede özetleyen Türkçe paragraf, 250-400 karakter, akıcı haber dili>",
+  "body_paragraph":  "<haberi 4-5 cümlede özetleyen Türkçe paragraf, 250-320 karakter, akıcı haber dili>",
   "highlights":      [{{"text": "<paragrafta birebir geçen ifade>", "color": "red"|"yellow"}}],
   "category":        "<EKONOMİ | SPOR | DÜNYA | TEKNOLOJİ | SAĞLIK | SİYASET | SON DAKİKA | ...>",
   "mood":            "breaking" | "neutral" | "upbeat"
@@ -29,6 +29,7 @@ Kurallar:
 - highlights[i].text MUTLAKA body_paragraph içinde birebir (kelimesi kelimesine) geçmelidir
 - 1-4 highlight ekle: önemli sayı/oran/karar = yellow; uyarı/tehlike/şok = red
 - header_top + header_bottom toplam 4-6 kelimeyi geçmesin
+- header_top + header_bottom toplam ≤6 kelime VE her satır ≤14 harf (uzun tek kelime taşar)
 - Yazım Türkçe, diakritikler tam (ç, ğ, ı, ö, ş, ü)
 """
 
