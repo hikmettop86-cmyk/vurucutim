@@ -104,10 +104,12 @@ def render_frames(
     *,
     fps: int = 30,
     browser: str = "chromium",
+    ui_labels: dict[str, str] | None = None,
+    dna_css: str = "",
 ) -> int:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    html = build_html(job, template_path)
+    html = build_html(job, template_path, ui_labels=ui_labels, dna_css=dna_css)
 
     total_frames = job.duration_s * fps
 

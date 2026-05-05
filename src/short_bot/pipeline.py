@@ -27,6 +27,7 @@ from short_bot.script_writer import write_script
 from short_bot.assets import download_and_blur_thumb, pick_music
 from short_bot.renderer import render_frames
 from short_bot.composer import compose_video
+from short_bot.locale import ui_labels_for
 
 
 @dataclass
@@ -173,7 +174,9 @@ def run_pipeline(
                 log.info(f"  → body {len(body)} chars")
 
                 log.info("[5/8] write_script")
-                script = write_script(picked.item, body, claude_path=settings.claude_cli_path)
+                script_model = channel.script_model or settings.claude_models.get("default", "default")
+                script = write_script(picked.item, body, claude_path=settings.claude_cli_path,
+                                      channel=channel, model=script_model)
                 log.info(f"  → {script.header_top} | {script.header_bottom}")
 
                 log.info("[6/8] assets")
@@ -185,7 +188,8 @@ def run_pipeline(
                     from short_bot.image_picker import pick_image_for_script
                     images_cache = cache_dir / "images"
                     bg = pick_image_for_script(script, images_cache,
-                                                claude_path=settings.claude_cli_path)
+                                                claude_path=settings.claude_cli_path,
+                                                channel=channel)
                     if bg:
                         log.info(f"  ddg image accepted: {bg.name}")
                 music = pick_music(music_root, mood=script.mood)
@@ -199,6 +203,7 @@ def run_pipeline(
                     channel_colors=channel.colors,
                     handle=channel.handle,
                     duration_s=channel.duration_s,
+                    language=channel.language,
                     cta_enabled=channel.cta_enabled,
                     cta_text=channel.cta_text,
                     cta_icons=channel.cta_icons,
@@ -210,8 +215,12 @@ def run_pipeline(
                     frames_dir = Path(tmpd) / "frames"
                     t0 = time.perf_counter()
                     template_path = templates_dir / f"{channel.template}.html.j2"
+                    ui_labels = ui_labels_for(channel.language)
+                    dna_css_path = Path("templates") / "css" / f"{channel.slug}.css"
+                    dna_css = dna_css_path.read_text(encoding="utf-8") if dna_css_path.exists() else ""
                     render_frames(job, template_path, frames_dir,
-                                  fps=30, browser=settings.playwright_browser)
+                                  fps=30, browser=settings.playwright_browser,
+                                  ui_labels=ui_labels, dna_css=dna_css)
 
                     log.info("[8/8] compose_video")
                     out_dir = Path(channel.output_dir)
