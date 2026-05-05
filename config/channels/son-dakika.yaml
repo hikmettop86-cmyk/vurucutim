@@ -18,5 +18,5 @@ cta:
   enabled: true
   text: "BEĞEN · ABONE OL · PAYLAŞ"
   icons: ["❤️", "🔔", "↗️"]
-  duration_s: 1
+  duration_s: 3
   show_handle: true
