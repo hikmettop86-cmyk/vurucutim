@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="{{ language }}">
+<head>
+<meta charset="utf-8">
+<title>Short — Dark Tech</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;700&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --primary: #ff00ff;
+    --accent: #00ffff;
+    --bg-grad-1: #1a0a3a;
+    --bg-grad-2: #0a0a1a;
+    --body-bg-1: #0a0a14;
+    --body-bg-2: #000000;
+    --text-main: #ffffff;
+    --text-muted: #00ff88;
+    --font-headline: 'JetBrains Mono', 'Courier New', monospace;
+    --font-body: 'JetBrains Mono', 'Courier New', monospace;
+  }
+  html, body { width: 1080px; height: 1920px; overflow: hidden;
+    background: radial-gradient(ellipse at top, var(--bg-grad-1), var(--bg-grad-2) 70%);
+    font-family: var(--font-body); color: var(--text-main); }
+  .stage { position: relative; width: 1080px; height: 1920px; }
+
+  .stage-badge {
+    position: absolute; top: 24px; right: 24px;
+    background: var(--accent); color: #000;
+    font-family: var(--font-headline);
+    font-size: 18px; font-weight: 700; letter-spacing: 1px;
+    padding: 4px 10px;
+    z-index: 10;
+  }
+
+  .header {
+    padding: 60px 50px 30px;
+    font-family: var(--font-headline);
+  }
+  .header .top {
+    display: block;
+    color: var(--accent);
+    font-size: 56px;
+    font-weight: 700;
+    margin-bottom: 14px;
+  }
+  .header .bot {
+    display: block;
+    color: var(--text-main);
+    font-size: 90px;
+    line-height: 1.05;
+    border-left: 6px solid var(--primary);
+    padding-left: 24px;
+    font-weight: 700;
+  }
+
+  .photo {
+    position: relative;
+    margin: 30px 50px;
+    height: 460px;
+    background: linear-gradient(135deg, var(--bg-grad-1), var(--bg-grad-2));
+    overflow: hidden;
+    border: 1px solid var(--accent);
+  }
+  .photo .bg-img {
+    position: absolute; inset: 0;
+    background-image: url('{{ bg_image_url|default("") }}');
+    background-size: cover; background-position: center;
+    {% if not bg_image_url %}display: none;{% endif %}
+    filter: hue-rotate(45deg) saturate(.8) brightness(.7);
+  }
+  .photo::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: repeating-linear-gradient(0deg, transparent 0, transparent 3px, rgba(0,255,255,.05) 3px, rgba(0,255,255,.05) 4px);
+    pointer-events: none;
+  }
+  .photo .label {
+    position: absolute; bottom: 10px; left: 14px;
+    font-family: var(--font-headline);
+    font-size: 22px;
+    color: var(--accent);
+    background: rgba(0,0,0,.7);
+    padding: 4px 10px;
+  }
+
+  .body {
+    padding: 30px 50px 220px;
+    font-family: var(--font-headline);
+    font-size: 36px;
+    line-height: 1.4;
+    color: var(--text-main);
+    display: -webkit-box;
+    -webkit-line-clamp: 8;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .body .hl-r {
+    color: var(--primary);
+    text-shadow: 0 0 6px var(--primary);
+    font-weight: 700;
+  }
+  .body .hl-y {
+    color: var(--accent);
+    text-shadow: 0 0 6px var(--accent);
+    font-weight: 700;
+  }
+
+  .progress {
+    position: absolute; left: 0; right: 0; bottom: 84px; height: 4px;
+    background: rgba(0,255,255,.15);
+  }
+  .progress::after {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+    background: var(--accent);
+    box-shadow: 0 0 12px var(--accent);
+    animation: fill {{ duration_s }}s linear forwards;
+  }
+  @keyframes fill { from { width: 0; } to { width: 100%; } }
+
+  .handle {
+    position: absolute; left: 0; right: 0; bottom: 30px;
+    text-align: center; color: var(--text-muted);
+    font-family: var(--font-headline);
+    font-size: 22px; font-weight: 700;
+  }
+
+  .persistent {
+    position: absolute;
+    display: flex; align-items: center; gap: 8px;
+    font-family: var(--font-headline);
+    font-weight: 700; font-size: 22px;
+    padding: 6px 14px;
+    border-radius: 2px;
+    color: var(--text-main);
+    background: rgba(0,0,0,.85);
+    border: 1px solid var(--accent);
+    z-index: 35;
+  }
+  .persistent .ic { font-size: 26px; }
+  .persistent.like { bottom: 120px; left: 30px; }
+  .persistent.sub  { bottom: 120px; right: 30px; background: var(--primary); color: #fff; border: 1px solid var(--primary); }
+
+  /* DNA OVERRIDE */
+  {{ dna_css|safe }}
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="stage-badge">{{ ui_breaking }}</div>
+  <div class="header">
+    <span class="top">{{ script.header_top }}</span>
+    <span class="bot">{{ script.header_bottom }}</span>
+  </div>
+
+  <div class="photo">
+    <div class="bg-img"></div>
+    <div class="label">{{ script.photo_overlay }}</div>
+  </div>
+
+  <div class="body">{{ body_html|safe }}</div>
+
+  <div class="progress"></div>
+  <div class="handle">{{ handle }}</div>
+
+  <div class="persistent like"><span class="ic">❤️</span><span>{{ ui_like }}</span></div>
+  <div class="persistent sub"><span class="ic">🔔</span><span>{{ ui_subscribe }}</span></div>
+</div>
+</body>
+</html>
