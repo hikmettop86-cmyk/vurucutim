@@ -1,8 +1,8 @@
 import re
 import unicodedata
 
-from flask import (Blueprint, abort, current_app, redirect, render_template,
-                   request, session, url_for)
+from flask import (Blueprint, abort, current_app, flash, redirect,
+                   render_template, request, session, url_for)
 
 from short_bot.config import ChannelConfig, save_channel
 from short_bot.dna import DnaSpec, build_css_override, generate_dna
@@ -56,6 +56,7 @@ def save():
     dna = DnaSpec.model_validate_json(session["wizard_dna"])
     name = session.get("wizard_name", request.form.get("name", "Channel"))
     language = session.get("wizard_language", request.form.get("language", "tr"))
+    content_source = request.form.get("content_source", "rss")
     keywords = [k.strip() for k in request.form.get("keywords", "").split(",") if k.strip()]
     slug = _slug_from_name(name)
 
@@ -65,6 +66,15 @@ def save():
     css_path = templates_dir / "css" / f"{slug}.css"
     css_path.parent.mkdir(parents=True, exist_ok=True)
     css_path.write_text(build_css_override(dna), encoding="utf-8")
+
+    generator = None
+    if content_source == "generator":
+        from short_bot.config import GeneratorConfig
+        topic = request.form.get("generator_topic", "").strip()
+        if len(topic) < 10:
+            flash("generator.topic en az 10 karakter olmalı.", "error")
+            return redirect(url_for("channel_new.form"))
+        generator = GeneratorConfig(topic=topic)
 
     cfg = ChannelConfig(
         slug=slug, name=name, keywords=keywords,
@@ -80,6 +90,8 @@ def save():
         cta_enabled=False, cta_text="", cta_icons=[],
         cta_duration_s=0, cta_show_handle=False,
         language=language, dna=dna, script_model=None,
+        content_source=content_source,
+        generator=generator,
     )
     save_channel(yaml_path, cfg)
     session.pop("wizard_dna", None)

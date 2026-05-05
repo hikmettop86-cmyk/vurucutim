@@ -36,3 +36,69 @@ def test_new_channel_form_has_generator_topic_field(tmp_path, monkeypatch):
     r = c.get("/channels/new")
     body = r.data.decode("utf-8")
     assert 'name="generator_topic"' in body
+
+
+from unittest.mock import patch
+
+from short_bot.dna import DnaPalette, DnaFonts, DnaTone, DnaSpec
+
+
+def _fake_dna():
+    return DnaSpec(
+        archetype="kinetic",
+        palette=DnaPalette(primary="#000000", accent="#ffffff",
+                           bg_gradient=["#000000", "#111111"],
+                           body_bg=["#000000", "#111111"]),
+        fonts=DnaFonts(),
+        tone=DnaTone(voice="x", style="y"),
+        persona_summary="x",
+    )
+
+
+def test_save_generator_channel_writes_yaml_with_generator_block(tmp_path, monkeypatch):
+    c = _client(tmp_path, monkeypatch)
+    with patch("short_bot.web.routes.channel_new.generate_dna",
+               return_value=_fake_dna()):
+        r1 = c.post("/channels/new/generate", data={
+            "name": "Sevgi Sözleri", "language": "tr",
+            "content_source": "generator",
+            "generator_topic": "Sevgi ve aşk üzerine kısa, vurucu sözler",
+        })
+        assert r1.status_code == 200
+
+    r2 = c.post("/channels/new/save", data={
+        "name": "Sevgi Sözleri", "language": "tr",
+        "content_source": "generator",
+        "generator_topic": "Sevgi ve aşk üzerine kısa, vurucu sözler",
+    })
+    assert r2.status_code in (200, 302)
+
+    yaml_path = (tmp_path / "config" / "channels" / "sevgi-sozleri.yaml")
+    assert yaml_path.exists()
+    contents = yaml_path.read_text(encoding="utf-8")
+    assert "content_source: generator" in contents
+    assert "generator:" in contents
+    assert "Sevgi ve aşk" in contents
+
+
+def test_save_rss_channel_unchanged_no_generator_block(tmp_path, monkeypatch):
+    c = _client(tmp_path, monkeypatch)
+    with patch("short_bot.web.routes.channel_new.generate_dna",
+               return_value=_fake_dna()):
+        c.post("/channels/new/generate", data={
+            "name": "Haber", "language": "tr",
+            "content_source": "rss",
+            "keywords": "ekonomi, siyaset",
+        })
+
+    r2 = c.post("/channels/new/save", data={
+        "name": "Haber", "language": "tr",
+        "content_source": "rss",
+        "keywords": "ekonomi, siyaset",
+    })
+    assert r2.status_code in (200, 302)
+    yaml_path = tmp_path / "config" / "channels" / "haber.yaml"
+    assert yaml_path.exists()
+    contents = yaml_path.read_text(encoding="utf-8")
+    assert "content_source" not in contents    # default not serialized
+    assert "generator:" not in contents
