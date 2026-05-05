@@ -1,6 +1,43 @@
 {% extends "base.html.j2" %}
 {% block title %}short-bot — Dashboard{% endblock %}
 {% block content %}
-<h1 class="text-3xl font-bold mb-4">Dashboard</h1>
-<p class="text-slate-400">(content TBD in next tasks)</p>
+<h1 class="text-3xl font-bold mb-6">Dashboard</h1>
+
+<div class="grid grid-cols-4 gap-4 mb-8">
+  <div class="bg-slate-800 rounded-lg p-4">
+    <div class="text-xs text-slate-400 uppercase tracking-wider">Bugün üretilen</div>
+    <div class="text-3xl font-bold mt-1">{{ today_shorts }}</div>
+  </div>
+  <div class="bg-slate-800 rounded-lg p-4">
+    <div class="text-xs text-slate-400 uppercase tracking-wider">Toplam Shorts</div>
+    <div class="text-3xl font-bold mt-1">{{ total_shorts }}</div>
+  </div>
+  <div class="bg-slate-800 rounded-lg p-4">
+    <div class="text-xs text-slate-400 uppercase tracking-wider">Kanal</div>
+    <div class="text-3xl font-bold mt-1">{{ channel_count }}</div>
+  </div>
+  <div class="bg-slate-800 rounded-lg p-4">
+    <div class="text-xs text-slate-400 uppercase tracking-wider">Hata (24s)</div>
+    <div class="text-3xl font-bold mt-1 {{ 'text-red-500' if failed_runs > 0 else 'text-green-500' }}">
+      {{ failed_runs }}
+    </div>
+  </div>
+</div>
+
+<h2 class="text-xl font-bold mb-3">Son üretilenler</h2>
+<div class="grid grid-cols-4 gap-4">
+  {% for s in recent %}
+  <div class="bg-slate-800 rounded-lg overflow-hidden">
+    <div class="aspect-[9/16] bg-slate-900 flex items-center justify-center text-slate-500 text-xs">
+      <a href="/shorts/{{ s.id }}" class="block w-full h-full flex items-center justify-center">▶ {{ s.title }}</a>
+    </div>
+    <div class="p-3 text-xs">
+      <div class="font-semibold truncate">{{ s.title }}</div>
+      <div class="text-slate-400 mt-1">{{ s.channel }} · {{ s.created_at.strftime('%H:%M') }}</div>
+    </div>
+  </div>
+  {% else %}
+  <div class="col-span-4 text-slate-500 text-center py-8">Henüz Short yok.</div>
+  {% endfor %}
+</div>
 {% endblock %}
