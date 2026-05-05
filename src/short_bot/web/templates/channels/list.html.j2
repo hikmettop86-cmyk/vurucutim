@@ -1,0 +1,49 @@
+{% extends "base.html.j2" %}
+{% block title %}short-bot — Kanallar{% endblock %}
+{% block content %}
+<div class="flex justify-between items-center mb-4">
+  <h1 class="text-3xl font-bold">Kanallar</h1>
+  <a href="/channels/new" class="bg-red-600 hover:bg-red-700 px-4 py-2 rounded font-semibold text-sm">
+    + Yeni Kanal
+  </a>
+</div>
+
+<table class="w-full text-sm">
+  <thead class="bg-slate-800">
+    <tr class="text-left">
+      <th class="p-3">Slug</th>
+      <th class="p-3">İsim</th>
+      <th class="p-3">Dil</th>
+      <th class="p-3">Archetype</th>
+      <th class="p-3">Cron</th>
+      <th class="p-3">DNA</th>
+      <th class="p-3">Aktif</th>
+      <th class="p-3"></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for c in channels %}
+    <tr class="border-b border-slate-800 hover:bg-slate-800/50">
+      <td class="p-3 font-mono text-xs">{{ c.slug }}</td>
+      <td class="p-3">{{ c.name }}</td>
+      <td class="p-3">{{ c.language }}</td>
+      <td class="p-3 text-slate-400">{{ c.template }}</td>
+      <td class="p-3 font-mono text-xs">{{ c.schedule_cron }}</td>
+      <td class="p-3">
+        {% if c.dna %}
+          <span class="bg-green-700 text-white px-2 py-0.5 rounded text-xs">DNA</span>
+        {% else %}
+          <span class="text-slate-500">—</span>
+        {% endif %}
+      </td>
+      <td class="p-3">{{ '✓' if c.enabled else '✗' }}</td>
+      <td class="p-3">
+        <a href="/channels/{{ c.slug }}/edit" class="text-blue-400 hover:underline">Düzenle</a>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="8" class="p-8 text-center text-slate-500">Henüz kanal yok.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
