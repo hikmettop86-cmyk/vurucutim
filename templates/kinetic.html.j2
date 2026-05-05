@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="{{ language }}">
+<head>
+<meta charset="utf-8">
+<title>Short — Kinetic</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;700&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --primary: #00ff88;
+    --accent: #ffffff;
+    --bg-grad-1: #0a0a0a;
+    --bg-grad-2: #000000;
+    --body-bg-1: #0a0a0a;
+    --body-bg-2: #000000;
+    --text-main: #ffffff;
+    --text-muted: #888888;
+    --font-headline: 'Anton', Impact, sans-serif;
+    --font-body: 'Inter', sans-serif;
+  }
+  html, body { width: 1080px; height: 1920px; overflow: hidden;
+    background: var(--bg-grad-1); font-family: var(--font-body); color: var(--text-main); }
+  .stage { position: relative; width: 1080px; height: 1920px; }
+
+  .stage-badge {
+    position: absolute; top: 50px; left: 50%; transform: translateX(-50%);
+    background: transparent; color: var(--primary);
+    font-size: 24px; font-weight: 700; letter-spacing: 8px;
+    padding: 6px 14px;
+    border: 2px solid var(--primary);
+    z-index: 10;
+  }
+
+  .header {
+    position: absolute; top: 25%; left: 0; right: 0;
+    text-align: center;
+    font-family: var(--font-headline);
+  }
+  .header .top {
+    display: block;
+    font-size: 320px;
+    line-height: .9;
+    color: var(--primary);
+    text-shadow: 0 0 40px rgba(0,255,136,.6), 0 0 80px rgba(0,255,136,.3);
+  }
+  .header .bot {
+    display: block;
+    font-size: 80px;
+    color: var(--text-main);
+    letter-spacing: 14px;
+    margin-top: 20px;
+  }
+
+  .photo {
+    display: none;
+  }
+
+  .body {
+    position: absolute; bottom: 240px; left: 60px; right: 60px;
+    text-align: center;
+    font-size: 38px;
+    color: var(--text-muted);
+    line-height: 1.4;
+    font-weight: 400;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .body .hl-r {
+    color: var(--primary);
+    text-shadow: 0 0 8px var(--primary);
+    font-weight: 700;
+  }
+  .body .hl-y {
+    color: var(--accent);
+    text-shadow: 0 0 8px var(--accent);
+    font-weight: 700;
+  }
+
+  .progress {
+    position: absolute; left: 0; right: 0; bottom: 84px; height: 2px;
+    background: rgba(255,255,255,.15);
+  }
+  .progress::after {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+    background: var(--primary);
+    box-shadow: 0 0 16px var(--primary);
+    animation: fill {{ duration_s }}s linear forwards;
+  }
+  @keyframes fill { from { width: 0; } to { width: 100%; } }
+
+  .handle {
+    position: absolute; left: 0; right: 0; bottom: 30px;
+    text-align: center; color: var(--text-muted);
+    font-size: 24px; letter-spacing: 4px; font-weight: 700;
+  }
+
+  .persistent {
+    position: absolute;
+    display: flex; align-items: center; gap: 8px;
+    font-weight: 700; font-size: 22px; letter-spacing: 2px;
+    padding: 8px 14px;
+    border-radius: 2px;
+    color: var(--text-main);
+    background: transparent;
+    border: 2px solid var(--primary);
+    z-index: 35;
+  }
+  .persistent .ic { font-size: 26px; }
+  .persistent.like { bottom: 120px; left: 30px; }
+  .persistent.sub  { bottom: 120px; right: 30px; background: var(--primary); color: #000; border: 2px solid var(--primary); }
+
+  /* DNA OVERRIDE */
+  {{ dna_css|safe }}
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="stage-badge">{{ ui_breaking }}</div>
+  <div class="header">
+    <span class="top">{{ script.header_top }}</span>
+    <span class="bot">{{ script.header_bottom }}</span>
+  </div>
+
+  <div class="body">{{ body_html|safe }}</div>
+
+  <div class="progress"></div>
+  <div class="handle">{{ handle }}</div>
+
+  <div class="persistent like"><span class="ic">❤️</span><span>{{ ui_like }}</span></div>
+  <div class="persistent sub"><span class="ic">🔔</span><span>{{ ui_subscribe }}</span></div>
+</div>
+</body>
+</html>
