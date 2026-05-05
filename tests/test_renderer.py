@@ -21,7 +21,7 @@ def _job(tmp_path):
         music_path=tmp_path / "fake.mp3",
         channel_colors={"primary": "#c81e1e", "accent": "#ffea3b",
                          "bg_gradient": ["#1a3b6b", "#0a1a3b"]},
-        handle="@HaberShortsTR", duration_s=30,
+        handle="@HaberShortsTR", duration_s=30, language="tr",
     )
 
 
@@ -53,6 +53,38 @@ def test_build_html_uses_bg_image_when_provided(tmp_path):
     template = Path("templates/newscast.html.j2")
     html = build_html(job, template)
     assert "url('file://" in html or "url('/" in html or "url('" in html  # set
+
+
+def test_build_html_includes_ui_labels_when_provided(tmp_path):
+    template = Path("templates/newscast.html.j2")
+    labels = {
+        "breaking": "BREAKING NEWS",
+        "like": "LIKE",
+        "subscribe": "SUBSCRIBE",
+        "share": "SHARE",
+    }
+    html = build_html(_job(tmp_path), template, ui_labels=labels)
+    assert "BREAKING NEWS" in html
+    assert "LIKE" in html
+    assert "SUBSCRIBE" in html
+    assert "SHARE" in html
+
+
+def test_build_html_includes_dna_css_when_provided(tmp_path):
+    template = Path("templates/newscast.html.j2")
+    custom_css = ".custom-dna { color: hotpink; }"
+    html = build_html(_job(tmp_path), template, dna_css=custom_css)
+    assert custom_css in html
+
+
+def test_build_html_default_ui_labels_when_omitted(tmp_path):
+    template = Path("templates/newscast.html.j2")
+    html = build_html(_job(tmp_path), template)
+    # Default TR labels should appear
+    assert "SON DAKİKA" in html
+    assert "BEĞEN" in html
+    assert "ABONE OL" in html
+    assert "PAYLAŞ" in html
 
 
 @pytest.mark.slow

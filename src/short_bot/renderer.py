@@ -13,6 +13,13 @@ from short_bot.models import RenderJob
 WIDTH = 1080
 HEIGHT = 1920
 
+DEFAULT_UI_LABELS_TR: dict[str, str] = {
+    "breaking": "SON DAKİKA",
+    "like": "BEĞEN",
+    "subscribe": "ABONE OL",
+    "share": "PAYLAŞ",
+}
+
 
 def _wrap_highlights(paragraph: str, highlights) -> str:
     """Wrap each highlight.text in paragraph with <span class="hl-r/y">. Longest first to avoid partial overlap."""
@@ -34,7 +41,13 @@ def _primary_light(primary_hex: str) -> str:
     return f"#{min(255,r+40):02x}{min(255,g+30):02x}{min(255,b+30):02x}"
 
 
-def build_html(job: RenderJob, template_path: Path) -> str:
+def build_html(
+    job: RenderJob,
+    template_path: Path,
+    *,
+    ui_labels: dict[str, str] | None = None,
+    dna_css: str = "",
+) -> str:
     template_path = Path(template_path)
     env = Environment(
         loader=FileSystemLoader(str(template_path.parent)),
@@ -56,6 +69,10 @@ def build_html(job: RenderJob, template_path: Path) -> str:
 
     body_html = _wrap_highlights(job.script.body_paragraph, job.script.highlights)
 
+    labels = DEFAULT_UI_LABELS_TR.copy()
+    if ui_labels:
+        labels.update(ui_labels)
+
     return template.render(
         script=job.script,
         body_html=body_html,
@@ -64,6 +81,12 @@ def build_html(job: RenderJob, template_path: Path) -> str:
         handle=job.handle,
         duration_s=job.duration_s,
         category=job.script.category,
+        language=job.language,
+        ui_breaking=labels["breaking"],
+        ui_like=labels["like"],
+        ui_subscribe=labels["subscribe"],
+        ui_share=labels["share"],
+        dna_css=dna_css,
         cta={
             "enabled": job.cta_enabled,
             "text": job.cta_text,

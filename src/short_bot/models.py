@@ -57,6 +57,7 @@ class RenderJob:
     channel_colors: dict
     handle: str
     duration_s: int
+    language: str = "tr"
     cta_enabled: bool = True
     cta_text: str = "BEĞEN · ABONE OL · PAYLAŞ"
     cta_icons: list[str] = field(default_factory=lambda: ["❤️", "🔔", "↗️"])
