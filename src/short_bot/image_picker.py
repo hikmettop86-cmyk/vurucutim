@@ -103,16 +103,43 @@ def pick_image_for_script(
     max_candidates: int = 3,
     channel: ChannelConfig | None = None,
 ) -> Path | None:
-    """Search -> download candidates -> verify with Claude -> return first OK image path.
+    """Search -> download candidates -> verify with Claude -> return first OK image path."""
+    query = (build_search_query_for_channel(script, channel)
+             if channel is not None else build_search_query(script))
+    return _run_image_search(
+        query, script, cache_dir,
+        claude_path=claude_path, max_candidates=max_candidates,
+    )
 
-    Tries DuckDuckGo first; if that returns nothing (rate limit, network), falls back
-    to Wikimedia Commons API.
-    """
+
+def pick_image_for_generator(
+    *,
+    keywords: list[str],
+    script: Script,
+    cache_dir: Path,
+    claude_path: str = "claude",
+    max_candidates: int = 3,
+) -> Path | None:
+    """Image picker for generator mode: query is space-joined keywords from Sonnet."""
+    query = " ".join(keywords).strip()
+    return _run_image_search(
+        query, script, cache_dir,
+        claude_path=claude_path, max_candidates=max_candidates,
+    )
+
+
+def _run_image_search(
+    query: str,
+    script: Script,
+    cache_dir: Path,
+    *,
+    claude_path: str,
+    max_candidates: int,
+) -> Path | None:
+    """Internal: shared DDG -> Wikimedia fallback -> download -> Claude verify loop."""
     cache_dir = Path(cache_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
 
-    query = (build_search_query_for_channel(script, channel)
-             if channel is not None else build_search_query(script))
     logger.info(f"image search (DDG): {query!r}")
     candidates = search_images(query, max_results=max_candidates)
     if not candidates:
