@@ -137,10 +137,17 @@
 
   <div>
     <h2 class="font-serif text-lg font-bold mb-4">Önizleme</h2>
-    <iframe x-bind:src="`/preview/{{ c.slug }}?primary=${encodeURIComponent(primary)}&accent=${encodeURIComponent(accent)}&font_headline=${encodeURIComponent(fontHeadline)}`"
-            src="/preview/{{ c.slug }}"
-            class="w-full bg-black rounded-lg"
-            style="aspect-ratio: 9/16; max-height: 700px;"></iframe>
+    <div class="relative bg-black rounded-lg overflow-hidden mx-auto"
+         style="width: 100%; max-width: 360px; aspect-ratio: 9/16;">
+      <iframe x-bind:src="`/preview/{{ c.slug }}?primary=${encodeURIComponent(primary)}&accent=${encodeURIComponent(accent)}&font_headline=${encodeURIComponent(fontHeadline)}`"
+              src="/preview/{{ c.slug }}"
+              scrolling="no"
+              class="absolute top-0 left-0 border-0"
+              style="width: 1080px; height: 1920px; transform: scale(0.333); transform-origin: top left;"></iframe>
+    </div>
+    <p class="text-xs text-claude-muted mt-2 text-center">
+      Gerçek 1080×1920 short, ölçekli önizleme.
+    </p>
   </div>
 </form>
 {% endblock %}
