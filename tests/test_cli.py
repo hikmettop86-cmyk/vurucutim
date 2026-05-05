@@ -40,3 +40,12 @@ def test_list_channels_subcommand(tmp_path, monkeypatch):
     )
     assert result.returncode == 0
     assert "demo" in result.stdout
+
+
+def test_web_subcommand_help():
+    result = subprocess.run(
+        [sys.executable, "-m", "short_bot", "web", "--help"],
+        capture_output=True, text=True, encoding="utf-8",
+    )
+    assert result.returncode == 0
+    assert "host" in result.stdout.lower() or "port" in result.stdout.lower()

@@ -345,6 +345,52 @@ def _cmd_migrate_channel(args) -> int:
     return 0
 
 
+def _add_web(sub):
+    p = sub.add_parser("web", help="Start the web panel + scheduler")
+    p.add_argument("--host", default=None, help="Bind host (default from settings)")
+    p.add_argument("--port", type=int, default=None, help="Bind port (default from settings)")
+    p.add_argument("--config-dir", default="config")
+    p.add_argument("--data-dir", default="data")
+    p.add_argument("--templates-dir", default="templates")
+    p.add_argument("--music-root", default="assets/music")
+    p.add_argument("--logs-dir", default="logs/runs")
+    p.add_argument("--output-root", default="output")
+    p.add_argument("--no-scheduler", action="store_true",
+                    help="Disable APScheduler (panel-only)")
+    p.set_defaults(func=_cmd_web)
+
+
+def _cmd_web(args) -> int:
+    from pathlib import Path
+    from short_bot.web import create_app
+
+    config_dir = Path(args.config_dir)
+    data_dir = Path(args.data_dir)
+    settings = load_settings(config_dir / "settings.yaml")
+
+    host = args.host or settings.web_host
+    port = args.port or settings.web_port
+
+    app = create_app(
+        config_dir=config_dir,
+        db_path=data_dir / "short_bot.sqlite",
+        templates_dir=Path(args.templates_dir),
+        music_root=Path(args.music_root),
+        cache_dir=data_dir / "cache",
+        lock_dir=data_dir / "locks",
+        logs_dir=Path(args.logs_dir),
+        output_root=Path(args.output_root),
+        scheduler=not args.no_scheduler,
+    )
+
+    print(f"Web panel: http://{host}:{port}")
+    if not args.no_scheduler:
+        print(f"Scheduler: see /channels")
+    print("Press Ctrl+C to stop.")
+    app.run(host=host, port=port, debug=False, use_reloader=False)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="short-bot")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -355,6 +401,7 @@ def main(argv: list[str] | None = None) -> int:
     _add_regenerate_dna(sub)
     _add_rebuild_css(sub)
     _add_migrate_channel(sub)
+    _add_web(sub)
     args = parser.parse_args(argv)
     return args.func(args)
 
