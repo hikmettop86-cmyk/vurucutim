@@ -5,6 +5,8 @@ import re
 
 import yaml
 
+from short_bot.locale import RSS_LOCALES, SUPPORTED_LANGUAGES
+
 SLUG_RE = re.compile(r"^[a-z0-9\-]+$")
 
 
@@ -40,6 +42,7 @@ class ChannelConfig:
     cta_icons: list[str]
     cta_duration_s: int
     cta_show_handle: bool
+    language: str = "tr"
 
 
 def load_settings(path: Path) -> Settings:
@@ -62,12 +65,21 @@ def load_channel(path: Path) -> ChannelConfig:
     slug = data["slug"]
     if not SLUG_RE.match(slug):
         raise ValueError(f"Geçersiz slug '{slug}': sadece [a-z0-9-] izinli")
+
+    # Resolve language (with backward-compat for legacy rss_locale-only YAMLs)
+    language = data.get("language", "tr")
+    if language not in SUPPORTED_LANGUAGES:
+        raise ValueError(
+            f"Unsupported language '{language}': must be one of {SUPPORTED_LANGUAGES}"
+        )
+    rss_locale = data.get("rss_locale") or RSS_LOCALES[language]
+
     cta = data.get("cta", {})
     return ChannelConfig(
         slug=slug,
         name=data["name"],
         keywords=list(data.get("keywords", [])),
-        rss_locale=data["rss_locale"],
+        rss_locale=rss_locale,
         schedule_cron=data["schedule_cron"],
         duration_s=int(data["duration_s"]),
         min_score=float(data["min_score"]),
@@ -82,6 +94,7 @@ def load_channel(path: Path) -> ChannelConfig:
         cta_icons=list(cta.get("icons", ["❤️", "🔔", "↗️"])),
         cta_duration_s=int(cta.get("duration_s", 4)),
         cta_show_handle=bool(cta.get("show_handle", True)),
+        language=language,
     )
 
 
@@ -91,7 +104,7 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
         "slug": cfg.slug,
         "name": cfg.name,
         "keywords": list(cfg.keywords),
-        "rss_locale": cfg.rss_locale,
+        "language": cfg.language,
         "schedule_cron": cfg.schedule_cron,
         "duration_s": cfg.duration_s,
         "min_score": cfg.min_score,
