@@ -58,7 +58,9 @@ def _fake_dna():
 def test_save_generator_channel_writes_yaml_with_generator_block(tmp_path, monkeypatch):
     c = _client(tmp_path, monkeypatch)
     with patch("short_bot.web.routes.channel_new.generate_dna",
-               return_value=_fake_dna()):
+               return_value=_fake_dna()), \
+         patch("short_bot.web.routes.channel_new.smoke_render_dna",
+               return_value=(True, "ok")):
         r1 = c.post("/channels/new/generate", data={
             "name": "Sevgi Sözleri", "language": "tr",
             "content_source": "generator",
@@ -66,11 +68,11 @@ def test_save_generator_channel_writes_yaml_with_generator_block(tmp_path, monke
         })
         assert r1.status_code == 200
 
-    r2 = c.post("/channels/new/save", data={
-        "name": "Sevgi Sözleri", "language": "tr",
-        "content_source": "generator",
-        "generator_topic": "Sevgi ve aşk üzerine kısa, vurucu sözler",
-    })
+        r2 = c.post("/channels/new/save", data={
+            "name": "Sevgi Sözleri", "language": "tr",
+            "content_source": "generator",
+            "generator_topic": "Sevgi ve aşk üzerine kısa, vurucu sözler",
+        })
     assert r2.status_code in (200, 302)
 
     yaml_path = (tmp_path / "config" / "channels" / "sevgi-sozleri.yaml")
@@ -84,21 +86,68 @@ def test_save_generator_channel_writes_yaml_with_generator_block(tmp_path, monke
 def test_save_rss_channel_unchanged_no_generator_block(tmp_path, monkeypatch):
     c = _client(tmp_path, monkeypatch)
     with patch("short_bot.web.routes.channel_new.generate_dna",
-               return_value=_fake_dna()):
+               return_value=_fake_dna()), \
+         patch("short_bot.web.routes.channel_new.smoke_render_dna",
+               return_value=(True, "ok")):
         c.post("/channels/new/generate", data={
             "name": "Haber", "language": "tr",
             "content_source": "rss",
             "keywords": "ekonomi, siyaset",
         })
 
-    r2 = c.post("/channels/new/save", data={
-        "name": "Haber", "language": "tr",
-        "content_source": "rss",
-        "keywords": "ekonomi, siyaset",
-    })
+        r2 = c.post("/channels/new/save", data={
+            "name": "Haber", "language": "tr",
+            "content_source": "rss",
+            "keywords": "ekonomi, siyaset",
+        })
     assert r2.status_code in (200, 302)
     yaml_path = tmp_path / "config" / "channels" / "haber.yaml"
     assert yaml_path.exists()
     contents = yaml_path.read_text(encoding="utf-8")
     assert "content_source" not in contents    # default not serialized
     assert "generator:" not in contents
+
+
+def test_smoke_fail_blocks_channel_save(tmp_path, monkeypatch):
+    """When smoke_render returns False, save() flashes error and skips YAML write."""
+    c = _client(tmp_path, monkeypatch)
+    fake_dna = _fake_dna()
+
+    with patch("short_bot.web.routes.channel_new.generate_dna",
+               return_value=fake_dna), \
+         patch("short_bot.web.routes.channel_new.smoke_render_dna",
+               return_value=(False, "render exception: layout broke")):
+        c.post("/channels/new/generate", data={
+            "name": "Smoke Fail", "language": "tr",
+            "content_source": "rss", "keywords": "x",
+        })
+        r = c.post("/channels/new/save", data={
+            "name": "Smoke Fail", "language": "tr",
+            "content_source": "rss", "keywords": "x",
+        })
+
+    # Save was skipped → no YAML file created
+    assert not (tmp_path / "config" / "channels" / "smoke-fail.yaml").exists()
+    # Should redirect back to wizard form (not edit page)
+    assert r.status_code in (200, 302)
+
+
+def test_smoke_pass_allows_channel_save(tmp_path, monkeypatch):
+    """When smoke_render returns True, save() proceeds normally."""
+    c = _client(tmp_path, monkeypatch)
+    fake_dna = _fake_dna()
+
+    with patch("short_bot.web.routes.channel_new.generate_dna",
+               return_value=fake_dna), \
+         patch("short_bot.web.routes.channel_new.smoke_render_dna",
+               return_value=(True, "ok")):
+        c.post("/channels/new/generate", data={
+            "name": "Smoke Pass", "language": "tr",
+            "content_source": "rss", "keywords": "x",
+        })
+        c.post("/channels/new/save", data={
+            "name": "Smoke Pass", "language": "tr",
+            "content_source": "rss", "keywords": "x",
+        })
+
+    assert (tmp_path / "config" / "channels" / "smoke-pass.yaml").exists()

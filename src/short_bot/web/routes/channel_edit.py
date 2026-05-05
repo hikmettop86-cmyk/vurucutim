@@ -3,6 +3,7 @@ from flask import (Blueprint, abort, current_app, flash, redirect,
 
 from short_bot.config import ChannelConfig, load_channel, save_channel
 from short_bot.dna import build_css_override, generate_dna
+from short_bot.dna_smoke import smoke_render_dna
 
 bp = Blueprint("channel_edit", __name__)
 
@@ -180,8 +181,20 @@ def regenerate_dna(slug):
         flash(f"DNA üretimi başarısız: {e}", "error")
         return redirect(url_for("channel_edit.edit", slug=slug))
 
-    # Rebuild css with new DNA
+    settings = current_app.config["SHORTBOT_SETTINGS"]
     templates_dir = current_app.config["SHORTBOT_TEMPLATES_DIR"]
+    ok, reason = smoke_render_dna(
+        new_dna,
+        channel_template=new_dna.archetype,
+        templates_dir=templates_dir,
+        settings=settings,
+        language=cfg.language,
+    )
+    if not ok:
+        flash(f"DNA render testi başarısız: {reason}. Mevcut DNA korundu.", "error")
+        return redirect(url_for("channel_edit.edit", slug=slug))
+
+    # Rebuild css with new DNA
     css_path = templates_dir / "css" / f"{slug}.css"
     css_path.parent.mkdir(parents=True, exist_ok=True)
     css_path.write_text(build_css_override(new_dna), encoding="utf-8")

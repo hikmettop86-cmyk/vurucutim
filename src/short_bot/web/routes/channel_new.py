@@ -6,6 +6,7 @@ from flask import (Blueprint, abort, current_app, flash, redirect,
 
 from short_bot.config import ChannelConfig, save_channel
 from short_bot.dna import DnaSpec, build_css_override, generate_dna
+from short_bot.dna_smoke import smoke_render_dna
 from short_bot.locale import RSS_LOCALES, SUPPORTED_LANGUAGES
 
 bp = Blueprint("channel_new", __name__)
@@ -64,6 +65,20 @@ def save():
     templates_dir = current_app.config["SHORTBOT_TEMPLATES_DIR"]
     yaml_path = cfg_dir / "channels" / f"{slug}.yaml"
     css_path = templates_dir / "css" / f"{slug}.css"
+
+    # Smoke render check — refuse to persist DNA that breaks the layout
+    settings = current_app.config["SHORTBOT_SETTINGS"]
+    ok, reason = smoke_render_dna(
+        dna,
+        channel_template=dna.archetype,
+        templates_dir=templates_dir,
+        settings=settings,
+        language=language,
+    )
+    if not ok:
+        flash(f"DNA render testi başarısız: {reason}. Tekrar üretmeyi dene.", "error")
+        return redirect(url_for("channel_new.form"))
+
     css_path.parent.mkdir(parents=True, exist_ok=True)
     css_path.write_text(build_css_override(dna), encoding="utf-8")
 

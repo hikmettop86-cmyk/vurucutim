@@ -85,3 +85,32 @@ def test_edit_save_updates_generator_topic(app, tmp_path):
     assert data["generator"]["topic"].startswith("GÜNCELLENDİ")
     assert data["generator"]["forbidden_lookback"] == 75
     assert data["generator"]["max_retries"] == 5
+
+
+def test_regenerate_dna_blocks_save_on_smoke_fail(app, tmp_path):
+    """regenerate_dna must preserve old DNA when smoke_render returns False."""
+    from unittest.mock import patch
+    from short_bot.dna import DnaPalette, DnaFonts, DnaTone, DnaSpec
+
+    c = app.test_client()
+    new_dna = DnaSpec(
+        archetype="kinetic",
+        palette=DnaPalette(primary="#abcabc", accent="#defdef",
+                           bg_gradient=["#000000", "#111111"],
+                           body_bg=["#000000", "#111111"]),
+        fonts=DnaFonts(),
+        tone=DnaTone(voice="new", style="new"),
+        persona_summary="new persona",
+    )
+    with patch("short_bot.web.routes.channel_edit.generate_dna",
+               return_value=new_dna), \
+         patch("short_bot.web.routes.channel_edit.smoke_render_dna",
+               return_value=(False, "blank frame")):
+        r = c.post("/channels/sevgi/regenerate-dna")
+
+    assert r.status_code in (200, 302)
+
+    # Verify old DNA preserved in YAML — persona_summary should still be "x"
+    yaml_path = tmp_path / "config" / "channels" / "sevgi.yaml"
+    yaml_data = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
+    assert yaml_data["dna"]["persona_summary"] == "x"
