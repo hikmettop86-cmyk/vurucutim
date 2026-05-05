@@ -1,5 +1,5 @@
 """YAML config loader for global settings and per-channel configs."""
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 import re
 
