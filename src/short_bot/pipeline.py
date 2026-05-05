@@ -28,6 +28,14 @@ from short_bot.assets import download_and_blur_thumb, pick_music
 from short_bot.renderer import render_frames
 from short_bot.composer import compose_video
 from short_bot.locale import ui_labels_for
+from short_bot.generator import (
+    GeneratorRetryExhausted, check_duplicate, generate_quote,
+)
+from short_bot.generated_db import (
+    insert_generated, recent_generated_texts, topic_distribution,
+    update_generated_short_id,
+)
+from short_bot.image_picker import pick_image_for_generator
 
 
 @dataclass
@@ -286,5 +294,117 @@ def _run_rss(*, channel, run_id, log, eng, settings,
 
 def _run_generator(*, channel, run_id, log, eng, settings,
                    music_root, templates_dir, cache_dir) -> RunResult:
-    """Generator pipeline body (Task 11 fills this in)."""
-    raise NotImplementedError("filled in Task 11")
+    """6-phase generator pipeline."""
+    log.info("[1/6] prepare (forbidden + topic distribution)")
+    forbidden = recent_generated_texts(
+        eng, channel.slug, limit=channel.generator.forbidden_lookback,
+    )
+    topic_dist = topic_distribution(eng, channel.slug, days=7)
+    log.info(f"  → forbidden={len(forbidden)} topic_dist={topic_dist}")
+
+    fuzzy_threshold = (channel.generator.fuzzy_threshold
+                       or settings.fuzzy_dedup_threshold)
+
+    last_text = ""
+    chosen_result = None
+    for attempt in range(1, channel.generator.max_retries + 1):
+        log.info(f"[2/6] generate attempt {attempt}/{channel.generator.max_retries}")
+        result = generate_quote(
+            channel=channel, dna=channel.dna,
+            forbidden_texts=forbidden, topic_distribution=topic_dist,
+            claude_path=settings.claude_cli_path,
+            model=channel.script_model
+                  or settings.claude_models.get("default", "sonnet"),
+        )
+
+        log.info(f"[3/6] dedup-check (text={result.text[:60]!r})")
+        verdict = check_duplicate(eng, channel.slug, result, forbidden,
+                                  fuzzy_threshold)
+        if verdict.is_duplicate:
+            log.warning(f"  duplicate ({verdict.reason}) → discard")
+            try:
+                insert_generated(
+                    eng, channel=channel.slug, text=result.text,
+                    topic_tag=result.topic_tag, language=channel.language,
+                    status="discarded", short_id=None,
+                )
+            except Exception as e:
+                log.warning(f"  discarded insert failed (probably hash race): {e}")
+            last_text = result.text
+            continue
+
+        chosen_result = result
+        break
+
+    if chosen_result is None:
+        msg = (f"{channel.slug}: {channel.generator.max_retries} attempts all "
+               f"duplicate. Last attempt: {last_text[:80]!r}")
+        finish_run(eng, run_id, status="failed",
+                   short_id=None, error=msg)
+        raise GeneratorRetryExhausted(msg)
+
+    # Record as 'used' WITHOUT short_id yet (filled after render)
+    generated_id = insert_generated(
+        eng, channel=channel.slug, text=chosen_result.text,
+        topic_tag=chosen_result.topic_tag, language=channel.language,
+        status="used", short_id=None,
+    )
+
+    # Phase 4: image
+    log.info("[4/6] image search (Sonnet keywords)")
+    images_cache = Path(cache_dir) / "images"
+    bg = pick_image_for_generator(
+        keywords=chosen_result.image_keywords,
+        script=chosen_result.script,
+        cache_dir=images_cache,
+        claude_path=settings.claude_cli_path,
+    )
+    music = pick_music(music_root, mood=chosen_result.script.mood)
+    log.info(f"  → bg={'cached' if bg else 'none'} music={music.name}")
+
+    # Phase 5+6: render + compose (same RenderJob shape as RSS path)
+    log.info("[5/6] render_frames")
+    job = RenderJob(
+        script=chosen_result.script, bg_image_path=bg, music_path=music,
+        channel_colors=channel.colors, handle=channel.handle,
+        duration_s=channel.duration_s, language=channel.language,
+        cta_enabled=channel.cta_enabled, cta_text=channel.cta_text,
+        cta_icons=channel.cta_icons, cta_duration_s=channel.cta_duration_s,
+        cta_show_handle=channel.cta_show_handle,
+    )
+
+    with tempfile.TemporaryDirectory() as tmpd:
+        frames_dir = Path(tmpd) / "frames"
+        t0 = time.perf_counter()
+        template_path = templates_dir / f"{channel.template}.html.j2"
+        ui_labels = ui_labels_for(channel.language)
+        dna_css_path = Path("templates") / "css" / f"{channel.slug}.css"
+        dna_css = dna_css_path.read_text(encoding="utf-8") if dna_css_path.exists() else ""
+        render_frames(job, template_path, frames_dir,
+                      fps=30, browser=settings.playwright_browser,
+                      ui_labels=ui_labels, dna_css=dna_css)
+
+        log.info("[6/6] compose_video")
+        out_dir = Path(channel.output_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        slug = _slugify(chosen_result.text)
+        out_path = out_dir / f"{datetime.now(timezone.utc):%Y-%m-%d}_{slug}.mp4"
+        sfx_overlays = _build_cta_sfx(channel)
+        compose_video(frames_dir, music, out_path,
+                      fps=30, ffmpeg_path=settings.ffmpeg_path,
+                      sfx_overlays=sfx_overlays)
+        render_ms = int((time.perf_counter() - t0) * 1000)
+        log.info(f"  → {out_path.name} ({render_ms}ms)")
+
+    short_id = record_short(
+        eng, channel=channel.slug, rss_item_guid=None,
+        title=chosen_result.script.header_top + " " + chosen_result.script.header_bottom,
+        file_path=str(out_path), duration_s=channel.duration_s,
+        script_json=chosen_result.script.model_dump_json(),
+        render_ms=render_ms,
+    )
+    update_generated_short_id(eng, generated_id, short_id)
+    finish_run(eng, run_id, status="success", short_id=short_id, error=None)
+    log.info(f"=== success short_id={short_id} ===")
+    return RunResult(run_id=run_id, status="success",
+                     short_path=out_path, error=None)
