@@ -1,26 +1,24 @@
 @echo off
-chcp 65001 >nul
 cd /d "%~dp0"
-title short-bot — stopper
+title short-bot stopper
 
 echo.
-echo === short-bot panel kapatılıyor ===
+echo === short-bot panel kapaniyor ===
 echo.
 
 set FOUND=0
 for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":5005" ^| findstr "LISTENING"') do (
     set FOUND=1
-    echo PID %%a sonlandırılıyor...
+    echo PID %%a kapatiliyor...
     taskkill /F /PID %%a >nul 2>&1
 )
 
-REM "short-bot" başlıklı pencereyi kapat (start.bat'in açtığı)
 taskkill /F /FI "WINDOWTITLE eq short-bot*" >nul 2>&1
 
 if %FOUND%==0 (
-    echo Panel zaten çalışmıyor.
+    echo Panel zaten calismiyor.
 ) else (
-    echo Panel kapatıldı.
+    echo Panel kapatildi.
 )
 
 echo.
