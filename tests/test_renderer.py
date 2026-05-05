@@ -26,7 +26,7 @@ def _job(tmp_path):
 
 
 def test_build_html_includes_script_text(tmp_path):
-    template = Path("templates/default.html.j2")
+    template = Path("templates/newscast.html.j2")
     html = build_html(_job(tmp_path), template)
     assert "FAİZ ŞOKU" in html
     assert "BAŞLADI" in html
@@ -39,7 +39,7 @@ def test_build_html_includes_script_text(tmp_path):
 
 
 def test_build_html_wraps_highlights(tmp_path):
-    template = Path("templates/default.html.j2")
+    template = Path("templates/newscast.html.j2")
     html = build_html(_job(tmp_path), template)
     assert '<span class="hl-y">250 baz puan</span>' in html
     assert '<span class="hl-r">şok yarattı</span>' in html
@@ -50,14 +50,14 @@ def test_build_html_uses_bg_image_when_provided(tmp_path):
     bg = tmp_path / "bg.jpg"
     bg.write_bytes(b"fake")
     job.bg_image_path = bg
-    template = Path("templates/default.html.j2")
+    template = Path("templates/newscast.html.j2")
     html = build_html(job, template)
     assert "url('file://" in html or "url('/" in html or "url('" in html  # set
 
 
 @pytest.mark.slow
 def test_render_frames_writes_pngs(tmp_path):
-    template = Path("templates/default.html.j2")
+    template = Path("templates/newscast.html.j2")
     job = _job(tmp_path)
     job.duration_s = 2  # minimal: 2s × 30fps = 60 frames
     out_dir = tmp_path / "frames"

@@ -52,7 +52,7 @@ def main():
         cta_show_handle=True,
     )
 
-    template = Path("templates/default.html.j2")
+    template = Path("templates/newscast.html.j2")
     html = build_html(job, template)
 
     out_dir = Path("tmp")
