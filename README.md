@@ -56,3 +56,22 @@ Loglar: `logs/runs/<tarih>_<slug>.log`
 | Render uzun sürüyor | Normal: 30s short → 30-90s render (ilk koşumda Playwright cold-start) |
 
 Detay: `docs/superpowers/specs/2026-05-05-rss-news-shorts-design.md`
+
+## Web Panel (Phase 3)
+
+```bash
+python -m short_bot web
+# → http://127.0.0.1:5005
+```
+
+Features:
+- Dashboard with daily counters and recent shorts
+- Shorts gallery (filter by channel/search) + detail player
+- RSS scoring history (last 24h)
+- Channel list + edit (DNA editor with color pickers, font dropdowns, segment pills)
+- New-channel wizard (form → Opus DNA → live preview → save)
+- Live template preview in iframe (instant updates as you tweak DNA)
+- APScheduler runs cron jobs in-process (kanal config'lerinden okur)
+- Logs tail with HTMX 2s polling
+
+Default port: 5005. Override with `--port` flag.
