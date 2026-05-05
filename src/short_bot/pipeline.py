@@ -162,7 +162,7 @@ def run_pipeline(
                               fps=30, browser=settings.playwright_browser)
 
                 log.info("[8/8] compose_video")
-                out_dir = Path(channel.output_dir) / channel.slug
+                out_dir = Path(channel.output_dir)
                 out_dir.mkdir(parents=True, exist_ok=True)
                 slug = _slugify(picked.item.title)
                 out_path = out_dir / f"{datetime.utcnow():%Y-%m-%d}_{slug}.mp4"

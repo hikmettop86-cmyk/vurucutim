@@ -24,7 +24,7 @@ def _channel(tmp_path):
         schedule_cron="0 * * * *", duration_s=2, min_score=5.0,
         max_candidates_per_run=10, template="default",
         colors={"primary": "#c81e1e", "accent": "#ffea3b", "bg_gradient": ["#1a3b6b", "#0a1a3b"]},
-        handle="@x", output_dir=str(tmp_path / "output"),
+        handle="@x", output_dir=str(tmp_path / "output" / "test"),
         enabled=True, cta_enabled=True, cta_text="A · B · C",
         cta_icons=["❤️", "🔔", "↗️"], cta_duration_s=1, cta_show_handle=True,
     )
