@@ -4,23 +4,52 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}short-bot{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:wght@400;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'claude-bg': '#faf9f5',
+            'claude-surface': '#f0ede4',
+            'claude-surface-alt': '#e8e4d8',
+            'claude-text': '#141413',
+            'claude-muted': '#6b6863',
+            'claude-accent': '#c96442',
+            'claude-accent-hover': '#b85638',
+            'claude-border': '#e3e0d4',
+            'claude-error': '#cc3333',
+            'claude-success': '#3a7d44',
+          },
+          fontFamily: {
+            serif: ['"Source Serif 4"', 'Georgia', 'serif'],
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
   <script src="https://unpkg.com/htmx.org@2.0.4"></script>
   <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
   <style>
     [x-cloak] { display: none !important; }
+    body { font-family: 'Inter', sans-serif; }
+    h1, h2, h3 { font-family: 'Source Serif 4', Georgia, serif; }
   </style>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen">
-  <nav class="bg-slate-950 border-b border-slate-800 px-6 py-3 flex items-center gap-6">
-    <a href="/" class="font-bold text-red-500">&#9654; short-bot</a>
-    <a href="/" class="text-slate-300 hover:text-white">Dashboard</a>
-    <a href="/shorts" class="text-slate-300 hover:text-white">Shorts</a>
-    <a href="/rss" class="text-slate-300 hover:text-white">RSS</a>
-    <a href="/channels" class="text-slate-300 hover:text-white">Kanallar</a>
-    <a href="/logs" class="text-slate-300 hover:text-white">Loglar</a>
+<body class="bg-claude-bg text-claude-text min-h-screen">
+  <nav class="bg-claude-surface border-b border-claude-border px-6 py-3 flex items-center gap-6">
+    <a href="/" class="font-serif font-bold text-claude-accent text-lg">short-bot</a>
+    <a href="/" class="text-claude-text/80 hover:text-claude-text text-sm">Dashboard</a>
+    <a href="/shorts" class="text-claude-text/80 hover:text-claude-text text-sm">Shorts</a>
+    <a href="/rss" class="text-claude-text/80 hover:text-claude-text text-sm">RSS</a>
+    <a href="/channels" class="text-claude-text/80 hover:text-claude-text text-sm">Kanallar</a>
+    <a href="/logs" class="text-claude-text/80 hover:text-claude-text text-sm">Loglar</a>
   </nav>
-  <main class="container mx-auto px-6 py-6 max-w-7xl">
+  <main class="container mx-auto px-6 py-8 max-w-7xl">
     {% block content %}{% endblock %}
   </main>
 </body>

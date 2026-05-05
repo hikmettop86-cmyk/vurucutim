@@ -1,6 +1,6 @@
 {% if status == "running" %}
 <div id="run-status"
-     class="flex items-center gap-2 text-sm text-yellow-400"
+     class="flex items-center gap-2 text-sm text-claude-accent"
      {% if run_id %}
      hx-get="/runs/{{ run_id }}/status"
      hx-trigger="every 3s"
@@ -14,28 +14,28 @@
   Üretiliyor…
 </div>
 {% elif status == "success" %}
-<div id="run-status" class="flex items-center gap-2 text-sm text-green-400">
+<div id="run-status" class="flex items-center gap-2 text-sm text-claude-success">
   <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
     <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
   </svg>
   Başarılı
 </div>
 {% elif status == "failed" %}
-<div id="run-status" class="flex items-center gap-2 text-sm text-red-400">
+<div id="run-status" class="flex items-center gap-2 text-sm text-claude-error">
   <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
     <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
   </svg>
   Başarısız
 </div>
 {% elif status == "no_candidates" %}
-<div id="run-status" class="flex items-center gap-2 text-sm text-slate-400">
+<div id="run-status" class="flex items-center gap-2 text-sm text-claude-muted">
   <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
     <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 100 20A10 10 0 0012 2z" />
   </svg>
   Aday içerik yok
 </div>
 {% else %}
-<div id="run-status" class="text-sm text-slate-500">
+<div id="run-status" class="text-sm text-claude-muted">
   Durum bilinmiyor
 </div>
 {% endif %}

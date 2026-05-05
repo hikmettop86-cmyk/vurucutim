@@ -1,45 +1,45 @@
 {% extends "base.html.j2" %}
 {% block title %}short-bot — {{ c.slug }}{% endblock %}
 {% block content %}
-<a href="/channels" class="text-slate-400 hover:text-white text-sm">← Kanallar</a>
-<h1 class="text-3xl font-bold mt-2 mb-1">{{ c.name }}</h1>
-<div class="text-slate-400 text-sm mb-6">
+<a href="/channels" class="text-claude-muted hover:text-claude-text text-sm">← Kanallar</a>
+<h1 class="font-serif text-3xl font-bold mt-2 mb-1">{{ c.name }}</h1>
+<div class="text-claude-muted text-sm mb-6">
   {{ c.slug }} · {{ c.language }} · {{ c.template }}
-  {% if c.dna %}<span class="bg-green-700 text-white px-2 py-0.5 rounded text-xs ml-2">DNA</span>{% endif %}
+  {% if c.dna %}<span class="bg-claude-success text-white px-2 py-0.5 rounded-lg text-xs ml-2">DNA</span>{% endif %}
 </div>
 
 <form method="POST" class="grid grid-cols-2 gap-6"
       x-data='{ primary: "{{ c.dna.palette.primary if c.dna else c.colors.primary }}",
                 accent: "{{ c.dna.palette.accent if c.dna else c.colors.accent }}",
                 fontHeadline: "{{ c.dna.fonts.headline if c.dna else "Inter" }}" }'>
-  <div class="space-y-3">
-    <h2 class="text-lg font-bold">Temel</h2>
+  <div class="space-y-4">
+    <h2 class="font-serif text-lg font-bold">Temel</h2>
     <label class="block">
-      <span class="text-xs text-slate-400 uppercase">Keywords</span>
+      <span class="text-xs text-claude-muted uppercase">Keywords</span>
       <input type="text" name="keywords" value="{{ c.keywords | join(', ') }}"
-             class="bg-slate-800 px-3 py-2 rounded w-full mt-1 text-sm">
+             class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
     </label>
     <label class="block">
-      <span class="text-xs text-slate-400 uppercase">Cron</span>
+      <span class="text-xs text-claude-muted uppercase">Cron</span>
       <input type="text" name="schedule_cron" value="{{ c.schedule_cron }}"
-             class="bg-slate-800 px-3 py-2 rounded w-full mt-1 font-mono text-sm">
+             class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 font-mono text-sm text-claude-text">
     </label>
     <div class="grid grid-cols-2 gap-3">
       <label class="block">
-        <span class="text-xs text-slate-400 uppercase">Süre (sn)</span>
+        <span class="text-xs text-claude-muted uppercase">Süre (sn)</span>
         <input type="number" name="duration_s" value="{{ c.duration_s }}"
-               class="bg-slate-800 px-3 py-2 rounded w-full mt-1 text-sm">
+               class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
       </label>
       <label class="block">
-        <span class="text-xs text-slate-400 uppercase">Min skor</span>
+        <span class="text-xs text-claude-muted uppercase">Min skor</span>
         <input type="number" step="0.1" name="min_score" value="{{ c.min_score }}"
-               class="bg-slate-800 px-3 py-2 rounded w-full mt-1 text-sm">
+               class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
       </label>
     </div>
     <label class="block">
-      <span class="text-xs text-slate-400 uppercase">Handle</span>
+      <span class="text-xs text-claude-muted uppercase">Handle</span>
       <input type="text" name="handle" value="{{ c.handle }}"
-             class="bg-slate-800 px-3 py-2 rounded w-full mt-1 text-sm">
+             class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
     </label>
     <label class="flex items-center gap-2">
       <input type="checkbox" name="enabled" value="1" {% if c.enabled %}checked{% endif %}>
@@ -47,36 +47,36 @@
     </label>
 
     {% if c.dna %}
-    <h2 class="text-lg font-bold mt-6 border-t border-slate-700 pt-4">DNA Editör</h2>
+    <h2 class="font-serif text-lg font-bold mt-6 border-t border-claude-border pt-4">DNA Editör</h2>
 
     <div class="grid grid-cols-2 gap-3">
       <label class="block">
-        <span class="text-xs text-slate-400 uppercase">Primary</span>
+        <span class="text-xs text-claude-muted uppercase">Primary</span>
         <input type="color" name="dna_primary" x-model="primary"
                value="{{ c.dna.palette.primary }}"
-               class="bg-slate-800 rounded w-full mt-1 h-9">
+               class="bg-claude-surface border border-claude-border rounded-lg w-full mt-1 h-9">
       </label>
       <label class="block">
-        <span class="text-xs text-slate-400 uppercase">Accent</span>
+        <span class="text-xs text-claude-muted uppercase">Accent</span>
         <input type="color" name="dna_accent" x-model="accent"
                value="{{ c.dna.palette.accent }}"
-               class="bg-slate-800 rounded w-full mt-1 h-9">
+               class="bg-claude-surface border border-claude-border rounded-lg w-full mt-1 h-9">
       </label>
     </div>
 
     <div class="grid grid-cols-2 gap-3">
       <label class="block">
-        <span class="text-xs text-slate-400 uppercase">Headline font</span>
+        <span class="text-xs text-claude-muted uppercase">Headline font</span>
         <select name="dna_font_headline" x-model="fontHeadline"
-                class="bg-slate-800 px-3 py-2 rounded w-full mt-1 text-sm">
+                class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
           {% for f in ["Inter", "Bebas Neue", "Playfair Display", "Anton", "JetBrains Mono", "Oswald", "Impact", "Roboto", "Montserrat", "Lato", "Open Sans"] %}
             <option value="{{ f }}" {% if c.dna.fonts.headline == f %}selected{% endif %}>{{ f }}</option>
           {% endfor %}
         </select>
       </label>
       <label class="block">
-        <span class="text-xs text-slate-400 uppercase">Body font</span>
-        <select name="dna_font_body" class="bg-slate-800 px-3 py-2 rounded w-full mt-1 text-sm">
+        <span class="text-xs text-claude-muted uppercase">Body font</span>
+        <select name="dna_font_body" class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
           {% for f in ["Inter", "Roboto", "Lato", "Open Sans", "Montserrat", "Georgia"] %}
             <option value="{{ f }}" {% if c.dna.fonts.body == f %}selected{% endif %}>{{ f }}</option>
           {% endfor %}
@@ -85,61 +85,61 @@
     </div>
 
     <div>
-      <span class="text-xs text-slate-400 uppercase">Banner shape</span>
+      <span class="text-xs text-claude-muted uppercase">Banner shape</span>
       <div class="flex gap-2 mt-1">
         {% for s in ["flat", "ribbon", "slanted", "sharp"] %}
           <label class="flex-1">
             <input type="radio" name="dna_banner_shape" value="{{ s }}"
                    {% if c.dna.banner_shape == s %}checked{% endif %} class="hidden peer">
-            <div class="bg-slate-800 hover:bg-slate-700 peer-checked:bg-red-600 px-3 py-2 rounded text-center text-sm cursor-pointer">{{ s }}</div>
+            <div class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border peer-checked:bg-claude-accent peer-checked:text-white peer-checked:border-claude-accent px-3 py-2 rounded-lg text-center text-sm cursor-pointer">{{ s }}</div>
           </label>
         {% endfor %}
       </div>
     </div>
 
     <div>
-      <span class="text-xs text-slate-400 uppercase">Highlight style</span>
+      <span class="text-xs text-claude-muted uppercase">Highlight style</span>
       <div class="flex gap-2 mt-1">
         {% for s in ["bg-flat", "underline", "marker", "neon"] %}
           <label class="flex-1">
             <input type="radio" name="dna_highlight_style" value="{{ s }}"
                    {% if c.dna.highlight_style == s %}checked{% endif %} class="hidden peer">
-            <div class="bg-slate-800 hover:bg-slate-700 peer-checked:bg-red-600 px-3 py-2 rounded text-center text-sm cursor-pointer">{{ s }}</div>
+            <div class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border peer-checked:bg-claude-accent peer-checked:text-white peer-checked:border-claude-accent px-3 py-2 rounded-lg text-center text-sm cursor-pointer">{{ s }}</div>
           </label>
         {% endfor %}
       </div>
     </div>
 
     <div>
-      <span class="text-xs text-slate-400 uppercase">Chip style</span>
+      <span class="text-xs text-claude-muted uppercase">Chip style</span>
       <div class="flex gap-2 mt-1">
         {% for s in ["rounded", "sharp", "pill"] %}
           <label class="flex-1">
             <input type="radio" name="dna_chip_style" value="{{ s }}"
                    {% if c.dna.chip_style == s %}checked{% endif %} class="hidden peer">
-            <div class="bg-slate-800 hover:bg-slate-700 peer-checked:bg-red-600 px-3 py-2 rounded text-center text-sm cursor-pointer">{{ s }}</div>
+            <div class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border peer-checked:bg-claude-accent peer-checked:text-white peer-checked:border-claude-accent px-3 py-2 rounded-lg text-center text-sm cursor-pointer">{{ s }}</div>
           </label>
         {% endfor %}
       </div>
     </div>
 
     <label class="block">
-      <span class="text-xs text-slate-400 uppercase">Category icon</span>
+      <span class="text-xs text-claude-muted uppercase">Category icon</span>
       <input type="text" name="dna_category_icon" value="{{ c.dna.category_icon }}"
-             maxlength="4" class="bg-slate-800 px-3 py-2 rounded w-24 mt-1 text-2xl text-center">
+             maxlength="4" class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-24 mt-1 text-2xl text-center text-claude-text">
     </label>
     {% endif %}
 
-    <button type="submit" class="bg-red-600 hover:bg-red-700 px-4 py-2 rounded font-semibold mt-6">
+    <button type="submit" class="bg-claude-accent hover:bg-claude-accent-hover text-white px-4 py-2 rounded-lg font-semibold mt-6">
       Kaydet
     </button>
   </div>
 
   <div>
-    <h2 class="text-lg font-bold mb-3">Önizleme</h2>
+    <h2 class="font-serif text-lg font-bold mb-4">Önizleme</h2>
     <iframe x-bind:src="`/preview/{{ c.slug }}?primary=${encodeURIComponent(primary)}&accent=${encodeURIComponent(accent)}&font_headline=${encodeURIComponent(fontHeadline)}`"
             src="/preview/{{ c.slug }}"
-            class="w-full bg-black rounded"
+            class="w-full bg-black rounded-lg"
             style="aspect-ratio: 9/16; max-height: 700px;"></iframe>
   </div>
 </form>

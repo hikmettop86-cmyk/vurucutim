@@ -1,9 +1,9 @@
 {% extends "base.html.j2" %}
 {% block title %}short-bot — Loglar{% endblock %}
 {% block content %}
-<h1 class="text-3xl font-bold mb-4">Loglar</h1>
+<h1 class="font-serif text-3xl font-bold mb-6">Loglar</h1>
 
-<div id="logtail" class="bg-slate-950 rounded-lg p-4 font-mono text-xs h-[600px] overflow-y-auto"
+<div id="logtail" class="bg-claude-surface-alt border border-claude-border rounded-lg p-4 font-mono text-xs h-[600px] overflow-y-auto"
      hx-get="/logs/tail" hx-trigger="load, every 2s" hx-swap="innerHTML">
   Yükleniyor...
 </div>

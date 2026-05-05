@@ -1,23 +1,23 @@
 {% extends "base.html.j2" %}
 {% block title %}short-bot — Yeni Kanal{% endblock %}
 {% block content %}
-<a href="/channels" class="text-slate-400 hover:text-white text-sm">&larr; Kanallar</a>
-<h1 class="text-3xl font-bold mt-2 mb-6">+ Yeni Kanal</h1>
+<a href="/channels" class="text-claude-muted hover:text-claude-text text-sm">&larr; Kanallar</a>
+<h1 class="font-serif text-3xl font-bold mt-2 mb-6">+ Yeni Kanal</h1>
 
 <div class="grid grid-cols-2 gap-6">
   <form id="wizard-form" hx-post="/channels/new/generate" hx-target="#preview" hx-indicator="#loading"
-        class="space-y-3">
-    <h2 class="text-lg font-bold">Temel Bilgi</h2>
+        class="space-y-4">
+    <h2 class="font-serif text-lg font-bold">Temel Bilgi</h2>
 
     <label class="block">
-      <span class="text-xs text-slate-400 uppercase">Kanal &#304;sim</span>
+      <span class="text-xs text-claude-muted uppercase">Kanal &#304;sim</span>
       <input type="text" name="name" required
-             class="bg-slate-800 px-3 py-2 rounded w-full mt-1 text-sm">
+             class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
     </label>
 
     <label class="block">
-      <span class="text-xs text-slate-400 uppercase">Dil</span>
-      <select name="language" class="bg-slate-800 px-3 py-2 rounded w-full mt-1 text-sm">
+      <span class="text-xs text-claude-muted uppercase">Dil</span>
+      <select name="language" class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
         <option value="tr">Türkçe</option>
         <option value="en">English</option>
         <option value="de">Deutsch</option>
@@ -27,35 +27,35 @@
     </label>
 
     <label class="block">
-      <span class="text-xs text-slate-400 uppercase">Keywords (virgülle)</span>
+      <span class="text-xs text-claude-muted uppercase">Keywords (virgülle)</span>
       <input type="text" name="keywords" required
              placeholder="Bundesliga, Bayern, Champions League"
-             class="bg-slate-800 px-3 py-2 rounded w-full mt-1 text-sm">
+             class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text placeholder:text-claude-muted">
     </label>
 
     <label class="block">
-      <span class="text-xs text-slate-400 uppercase">Konu ipucu (opsiyonel)</span>
+      <span class="text-xs text-claude-muted uppercase">Konu ipucu (opsiyonel)</span>
       <input type="text" name="topic_hint"
-             class="bg-slate-800 px-3 py-2 rounded w-full mt-1 text-sm">
+             class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
     </label>
 
     <label class="block">
-      <span class="text-xs text-slate-400 uppercase">Hedef kitle (opsiyonel)</span>
+      <span class="text-xs text-claude-muted uppercase">Hedef kitle (opsiyonel)</span>
       <input type="text" name="target_audience"
-             class="bg-slate-800 px-3 py-2 rounded w-full mt-1 text-sm">
+             class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
     </label>
 
-    <button type="submit" class="bg-red-600 hover:bg-red-700 px-4 py-2 rounded font-semibold mt-4 w-full">
+    <button type="submit" class="bg-claude-accent hover:bg-claude-accent-hover text-white px-4 py-2 rounded-lg font-semibold mt-4 w-full">
       DNA Üret (Opus, ~30-60s)
     </button>
-    <div id="loading" class="htmx-indicator text-blue-400 text-sm">
+    <div id="loading" class="htmx-indicator text-claude-accent text-sm">
       Opus düşünüyor...
     </div>
   </form>
 
   <div>
-    <h2 class="text-lg font-bold mb-3">Canlı Önizleme</h2>
-    <div id="preview" class="bg-slate-950 rounded-lg p-4 text-slate-500 text-center text-sm aspect-[9/16] flex items-center justify-center">
+    <h2 class="font-serif text-lg font-bold mb-4">Canlı Önizleme</h2>
+    <div id="preview" class="bg-claude-surface-alt border border-claude-border rounded-lg p-4 text-claude-muted text-center text-sm aspect-[9/16] flex items-center justify-center">
       Önce DNA üret &rarr;
     </div>
   </div>

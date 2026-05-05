@@ -1,24 +1,24 @@
 {% if error %}
-  <div class="bg-red-900/50 border border-red-700 rounded p-4 text-red-300 text-sm">
+  <div class="bg-claude-error/10 border border-claude-error/30 rounded-lg p-4 text-claude-error text-sm">
     Hata: {{ error }}
   </div>
 {% elif dna %}
-  <div class="bg-slate-800 rounded p-3 text-xs space-y-2 mb-3">
-    <div><span class="text-slate-400">Archetype:</span> <strong>{{ dna.archetype }}</strong></div>
-    <div><span class="text-slate-400">Palette:</span>
+  <div class="bg-claude-surface border border-claude-border rounded-lg p-4 text-xs space-y-2 mb-4">
+    <div><span class="text-claude-muted">Archetype:</span> <strong>{{ dna.archetype }}</strong></div>
+    <div><span class="text-claude-muted">Palette:</span>
       <span class="inline-block w-4 h-4 rounded align-middle ml-1" style="background: {{ dna.palette.primary }}"></span> {{ dna.palette.primary }}
       <span class="inline-block w-4 h-4 rounded align-middle ml-2" style="background: {{ dna.palette.accent }}"></span> {{ dna.palette.accent }}
     </div>
-    <div><span class="text-slate-400">Fonts:</span> {{ dna.fonts.headline }} + {{ dna.fonts.body }}</div>
+    <div><span class="text-claude-muted">Fonts:</span> {{ dna.fonts.headline }} + {{ dna.fonts.body }}</div>
   </div>
   <div class="flex gap-2 mt-2">
     <form hx-post="/channels/new/generate" hx-target="#preview" hx-include="#wizard-form" class="flex-1">
-      <button class="bg-slate-700 hover:bg-slate-600 px-3 py-2 rounded text-sm w-full">Yeniden Üret</button>
+      <button class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm w-full text-claude-text">Yeniden Üret</button>
     </form>
     <form action="/channels/new/save" method="POST" class="flex-1">
       <input type="hidden" name="name" value="{{ name }}">
       <input type="hidden" name="language" value="{{ language }}">
-      <button class="bg-red-600 hover:bg-red-700 px-3 py-2 rounded text-sm w-full font-semibold">Kaydet</button>
+      <button class="bg-claude-accent hover:bg-claude-accent-hover text-white px-3 py-2 rounded-lg text-sm w-full font-semibold">Kaydet</button>
     </form>
   </div>
 {% endif %}

@@ -1,17 +1,17 @@
 <div class="grid grid-cols-4 gap-4">
   {% for s in shorts %}
-  <div class="bg-slate-800 rounded-lg overflow-hidden">
+  <div class="bg-claude-surface border border-claude-border rounded-lg overflow-hidden">
     <a href="/shorts/{{ s.id }}" class="block">
-      <div class="aspect-[9/16] bg-slate-900 flex items-center justify-center text-slate-500 text-xs">
+      <div class="aspect-[9/16] bg-claude-text flex items-center justify-center text-white/50 text-xs">
         ▶ {{ s.title[:30] }}
       </div>
     </a>
-    <div class="p-3 text-xs">
+    <div class="p-4 text-xs">
       <div class="font-semibold truncate">{{ s.title }}</div>
-      <div class="text-slate-400 mt-1">{{ s.channel }} · {{ s.created_at.strftime('%d %b %H:%M') }}</div>
+      <div class="text-claude-muted mt-1">{{ s.channel }} · {{ s.created_at.strftime('%d %b %H:%M') }}</div>
     </div>
   </div>
   {% else %}
-  <div class="col-span-4 text-slate-500 text-center py-12">Sonuç yok.</div>
+  <div class="col-span-4 text-claude-muted text-center py-12">Sonuç yok.</div>
   {% endfor %}
 </div>
