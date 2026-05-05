@@ -105,3 +105,27 @@ topic_tag: tek kelime, lowercase, Türkçe (sabir/umut/ayrilik gibi). Az kullan�
 - script.mood: tam olarak breaking, neutral veya upbeat (üç seçenekten biri)
 - image_keywords: İngilizce, görsel arama için ("couple silhouette sunset")
 """
+
+
+from short_bot.claude_cli import run_json
+
+
+def generate_quote(
+    *,
+    channel: ChannelConfig,
+    dna: DnaSpec,
+    forbidden_texts: list[str],
+    topic_distribution: dict[str, int],
+    claude_path: str = "claude",
+    model: str = "sonnet",
+) -> GeneratorResult:
+    prompt = build_generator_prompt(
+        channel=channel, dna=dna,
+        forbidden_texts=forbidden_texts,
+        topic_distribution=topic_distribution,
+    )
+    return run_json(
+        prompt, GeneratorResult,
+        claude_path=claude_path, model=model,
+        retries=2, timeout_s=180,
+    )
