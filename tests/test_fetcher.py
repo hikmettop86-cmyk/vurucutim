@@ -37,3 +37,17 @@ def test_fetch_rss_retries_on_failure():
                             type("R", (), {"status_code": 200, "content": b"<rss version='2.0'><channel></channel></rss>"})()]):
         items = fetch_rss(["x"], "hl=tr", max_retries=3, backoff=0)
     assert items == []
+
+
+def test_build_rss_url_uses_language_param():
+    from short_bot.fetcher import build_rss_url_for_language
+    url = build_rss_url_for_language(["x"], "de")
+    assert "hl=de" in url
+    assert "gl=DE" in url
+
+
+def test_build_rss_url_for_language_invalid():
+    import pytest
+    from short_bot.fetcher import build_rss_url_for_language
+    with pytest.raises(KeyError):
+        build_rss_url_for_language(["x"], "xx")

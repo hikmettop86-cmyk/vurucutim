@@ -10,6 +10,7 @@ import requests
 from dateutil import parser as dateparser
 
 from short_bot.models import NewsItem
+from short_bot.locale import RSS_LOCALES
 
 _BASE_URL = "https://news.google.com/rss/search"
 
@@ -85,3 +86,8 @@ def _parse_feed(raw: bytes) -> list[NewsItem]:
             description=e.get("summary"),
         ))
     return items
+
+
+def build_rss_url_for_language(keywords: list[str], language: str) -> str:
+    """Convenience: build the RSS URL using the locale for `language`."""
+    return build_rss_url(keywords, RSS_LOCALES[language])
