@@ -13,8 +13,15 @@ playwright install chromium
 
 ### 1. Müzik dosyaları
 
-`assets/music/{breaking,neutral,upbeat}/` klasörlerine **en az birer mp3** koyun.
-Başlangıç için YouTube Audio Library'den 5-10 telifsiz parça indirin.
+Repo, `assets/music/` altında **YouTube Audio Library kaynaklı 4 telifsiz parçayla** birlikte gelir:
+
+| Mood | Dosya |
+|---|---|
+| breaking | `Running - Nat Keefe.mp3`, `Sweaty Staredown - The Soundings.mp3` |
+| neutral  | `Rain Over Kyoto Station - The Mini Vandals.mp3` |
+| upbeat   | `Floating Lanterns - The Mini Vandals.mp3` |
+
+Bot her koşumda `assets/music/<mood>/*.mp3` altından rastgele birini seçer. Yeni parça eklemek isterseniz YouTube Audio Library veya başka telifsiz kaynaktan indirip ilgili klasöre koyun — bot otomatik bulur, ek yapılandırma gerekmez.
 
 ### 2. DB init
 

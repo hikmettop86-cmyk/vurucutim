@@ -23,3 +23,6 @@ logs/runs/*
 
 # brainstorm/spec working files
 .superpowers/
+
+# scratch / one-off renders
+tmp/
