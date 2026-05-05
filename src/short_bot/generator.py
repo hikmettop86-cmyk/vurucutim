@@ -107,6 +107,62 @@ topic_tag: tek kelime, lowercase, Türkçe (sabir/umut/ayrilik gibi). Az kullan�
 """
 
 
+from dataclasses import dataclass
+
+from rapidfuzz import fuzz
+from sqlalchemy.engine import Engine
+
+from short_bot.generated_db import (
+    exists_hash, recent_by_tag, text_hash,
+)
+
+
+_TAG_OVERLAP_THRESHOLD = 0.65   # same-tag medium-fuzzy match → duplicate
+
+
+@dataclass
+class DupVerdict:
+    is_duplicate: bool
+    reason: str = ""
+
+
+def check_duplicate(
+    eng: Engine,
+    channel_slug: str,
+    result: "GeneratorResult",
+    forbidden: list[str],
+    fuzzy_threshold: float,
+) -> DupVerdict:
+    """Three-layer duplicate detection.
+
+    Layer 1: exact hash in DB (fast).
+    Layer 2: fuzzy ratio >= fuzzy_threshold against forbidden list (in-memory).
+    Layer 3: same topic_tag + fuzzy ratio >= 0.70 (DB query).
+    """
+    # Layer 1: exact hash
+    if exists_hash(eng, channel_slug, text_hash(result.text)):
+        return DupVerdict(True, "exact_hash")
+
+    # Layer 2: fuzzy text vs forbidden list
+    new_low = result.text.lower()
+    for prev in forbidden:
+        ratio = fuzz.ratio(new_low, prev.lower()) / 100
+        if ratio >= fuzzy_threshold:
+            return DupVerdict(True, f"fuzzy_text({ratio:.2f})")
+
+    # Layer 3: same-tag medium fuzzy
+    same_tag = recent_by_tag(eng, channel_slug, tag=result.topic_tag,
+                              days=7, limit=20)
+    for prev in same_tag:
+        ratio = fuzz.ratio(new_low, prev.lower()) / 100
+        if ratio >= _TAG_OVERLAP_THRESHOLD:
+            return DupVerdict(
+                True, f"tag_overlap({result.topic_tag},{ratio:.2f})"
+            )
+
+    return DupVerdict(False)
+
+
 from short_bot.claude_cli import run_json
 
 
