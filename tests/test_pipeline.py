@@ -61,6 +61,7 @@ def test_pipeline_happy_path(tmp_path):
          patch("short_bot.pipeline.extract_article", return_value="Tam makale gövdesi"), \
          patch("short_bot.pipeline.write_script", return_value=_script()), \
          patch("short_bot.pipeline.download_and_blur_thumb", return_value=None), \
+         patch("short_bot.image_picker.pick_image_for_script", return_value=None), \
          patch("short_bot.pipeline.render_frames", return_value=60), \
          patch("short_bot.pipeline.compose_video", side_effect=fake_compose):
         result = run_pipeline(
@@ -110,6 +111,7 @@ def test_pipeline_records_failure_on_render_error(tmp_path):
          patch("short_bot.pipeline.extract_article", return_value="body"), \
          patch("short_bot.pipeline.write_script", return_value=_script()), \
          patch("short_bot.pipeline.download_and_blur_thumb", return_value=None), \
+         patch("short_bot.image_picker.pick_image_for_script", return_value=None), \
          patch("short_bot.pipeline.render_frames", side_effect=RuntimeError("crash")):
         result = run_pipeline(
             channel=channel, settings=settings,

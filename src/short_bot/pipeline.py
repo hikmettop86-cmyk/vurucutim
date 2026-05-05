@@ -147,6 +147,14 @@ def run_pipeline(
                 bg = None
                 if picked.item.thumb_url:
                     bg = download_and_blur_thumb(picked.item.thumb_url, cache_dir)
+                if bg is None:
+                    # Fallback: search DDG + verify with Claude vision
+                    from short_bot.image_picker import pick_image_for_script
+                    images_cache = cache_dir / "images"
+                    bg = pick_image_for_script(script, images_cache,
+                                                claude_path=settings.claude_cli_path)
+                    if bg:
+                        log.info(f"  ddg image accepted: {bg.name}")
                 music = pick_music(music_root, mood=script.mood)
                 log.info(f"  → bg={'cached' if bg else 'none'} music={music.name}")
 
