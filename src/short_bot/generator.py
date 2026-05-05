@@ -117,7 +117,7 @@ from short_bot.generated_db import (
 )
 
 
-_TAG_OVERLAP_THRESHOLD = 0.65   # same-tag medium-fuzzy match → duplicate
+_TAG_OVERLAP_THRESHOLD = 0.70   # same-tag medium-fuzzy match → duplicate
 
 
 @dataclass

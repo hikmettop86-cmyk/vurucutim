@@ -35,11 +35,11 @@ def test_layer2_fuzzy_text_against_forbidden(eng):
 
 def test_layer3_same_tag_medium_fuzzy(eng):
     insert_generated(eng, channel="sevgi",
-                     text="Aşk, ilk bakışta değil ilk anlayışta başlamalı.",
+                     text="Aşk her şeyden önce ilk anlayışta başlar.",
                      topic_tag="tanisma", language="tr",
                      status="used", short_id=None)
     # _fake_result text: "Aşk, ilk anlayışta başlar." — same tag (tanisma),
-    # fuzzy ratio ~ 0.7+ but < 0.85 → layer2 misses, layer3 catches
+    # fuzzy ratio ~0.746 (in [0.70, 0.85)) → layer2 misses, layer3 catches
     result = _fake_result()
     verdict = check_duplicate(eng, "sevgi", result, forbidden=[],
                               fuzzy_threshold=0.85)
