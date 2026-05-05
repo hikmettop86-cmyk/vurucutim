@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request
+from flask import Blueprint, render_template, request, abort
 
 from short_bot.web.models import Short
 
@@ -33,3 +33,11 @@ def grid_partial():
         query = query.filter(Short.title.ilike(f"%{q}%"))
     shorts = query.order_by(Short.created_at.desc()).limit(60).all()
     return render_template("_partials/shorts_grid.html.j2", shorts=shorts)
+
+
+@bp.route("/shorts/<int:short_id>")
+def detail(short_id):
+    s = Short.query.filter_by(id=short_id).first()
+    if s is None or s.deleted_at is not None:
+        abort(404)
+    return render_template("shorts/detail.html.j2", s=s)

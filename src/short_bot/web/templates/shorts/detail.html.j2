@@ -1,0 +1,31 @@
+{% extends "base.html.j2" %}
+{% block title %}short-bot — {{ s.title }}{% endblock %}
+{% block content %}
+<a href="/shorts" class="text-slate-400 hover:text-white text-sm">← Shorts</a>
+<h1 class="text-3xl font-bold mt-2 mb-1">{{ s.title }}</h1>
+<div class="text-slate-400 text-sm mb-4">
+  {{ s.channel }} · {{ s.created_at.strftime('%d %b %Y, %H:%M') }} · {{ s.duration_s }}s · render {{ s.render_ms }}ms
+</div>
+
+<div class="grid grid-cols-3 gap-6">
+  <div class="col-span-1">
+    <video controls class="w-full bg-black rounded">
+      <source src="{{ s.file_url }}" type="video/mp4">
+    </video>
+  </div>
+  <div class="col-span-2 space-y-3">
+    <div class="bg-slate-800 rounded p-4">
+      <div class="text-xs text-slate-400 uppercase tracking-wider mb-1">Dosya</div>
+      <div class="font-mono text-xs">{{ s.file_path }}</div>
+    </div>
+    <div class="bg-slate-800 rounded p-4">
+      <div class="text-xs text-slate-400 uppercase tracking-wider mb-1">RSS GUID</div>
+      <div class="font-mono text-xs break-all">{{ s.rss_item_guid }}</div>
+    </div>
+    <div class="bg-slate-800 rounded p-4">
+      <div class="text-xs text-slate-400 uppercase tracking-wider mb-1">Script JSON</div>
+      <pre class="text-xs whitespace-pre-wrap">{{ s.script_json }}</pre>
+    </div>
+  </div>
+</div>
+{% endblock %}

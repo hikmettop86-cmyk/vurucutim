@@ -61,6 +61,12 @@ def create_app(
     from short_bot.web.routes import register_blueprints
     register_blueprints(app)
 
+    # Serve mp4 files from output directory
+    @app.route("/output/<path:filename>")
+    def serve_output(filename):
+        from flask import send_from_directory
+        return send_from_directory(app.config["SHORTBOT_OUTPUT_ROOT"], filename)
+
     if scheduler:
         from short_bot.web.scheduler import init_scheduler
         init_scheduler(app)

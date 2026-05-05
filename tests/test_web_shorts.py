@@ -49,3 +49,18 @@ def test_shorts_search_query(app):
     body = resp.data.decode("utf-8")
     assert "Alpha" in body
     assert "Beta" not in body
+
+
+def test_short_detail_view(app):
+    client = app.test_client()
+    resp = client.get("/shorts/1")
+    assert resp.status_code == 200
+    body = resp.data.decode("utf-8")
+    assert "Alpha" in body
+    assert "ch1" in body
+
+
+def test_short_detail_404_when_missing(app):
+    client = app.test_client()
+    resp = client.get("/shorts/9999")
+    assert resp.status_code == 404
