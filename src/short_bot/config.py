@@ -2,6 +2,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 import re
+from typing import Literal
 
 import yaml
 
@@ -21,6 +22,14 @@ class Settings:
     fuzzy_dedup_threshold: float
     log_level: str
     claude_models: dict
+
+
+@dataclass(frozen=True)
+class GeneratorConfig:
+    topic: str
+    forbidden_lookback: int = 50
+    max_retries: int = 3
+    fuzzy_threshold: float | None = None
 
 
 @dataclass(frozen=True)
@@ -46,6 +55,8 @@ class ChannelConfig:
     language: str = "tr"
     dna: DnaSpec | None = None
     script_model: str | None = None
+    content_source: Literal["rss", "generator"] = "rss"
+    generator: GeneratorConfig | None = None
 
 
 def load_settings(path: Path) -> Settings:
@@ -90,6 +101,32 @@ def load_channel(path: Path) -> ChannelConfig:
             f"channel.template ({template!r}) must match dna.archetype ({dna.archetype!r})"
         )
 
+    content_source = data.get("content_source", "rss")
+    if content_source not in ("rss", "generator"):
+        raise ValueError(
+            f"content_source must be 'rss' or 'generator', got {content_source!r}"
+        )
+
+    generator = None
+    if content_source == "generator":
+        gen_data = data.get("generator")
+        if not gen_data:
+            raise ValueError(
+                "content_source='generator' requires a 'generator' block in YAML"
+            )
+        topic = (gen_data.get("topic") or "").strip()
+        if len(topic) < 10:
+            raise ValueError(
+                f"generator.topic must be at least 10 chars, got {len(topic)}"
+            )
+        generator = GeneratorConfig(
+            topic=topic,
+            forbidden_lookback=int(gen_data.get("forbidden_lookback", 50)),
+            max_retries=int(gen_data.get("max_retries", 3)),
+            fuzzy_threshold=(float(gen_data["fuzzy_threshold"])
+                              if "fuzzy_threshold" in gen_data else None),
+        )
+
     cta = data.get("cta", {})
     return ChannelConfig(
         slug=slug,
@@ -113,6 +150,8 @@ def load_channel(path: Path) -> ChannelConfig:
         language=language,
         dna=dna,
         script_model=data.get("script_model"),
+        content_source=content_source,
+        generator=generator,
     )
 
 
@@ -142,6 +181,17 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
     }
     if cfg.script_model:
         data["script_model"] = cfg.script_model
+    if cfg.content_source != "rss":
+        data["content_source"] = cfg.content_source
+    if cfg.generator is not None:
+        gen_data = {
+            "topic": cfg.generator.topic,
+            "forbidden_lookback": cfg.generator.forbidden_lookback,
+            "max_retries": cfg.generator.max_retries,
+        }
+        if cfg.generator.fuzzy_threshold is not None:
+            gen_data["fuzzy_threshold"] = cfg.generator.fuzzy_threshold
+        data["generator"] = gen_data
     if cfg.dna is not None:
         # mode='json' → tuple becomes list, ready for YAML round-trip
         data["dna"] = cfg.dna.model_dump(mode="json")
