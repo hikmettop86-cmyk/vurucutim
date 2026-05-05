@@ -19,12 +19,12 @@
       ▶ Şimdi üret
     </button>
     {% if c.content_source == 'generator' %}
-    <form method="POST" action="/channels/{{ c.slug }}/generator-test" class="inline">
-      <button type="submit"
-              class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm">
-        🧪 Test örnek üret
-      </button>
-    </form>
+    <button hx-post="/channels/{{ c.slug }}/generator-test"
+            hx-target="#generator-test-result"
+            hx-swap="innerHTML"
+            class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm">
+      🧪 Test örnek üret
+    </button>
     {% endif %}
     {% if c.dna %}
     <form method="POST" action="/channels/{{ c.slug }}/regenerate-dna" class="inline"
@@ -420,6 +420,13 @@
     </table>
     {% else %}
       <p class="text-sm text-claude-muted">Henüz run yok.</p>
+    {% endif %}
+
+    {% if c.content_source == 'generator' %}
+    <h2 class="font-serif text-lg font-bold mt-6 mb-3">Test Sonucu</h2>
+    <div id="generator-test-result" class="text-sm text-claude-muted">
+      "🧪 Test örnek üret" butonuna basıldığında burada görünür.
+    </div>
     {% endif %}
   </div>
 </form>

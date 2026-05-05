@@ -1,0 +1,25 @@
+{% if error %}
+  <div class="bg-claude-error/10 border border-claude-error/40 rounded-lg p-4 text-claude-error text-sm">
+    Hata: {{ error }}
+  </div>
+{% elif result %}
+  <div class="bg-claude-surface border border-claude-border rounded-lg p-4 space-y-3 text-sm">
+    <div>
+      <span class="text-xs text-claude-muted uppercase">Topic tag:</span>
+      <strong class="text-claude-accent">{{ result.topic_tag }}</strong>
+    </div>
+    <div>
+      <span class="text-xs text-claude-muted uppercase">Text:</span>
+      <p class="font-serif text-base leading-snug mt-1">{{ result.text }}</p>
+    </div>
+    <details>
+      <summary class="text-xs text-claude-muted uppercase cursor-pointer">Script JSON</summary>
+      <pre class="text-xs whitespace-pre-wrap mt-2 bg-claude-surface-alt p-2 rounded">{{ result.script.model_dump_json(indent=2) }}</pre>
+    </details>
+    <div>
+      <span class="text-xs text-claude-muted uppercase">Image keywords:</span>
+      <span class="font-mono text-xs">{{ result.image_keywords | join(' · ') }}</span>
+    </div>
+    <p class="text-xs text-claude-muted italic">&#9888;&#65039; DB'ye kaydedilmedi — gerçek üretim için "Şimdi üret" kullan.</p>
+  </div>
+{% endif %}
