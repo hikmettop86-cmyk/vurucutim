@@ -4,13 +4,30 @@ from datetime import datetime
 import pytest
 
 from short_bot.models import NewsItem, Script
-from short_bot.script_writer import write_script, build_script_prompt
+from short_bot.script_writer import write_script, build_script_prompt, ARCHETYPE_PROMPTS, build_script_prompt_for_channel
+from short_bot.config import ChannelConfig
+from short_bot.dna import DnaSpec, DnaPalette, DnaFonts, DnaTone
 
 
 def _item():
     return NewsItem(guid="g", title="Faiz indirimi", link="http://x", source="Reuters",
                     pub_date=datetime(2026, 5, 5), thumb_url=None,
                     description="Karar şok yarattı.")
+
+
+def _channel(language="tr", template="newscast", dna=None):
+    return ChannelConfig(
+        slug="test", name="T", keywords=["x"],
+        rss_locale="hl=tr&gl=TR&ceid=TR:tr",
+        schedule_cron="0 * * * *", duration_s=30, min_score=8.0,
+        max_candidates_per_run=10, template=template,
+        colors={"primary": "#c81e1e", "accent": "#ffea3b",
+                "bg_gradient": ["#1a3b6b", "#0a1a3b"]},
+        handle="@x", output_dir="output/test",
+        enabled=True, cta_enabled=False, cta_text="",
+        cta_icons=[], cta_duration_s=0, cta_show_handle=False,
+        language=language, dna=dna,
+    )
 
 
 def test_build_script_prompt_includes_body_and_title():
@@ -35,3 +52,44 @@ def test_write_script_returns_script_model():
         result = write_script(_item(), "Tam makale", claude_path="claude")
     assert isinstance(result, Script)
     assert result.header_top == "FAİZ ŞOKU"
+
+
+def test_archetype_prompts_cover_all_seven():
+    expected = {"newscast", "tabloid", "magazine", "kinetic", "dark-tech", "stadium", "meme"}
+    assert set(ARCHETYPE_PROMPTS.keys()) == expected
+
+
+def test_build_script_prompt_includes_archetype_instructions():
+    item = _item()
+    p = build_script_prompt_for_channel(item, "body text", _channel(template="tabloid"))
+    assert "tabloid" in p.lower()
+    # Tabloid signature word from prompt
+    assert "provocative" in p.lower() or "sensational" in p.lower()
+
+
+def test_build_script_prompt_includes_language_name():
+    p = build_script_prompt_for_channel(_item(), "body", _channel(language="de"))
+    assert "Deutsch" in p
+
+
+def test_build_script_prompt_includes_tone_block_when_dna_present():
+    dna = DnaSpec(
+        archetype="newscast",
+        palette=DnaPalette(primary="#000000", accent="#ffffff",
+                           bg_gradient=["#000000", "#111111"], body_bg=["#000000", "#111111"]),
+        fonts=DnaFonts(),
+        tone=DnaTone(voice="formal, data-driven", style="concise",
+                     forbidden=["clickbait"], sentence_max_words=12,
+                     paragraph_sentences=(3, 4), body_max_chars=300),
+        persona_summary="x",
+    )
+    p = build_script_prompt_for_channel(_item(), "body", _channel(dna=dna))
+    assert "formal, data-driven" in p
+    assert "clickbait" in p
+    assert "12" in p   # sentence_max_words
+
+
+def test_build_script_prompt_no_tone_block_when_no_dna():
+    p = build_script_prompt_for_channel(_item(), "body", _channel(dna=None))
+    # No tone-block heading should be present
+    assert "TONE OF VOICE" not in p
