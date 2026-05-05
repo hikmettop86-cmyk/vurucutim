@@ -81,3 +81,19 @@ def test_search_images_retries_on_ratelimit():
         candidates = search_images("test", max_results=2, max_attempts=2)
     assert len(candidates) == 1
     assert call_count["n"] == 2
+
+
+def test_search_images_coerces_string_dimensions():
+    """ddgs package may return width/height as strings; ensure no TypeError."""
+    fake_results = [
+        _ddg_result("https://example.com/a.jpg", title="t", width="1280", height="800"),
+        _ddg_result("https://example.com/b.jpg", title="t", width="400", height="200"),  # too small
+    ]
+    with patch("short_bot.image_search.DDGS") as ddgs_cls:
+        instance = MagicMock()
+        instance.__enter__.return_value.images.return_value = fake_results
+        instance.__exit__.return_value = False
+        ddgs_cls.return_value = instance
+        candidates = search_images("test", max_results=5, min_width=800)
+    assert len(candidates) == 1
+    assert candidates[0].width == 1280  # coerced to int

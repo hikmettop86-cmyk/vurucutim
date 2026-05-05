@@ -99,11 +99,13 @@ def pick_image_for_script(
     logger.info(f"image search (DDG): {query!r}")
     candidates = search_images(query, max_results=max_candidates)
     if not candidates:
-        logger.info("DDG returned 0 candidates; trying Wikimedia Commons")
+        logger.warning("DDG returned 0 candidates; trying Wikimedia Commons")
         from short_bot.wikimedia_search import search_images_commons
         candidates = search_images_commons(query, max_results=max_candidates)
+        if candidates:
+            logger.warning(f"Wikimedia returned {len(candidates)} candidates")
     if not candidates:
-        logger.info("no image candidates from any source")
+        logger.warning("no image candidates from any source")
         return None
 
     for i, cand in enumerate(candidates):
@@ -117,8 +119,8 @@ def pick_image_for_script(
             logger.warning(f"  cand {i}: verification CLI failed -> skip")
             continue
         if verdict.appropriate:
-            logger.info(f"  cand {i} ACCEPTED: {verdict.reason}")
+            logger.warning(f"  cand {i} ACCEPTED: {verdict.reason}")
             return path
-        logger.info(f"  cand {i} rejected: {verdict.reason}")
+        logger.warning(f"  cand {i} rejected: {verdict.reason}")
     logger.info("no candidate passed verification")
     return None

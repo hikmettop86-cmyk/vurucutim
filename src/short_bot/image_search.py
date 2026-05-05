@@ -83,9 +83,15 @@ def _filter_results(raw_results, *, min_width: int, max_results: int) -> list[Im
         domain = urlparse(url).netloc.lower().replace("www.", "")
         if any(bd in domain for bd in _BLOCKED_DOMAINS):
             continue
-        w = r.get("width")
-        h = r.get("height")
-        if w and w < min_width:
+        try:
+            w = int(r.get("width")) if r.get("width") is not None else None
+        except (ValueError, TypeError):
+            w = None
+        try:
+            h = int(r.get("height")) if r.get("height") is not None else None
+        except (ValueError, TypeError):
+            h = None
+        if w is not None and w < min_width:
             continue
         out.append(ImageCandidate(
             url=url,

@@ -53,9 +53,17 @@ def search_images_commons(
         url = info.get("thumburl") or info.get("url")
         if not url:
             continue
-        w = info.get("thumbwidth") or info.get("width")
-        h = info.get("thumbheight") or info.get("height")
-        if w and w < min_width:
+        raw_w = info.get("thumbwidth") or info.get("width")
+        raw_h = info.get("thumbheight") or info.get("height")
+        try:
+            w = int(raw_w) if raw_w is not None else None
+        except (ValueError, TypeError):
+            w = None
+        try:
+            h = int(raw_h) if raw_h is not None else None
+        except (ValueError, TypeError):
+            h = None
+        if w is not None and w < min_width:
             continue
         # Skip SVG / animated / vector formats — keep raster only
         if url.lower().endswith((".svg", ".gif")):
