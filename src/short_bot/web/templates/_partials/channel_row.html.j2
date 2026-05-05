@@ -1,0 +1,36 @@
+<tr class="border-b border-claude-border hover:bg-claude-surface-alt" id="channel-{{ c.slug }}">
+  <td class="p-3 font-mono text-xs">{{ c.slug }}</td>
+  <td class="p-3">{{ c.name }}</td>
+  <td class="p-3">{{ c.language }}</td>
+  <td class="p-3 text-claude-muted">{{ c.template }}</td>
+  <td class="p-3 font-mono text-xs">{{ c.schedule_cron }}</td>
+  <td class="p-3">
+    {% if c.dna %}
+      <span class="bg-claude-success text-white px-2 py-0.5 rounded-lg text-xs">DNA</span>
+    {% else %}
+      <span class="text-claude-muted">—</span>
+    {% endif %}
+  </td>
+  <td class="p-3">
+    <button hx-post="/channels/{{ c.slug }}/toggle"
+            hx-target="#channel-{{ c.slug }}"
+            hx-swap="outerHTML"
+            class="px-2 py-0.5 rounded-lg text-xs
+                   {% if c.enabled %}bg-claude-success text-white{% else %}bg-claude-surface-alt text-claude-muted{% endif %}">
+      {{ 'AÇIK' if c.enabled else 'KAPALI' }}
+    </button>
+  </td>
+  <td class="p-3 whitespace-nowrap">
+    <button hx-post="/shorts/run-now"
+            hx-vals='{"slug": "{{ c.slug }}"}'
+            hx-swap="none"
+            class="text-claude-accent hover:underline mr-2" title="Şimdi üret">▶</button>
+    <a href="/channels/{{ c.slug }}/edit" class="text-claude-accent hover:underline mr-2">Düzenle</a>
+    <button hx-post="/channels/{{ c.slug }}/clone"
+            hx-confirm="Kanalı klonlamak istiyor musunuz?"
+            class="text-claude-muted hover:text-claude-text mr-2" title="Klonla">⎘</button>
+    <button hx-post="/channels/{{ c.slug }}/delete"
+            hx-confirm="'{{ c.slug }}' kanalı silinsin mi? (yaml + css + output klasörü)"
+            class="text-claude-error hover:underline" title="Sil">Sil</button>
+  </td>
+</tr>

@@ -1,0 +1,105 @@
+{% extends "base.html.j2" %}
+{% block title %}short-bot — Ayarlar{% endblock %}
+{% block content %}
+<h1 class="font-serif text-3xl font-bold mb-6">Ayarlar</h1>
+
+<form method="POST" class="grid grid-cols-2 gap-6">
+  <div class="space-y-4">
+    <h2 class="font-serif text-lg font-bold">Yollar / İkililer</h2>
+
+    <label class="block">
+      <span class="text-xs text-claude-muted uppercase">FFmpeg path</span>
+      <input type="text" name="ffmpeg_path" value="{{ data.ffmpeg_path }}"
+             class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 font-mono text-sm text-claude-text">
+    </label>
+    <label class="block">
+      <span class="text-xs text-claude-muted uppercase">Claude CLI path</span>
+      <input type="text" name="claude_cli_path" value="{{ data.claude_cli_path }}"
+             class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 font-mono text-sm text-claude-text">
+    </label>
+    <label class="block">
+      <span class="text-xs text-claude-muted uppercase">Playwright browser</span>
+      <select name="playwright_browser"
+              class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
+        {% for b in ["chromium", "firefox", "webkit"] %}
+          <option value="{{ b }}" {% if data.playwright_browser == b %}selected{% endif %}>{{ b }}</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <h2 class="font-serif text-lg font-bold mt-6 border-t border-claude-border pt-4">Pipeline</h2>
+    <label class="block">
+      <span class="text-xs text-claude-muted uppercase">Fuzzy dedup eşiği (0.0–1.0)</span>
+      <input type="number" step="0.05" min="0" max="1" name="fuzzy_dedup_threshold"
+             value="{{ data.fuzzy_dedup_threshold }}"
+             class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
+    </label>
+    <label class="block">
+      <span class="text-xs text-claude-muted uppercase">Log level</span>
+      <select name="log_level"
+              class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
+        {% for lv in ["DEBUG", "INFO", "WARNING", "ERROR"] %}
+          <option value="{{ lv }}" {% if data.log_level == lv %}selected{% endif %}>{{ lv }}</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <h2 class="font-serif text-lg font-bold mt-6 border-t border-claude-border pt-4">Web</h2>
+    <div class="grid grid-cols-2 gap-3">
+      <label class="block">
+        <span class="text-xs text-claude-muted uppercase">Host</span>
+        <input type="text" name="web_host" value="{{ data.web.host }}"
+               class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 font-mono text-sm text-claude-text">
+      </label>
+      <label class="block">
+        <span class="text-xs text-claude-muted uppercase">Port</span>
+        <input type="number" name="web_port" value="{{ data.web.port }}"
+               class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 font-mono text-sm text-claude-text">
+      </label>
+    </div>
+
+    <h2 class="font-serif text-lg font-bold mt-6 border-t border-claude-border pt-4">Claude Modelleri</h2>
+    <div class="grid grid-cols-2 gap-3">
+      <label class="block">
+        <span class="text-xs text-claude-muted uppercase">DNA üretimi</span>
+        <select name="model_dna"
+                class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
+          {% for m in ["opus", "sonnet", "haiku"] %}
+            <option value="{{ m }}" {% if data.claude_models.dna == m %}selected{% endif %}>{{ m }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="block">
+        <span class="text-xs text-claude-muted uppercase">Varsayılan (skor + script)</span>
+        <select name="model_default"
+                class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
+          {% for m in ["opus", "sonnet", "haiku"] %}
+            <option value="{{ m }}" {% if data.claude_models.default == m %}selected{% endif %}>{{ m }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+
+    <button type="submit" class="bg-claude-accent hover:bg-claude-accent-hover text-white px-4 py-2 rounded-lg font-semibold mt-6 w-full">
+      Kaydet
+    </button>
+    <p class="text-xs text-claude-muted">
+      Not: web host/port değişikliği panel restart gerektirir.
+    </p>
+  </div>
+
+  <div>
+    <h2 class="font-serif text-lg font-bold mb-4">Yol Bilgileri (read-only)</h2>
+    <table class="w-full text-xs border border-claude-border rounded-lg overflow-hidden">
+      <tbody>
+        {% for label, p in paths.items() %}
+        <tr class="border-b border-claude-border">
+          <td class="p-2 bg-claude-surface text-claude-muted whitespace-nowrap">{{ label }}</td>
+          <td class="p-2 font-mono break-all">{{ p }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</form>
+{% endblock %}

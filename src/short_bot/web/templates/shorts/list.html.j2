@@ -14,28 +14,13 @@
           hx-get="/shorts/grid" hx-target="#grid" hx-trigger="change"
           hx-include="[name='q']">
     <option value="">Tüm kanallar</option>
-    <option value="son-dakika" {% if channel == 'son-dakika' %}selected{% endif %}>son-dakika</option>
-    <option value="spor-short-de" {% if channel == 'spor-short-de' %}selected{% endif %}>spor-short-de</option>
+    {% for c in all_channels %}
+      <option value="{{ c.slug }}" {% if channel == c.slug %}selected{% endif %}>{{ c.slug }}</option>
+    {% endfor %}
   </select>
 </div>
 
 <div id="grid">
-  <div class="grid grid-cols-4 gap-4">
-    {% for s in shorts %}
-    <div class="bg-claude-surface border border-claude-border rounded-lg overflow-hidden">
-      <a href="/shorts/{{ s.id }}" class="block">
-        <div class="aspect-[9/16] bg-claude-text flex items-center justify-center text-white/50 text-xs">
-          ▶ {{ s.title[:30] }}
-        </div>
-      </a>
-      <div class="p-4 text-xs">
-        <div class="font-semibold truncate">{{ s.title }}</div>
-        <div class="text-claude-muted mt-1">{{ s.channel }} · {{ s.created_at.strftime('%d %b %H:%M') }}</div>
-      </div>
-    </div>
-    {% else %}
-    <div class="col-span-4 text-claude-muted text-center py-12">Sonuç yok.</div>
-    {% endfor %}
-  </div>
+  {% include "_partials/shorts_grid.html.j2" %}
 </div>
 {% endblock %}

@@ -1,5 +1,8 @@
 {% for line in lines %}
-<div class="text-claude-muted leading-tight">{{ line }}</div>
+<div class="leading-tight
+            {% if 'ERROR' in line %}text-claude-error
+            {% elif 'WARN' in line %}text-yellow-600
+            {% else %}text-claude-muted{% endif %}">{{ line }}</div>
 {% else %}
-<div class="text-claude-muted">No logs yet.</div>
+<div class="text-claude-muted">Eşleşen log satırı yok.</div>
 {% endfor %}

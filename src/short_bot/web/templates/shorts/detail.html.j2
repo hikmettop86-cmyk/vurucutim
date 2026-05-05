@@ -2,7 +2,26 @@
 {% block title %}short-bot — {{ s.title }}{% endblock %}
 {% block content %}
 <a href="/shorts" class="text-claude-muted hover:text-claude-text text-sm">← Shorts</a>
-<h1 class="font-serif text-3xl font-bold mt-2 mb-1">{{ s.title }}</h1>
+<div class="flex justify-between items-start mt-2 mb-1">
+  <h1 class="font-serif text-3xl font-bold">{{ s.title }}</h1>
+  <div class="flex gap-2">
+    <a href="{{ s.file_url }}" download
+       class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm text-claude-text">
+      ↓ İndir
+    </a>
+    <button x-data x-on:click="navigator.clipboard.writeText(window.location.origin + '{{ s.file_url }}'); $el.textContent = 'Kopyalandı ✓'; setTimeout(() => $el.textContent = '⎘ URL kopyala', 2000)"
+            class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm text-claude-text">
+      ⎘ URL kopyala
+    </button>
+    <form method="POST" action="/shorts/{{ s.id }}/delete" class="inline"
+          onsubmit="return confirm('Bu short silinsin mi?')">
+      <button type="submit"
+              class="bg-claude-error hover:bg-red-700 text-white px-3 py-2 rounded-lg text-sm">
+        Sil
+      </button>
+    </form>
+  </div>
+</div>
 <div class="text-claude-muted text-sm mb-6">
   {{ s.channel }} · {{ s.created_at.strftime('%d %b %Y, %H:%M') }} · {{ s.duration_s }}s · render {{ s.render_ms }}ms
 </div>

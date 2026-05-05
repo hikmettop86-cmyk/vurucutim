@@ -17,30 +17,13 @@
       <th class="p-3">Archetype</th>
       <th class="p-3">Cron</th>
       <th class="p-3">DNA</th>
-      <th class="p-3">Aktif</th>
-      <th class="p-3"></th>
+      <th class="p-3">Durum</th>
+      <th class="p-3">Aksiyon</th>
     </tr>
   </thead>
   <tbody>
     {% for c in channels %}
-    <tr class="border-b border-claude-border hover:bg-claude-surface-alt">
-      <td class="p-3 font-mono text-xs">{{ c.slug }}</td>
-      <td class="p-3">{{ c.name }}</td>
-      <td class="p-3">{{ c.language }}</td>
-      <td class="p-3 text-claude-muted">{{ c.template }}</td>
-      <td class="p-3 font-mono text-xs">{{ c.schedule_cron }}</td>
-      <td class="p-3">
-        {% if c.dna %}
-          <span class="bg-claude-success text-white px-2 py-0.5 rounded-lg text-xs">DNA</span>
-        {% else %}
-          <span class="text-claude-muted">—</span>
-        {% endif %}
-      </td>
-      <td class="p-3">{{ '✓' if c.enabled else '✗' }}</td>
-      <td class="p-3">
-        <a href="/channels/{{ c.slug }}/edit" class="text-claude-accent hover:text-claude-accent-hover hover:underline">Düzenle</a>
-      </td>
-    </tr>
+      {% include "_partials/channel_row.html.j2" %}
     {% else %}
     <tr><td colspan="8" class="p-8 text-center text-claude-muted">Henüz kanal yok.</td></tr>
     {% endfor %}

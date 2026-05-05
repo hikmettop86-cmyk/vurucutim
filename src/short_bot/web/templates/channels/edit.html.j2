@@ -2,36 +2,73 @@
 {% block title %}short-bot — {{ c.slug }}{% endblock %}
 {% block content %}
 <a href="/channels" class="text-claude-muted hover:text-claude-text text-sm">← Kanallar</a>
-<h1 class="font-serif text-3xl font-bold mt-2 mb-1">{{ c.name }}</h1>
-<div class="text-claude-muted text-sm mb-6">
-  {{ c.slug }} · {{ c.language }} · {{ c.template }}
-  {% if c.dna %}<span class="bg-claude-success text-white px-2 py-0.5 rounded-lg text-xs ml-2">DNA</span>{% endif %}
+
+<div class="flex justify-between items-start mt-2 mb-1">
+  <div>
+    <h1 class="font-serif text-3xl font-bold">{{ c.name }}</h1>
+    <div class="text-claude-muted text-sm">
+      {{ c.slug }} · {{ c.language }} · {{ c.template }}
+      {% if c.dna %}<span class="bg-claude-success text-white px-2 py-0.5 rounded-lg text-xs ml-2">DNA</span>{% endif %}
+    </div>
+  </div>
+  <div class="flex gap-2">
+    <button hx-post="/shorts/run-now"
+            hx-vals='{"slug": "{{ c.slug }}"}'
+            hx-swap="none"
+            class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm">
+      ▶ Şimdi üret
+    </button>
+    {% if c.dna %}
+    <form method="POST" action="/channels/{{ c.slug }}/regenerate-dna" class="inline"
+          onsubmit="return confirm('DNA Opus ile yeniden üretilsin mi? (~30-60s sürer, mevcut DNA kaybolur)')">
+      <button type="submit"
+              class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm">
+        ↻ DNA Yenile
+      </button>
+    </form>
+    {% endif %}
+    <form method="POST" action="/channels/{{ c.slug }}/delete" class="inline"
+          onsubmit="return confirm('{{ c.slug }} kanalı silinsin mi? (yaml + css + output)')">
+      <button type="submit" class="bg-claude-error hover:bg-red-700 text-white px-3 py-2 rounded-lg text-sm">
+        Sil
+      </button>
+    </form>
+  </div>
 </div>
 
-<form method="POST" class="grid grid-cols-2 gap-6"
+<form method="POST" class="grid grid-cols-2 gap-6 mt-6"
       x-data='{
-        primary: "{{ c.dna.palette.primary if c.dna else c.colors.primary }}",
-        accent: "{{ c.dna.palette.accent if c.dna else c.colors.accent }}",
-        fontHeadline: "{{ c.dna.fonts.headline if c.dna else "Inter" }}",
-        fontBody: "{{ c.dna.fonts.body if c.dna else "Inter" }}",
-        bannerShape: "{{ c.dna.banner_shape if c.dna else "flat" }}",
-        highlightStyle: "{{ c.dna.highlight_style if c.dna else "bg-flat" }}",
-        chipStyle: "{{ c.dna.chip_style if c.dna else "rounded" }}",
-        categoryIcon: "{{ c.dna.category_icon if c.dna else "" }}"
+        primary: "{{ (c.dna.palette.primary if c.dna else c.colors.primary) }}",
+        accent: "{{ (c.dna.palette.accent if c.dna else c.colors.accent) }}",
+        bgGrad1: "{{ (c.dna.palette.bg_gradient[0] if c.dna else c.colors.bg_gradient[0]) }}",
+        bgGrad2: "{{ (c.dna.palette.bg_gradient[1] if c.dna else c.colors.bg_gradient[1]) }}",
+        bodyBg1: "{{ (c.dna.palette.body_bg[0] if c.dna else "#1a1a2a") }}",
+        bodyBg2: "{{ (c.dna.palette.body_bg[1] if c.dna else "#0a0a1a") }}",
+        fontHeadline: "{{ (c.dna.fonts.headline if c.dna else "Inter") }}",
+        fontBody: "{{ (c.dna.fonts.body if c.dna else "Inter") }}",
+        bannerShape: "{{ (c.dna.banner_shape if c.dna else "flat") }}",
+        highlightStyle: "{{ (c.dna.highlight_style if c.dna else "bg-flat") }}",
+        chipStyle: "{{ (c.dna.chip_style if c.dna else "rounded") }}",
+        categoryIcon: "{{ (c.dna.category_icon if c.dna else "") }}",
+        archetype: "{{ (c.dna.archetype if c.dna else c.template) }}"
       }'>
   <div class="space-y-4">
     <h2 class="font-serif text-lg font-bold">Temel</h2>
+
     <label class="block">
-      <span class="text-xs text-claude-muted uppercase">Keywords</span>
+      <span class="text-xs text-claude-muted uppercase">Keywords (virgülle)</span>
       <input type="text" name="keywords" value="{{ c.keywords | join(', ') }}"
              class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
     </label>
+
     <label class="block">
       <span class="text-xs text-claude-muted uppercase">Cron</span>
       <input type="text" name="schedule_cron" value="{{ c.schedule_cron }}"
              class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 font-mono text-sm text-claude-text">
+      <span class="text-xs text-claude-muted block mt-1">→ {{ cron_human }}</span>
     </label>
-    <div class="grid grid-cols-2 gap-3">
+
+    <div class="grid grid-cols-3 gap-3">
       <label class="block">
         <span class="text-xs text-claude-muted uppercase">Süre (sn)</span>
         <input type="number" name="duration_s" value="{{ c.duration_s }}"
@@ -42,19 +79,64 @@
         <input type="number" step="0.1" name="min_score" value="{{ c.min_score }}"
                class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
       </label>
+      <label class="block">
+        <span class="text-xs text-claude-muted uppercase">Max aday</span>
+        <input type="number" name="max_candidates_per_run" value="{{ c.max_candidates_per_run }}"
+               class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
+      </label>
     </div>
+
     <label class="block">
       <span class="text-xs text-claude-muted uppercase">Handle</span>
       <input type="text" name="handle" value="{{ c.handle }}"
              class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
     </label>
+
     <label class="flex items-center gap-2">
       <input type="checkbox" name="enabled" value="1" {% if c.enabled %}checked{% endif %}>
-      <span>Aktif</span>
+      <span>Aktif (cron'a göre otomatik üretilir)</span>
+    </label>
+
+    <h2 class="font-serif text-lg font-bold mt-6 border-t border-claude-border pt-4">CTA (Beğen-Abone-Paylaş)</h2>
+    <label class="flex items-center gap-2">
+      <input type="checkbox" name="cta_enabled" value="1" {% if c.cta_enabled %}checked{% endif %}>
+      <span>CTA göster</span>
+    </label>
+    <label class="block">
+      <span class="text-xs text-claude-muted uppercase">CTA metni</span>
+      <input type="text" name="cta_text" value="{{ c.cta_text }}"
+             class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
+    </label>
+    <div class="grid grid-cols-2 gap-3">
+      <label class="block">
+        <span class="text-xs text-claude-muted uppercase">CTA emojiler (virgül)</span>
+        <input type="text" name="cta_icons" value="{{ c.cta_icons | join(', ') }}"
+               class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
+      </label>
+      <label class="block">
+        <span class="text-xs text-claude-muted uppercase">CTA süre (sn)</span>
+        <input type="number" name="cta_duration_s" value="{{ c.cta_duration_s }}"
+               class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
+      </label>
+    </div>
+    <label class="flex items-center gap-2">
+      <input type="checkbox" name="cta_show_handle" value="1" {% if c.cta_show_handle %}checked{% endif %}>
+      <span>Handle'ı CTA üzerinde göster</span>
     </label>
 
     {% if c.dna %}
-    <h2 class="font-serif text-lg font-bold mt-6 border-t border-claude-border pt-4">DNA Editör</h2>
+    <h2 class="font-serif text-lg font-bold mt-6 border-t border-claude-border pt-4">DNA — Görsel</h2>
+
+    <label class="block">
+      <span class="text-xs text-claude-muted uppercase">Archetype</span>
+      <select name="dna_archetype" x-model="archetype"
+              class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
+        {% for a in archetypes %}
+          <option value="{{ a }}" {% if c.dna.archetype == a %}selected{% endif %}>{{ a }}</option>
+        {% endfor %}
+      </select>
+      <span class="text-xs text-claude-muted block mt-1">Değiştirildiğinde template + CSS yeniden yazılır.</span>
+    </label>
 
     <div class="grid grid-cols-2 gap-3">
       <label class="block">
@@ -67,6 +149,36 @@
         <span class="text-xs text-claude-muted uppercase">Accent</span>
         <input type="color" name="dna_accent" x-model="accent"
                value="{{ c.dna.palette.accent }}"
+               class="bg-claude-surface border border-claude-border rounded-lg w-full mt-1 h-9">
+      </label>
+    </div>
+
+    <div class="grid grid-cols-2 gap-3">
+      <label class="block">
+        <span class="text-xs text-claude-muted uppercase">BG gradient 1</span>
+        <input type="color" name="dna_bg_grad_1" x-model="bgGrad1"
+               value="{{ c.dna.palette.bg_gradient[0] }}"
+               class="bg-claude-surface border border-claude-border rounded-lg w-full mt-1 h-9">
+      </label>
+      <label class="block">
+        <span class="text-xs text-claude-muted uppercase">BG gradient 2</span>
+        <input type="color" name="dna_bg_grad_2" x-model="bgGrad2"
+               value="{{ c.dna.palette.bg_gradient[1] }}"
+               class="bg-claude-surface border border-claude-border rounded-lg w-full mt-1 h-9">
+      </label>
+    </div>
+
+    <div class="grid grid-cols-2 gap-3">
+      <label class="block">
+        <span class="text-xs text-claude-muted uppercase">Body BG 1</span>
+        <input type="color" name="dna_body_bg_1" x-model="bodyBg1"
+               value="{{ c.dna.palette.body_bg[0] }}"
+               class="bg-claude-surface border border-claude-border rounded-lg w-full mt-1 h-9">
+      </label>
+      <label class="block">
+        <span class="text-xs text-claude-muted uppercase">Body BG 2</span>
+        <input type="color" name="dna_body_bg_2" x-model="bodyBg2"
+               value="{{ c.dna.palette.body_bg[1] }}"
                class="bg-claude-surface border border-claude-border rounded-lg w-full mt-1 h-9">
       </label>
     </div>
@@ -131,15 +243,70 @@
       </div>
     </div>
 
+    <div class="grid grid-cols-2 gap-3">
+      <label class="block">
+        <span class="text-xs text-claude-muted uppercase">Category icon</span>
+        <input type="text" name="dna_category_icon" x-model="categoryIcon"
+               value="{{ c.dna.category_icon }}"
+               maxlength="4" class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-2xl text-center text-claude-text">
+      </label>
+      <label class="block">
+        <span class="text-xs text-claude-muted uppercase">Search query template</span>
+        <input type="text" name="dna_search_query_template" value="{{ c.dna.search_query_template }}"
+               placeholder="{header_top} {header_bottom} {category}"
+               class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-xs font-mono text-claude-text">
+      </label>
+    </div>
+
+    <h2 class="font-serif text-lg font-bold mt-6 border-t border-claude-border pt-4">DNA — Tone</h2>
+
+    <div class="grid grid-cols-2 gap-3">
+      <label class="block">
+        <span class="text-xs text-claude-muted uppercase">Voice</span>
+        <input type="text" name="dna_voice" value="{{ c.dna.tone.voice }}"
+               class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
+      </label>
+      <label class="block">
+        <span class="text-xs text-claude-muted uppercase">Style</span>
+        <input type="text" name="dna_style" value="{{ c.dna.tone.style }}"
+               class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
+      </label>
+    </div>
+
     <label class="block">
-      <span class="text-xs text-claude-muted uppercase">Category icon</span>
-      <input type="text" name="dna_category_icon" x-model="categoryIcon"
-             value="{{ c.dna.category_icon }}"
-             maxlength="4" class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-24 mt-1 text-2xl text-center text-claude-text">
+      <span class="text-xs text-claude-muted uppercase">Forbidden (virgülle)</span>
+      <input type="text" name="dna_forbidden" value="{{ c.dna.tone.forbidden | join(', ') }}"
+             class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
     </label>
+
+    <div class="grid grid-cols-2 gap-3">
+      <label class="block">
+        <span class="text-xs text-claude-muted uppercase">Sentence max words</span>
+        <input type="number" name="dna_sentence_max_words" value="{{ c.dna.tone.sentence_max_words }}"
+               min="4" max="40"
+               class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
+      </label>
+      <label class="block">
+        <span class="text-xs text-claude-muted uppercase">Body max chars</span>
+        <input type="number" name="dna_body_max_chars" value="{{ c.dna.tone.body_max_chars }}"
+               min="50" max="800"
+               class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
+      </label>
+    </div>
+
+    <label class="block">
+      <span class="text-xs text-claude-muted uppercase">Headline style hint</span>
+      <input type="text" name="dna_headline_style_hint" value="{{ c.dna.tone.headline_style_hint }}"
+             class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
+    </label>
+
+    <details class="bg-claude-surface border border-claude-border rounded-lg p-3 mt-4">
+      <summary class="text-xs text-claude-muted uppercase cursor-pointer">Persona özeti (read-only)</summary>
+      <p class="text-xs text-claude-muted mt-2">{{ c.dna.persona_summary }}</p>
+    </details>
     {% endif %}
 
-    <button type="submit" class="bg-claude-accent hover:bg-claude-accent-hover text-white px-4 py-2 rounded-lg font-semibold mt-6">
+    <button type="submit" class="bg-claude-accent hover:bg-claude-accent-hover text-white px-4 py-2 rounded-lg font-semibold mt-6 w-full">
       Kaydet
     </button>
   </div>
@@ -148,7 +315,7 @@
     <h2 class="font-serif text-lg font-bold mb-4">Önizleme</h2>
     <div class="relative bg-black rounded-lg overflow-hidden mx-auto"
          style="width: 100%; max-width: 360px; aspect-ratio: 9/16;">
-      <iframe x-bind:src="`/preview/{{ c.slug }}?primary=${encodeURIComponent(primary)}&accent=${encodeURIComponent(accent)}&font_headline=${encodeURIComponent(fontHeadline)}&font_body=${encodeURIComponent(fontBody)}&banner_shape=${encodeURIComponent(bannerShape)}&highlight_style=${encodeURIComponent(highlightStyle)}&chip_style=${encodeURIComponent(chipStyle)}&category_icon=${encodeURIComponent(categoryIcon)}`"
+      <iframe x-bind:src="`/preview/{{ c.slug }}?primary=${encodeURIComponent(primary)}&accent=${encodeURIComponent(accent)}&font_headline=${encodeURIComponent(fontHeadline)}&font_body=${encodeURIComponent(fontBody)}&banner_shape=${encodeURIComponent(bannerShape)}&highlight_style=${encodeURIComponent(highlightStyle)}&chip_style=${encodeURIComponent(chipStyle)}&category_icon=${encodeURIComponent(categoryIcon)}&bg_grad_1=${encodeURIComponent(bgGrad1)}&bg_grad_2=${encodeURIComponent(bgGrad2)}&body_bg_1=${encodeURIComponent(bodyBg1)}&body_bg_2=${encodeURIComponent(bodyBg2)}`"
               src="/preview/{{ c.slug }}"
               scrolling="no"
               class="absolute top-0 left-0 border-0"
@@ -157,6 +324,57 @@
     <p class="text-xs text-claude-muted mt-2 text-center">
       Gerçek 1080×1920 short, ölçekli önizleme.
     </p>
+
+    <h2 class="font-serif text-lg font-bold mt-6 mb-3">Son Run'lar</h2>
+    {% if runs %}
+    <table class="w-full text-xs border border-claude-border rounded-lg overflow-hidden">
+      <thead class="bg-claude-surface">
+        <tr class="text-left">
+          <th class="p-2">Tarih</th>
+          <th class="p-2">Trigger</th>
+          <th class="p-2">Durum</th>
+          <th class="p-2">Süre</th>
+          <th class="p-2"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in runs %}
+        <tr class="border-t border-claude-border">
+          <td class="p-2 font-mono">{{ r.started_at.strftime('%d %b %H:%M') }}</td>
+          <td class="p-2 text-claude-muted">{{ r.trigger }}</td>
+          <td class="p-2">
+            {% if r.status == 'success' %}
+              <span class="text-claude-success">✓ {{ r.status }}</span>
+            {% elif r.status == 'failed' %}
+              <span class="text-claude-error">✗ {{ r.status }}</span>
+            {% elif r.status == 'cancelled' %}
+              <span class="text-claude-muted">⊘ cancelled</span>
+            {% elif r.status == 'running' or r.status is none %}
+              <span class="text-yellow-600">● running</span>
+            {% else %}
+              <span class="text-claude-muted">{{ r.status or '—' }}</span>
+            {% endif %}
+          </td>
+          <td class="p-2 text-claude-muted">
+            {% if r.ended_at and r.started_at %}
+              {{ ((r.ended_at - r.started_at).total_seconds() | int) }}s
+            {% else %}—{% endif %}
+          </td>
+          <td class="p-2 text-right">
+            {% if r.status == 'running' or r.status is none %}
+              <form method="POST" action="/runs/{{ r.id }}/cancel" class="inline"
+                    onsubmit="return confirm('Run #{{ r.id }} iptal edilsin mi?')">
+                <button class="text-claude-error hover:underline">İptal</button>
+              </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+      <p class="text-sm text-claude-muted">Henüz run yok.</p>
+    {% endif %}
   </div>
 </form>
 {% endblock %}

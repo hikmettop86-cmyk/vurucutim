@@ -55,6 +55,20 @@ def preview(slug):
         palette_update["primary"] = request.args["primary"]
     if request.args.get("accent"):
         palette_update["accent"] = request.args["accent"]
+    bg1 = request.args.get("bg_grad_1")
+    bg2 = request.args.get("bg_grad_2")
+    if bg1 or bg2:
+        palette_update["bg_gradient"] = [
+            bg1 or dna.palette.bg_gradient[0],
+            bg2 or dna.palette.bg_gradient[1],
+        ]
+    body1 = request.args.get("body_bg_1")
+    body2 = request.args.get("body_bg_2")
+    if body1 or body2:
+        palette_update["body_bg"] = [
+            body1 or dna.palette.body_bg[0],
+            body2 or dna.palette.body_bg[1],
+        ]
     if palette_update:
         dna = dna.model_copy(update={"palette": dna.palette.model_copy(update=palette_update)})
 

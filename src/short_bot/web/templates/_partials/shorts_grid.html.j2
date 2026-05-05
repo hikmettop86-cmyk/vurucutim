@@ -1,11 +1,16 @@
 <div class="grid grid-cols-4 gap-4">
   {% for s in shorts %}
-  <div class="bg-claude-surface border border-claude-border rounded-lg overflow-hidden">
+  <div class="bg-claude-surface border border-claude-border rounded-lg overflow-hidden group relative">
     <a href="/shorts/{{ s.id }}" class="block">
       <div class="aspect-[9/16] bg-claude-text flex items-center justify-center text-white/50 text-xs">
         ▶ {{ s.title[:30] }}
       </div>
     </a>
+    <button hx-post="/shorts/{{ s.id }}/delete"
+            hx-confirm="Bu short silinsin mi?"
+            hx-swap="none"
+            class="absolute top-2 right-2 bg-claude-error/90 hover:bg-claude-error text-white w-7 h-7 rounded-full text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+            title="Sil">×</button>
     <div class="p-4 text-xs">
       <div class="font-semibold truncate">{{ s.title }}</div>
       <div class="text-claude-muted mt-1">{{ s.channel }} · {{ s.created_at.strftime('%d %b %H:%M') }}</div>

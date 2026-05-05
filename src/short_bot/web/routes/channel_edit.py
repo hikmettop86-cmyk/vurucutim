@@ -1,6 +1,8 @@
-from flask import Blueprint, abort, current_app, redirect, render_template, request, url_for
+from flask import (Blueprint, abort, current_app, flash, redirect,
+                   render_template, request, url_for)
 
 from short_bot.config import ChannelConfig, load_channel, save_channel
+from short_bot.dna import build_css_override, generate_dna
 
 bp = Blueprint("channel_edit", __name__)
 
@@ -15,7 +17,33 @@ def edit(slug):
     if not path.exists():
         abort(404)
     cfg = load_channel(path)
-    return render_template("channels/edit.html.j2", c=cfg)
+    from short_bot.dna import ARCHETYPES
+    from short_bot.web.cron_describe import describe_cron
+    from short_bot.web.models import Run
+    runs = (Run.query.filter_by(channel=slug)
+            .order_by(Run.started_at.desc()).limit(20).all())
+    return render_template("channels/edit.html.j2", c=cfg,
+                           archetypes=ARCHETYPES,
+                           cron_human=describe_cron(cfg.schedule_cron),
+                           runs=runs)
+
+
+def _form_get_int(key: str, default: int) -> int:
+    try:
+        return int(request.form.get(key, default))
+    except (TypeError, ValueError):
+        return default
+
+
+def _form_get_float(key: str, default: float) -> float:
+    try:
+        return float(request.form.get(key, default))
+    except (TypeError, ValueError):
+        return default
+
+
+def _form_get_list(key: str) -> list[str]:
+    return [x.strip() for x in request.form.get(key, "").split(",") if x.strip()]
 
 
 @bp.route("/channels/<slug>/edit", methods=["POST"])
@@ -25,25 +53,44 @@ def save(slug):
         abort(404)
     cfg = load_channel(path)
 
-    keywords = [k.strip() for k in request.form.get("keywords", "").split(",") if k.strip()]
+    keywords = _form_get_list("keywords")
 
     new_dna = cfg.dna
-    if cfg.dna and request.form.get("dna_primary"):
+    if cfg.dna:
         # Apply DNA tweaks from form
-        from short_bot.dna import build_css_override
+        bg1 = request.form.get("dna_bg_grad_1", cfg.dna.palette.bg_gradient[0])
+        bg2 = request.form.get("dna_bg_grad_2", cfg.dna.palette.bg_gradient[1])
+        body1 = request.form.get("dna_body_bg_1", cfg.dna.palette.body_bg[0])
+        body2 = request.form.get("dna_body_bg_2", cfg.dna.palette.body_bg[1])
+
         new_dna = cfg.dna.model_copy(update={
+            "archetype": request.form.get("dna_archetype", cfg.dna.archetype),
             "palette": cfg.dna.palette.model_copy(update={
                 "primary": request.form.get("dna_primary", cfg.dna.palette.primary),
                 "accent": request.form.get("dna_accent", cfg.dna.palette.accent),
+                "bg_gradient": [bg1, bg2],
+                "body_bg": [body1, body2],
             }),
             "fonts": cfg.dna.fonts.model_copy(update={
                 "headline": request.form.get("dna_font_headline", cfg.dna.fonts.headline),
                 "body": request.form.get("dna_font_body", cfg.dna.fonts.body),
             }),
+            "tone": cfg.dna.tone.model_copy(update={
+                "voice": request.form.get("dna_voice", cfg.dna.tone.voice) or cfg.dna.tone.voice,
+                "style": request.form.get("dna_style", cfg.dna.tone.style) or cfg.dna.tone.style,
+                "forbidden": _form_get_list("dna_forbidden") or cfg.dna.tone.forbidden,
+                "sentence_max_words": _form_get_int("dna_sentence_max_words",
+                                                     cfg.dna.tone.sentence_max_words),
+                "body_max_chars": _form_get_int("dna_body_max_chars", cfg.dna.tone.body_max_chars),
+                "headline_style_hint": request.form.get("dna_headline_style_hint",
+                                                         cfg.dna.tone.headline_style_hint),
+            }),
             "banner_shape": request.form.get("dna_banner_shape", cfg.dna.banner_shape),
             "highlight_style": request.form.get("dna_highlight_style", cfg.dna.highlight_style),
             "chip_style": request.form.get("dna_chip_style", cfg.dna.chip_style),
             "category_icon": request.form.get("dna_category_icon", cfg.dna.category_icon),
+            "search_query_template": request.form.get("dna_search_query_template",
+                                                       cfg.dna.search_query_template),
         })
         # Rebuild CSS
         templates_dir = current_app.config["SHORTBOT_TEMPLATES_DIR"]
@@ -51,32 +98,77 @@ def save(slug):
         css_path.parent.mkdir(parents=True, exist_ok=True)
         css_path.write_text(build_css_override(new_dna), encoding="utf-8")
 
+    new_template = (new_dna.archetype if new_dna else cfg.template)
+
     new_cfg = ChannelConfig(
         slug=cfg.slug,
         name=cfg.name,
         keywords=keywords,
         rss_locale=cfg.rss_locale,
         schedule_cron=request.form.get("schedule_cron", cfg.schedule_cron),
-        duration_s=int(request.form.get("duration_s", cfg.duration_s)),
-        min_score=float(request.form.get("min_score", cfg.min_score)),
-        max_candidates_per_run=cfg.max_candidates_per_run,
-        template=cfg.template,
+        duration_s=_form_get_int("duration_s", cfg.duration_s),
+        min_score=_form_get_float("min_score", cfg.min_score),
+        max_candidates_per_run=_form_get_int("max_candidates_per_run", cfg.max_candidates_per_run),
+        template=new_template,
         colors={
             "primary": new_dna.palette.primary if new_dna else cfg.colors["primary"],
             "accent": new_dna.palette.accent if new_dna else cfg.colors["accent"],
-            "bg_gradient": cfg.colors["bg_gradient"],
+            "bg_gradient": (list(new_dna.palette.bg_gradient) if new_dna
+                            else cfg.colors["bg_gradient"]),
         },
         handle=request.form.get("handle", cfg.handle),
         output_dir=cfg.output_dir,
         enabled=request.form.get("enabled") == "1",
-        cta_enabled=cfg.cta_enabled,
-        cta_text=cfg.cta_text,
-        cta_icons=cfg.cta_icons,
-        cta_duration_s=cfg.cta_duration_s,
-        cta_show_handle=cfg.cta_show_handle,
+        cta_enabled=request.form.get("cta_enabled") == "1",
+        cta_text=request.form.get("cta_text", cfg.cta_text),
+        cta_icons=_form_get_list("cta_icons") or cfg.cta_icons,
+        cta_duration_s=_form_get_int("cta_duration_s", cfg.cta_duration_s),
+        cta_show_handle=request.form.get("cta_show_handle") == "1",
         language=cfg.language,
         dna=new_dna,
         script_model=cfg.script_model,
     )
     save_channel(path, new_cfg)
+    flash("Kanal güncellendi.", "success")
+    return redirect(url_for("channel_edit.edit", slug=slug))
+
+
+@bp.route("/channels/<slug>/regenerate-dna", methods=["POST"])
+def regenerate_dna(slug):
+    """Re-run Opus DNA generation for an existing channel and rebuild CSS."""
+    path = _yaml_path(slug)
+    if not path.exists():
+        abort(404)
+    cfg = load_channel(path)
+    settings = current_app.config["SHORTBOT_SETTINGS"]
+    try:
+        new_dna = generate_dna(
+            name=cfg.name,
+            keywords=cfg.keywords,
+            language=cfg.language,
+            claude_path=settings.claude_cli_path,
+            model=settings.claude_models.get("dna", "opus"),
+        )
+    except Exception as e:
+        flash(f"DNA üretimi başarısız: {e}", "error")
+        return redirect(url_for("channel_edit.edit", slug=slug))
+
+    # Rebuild css with new DNA
+    templates_dir = current_app.config["SHORTBOT_TEMPLATES_DIR"]
+    css_path = templates_dir / "css" / f"{slug}.css"
+    css_path.parent.mkdir(parents=True, exist_ok=True)
+    css_path.write_text(build_css_override(new_dna), encoding="utf-8")
+
+    new_cfg = type(cfg)(**{
+        **cfg.__dict__,
+        "template": new_dna.archetype,
+        "colors": {
+            "primary": new_dna.palette.primary,
+            "accent": new_dna.palette.accent,
+            "bg_gradient": new_dna.palette.bg_gradient,
+        },
+        "dna": new_dna,
+    })
+    save_channel(path, new_cfg)
+    flash(f"DNA yeniden üretildi (archetype: {new_dna.archetype}).", "success")
     return redirect(url_for("channel_edit.edit", slug=slug))

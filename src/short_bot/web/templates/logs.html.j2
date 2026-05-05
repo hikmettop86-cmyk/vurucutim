@@ -1,10 +1,40 @@
 {% extends "base.html.j2" %}
 {% block title %}short-bot — Loglar{% endblock %}
 {% block content %}
-<h1 class="font-serif text-3xl font-bold mb-6">Loglar</h1>
+<div class="flex justify-between items-center mb-6">
+  <h1 class="font-serif text-3xl font-bold">Loglar</h1>
+  <a href="/logs/download" class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm">
+    ↓ Son log indir
+  </a>
+</div>
+
+<div class="flex gap-3 mb-4 items-center">
+  <select name="channel" class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg text-sm text-claude-text"
+          hx-get="/logs/tail" hx-target="#logtail" hx-trigger="change"
+          hx-include="[name='level'], [name='q']">
+    <option value="">Tüm kanallar</option>
+    {% for ch in log_channels %}
+      <option value="{{ ch }}" {% if channel == ch %}selected{% endif %}>{{ ch }}</option>
+    {% endfor %}
+  </select>
+  <select name="level" class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg text-sm text-claude-text"
+          hx-get="/logs/tail" hx-target="#logtail" hx-trigger="change"
+          hx-include="[name='channel'], [name='q']">
+    <option value="">Tüm seviyeler</option>
+    <option value="ERROR" {% if level == 'ERROR' %}selected{% endif %}>ERROR</option>
+    <option value="WARNING" {% if level == 'WARNING' %}selected{% endif %}>WARNING</option>
+    <option value="INFO" {% if level == 'INFO' %}selected{% endif %}>INFO</option>
+    <option value="DEBUG" {% if level == 'DEBUG' %}selected{% endif %}>DEBUG</option>
+  </select>
+  <input type="text" name="q" value="{{ q }}" placeholder="Logda ara..."
+         class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg text-sm flex-1 text-claude-text placeholder:text-claude-muted"
+         hx-get="/logs/tail" hx-target="#logtail" hx-trigger="keyup changed delay:300ms"
+         hx-include="[name='channel'], [name='level']">
+</div>
 
 <div id="logtail" class="bg-claude-surface-alt border border-claude-border rounded-lg p-4 font-mono text-xs h-[600px] overflow-y-auto"
-     hx-get="/logs/tail" hx-trigger="load, every 2s" hx-swap="innerHTML">
+     hx-get="/logs/tail" hx-trigger="load, every 3s" hx-swap="innerHTML"
+     hx-include="[name='channel'], [name='level'], [name='q']">
   Yükleniyor...
 </div>
 {% endblock %}

@@ -62,6 +62,17 @@ def create_app(
     from short_bot.web.routes import register_blueprints
     register_blueprints(app)
 
+    # Inject running-run count into all templates for the nav status badge
+    from short_bot.web.models import Run
+    @app.context_processor
+    def inject_status():
+        try:
+            running = Run.query.filter(Run.status.in_(["running"]) | Run.status.is_(None),
+                                        Run.ended_at.is_(None)).count()
+        except Exception:
+            running = 0
+        return {"system_running_count": running}
+
     # Serve mp4 files from output directory
     @app.route("/output/<path:filename>")
     def serve_output(filename):
