@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from short_bot.db import (
@@ -54,6 +54,46 @@ def test_record_short(tmp_path):
 def test_record_rss_item(tmp_path):
     eng = init_db(tmp_path / "x.sqlite")
     rid = record_rss_item(eng, guid="g1", channel="ch", title="T", link="http://x",
-                          source="S", pub_date=datetime.utcnow(), thumb_url=None,
+                          source="S", pub_date=datetime.now(timezone.utc), thumb_url=None,
                           score=8.5, status="selected")
     assert rid > 0
+
+
+def test_init_creates_indexes(tmp_path):
+    eng = init_db(tmp_path / "x.sqlite")
+    with eng.connect() as conn:
+        from sqlalchemy import text
+        rows = conn.execute(text(
+            "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%'"
+        )).fetchall()
+        names = {r[0] for r in rows}
+    assert "idx_processed_channel_ts" in names
+    assert "idx_shorts_channel_created" in names
+
+
+def test_mark_processed_is_idempotent(tmp_path):
+    eng = init_db(tmp_path / "x.sqlite")
+    mark_processed(eng, "g1", "T", "ch")
+    mark_processed(eng, "g1", "T2", "ch")  # second call should not raise
+    with eng.connect() as conn:
+        from sqlalchemy import text
+        count = conn.execute(text(
+            "SELECT COUNT(*) FROM processed_items WHERE guid='g1'"
+        )).scalar()
+    assert count == 1
+
+
+def test_similar_title_skips_outside_lookback(tmp_path):
+    eng = init_db(tmp_path / "x.sqlite")
+    mark_processed(eng, "g_old", "Faiz indirimi", "ch")
+    # Manually backdate the row 60 days
+    from sqlalchemy import text
+    with eng.begin() as conn:
+        conn.execute(text(
+            "UPDATE processed_items SET processed_at=:t WHERE guid='g_old'"
+        ), {"t": datetime.now(timezone.utc) - timedelta(days=60)})
+    # With default 30-day lookback, the old row should be ignored
+    assert not similar_title_exists(eng, "Faiz indirimi 250 baz puan", "ch", threshold=0.5)
+    # With explicit 90-day lookback, it should match
+    assert similar_title_exists(eng, "Faiz indirimi 250 baz puan", "ch",
+                                  threshold=0.5, lookback_days=90)
