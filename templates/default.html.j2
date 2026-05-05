@@ -106,36 +106,139 @@
 
   /* CTA overlay (last cta_duration_s seconds) */
   {% if cta.enabled %}
+  /* Pre-flash: full-screen white flash 150ms before CTA */
+  .preflash {
+    position: absolute; inset: 0;
+    background: #fff;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 50;
+    animation: flash 0.18s ease-out {{ duration_s - cta.duration_s - 0.15 }}s forwards;
+  }
+  @keyframes flash {
+    0% { opacity: 0; }
+    40% { opacity: 0.9; }
+    100% { opacity: 0; }
+  }
+
+  /* CTA wrapper */
   .cta {
-    position: absolute; left: 0; right: 0; bottom: 0;
-    background: linear-gradient(180deg, transparent, rgba(0,0,0,.92) 30%);
-    padding: 80px 60px 130px;
+    position: absolute; left: 0; right: 0; bottom: 0; top: 0;
+    background: radial-gradient(ellipse at center, rgba(20,20,20,.92), rgba(0,0,0,.98));
+    padding: 0 60px;
     text-align: center;
     opacity: 0;
-    transform: translateY(40px);
+    pointer-events: none;
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
     animation:
-      cta-in 0.5s ease-out {{ duration_s - cta.duration_s }}s forwards,
-      cta-out 0.5s ease-in {{ duration_s - 0.5 }}s forwards;
+      cta-fade-in 0.25s ease-out {{ duration_s - cta.duration_s }}s forwards;
   }
+  @keyframes cta-fade-in {
+    to { opacity: 1; }
+  }
+
   {% if cta.show_handle %}
-  .cta .handle-line { font-size: 48px; font-weight: 800; margin-bottom: 18px;
-    color: {{ colors.accent }}; }
-  {% endif %}
-  .cta .row {
-    display: flex; align-items: center; justify-content: center;
-    gap: 24px;
-    background: linear-gradient(90deg, {{ colors.primary }}, #ff5050);
-    padding: 28px 40px; border-radius: 16px;
-    box-shadow: 0 10px 0 rgba(0,0,0,.4);
-    font-size: 52px; font-weight: 900; letter-spacing: 1px;
+  .cta .handle-line {
+    font-size: 64px; font-weight: 900;
+    color: {{ colors.accent }};
+    letter-spacing: 1px;
+    margin-bottom: 50px;
+    text-shadow:
+      0 0 18px rgba(255,234,59,.7),
+      0 0 36px rgba(255,234,59,.4);
+    opacity: 0; transform: translateY(-30px);
+    animation: handle-drop 0.45s cubic-bezier(.34,1.56,.64,1) {{ duration_s - cta.duration_s + 0.05 }}s forwards;
   }
-  .cta .icon { font-size: 64px; animation: pulse 0.9s infinite ease-in-out; }
-  @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.18); } }
-  @keyframes cta-in { to { opacity: 1; transform: translateY(0); } }
-  @keyframes cta-out { to { opacity: 0; transform: translateY(-10px); } }
-  /* Dim body during CTA so it's readable */
-  .body { animation: dim 0.5s ease-in {{ duration_s - cta.duration_s }}s forwards; }
-  @keyframes dim { to { opacity: 0.15; } }
+  @keyframes handle-drop {
+    to { opacity: 1; transform: translateY(0); }
+  }
+  {% endif %}
+
+  /* Big YouTube-style SUBSCRIBE button */
+  .cta .sub-btn {
+    background: linear-gradient(180deg, #ff2d2d, #c81e1e);
+    color: #fff;
+    font-size: 88px; font-weight: 900;
+    padding: 40px 70px;
+    border-radius: 100px;
+    box-shadow:
+      0 12px 0 rgba(0,0,0,.5),
+      0 20px 60px rgba(255,45,45,.6);
+    display: inline-flex;
+    align-items: center;
+    gap: 28px;
+    letter-spacing: 1px;
+    margin-bottom: 60px;
+    transform: scale(0);
+    animation:
+      sub-pop 0.5s cubic-bezier(.34,1.56,.64,1) {{ duration_s - cta.duration_s + 0.15 }}s forwards,
+      sub-press 0.4s ease-in-out {{ duration_s - cta.duration_s + 0.55 }}s;
+  }
+  @keyframes sub-pop {
+    to { transform: scale(1); }
+  }
+  @keyframes sub-press {
+    0%, 100% { transform: scale(1); box-shadow: 0 12px 0 rgba(0,0,0,.5), 0 20px 60px rgba(255,45,45,.6); }
+    50% { transform: scale(0.92); box-shadow: 0 4px 0 rgba(0,0,0,.5), 0 8px 30px rgba(255,45,45,.6); }
+  }
+  .cta .sub-btn .bell { font-size: 96px; }
+
+  /* Pointer hand below button — bouncing */
+  .cta .pointer {
+    font-size: 100px;
+    margin-bottom: 50px;
+    opacity: 0;
+    animation:
+      pointer-in 0.3s ease-out {{ duration_s - cta.duration_s + 0.7 }}s forwards,
+      bounce 0.6s ease-in-out {{ duration_s - cta.duration_s + 1.0 }}s infinite;
+  }
+  @keyframes pointer-in {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-15px); }
+  }
+
+  /* Three icons row at bottom — stagger pop-in */
+  .cta .icons-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 50px;
+    margin-top: 30px;
+  }
+  .cta .icon-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    transform: scale(0);
+    opacity: 0;
+  }
+  .cta .icon-item .ic { font-size: 110px; }
+  .cta .icon-item .lbl { font-size: 36px; font-weight: 800; color: #fff; letter-spacing: 1px; }
+  .cta .icon-item:nth-child(1) {
+    animation: icon-pop 0.4s cubic-bezier(.34,1.56,.64,1) {{ duration_s - cta.duration_s + 0.25 }}s forwards;
+  }
+  .cta .icon-item:nth-child(2) {
+    animation: icon-pop 0.4s cubic-bezier(.34,1.56,.64,1) {{ duration_s - cta.duration_s + 0.4 }}s forwards;
+  }
+  .cta .icon-item:nth-child(3) {
+    animation: icon-pop 0.4s cubic-bezier(.34,1.56,.64,1) {{ duration_s - cta.duration_s + 0.55 }}s forwards;
+  }
+  @keyframes icon-pop {
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  /* Body dim during CTA so it stays focused */
+  .body { animation: dim 0.3s ease-in {{ duration_s - cta.duration_s }}s forwards; }
+  @keyframes dim { to { opacity: 0.05; } }
   {% endif %}
 </style>
 </head>
@@ -160,11 +263,22 @@
   <div class="handle">{{ handle }}</div>
 
   {% if cta.enabled %}
+  <div class="preflash"></div>
   <div class="cta">
     {% if cta.show_handle %}<div class="handle-line">{{ handle }}</div>{% endif %}
-    <div class="row">
-      {% for icon in cta.icons %}<span class="icon">{{ icon }}</span>{% endfor %}
-      <span>{{ cta.text }}</span>
+    <div class="sub-btn">
+      <span class="bell">🔔</span>
+      <span>ABONE OL</span>
+    </div>
+    <div class="pointer">👆</div>
+    <div class="icons-row">
+      {% set icon_labels = ["BEĞEN", "ABONE", "PAYLAŞ"] %}
+      {% for icon in cta.icons %}
+      <div class="icon-item">
+        <span class="ic">{{ icon }}</span>
+        <span class="lbl">{{ icon_labels[loop.index0] if loop.index0 < icon_labels|length else "" }}</span>
+      </div>
+      {% endfor %}
     </div>
   </div>
   {% endif %}

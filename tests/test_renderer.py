@@ -32,7 +32,10 @@ def test_build_html_includes_script_text(tmp_path):
     assert "BAŞLADI" in html
     assert "EKONOMİ" in html
     assert "@HaberShortsTR" in html
-    assert "BEĞEN · ABONE OL · PAYLAŞ" in html
+    # New CTA structure: ABONE OL button + icon labels
+    assert "ABONE OL" in html
+    assert "BEĞEN" in html
+    assert "PAYLAŞ" in html
 
 
 def test_build_html_wraps_highlights(tmp_path):

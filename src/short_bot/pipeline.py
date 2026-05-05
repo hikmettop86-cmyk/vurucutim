@@ -44,6 +44,35 @@ def _slugify(text: str, max_len: int = 60) -> str:
     return text[:max_len] or "haber"
 
 
+def _build_cta_sfx(channel) -> list:
+    """Build SFX overlay schedule for the CTA window. Returns empty if SFX missing."""
+    from short_bot.composer import SfxOverlay
+    sfx_dir = Path("assets/sfx")
+    whoosh = sfx_dir / "whoosh.mp3"
+    pop = sfx_dir / "pop.mp3"
+    ding = sfx_dir / "ding.mp3"
+    if not (whoosh.exists() and pop.exists() and ding.exists()):
+        return []  # SFX optional — silent if files missing
+    if not channel.cta_enabled:
+        return []
+
+    cta_start_ms = (channel.duration_s - channel.cta_duration_s) * 1000
+    # Timings match the CSS animations in the template:
+    #   handle-drop:  +0.05s
+    #   sub-pop:      +0.15s   ← whoosh here (entrance)
+    #   icon-pop #1:  +0.25s   ← pop1
+    #   icon-pop #2:  +0.40s   ← pop2
+    #   icon-pop #3:  +0.55s   ← pop3
+    #   sub-press:    +0.55s   ← ding (subscribe tap)
+    return [
+        SfxOverlay(path=whoosh, delay_ms=cta_start_ms + 100, volume=0.6),
+        SfxOverlay(path=pop, delay_ms=cta_start_ms + 250, volume=0.5),
+        SfxOverlay(path=pop, delay_ms=cta_start_ms + 400, volume=0.5),
+        SfxOverlay(path=pop, delay_ms=cta_start_ms + 550, volume=0.5),
+        SfxOverlay(path=ding, delay_ms=cta_start_ms + 550, volume=0.55),
+    ]
+
+
 def _setup_logger(log_path: Path) -> logging.Logger:
     log_path.parent.mkdir(parents=True, exist_ok=True)
     logger = logging.getLogger(f"shortbot.run.{log_path.stem}")
@@ -189,8 +218,13 @@ def run_pipeline(
                     out_dir.mkdir(parents=True, exist_ok=True)
                     slug = _slugify(picked.item.title)
                     out_path = out_dir / f"{datetime.now(timezone.utc):%Y-%m-%d}_{slug}.mp4"
+
+                    # Build SFX schedule for CTA window
+                    sfx_overlays = _build_cta_sfx(channel)
+
                     compose_video(frames_dir, music, out_path,
-                                  fps=30, ffmpeg_path=settings.ffmpeg_path)
+                                  fps=30, ffmpeg_path=settings.ffmpeg_path,
+                                  sfx_overlays=sfx_overlays)
                     render_ms = int((time.perf_counter() - t0) * 1000)
                     log.info(f"  → {out_path.name} ({render_ms}ms)")
 

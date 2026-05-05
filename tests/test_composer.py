@@ -36,3 +36,30 @@ def test_compose_video_duration_matches_frames(tmp_path, tiny_frames):
     )
     duration = float(probe.stdout.strip())
     assert 1.8 <= duration <= 2.2  # 60 frames / 30fps = 2s
+
+
+def test_compose_video_with_sfx_overlay(tmp_path, tiny_frames):
+    """SFX should be mixed into final audio."""
+    music = Path(__file__).parent / "fixtures" / "music_sample.mp3"
+    sfx_dir = Path("assets/sfx")
+    if not (sfx_dir / "whoosh.mp3").exists():
+        pytest.skip("SFX fixtures not present")
+
+    from short_bot.composer import SfxOverlay
+    overlays = [
+        SfxOverlay(path=sfx_dir / "whoosh.mp3", delay_ms=500, volume=0.5),
+        SfxOverlay(path=sfx_dir / "ding.mp3", delay_ms=1500, volume=0.6),
+    ]
+    out = tmp_path / "out.mp4"
+    compose_video(tiny_frames, music, out, fps=30, ffmpeg_path="ffmpeg",
+                   sfx_overlays=overlays)
+    assert out.exists() and out.stat().st_size > 0
+
+
+def test_compose_video_raises_on_missing_sfx(tmp_path, tiny_frames):
+    music = Path(__file__).parent / "fixtures" / "music_sample.mp3"
+    from short_bot.composer import SfxOverlay
+    overlays = [SfxOverlay(path=Path("does/not/exist.mp3"), delay_ms=0)]
+    with pytest.raises(FileNotFoundError):
+        compose_video(tiny_frames, music, tmp_path / "out.mp4",
+                       fps=30, ffmpeg_path="ffmpeg", sfx_overlays=overlays)
