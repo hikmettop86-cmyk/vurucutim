@@ -100,6 +100,31 @@ def save(slug):
 
     new_template = (new_dna.archetype if new_dna else cfg.template)
 
+    new_generator = cfg.generator
+    if cfg.content_source == "generator":
+        from short_bot.config import GeneratorConfig
+        topic = (request.form.get("generator_topic", "").strip()
+                 or (cfg.generator.topic if cfg.generator else ""))
+        if len(topic) < 10:
+            flash("generator.topic en az 10 karakter olmalı.", "error")
+            return redirect(url_for("channel_edit.edit", slug=slug))
+        try:
+            forbidden_lookback = int(request.form.get("generator_forbidden_lookback",
+                                                       cfg.generator.forbidden_lookback))
+        except (TypeError, ValueError):
+            forbidden_lookback = cfg.generator.forbidden_lookback
+        try:
+            max_retries = int(request.form.get("generator_max_retries",
+                                               cfg.generator.max_retries))
+        except (TypeError, ValueError):
+            max_retries = cfg.generator.max_retries
+        ft_raw = request.form.get("generator_fuzzy_threshold", "").strip()
+        fuzzy_threshold = float(ft_raw) if ft_raw else None
+        new_generator = GeneratorConfig(
+            topic=topic, forbidden_lookback=forbidden_lookback,
+            max_retries=max_retries, fuzzy_threshold=fuzzy_threshold,
+        )
+
     new_cfg = ChannelConfig(
         slug=cfg.slug,
         name=cfg.name,
@@ -127,6 +152,8 @@ def save(slug):
         language=cfg.language,
         dna=new_dna,
         script_model=cfg.script_model,
+        content_source=cfg.content_source,
+        generator=new_generator,
     )
     save_channel(path, new_cfg)
     flash("Kanal güncellendi.", "success")

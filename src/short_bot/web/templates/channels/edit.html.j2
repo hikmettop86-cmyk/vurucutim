@@ -18,6 +18,14 @@
             class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm">
       ▶ Şimdi üret
     </button>
+    {% if c.content_source == 'generator' %}
+    <form method="POST" action="/channels/{{ c.slug }}/generator-test" class="inline">
+      <button type="submit"
+              class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm">
+        🧪 Test örnek üret
+      </button>
+    </form>
+    {% endif %}
     {% if c.dna %}
     <form method="POST" action="/channels/{{ c.slug }}/regenerate-dna" class="inline"
           onsubmit="return confirm('DNA Opus ile yeniden üretilsin mi? (~30-60s sürer, mevcut DNA kaybolur)')">
@@ -55,11 +63,13 @@
   <div class="space-y-4">
     <h2 class="font-serif text-lg font-bold">Temel</h2>
 
+    {% if c.content_source != 'generator' %}
     <label class="block">
       <span class="text-xs text-claude-muted uppercase">Keywords (virgülle)</span>
       <input type="text" name="keywords" value="{{ c.keywords | join(', ') }}"
              class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
     </label>
+    {% endif %}
 
     <label class="block">
       <span class="text-xs text-claude-muted uppercase">Cron</span>
@@ -74,16 +84,20 @@
         <input type="number" name="duration_s" value="{{ c.duration_s }}"
                class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
       </label>
+      {% if c.content_source != 'generator' %}
       <label class="block">
         <span class="text-xs text-claude-muted uppercase">Min skor</span>
         <input type="number" step="0.1" name="min_score" value="{{ c.min_score }}"
                class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
       </label>
+      {% endif %}
+      {% if c.content_source != 'generator' %}
       <label class="block">
         <span class="text-xs text-claude-muted uppercase">Max aday</span>
         <input type="number" name="max_candidates_per_run" value="{{ c.max_candidates_per_run }}"
                class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
       </label>
+      {% endif %}
     </div>
 
     <label class="block">
@@ -304,6 +318,38 @@
       <summary class="text-xs text-claude-muted uppercase cursor-pointer">Persona özeti (read-only)</summary>
       <p class="text-xs text-claude-muted mt-2">{{ c.dna.persona_summary }}</p>
     </details>
+
+    {% if c.content_source == 'generator' %}
+    <h2 class="font-serif text-lg font-bold mt-6 border-t border-claude-border pt-4">Generator Ayarları</h2>
+
+    <label class="block">
+      <span class="text-xs text-claude-muted uppercase">Konu (en az 10 karakter)</span>
+      <textarea name="generator_topic" rows="3"
+                class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">{{ c.generator.topic }}</textarea>
+    </label>
+
+    <div class="grid grid-cols-3 gap-3">
+      <label class="block">
+        <span class="text-xs text-claude-muted uppercase">Forbidden lookback</span>
+        <input type="number" name="generator_forbidden_lookback"
+               value="{{ c.generator.forbidden_lookback }}" min="0" max="500"
+               class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
+      </label>
+      <label class="block">
+        <span class="text-xs text-claude-muted uppercase">Max retries</span>
+        <input type="number" name="generator_max_retries"
+               value="{{ c.generator.max_retries }}" min="1" max="10"
+               class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
+      </label>
+      <label class="block">
+        <span class="text-xs text-claude-muted uppercase">Fuzzy threshold</span>
+        <input type="number" name="generator_fuzzy_threshold" step="0.05" min="0" max="1"
+               value="{{ c.generator.fuzzy_threshold if c.generator.fuzzy_threshold is not none else '' }}"
+               placeholder="boş = settings"
+               class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
+      </label>
+    </div>
+    {% endif %}
     {% endif %}
 
     <button type="submit" class="bg-claude-accent hover:bg-claude-accent-hover text-white px-4 py-2 rounded-lg font-semibold mt-6 w-full">
