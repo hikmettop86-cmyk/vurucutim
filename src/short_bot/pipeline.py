@@ -127,6 +127,10 @@ def run_pipeline(
                                     score=s.score, status=status)
                 if not top:
                     log.info(f"no item ≥ {channel.min_score} → finish")
+                    # Show top 3 for calibration / debug
+                    top_seen = sorted(scored, key=lambda s: s.score, reverse=True)[:3]
+                    for i, s in enumerate(top_seen, 1):
+                        log.info(f"  top#{i} score={s.score:.1f} | {s.item.title[:80]}")
                     finish_run(eng, run_id, status="no_candidates", short_id=None, error=None)
                     return RunResult(run_id=run_id, status="no_candidates", short_path=None, error=None)
                 picked = top[0]

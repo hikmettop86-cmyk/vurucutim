@@ -4,7 +4,7 @@ keywords: ["son dakika", "deprem", "faiz", "dolar", "seçim", "asgari ücret"]
 rss_locale: "hl=tr&gl=TR&ceid=TR:tr"
 schedule_cron: "0 2,6,10,14,18,22 * * *"
 duration_s: 6
-min_score: 8.0
+min_score: 6.0
 max_candidates_per_run: 10
 template: default
 colors:
