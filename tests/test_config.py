@@ -1,0 +1,57 @@
+from pathlib import Path
+import pytest
+
+from short_bot.config import load_settings, load_channel, list_channels, ChannelConfig, Settings
+
+
+def test_load_settings(tmp_path):
+    (tmp_path / "settings.yaml").write_text(
+        "ffmpeg_path: ffmpeg\nclaude_cli_path: claude\nplaywright_browser: chromium\n"
+        "web:\n  host: 127.0.0.1\n  port: 5000\n"
+        "fuzzy_dedup_threshold: 0.85\nlog_level: INFO\n",
+        encoding="utf-8",
+    )
+    s = load_settings(tmp_path / "settings.yaml")
+    assert isinstance(s, Settings)
+    assert s.ffmpeg_path == "ffmpeg"
+    assert s.fuzzy_dedup_threshold == 0.85
+    assert s.web_port == 5000
+
+
+def test_load_channel(tmp_path):
+    (tmp_path / "ch.yaml").write_text(
+        "slug: test\nname: Test\nkeywords: [a, b]\nrss_locale: hl=tr&gl=TR&ceid=TR:tr\n"
+        "schedule_cron: '0 * * * *'\nduration_s: 30\nmin_score: 8.0\n"
+        "max_candidates_per_run: 30\ntemplate: default\n"
+        "colors:\n  primary: '#c81e1e'\n  accent: '#ffea3b'\n  bg_gradient: ['#1a3b6b', '#0a1a3b']\n"
+        "handle: '@x'\noutput_dir: output/test\nenabled: true\n"
+        "cta:\n  enabled: true\n  text: 'A · B · C'\n  icons: ['❤️', '🔔', '↗️']\n  duration_s: 4\n  show_handle: true\n",
+        encoding="utf-8",
+    )
+    c = load_channel(tmp_path / "ch.yaml")
+    assert c.slug == "test"
+    assert c.keywords == ["a", "b"]
+    assert c.colors["primary"] == "#c81e1e"
+    assert c.cta_enabled is True
+    assert c.cta_duration_s == 4
+
+
+def test_load_channel_invalid_slug(tmp_path):
+    (tmp_path / "bad.yaml").write_text(
+        "slug: 'BAD SLUG!'\nname: x\nkeywords: []\nrss_locale: ''\n"
+        "schedule_cron: ''\nduration_s: 30\nmin_score: 0\n"
+        "max_candidates_per_run: 1\ntemplate: default\n"
+        "colors: {primary: '#000', accent: '#fff', bg_gradient: ['#0', '#1']}\n"
+        "handle: '@x'\noutput_dir: x\nenabled: true\n"
+        "cta: {enabled: false, text: '', icons: [], duration_s: 0, show_handle: false}\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="slug"):
+        load_channel(tmp_path / "bad.yaml")
+
+
+def test_list_channels(tmp_path):
+    (tmp_path / "a.yaml").write_text("slug: a\nname: A\nkeywords: []\nrss_locale: ''\nschedule_cron: ''\nduration_s: 30\nmin_score: 0\nmax_candidates_per_run: 1\ntemplate: default\ncolors: {primary: '#0', accent: '#1', bg_gradient: ['#2','#3']}\nhandle: x\noutput_dir: x\nenabled: true\ncta: {enabled: false, text: '', icons: [], duration_s: 0, show_handle: false}\n", encoding="utf-8")
+    (tmp_path / "b.yaml").write_text("slug: b\nname: B\nkeywords: []\nrss_locale: ''\nschedule_cron: ''\nduration_s: 30\nmin_score: 0\nmax_candidates_per_run: 1\ntemplate: default\ncolors: {primary: '#0', accent: '#1', bg_gradient: ['#2','#3']}\nhandle: x\noutput_dir: x\nenabled: false\ncta: {enabled: false, text: '', icons: [], duration_s: 0, show_handle: false}\n", encoding="utf-8")
+    chans = list_channels(tmp_path, enabled_only=True)
+    assert len(chans) == 1 and chans[0].slug == "a"
