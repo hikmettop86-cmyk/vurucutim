@@ -1,7 +1,8 @@
 """HTML render via Jinja2 → frame capture via Playwright."""
 from __future__ import annotations
 
-import re
+import base64
+import mimetypes
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -46,7 +47,12 @@ def build_html(job: RenderJob, template_path: Path) -> str:
 
     bg_url = None
     if job.bg_image_path is not None:
-        bg_url = job.bg_image_path.absolute().as_uri()
+        # Embed as base64 data URI so Playwright's about:blank origin can load it
+        # (file:// URLs are blocked under set_content security context)
+        mime, _ = mimetypes.guess_type(str(job.bg_image_path))
+        mime = mime or "image/jpeg"
+        data = base64.b64encode(job.bg_image_path.read_bytes()).decode("ascii")
+        bg_url = f"data:{mime};base64,{data}"
 
     body_html = _wrap_highlights(job.script.body_paragraph, job.script.highlights)
 
