@@ -3,7 +3,7 @@ name: "Son Dakika"
 keywords: ["son dakika", "deprem", "faiz", "dolar", "seçim", "asgari ücret"]
 rss_locale: "hl=tr&gl=TR&ceid=TR:tr"
 schedule_cron: "0 2,6,10,14,18,22 * * *"
-duration_s: 30
+duration_s: 6
 min_score: 8.0
 max_candidates_per_run: 10
 template: default
@@ -18,5 +18,5 @@ cta:
   enabled: true
   text: "BEĞEN · ABONE OL · PAYLAŞ"
   icons: ["❤️", "🔔", "↗️"]
-  duration_s: 4
+  duration_s: 1
   show_handle: true
