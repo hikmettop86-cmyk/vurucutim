@@ -58,3 +58,19 @@ def test_run_json_raises_on_non_zero_exit():
                return_value=_fake_proc("", returncode=1)):
         with pytest.raises(ClaudeCliError):
             run_json("p", _Out, claude_path="claude", retries=1)
+
+
+def test_run_json_raises_immediately_on_missing_binary():
+    with patch("short_bot.claude_cli.subprocess.run", side_effect=FileNotFoundError("not found")):
+        with pytest.raises(ClaudeCliError, match="not found"):
+            run_json("p", _Out, claude_path="claude_missing", retries=3)
+
+
+def test_run_json_retries_on_timeout_then_succeeds():
+    import subprocess as _sp
+    good = json.dumps({"score": 5.0, "why": "ok"})
+    with patch("short_bot.claude_cli.subprocess.run",
+               side_effect=[_sp.TimeoutExpired(cmd="claude", timeout=1), _fake_proc(good)]), \
+         patch("short_bot.claude_cli.time.sleep"):  # don't actually sleep
+        r = run_json("p", _Out, claude_path="claude", retries=2)
+    assert r.score == 5.0

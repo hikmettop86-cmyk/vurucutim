@@ -41,7 +41,19 @@ def run_json(
     retries: int = 2,
     timeout_s: int = 90,
 ) -> T:
-    """Invoke `claude -p PROMPT --output-format text` and parse output as JSON validating against `schema`."""
+    """Invoke `claude -p PROMPT --output-format text` and parse output as JSON validating against `schema`.
+
+    Args:
+        prompt: prompt text passed to claude via -p
+        schema: Pydantic BaseModel subclass to validate the parsed JSON against
+        claude_path: path to claude CLI binary (default 'claude' resolves via PATH)
+        retries: total number of attempts (NOT retries-after-first); minimum useful value is 1
+        timeout_s: per-attempt subprocess timeout in seconds
+
+    Raises:
+        ClaudeCliError: if all attempts fail (parse error, validation error, exit != 0, timeout)
+                        or immediately if claude binary is not found
+    """
     last_error: Exception | None = None
 
     for attempt in range(1, retries + 1):
@@ -54,6 +66,12 @@ def run_json(
                 timeout=timeout_s,
                 check=False,
             )
+        except FileNotFoundError as e:
+            # Don't retry — sleeping won't make the binary appear
+            raise ClaudeCliError(
+                f"claude binary not found at {claude_path!r}. "
+                f"Install Claude Code CLI or set claude_cli_path in config/settings.yaml."
+            ) from e
         except subprocess.TimeoutExpired as e:
             last_error = e
             if attempt < retries:
