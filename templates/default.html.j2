@@ -13,17 +13,17 @@
 
   /* STAGE-LEVEL BADGE (top-right corner) */
   .stage-badge {
-    position: absolute; top: 28px; right: 28px;
+    position: absolute; top: 14px; right: 14px;
     background: #000; color: {{ colors.accent }};
-    font-size: 24px; font-weight: 800; letter-spacing: 1px;
-    padding: 8px 14px; border-radius: 6px;
+    font-size: 20px; font-weight: 800; letter-spacing: 1px;
+    padding: 5px 12px; border-radius: 5px;
     z-index: 10;
   }
 
   /* HEADER (top banner) */
   .header {
     background: linear-gradient(90deg, {{ colors.primary }}, {{ colors.primary_light }});
-    padding: 56px 60px 48px;
+    padding: 78px 60px 44px;
     text-align: center;
     font-weight: 900;
     font-size: 100px;
@@ -239,6 +239,74 @@
   /* Body dim during CTA so it stays focused */
   .body { animation: dim 0.3s ease-in {{ duration_s - cta.duration_s }}s forwards; }
   @keyframes dim { to { opacity: 0.05; } }
+
+  /* 4-corner "ABONE OL!" badges — meme-style begging, looping flash */
+  .corner-cta {
+    position: absolute;
+    background: linear-gradient(135deg, #ff3b3b, #c81e1e);
+    color: #fff;
+    font-size: 38px;
+    font-weight: 900;
+    padding: 14px 24px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    letter-spacing: 1px;
+    box-shadow: 0 6px 0 rgba(0,0,0,.55), 0 0 28px rgba(255,59,59,.5);
+    opacity: 0;
+    z-index: 45;
+    text-shadow: 0 2px 0 rgba(0,0,0,.4);
+  }
+  .corner-cta .arrow { font-size: 46px; }
+  .corner-cta.tl { top: 60px;    left:  60px;  transform: translate(-40px,-40px) rotate(-6deg) scale(.8); }
+  .corner-cta.tr { top: 60px;    right: 60px;  transform: translate( 40px,-40px) rotate( 6deg) scale(.8); }
+  .corner-cta.bl { bottom: 90px; left:  60px;  transform: translate(-40px, 40px) rotate( 6deg) scale(.8); }
+  .corner-cta.br { bottom: 90px; right: 60px;  transform: translate( 40px, 40px) rotate(-6deg) scale(.8); }
+
+  @keyframes corner-tl-in { to { opacity: 1; transform: translate(0,0) rotate(-6deg) scale(1); } }
+  @keyframes corner-tr-in { to { opacity: 1; transform: translate(0,0) rotate( 6deg) scale(1); } }
+  @keyframes corner-bl-in { to { opacity: 1; transform: translate(0,0) rotate( 6deg) scale(1); } }
+  @keyframes corner-br-in { to { opacity: 1; transform: translate(0,0) rotate(-6deg) scale(1); } }
+
+  /* Looping pulse — each corner has different delay so they "chase" */
+  @keyframes corner-pulse-tl {
+    0%, 70%, 100% { filter: brightness(1); transform: rotate(-6deg) scale(1); }
+    35% { filter: brightness(1.4); transform: rotate(-6deg) scale(1.12); }
+  }
+  @keyframes corner-pulse-tr {
+    0%, 70%, 100% { filter: brightness(1); transform: rotate( 6deg) scale(1); }
+    35% { filter: brightness(1.4); transform: rotate( 6deg) scale(1.12); }
+  }
+  @keyframes corner-pulse-bl {
+    0%, 70%, 100% { filter: brightness(1); transform: rotate( 6deg) scale(1); }
+    35% { filter: brightness(1.4); transform: rotate( 6deg) scale(1.12); }
+  }
+  @keyframes corner-pulse-br {
+    0%, 70%, 100% { filter: brightness(1); transform: rotate(-6deg) scale(1); }
+    35% { filter: brightness(1.4); transform: rotate(-6deg) scale(1.12); }
+  }
+
+  .corner-cta.tl {
+    animation:
+      corner-tl-in 0.35s cubic-bezier(.34,1.56,.64,1) {{ duration_s - cta.duration_s + 0.10 }}s forwards,
+      corner-pulse-tl 1.2s ease-in-out {{ duration_s - cta.duration_s + 0.45 }}s infinite;
+  }
+  .corner-cta.tr {
+    animation:
+      corner-tr-in 0.35s cubic-bezier(.34,1.56,.64,1) {{ duration_s - cta.duration_s + 0.20 }}s forwards,
+      corner-pulse-tr 1.2s ease-in-out {{ duration_s - cta.duration_s + 0.75 }}s infinite;
+  }
+  .corner-cta.bl {
+    animation:
+      corner-bl-in 0.35s cubic-bezier(.34,1.56,.64,1) {{ duration_s - cta.duration_s + 0.30 }}s forwards,
+      corner-pulse-bl 1.2s ease-in-out {{ duration_s - cta.duration_s + 1.05 }}s infinite;
+  }
+  .corner-cta.br {
+    animation:
+      corner-br-in 0.35s cubic-bezier(.34,1.56,.64,1) {{ duration_s - cta.duration_s + 0.40 }}s forwards,
+      corner-pulse-br 1.2s ease-in-out {{ duration_s - cta.duration_s + 1.35 }}s infinite;
+  }
   {% endif %}
 </style>
 </head>
@@ -265,6 +333,10 @@
   {% if cta.enabled %}
   <div class="preflash"></div>
   <div class="cta">
+    <div class="corner-cta tl"><span class="arrow">↘</span><span>ABONE OL!</span></div>
+    <div class="corner-cta tr"><span>ABONE OL!</span><span class="arrow">↙</span></div>
+    <div class="corner-cta bl"><span class="arrow">↗</span><span>ABONE OL!</span></div>
+    <div class="corner-cta br"><span>ABONE OL!</span><span class="arrow">↖</span></div>
     {% if cta.show_handle %}<div class="handle-line">{{ handle }}</div>{% endif %}
     <div class="sub-btn">
       <span class="bell">🔔</span>

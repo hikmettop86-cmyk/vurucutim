@@ -1,4 +1,4 @@
-"""One-off render of a verification frame using a fixed Script (no claude CLI)."""
+"""Render verification frames at multiple timestamps (badge fix + CTA corners)."""
 from pathlib import Path
 import sys
 
@@ -11,26 +11,32 @@ from playwright.sync_api import sync_playwright
 
 def main():
     script = Script(
-        header_top="ARA ZAM",
-        header_bottom="AÇIKLAMASI",
-        photo_overlay="İKTİDARDAN NET YANIT",
+        header_top="ASGARİ ÜCRETE",
+        header_bottom="ARA ZAM MI?",
+        photo_overlay="MİLYONLARCA ÇALIŞAN BEKLİYOR",
         body_paragraph=(
-            "Sendikalar düşen alım gücüne karşı ara zam çağrısı yaptı. "
-            "Konuya ilişkin AKP cephesinden açıklama geldi. "
-            "İktidar partisi, ara zam talebine ilişkin tutumunu netleştirdi. "
-            "Çalışanlar ve emekliler kararı merakla bekliyordu. "
-            "Hükümetin tutumu kamuoyunda tartışma yarattı."
+            "Asgari ücrete temmuzda ara zam gelip gelmeyeceği milyonlarca çalışanı "
+            "yakından ilgilendiriyor. Yüksek enflasyon nedeniyle alım gücü eridi ve ara zam "
+            "talepleri yeniden gündemde. Hükümet kanadından henüz net bir karar açıklanmadı. "
+            "Sendikalar acil müdahale beklerken işveren tarafı temkinli. Karar yıl ortasında netleşecek."
         ),
         highlights=[
-            Highlight(text="ara zam çağrısı", color="yellow"),
-            Highlight(text="AKP cephesinden açıklama", color="red"),
+            Highlight(text="ara zam", color="yellow"),
+            Highlight(text="milyonlarca çalışanı", color="yellow"),
+            Highlight(text="alım gücü eridi", color="red"),
         ],
-        category="SİYASET",
-        mood="breaking",
+        category="EKONOMİ",
+        mood="neutral",
     )
+
+    bg = Path("data/cache/images/6f73555c59ac6026.jpg")
+    if not bg.exists():
+        candidates = sorted(Path("data/cache/images").glob("*.jpg"))
+        bg = candidates[-1] if candidates else None
+
     job = RenderJob(
         script=script,
-        bg_image_path=None,
+        bg_image_path=bg,
         music_path=Path("dummy.mp3"),
         channel_colors={
             "primary": "#c81e1e",
@@ -38,34 +44,41 @@ def main():
             "bg_gradient": ["#1a3b6b", "#0a1a3b"],
         },
         handle="@HaberShortsTR",
-        duration_s=30,
+        duration_s=6,
         cta_enabled=True,
         cta_text="BEĞEN · ABONE OL · PAYLAŞ",
         cta_icons=["❤️", "🔔", "↗️"],
-        cta_duration_s=4,
+        cta_duration_s=3,
         cta_show_handle=True,
     )
 
     template = Path("templates/default.html.j2")
     html = build_html(job, template)
 
-    out = Path("tmp/test_frame.png")
-    out.parent.mkdir(parents=True, exist_ok=True)
+    out_dir = Path("tmp")
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # 3 timestamps: content (1.5s), early CTA entry (3.5s), CTA loop mid-cycle (5s)
+    timestamps_ms = {
+        "content_1500ms.png": 1500,
+        "cta_3500ms.png": 3500,
+        "cta_5000ms.png": 5000,
+    }
 
     with sync_playwright() as p:
         browser = p.chromium.launch()
         page = browser.new_page(viewport={"width": 1080, "height": 1920}, device_scale_factor=1)
-        page.set_content(html, wait_until="networkidle")
-        # Pause animations and step to t=2500ms (after progress has advanced, before CTA at t=26s)
         page.add_init_script("document.getAnimations().forEach(a => a.pause());")
-        page.evaluate(
-            "(t) => { document.getAnimations().forEach(a => { a.currentTime = t; }); }",
-            2500,
-        )
-        page.screenshot(path=str(out))
+        page.set_content(html, wait_until="networkidle")
+        for name, t_ms in timestamps_ms.items():
+            page.evaluate(
+                "(t) => { document.getAnimations().forEach(a => { a.currentTime = t; }); }",
+                t_ms,
+            )
+            out = out_dir / name
+            page.screenshot(path=str(out))
+            print(f"{name} → {out.resolve()}")
         browser.close()
-
-    print(f"Saved: {out.resolve()}")
 
 
 if __name__ == "__main__":
