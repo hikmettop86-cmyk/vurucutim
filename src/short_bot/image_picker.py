@@ -121,7 +121,7 @@ def pick_image_for_generator(
     max_candidates: int = 3,
 ) -> Path | None:
     """Image picker for generator mode: query is space-joined keywords from Sonnet."""
-    query = " ".join(keywords).strip()
+    query = " ".join(k for k in keywords if k).strip()
     return _run_image_search(
         query, script, cache_dir,
         claude_path=claude_path, max_candidates=max_candidates,
