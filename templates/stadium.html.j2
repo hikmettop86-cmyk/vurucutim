@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="{{ language }}">
+<head>
+<meta charset="utf-8">
+<title>Short — Stadium</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;700&family=Inter:wght@600;800&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --primary: #0a4d2a;
+    --accent: #ffd700;
+    --bg-grad-1: #1a8b3a;
+    --bg-grad-2: #0a4d1a;
+    --body-bg-1: #0a1a0a;
+    --body-bg-2: #000000;
+    --text-main: #ffffff;
+    --text-muted: #aaffaa;
+    --font-headline: 'Oswald', Impact, sans-serif;
+    --font-body: 'Inter', sans-serif;
+  }
+  html, body { width: 1080px; height: 1920px; overflow: hidden;
+    background: linear-gradient(180deg, var(--body-bg-1), var(--body-bg-2));
+    font-family: var(--font-body); color: var(--text-main); }
+  .stage { position: relative; width: 1080px; height: 1920px; }
+
+  .stage-badge {
+    position: absolute; top: 16px; right: 16px;
+    background: var(--accent); color: var(--primary);
+    font-family: var(--font-headline);
+    font-size: 22px; font-weight: 700; letter-spacing: 2px;
+    padding: 5px 12px;
+    z-index: 10;
+  }
+
+  .header {
+    background: linear-gradient(135deg, var(--primary), var(--bg-grad-2));
+    padding: 50px 40px 40px;
+    text-align: center;
+    font-family: var(--font-headline);
+    color: var(--accent);
+    border-bottom: 8px solid var(--accent);
+  }
+  .header .top {
+    display: block;
+    font-size: 200px;
+    line-height: .95;
+    letter-spacing: 8px;
+    text-shadow: 6px 6px 0 #000;
+    -webkit-text-stroke: 2px #000;
+  }
+  .header .bot {
+    display: block;
+    font-size: 60px;
+    color: var(--text-main);
+    letter-spacing: 6px;
+    margin-top: 14px;
+  }
+
+  .photo {
+    position: relative;
+    height: 580px;
+    background: linear-gradient(180deg, var(--bg-grad-1), var(--bg-grad-2));
+    overflow: hidden;
+  }
+  .photo .bg-img {
+    position: absolute; inset: 0;
+    background-image: url('{{ bg_image_url|default("") }}');
+    background-size: cover; background-position: center;
+    {% if not bg_image_url %}display: none;{% endif %}
+  }
+  .photo::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, transparent 60%, rgba(0,0,0,.8));
+  }
+  .photo .yellow {
+    position: absolute; bottom: 30px; left: 30px; right: 30px;
+    background: var(--accent);
+    color: var(--primary);
+    font-family: var(--font-headline);
+    padding: 22px 30px;
+    font-size: 64px;
+    text-align: center;
+    letter-spacing: 2px;
+    transform: skewX(-10deg);
+    box-shadow: 0 8px 0 #000;
+    z-index: 1;
+  }
+
+  .body {
+    padding: 40px 50px 220px;
+    font-size: 42px;
+    line-height: 1.4;
+    font-weight: 600;
+    color: var(--text-main);
+    display: -webkit-box;
+    -webkit-line-clamp: 7;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .body .hl-r {
+    background: var(--accent);
+    color: var(--primary);
+    padding: 2px 12px;
+    font-weight: 800;
+  }
+  .body .hl-y {
+    color: var(--accent);
+    text-shadow: 0 0 4px var(--accent);
+    font-weight: 800;
+  }
+
+  .progress {
+    position: absolute; left: 0; right: 0; bottom: 84px; height: 8px;
+    background: rgba(255,255,255,.15);
+  }
+  .progress::after {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+    background: var(--accent);
+    animation: fill {{ duration_s }}s linear forwards;
+  }
+  @keyframes fill { from { width: 0; } to { width: 100%; } }
+
+  .handle {
+    position: absolute; left: 0; right: 0; bottom: 30px;
+    text-align: center; color: var(--accent);
+    font-family: var(--font-headline);
+    font-size: 32px; letter-spacing: 4px;
+  }
+
+  .persistent {
+    position: absolute;
+    display: flex; align-items: center; gap: 10px;
+    font-weight: 800; font-size: 28px; letter-spacing: 1px;
+    padding: 10px 18px;
+    border-radius: 999px;
+    color: var(--text-main);
+    background: rgba(0,0,0,.85);
+    border: 3px solid var(--accent);
+    z-index: 35;
+  }
+  .persistent .ic { font-size: 32px; }
+  .persistent.like { bottom: 120px; left: 30px; }
+  .persistent.sub  { bottom: 120px; right: 30px; background: var(--accent); color: var(--primary); border-color: var(--primary); }
+
+  /* DNA OVERRIDE */
+  {{ dna_css|safe }}
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="stage-badge">{{ ui_breaking }}</div>
+  <div class="header">
+    <span class="top">{{ script.header_top }}</span>
+    <span class="bot">{{ script.header_bottom }}</span>
+  </div>
+
+  <div class="photo">
+    <div class="bg-img"></div>
+    <div class="yellow">{{ script.photo_overlay }}</div>
+  </div>
+
+  <div class="body">{{ body_html|safe }}</div>
+
+  <div class="progress"></div>
+  <div class="handle">{{ handle }}</div>
+
+  <div class="persistent like"><span class="ic">❤️</span><span>{{ ui_like }}</span></div>
+  <div class="persistent sub"><span class="ic">🔔</span><span>{{ ui_subscribe }}</span></div>
+</div>
+</body>
+</html>
