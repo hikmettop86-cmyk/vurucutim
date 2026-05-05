@@ -34,3 +34,37 @@ def test_channels_list_shows_channel(app):
     assert "demo-tr" in body
     assert "Demo TR" in body
     assert "newscast" in body
+
+
+def test_channel_edit_get_renders(app):
+    client = app.test_client()
+    resp = client.get("/channels/demo-tr/edit")
+    assert resp.status_code == 200
+    body = resp.data.decode("utf-8")
+    assert "demo-tr" in body
+    assert "Demo TR" in body
+
+
+def test_channel_edit_404_when_missing(app):
+    client = app.test_client()
+    resp = client.get("/channels/nonexistent/edit")
+    assert resp.status_code == 404
+
+
+def test_channel_edit_post_saves(app, tmp_path):
+    client = app.test_client()
+    resp = client.post("/channels/demo-tr/edit", data={
+        "keywords": "yeni, kelimeler",
+        "schedule_cron": "0 8,16 * * *",
+        "handle": "@updated",
+        "duration_s": "10",
+        "min_score": "7.0",
+        "enabled": "1",
+    })
+    assert resp.status_code in (200, 302)
+    # Reload and verify persistence
+    from short_bot.config import load_channel
+    cfg_dir = app.config["SHORTBOT_CONFIG_DIR"]
+    cfg = load_channel(cfg_dir / "channels" / "demo-tr.yaml")
+    assert cfg.handle == "@updated"
+    assert cfg.duration_s == 10

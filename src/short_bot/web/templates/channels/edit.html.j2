@@ -1,0 +1,67 @@
+{% extends "base.html.j2" %}
+{% block title %}short-bot — {{ c.slug }}{% endblock %}
+{% block content %}
+<a href="/channels" class="text-slate-400 hover:text-white text-sm">← Kanallar</a>
+<h1 class="text-3xl font-bold mt-2 mb-1">{{ c.name }}</h1>
+<div class="text-slate-400 text-sm mb-6">
+  {{ c.slug }} · {{ c.language }} · {{ c.template }}
+  {% if c.dna %}<span class="bg-green-700 text-white px-2 py-0.5 rounded text-xs ml-2">DNA</span>{% endif %}
+</div>
+
+<div class="grid grid-cols-2 gap-6">
+  <form method="POST" class="space-y-4">
+    <h2 class="text-lg font-bold">Temel</h2>
+
+    <label class="block">
+      <span class="text-xs text-slate-400 uppercase tracking-wider">Keywords (virgülle)</span>
+      <input type="text" name="keywords" value="{{ c.keywords | join(', ') }}"
+             class="bg-slate-800 px-3 py-2 rounded w-full mt-1 text-sm">
+    </label>
+
+    <label class="block">
+      <span class="text-xs text-slate-400 uppercase tracking-wider">Cron</span>
+      <input type="text" name="schedule_cron" value="{{ c.schedule_cron }}"
+             class="bg-slate-800 px-3 py-2 rounded w-full mt-1 text-sm font-mono">
+    </label>
+
+    <label class="block">
+      <span class="text-xs text-slate-400 uppercase tracking-wider">Duration (s)</span>
+      <input type="number" name="duration_s" value="{{ c.duration_s }}"
+             class="bg-slate-800 px-3 py-2 rounded w-full mt-1 text-sm">
+    </label>
+
+    <label class="block">
+      <span class="text-xs text-slate-400 uppercase tracking-wider">Min Score</span>
+      <input type="number" step="0.1" name="min_score" value="{{ c.min_score }}"
+             class="bg-slate-800 px-3 py-2 rounded w-full mt-1 text-sm">
+    </label>
+
+    <label class="block">
+      <span class="text-xs text-slate-400 uppercase tracking-wider">Handle</span>
+      <input type="text" name="handle" value="{{ c.handle }}"
+             class="bg-slate-800 px-3 py-2 rounded w-full mt-1 text-sm">
+    </label>
+
+    <label class="flex items-center gap-2">
+      <input type="checkbox" name="enabled" value="1" {% if c.enabled %}checked{% endif %}
+             class="w-4 h-4">
+      <span class="text-sm">Aktif</span>
+    </label>
+
+    <div class="pt-2">
+      <button type="submit"
+              class="bg-red-600 hover:bg-red-700 px-6 py-2 rounded font-semibold text-sm">
+        Kaydet
+      </button>
+    </div>
+  </form>
+
+  <div>
+    <h2 class="text-lg font-bold mb-3">Önizleme</h2>
+    <iframe src="/preview/{{ c.slug }}"
+            class="w-full rounded border border-slate-700 bg-slate-900"
+            style="height: 480px;"
+            title="Kanal önizleme"></iframe>
+  </div>
+</div>
+{% endblock %}
