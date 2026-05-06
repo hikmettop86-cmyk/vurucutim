@@ -16,7 +16,7 @@ def test_load_secrets_parses_yaml(tmp_path):
     assert load_secrets(p) == {"pexels_api_key": "abc123"}
 
 
-def test_resolve_returns_env_var_when_set(tmp_path, monkeypatch):
+def test_resolve_returns_env_var_when_set(monkeypatch):
     monkeypatch.setenv("PEXELS_API_KEY", "from-env")
     assert resolve_pexels_api_key({"pexels_api_key": "from-file"}) == "from-env"
 
