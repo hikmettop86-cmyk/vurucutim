@@ -138,3 +138,72 @@ def test_disconnect_404_when_channel_missing(tmp_path):
     resp = client.post("/channels/nonexistent/youtube/disconnect",
                        follow_redirects=False)
     assert resp.status_code == 404
+
+
+def test_upload_route_calls_uploader_and_records_db(tmp_path):
+    app = _make_app(tmp_path)
+    yt_root = tmp_path / "yt_creds"
+    (yt_root / "ch").mkdir(parents=True)
+    (yt_root / "ch" / "token.json").write_text(json.dumps({
+        "token": "x", "refresh_token": "y", "client_id": "x",
+        "client_secret": "y", "token_uri": "https://oauth2.googleapis.com/token",
+        "scopes": ["https://www.googleapis.com/auth/youtube.upload"],
+    }))
+    app.config["SHORTBOT_YT_CREDS_DIR"] = yt_root
+
+    out_dir = tmp_path / "out" / "ch"
+    out_dir.mkdir(parents=True)
+    mp4 = out_dir / "v.mp4"
+    mp4.write_bytes(b"\x00")
+
+    from short_bot.db import init_db, record_short
+    eng = init_db(app.config["SHORTBOT_DB_PATH"])
+    sid = record_short(eng, channel="ch", rss_item_guid="g1",
+                        title="T", file_path=str(mp4), duration_s=6,
+                        script_json='{"header_top":"A","header_bottom":"B",'
+                                     '"photo_overlay":"X","body_paragraph":"yyyyyyyyyyyyyyyyyyyy",'
+                                     '"highlights":[],"category":"x","mood":"neutral"}',
+                        render_ms=1)
+
+    with patch("short_bot.youtube.auth.Credentials") as MockCreds, \
+         patch("short_bot.web.routes.youtube.upload_video", return_value="VID") as mup:
+        mock_cred = MagicMock(); mock_cred.expired = False
+        MockCreds.from_authorized_user_info.return_value = mock_cred
+        client = app.test_client()
+        resp = client.post(f"/shorts/{sid}/upload-youtube",
+                           follow_redirects=False)
+    assert resp.status_code == 302
+    mup.assert_called_once()
+    from short_bot.db import get_youtube_upload_for_short
+    row = get_youtube_upload_for_short(eng, short_id=sid)
+    assert row.status == "success"
+    assert row.video_id == "VID"
+
+
+def test_upload_route_404_when_short_missing(tmp_path):
+    app = _make_app(tmp_path)
+    app.config["SHORTBOT_YT_CREDS_DIR"] = tmp_path / "yt_creds"
+    client = app.test_client()
+    resp = client.post("/shorts/9999/upload-youtube")
+    assert resp.status_code == 404
+
+
+def test_upload_route_flashes_error_when_not_connected(tmp_path):
+    app = _make_app(tmp_path)
+    app.config["SHORTBOT_YT_CREDS_DIR"] = tmp_path / "yt_creds"
+    out_dir = tmp_path / "out" / "ch"; out_dir.mkdir(parents=True)
+    mp4 = out_dir / "v.mp4"; mp4.write_bytes(b"\x00")
+    from short_bot.db import init_db, record_short
+    eng = init_db(app.config["SHORTBOT_DB_PATH"])
+    sid = record_short(eng, channel="ch", rss_item_guid="g",
+                        title="T", file_path=str(mp4), duration_s=6,
+                        script_json='{"header_top":"A","header_bottom":"B",'
+                                     '"photo_overlay":"X","body_paragraph":"yyyyyyyyyyyyyyyyyyyy",'
+                                     '"highlights":[],"category":"x","mood":"neutral"}',
+                        render_ms=1)
+    client = app.test_client()
+    resp = client.post(f"/shorts/{sid}/upload-youtube",
+                       follow_redirects=False)
+    assert resp.status_code == 302
+    from short_bot.db import get_youtube_upload_for_short
+    assert get_youtube_upload_for_short(eng, short_id=sid) is None
