@@ -1,36 +1,62 @@
 {% extends "base.html.j2" %}
-{% block title %}short-bot — Dashboard{% endblock %}
+{% block title %}Vurucu TİM — Dashboard{% endblock %}
 {% block content %}
 <h1 class="font-serif text-3xl font-bold mb-6">Dashboard</h1>
 
-<div class="grid grid-cols-4 gap-4 mb-8">
-  <div class="bg-claude-surface border border-claude-border rounded-lg p-6">
+<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4 mb-8">
+  <a href="/shorts?since=1h" class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border rounded-lg p-5 transition-colors">
+    <div class="text-xs text-claude-muted uppercase tracking-wider">Son 1 saat</div>
+    <div class="text-3xl font-bold mt-1">{{ last_hour_shorts }}</div>
+  </a>
+  <a href="/shorts?since=today" class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border rounded-lg p-5 transition-colors">
     <div class="text-xs text-claude-muted uppercase tracking-wider">Bugün üretilen</div>
     <div class="text-3xl font-bold mt-1">{{ today_shorts }}</div>
-  </div>
-  <div class="bg-claude-surface border border-claude-border rounded-lg p-6">
+  </a>
+  <a href="/shorts" class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border rounded-lg p-5 transition-colors">
     <div class="text-xs text-claude-muted uppercase tracking-wider">Toplam Shorts</div>
     <div class="text-3xl font-bold mt-1">{{ total_shorts }}</div>
-  </div>
-  <div class="bg-claude-surface border border-claude-border rounded-lg p-6">
+  </a>
+  <a href="/shorts?youtube=yes" class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border rounded-lg p-5 transition-colors">
+    <div class="text-xs text-claude-muted uppercase tracking-wider">YouTube'da</div>
+    <div class="text-3xl font-bold mt-1">{{ youtube_uploaded }}</div>
+  </a>
+  <a href="/shorts?youtube=yes" class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border rounded-lg p-5 transition-colors">
+    <div class="text-xs text-claude-muted uppercase tracking-wider">YT son 24s</div>
+    <div class="text-3xl font-bold mt-1">{{ auto_uploads_24h }}</div>
+  </a>
+  <a href="/channels" class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border rounded-lg p-5 transition-colors">
     <div class="text-xs text-claude-muted uppercase tracking-wider">Kanal</div>
     <div class="text-3xl font-bold mt-1">{{ channel_count }}</div>
-  </div>
-  <div class="bg-claude-surface border border-claude-border rounded-lg p-6">
+  </a>
+  <a href="/logs?level=ERROR" class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border rounded-lg p-5 transition-colors">
     <div class="text-xs text-claude-muted uppercase tracking-wider">Hata (24s)</div>
     <div class="text-3xl font-bold mt-1 {{ 'text-claude-error' if failed_runs > 0 else 'text-claude-success' }}">
       {{ failed_runs }}
     </div>
-  </div>
+  </a>
+</div>
+
+<div class="flex flex-wrap items-center gap-2 mb-4">
+  <span class="text-xs text-claude-muted uppercase tracking-wider mr-1">Hızlı filtre:</span>
+  <a href="/shorts" class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border px-3 py-1.5 rounded-full text-xs">Tümü</a>
+  <a href="/shorts?since=1h" class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border px-3 py-1.5 rounded-full text-xs">⏱ Son 1 saat</a>
+  <a href="/shorts?since=today" class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border px-3 py-1.5 rounded-full text-xs">📅 Bugün</a>
+  <a href="/shorts?youtube=yes" class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border px-3 py-1.5 rounded-full text-xs">▶ YT yüklü</a>
+  <a href="/shorts?youtube=no" class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border px-3 py-1.5 rounded-full text-xs">○ YT yüklenmedi</a>
 </div>
 
 <h2 class="font-serif text-xl font-bold mb-4">Son üretilenler</h2>
 <div class="grid grid-cols-4 gap-4">
   {% for s in recent %}
-  <div class="bg-claude-surface border border-claude-border rounded-lg overflow-hidden">
-    <div class="aspect-[9/16] bg-claude-text flex items-center justify-center text-white/50 text-xs">
-      <a href="/shorts/{{ s.id }}" class="block w-full h-full flex items-center justify-center">▶ {{ s.title }}</a>
-    </div>
+  <div class="bg-claude-surface border border-claude-border rounded-lg overflow-hidden group shadow-soft hover:shadow-card transition-shadow">
+    <a href="/shorts/{{ s.id }}" class="block">
+      <video class="aspect-[9/16] w-full bg-black object-cover"
+             src="{{ s.file_url }}#t=0.1"
+             muted loop playsinline preload="metadata"
+             x-data
+             x-on:mouseenter="$el.currentTime = 0; $el.play()"
+             x-on:mouseleave="$el.pause(); $el.currentTime = 0.1"></video>
+    </a>
     <div class="p-4 text-xs">
       <div class="font-semibold truncate">{{ s.title }}</div>
       <div class="text-claude-muted mt-1">{{ s.channel }} · {{ s.created_at.strftime('%H:%M') }}</div>
