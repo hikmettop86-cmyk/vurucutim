@@ -173,14 +173,29 @@
               Tarayıcı Google'a yönlendirecek, izin verince bu kanal YouTube hesabınla eşleşir.
             </div>
           {% else %}
-            <div class="text-xs text-claude-muted">
-              <strong>Adım 1:</strong>
-              <a href="https://console.cloud.google.com/" target="_blank" class="text-claude-accent underline">Google Cloud Console</a>
-              → yeni proje → APIs: YouTube Data API v3 + YouTube Analytics API → OAuth Consent (External) →
-              OAuth Client (Web type, redirect: <code>http://127.0.0.1:5005/oauth/callback</code>) → JSON indir.
-              <br><strong>Adım 2:</strong> İndirdiğin JSON'u şu yola koy:
-              <code class="block mt-1 font-mono text-[11px] text-claude-text break-all">{{ yt_secrets_abs }}\client_secrets.json</code>
-              <br><strong>Adım 3:</strong> Sayfayı yenile, "YouTube Bağla" butonu görünecek.
+            <div class="text-xs text-claude-muted space-y-2">
+              <div>
+                <strong>Adım 1:</strong>
+                <a href="https://console.cloud.google.com/" target="_blank" class="text-claude-accent underline">Google Cloud Console</a>
+                → yeni proje → APIs: YouTube Data API v3 + YouTube Analytics API → OAuth Consent (External) →
+                OAuth Client (Web type, redirect: <code>http://127.0.0.1:5005/oauth/callback</code>) → JSON indir.
+              </div>
+              <div>
+                <strong>Adım 2:</strong> İndirdiğin <code>client_secrets.json</code>'u aşağıdaki kutuya sürükle veya seç:
+              </div>
+              <form method="POST" action="/channels/{{ c.slug }}/youtube/upload-secrets"
+                    enctype="multipart/form-data"
+                    class="flex items-center gap-2 mt-2">
+                <input type="file" name="client_secrets" accept="application/json,.json" required
+                       class="text-xs flex-1 file:bg-claude-surface-alt file:border-0 file:px-3 file:py-1.5 file:rounded file:text-claude-text file:cursor-pointer file:mr-2">
+                <button class="bg-claude-accent hover:bg-claude-accent-hover text-white px-3 py-1.5 rounded-lg text-xs">
+                  ↑ Yükle
+                </button>
+              </form>
+              <div class="text-[10px] text-claude-subtle">
+                Dosya şuraya kaydedilecek:
+                <code class="break-all">{{ yt_secrets_abs }}\client_secrets.json</code>
+              </div>
             </div>
           {% endif %}
         {% endif %}

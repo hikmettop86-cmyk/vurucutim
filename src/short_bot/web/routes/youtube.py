@@ -120,3 +120,31 @@ def upload(short_id):
         )
         flash(f"Yükleme başarısız: {e}", "error")
     return redirect(url_for("shorts.detail", short_id=short_id))
+
+
+@bp.route("/channels/<slug>/youtube/upload-secrets", methods=["POST"])
+def upload_secrets(slug):
+    cfg_path = current_app.config["SHORTBOT_CONFIG_DIR"] / "channels" / f"{slug}.yaml"
+    if not cfg_path.exists():
+        abort(404)
+    f = request.files.get("client_secrets")
+    if f is None or not f.filename:
+        flash("Dosya seçilmedi.", "error")
+        return redirect(url_for("channel_edit.edit", slug=slug))
+    raw = f.read()
+    try:
+        data = _json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        flash("Geçersiz JSON. Google Console'dan indirdiğin orijinal dosyayı yükle.",
+              "error")
+        return redirect(url_for("channel_edit.edit", slug=slug))
+    if not isinstance(data, dict) or not ("web" in data or "installed" in data):
+        flash("Bu OAuth client JSON'u gibi görünmüyor (web/installed anahtarı yok).",
+              "error")
+        return redirect(url_for("channel_edit.edit", slug=slug))
+    target_dir = _yt_root() / slug
+    target_dir.mkdir(parents=True, exist_ok=True)
+    (target_dir / "client_secrets.json").write_bytes(raw)
+    flash("client_secrets.json yüklendi. Şimdi 'YouTube Bağla' butonuna tıkla.",
+          "success")
+    return redirect(url_for("channel_edit.edit", slug=slug))

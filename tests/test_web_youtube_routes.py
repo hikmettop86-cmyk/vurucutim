@@ -207,3 +207,79 @@ def test_upload_route_flashes_error_when_not_connected(tmp_path):
     assert resp.status_code == 302
     from short_bot.db import get_youtube_upload_for_short
     assert get_youtube_upload_for_short(eng, short_id=sid) is None
+
+
+def test_upload_secrets_saves_valid_json(tmp_path):
+    app = _make_app(tmp_path)
+    yt_root = tmp_path / "yt_creds"
+    app.config["SHORTBOT_YT_CREDS_DIR"] = yt_root
+    client = app.test_client()
+
+    payload = json.dumps({
+        "web": {
+            "client_id": "x.apps.googleusercontent.com",
+            "client_secret": "secret",
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "redirect_uris": ["http://127.0.0.1:5005/oauth/callback"],
+        }
+    }).encode("utf-8")
+
+    from io import BytesIO
+    resp = client.post(
+        "/channels/ch/youtube/upload-secrets",
+        data={"client_secrets": (BytesIO(payload), "client_secrets.json")},
+        content_type="multipart/form-data",
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+    saved = (yt_root / "ch" / "client_secrets.json").read_text(encoding="utf-8")
+    assert "client_id" in saved
+
+
+def test_upload_secrets_rejects_invalid_json(tmp_path):
+    app = _make_app(tmp_path)
+    yt_root = tmp_path / "yt_creds"
+    app.config["SHORTBOT_YT_CREDS_DIR"] = yt_root
+    client = app.test_client()
+    from io import BytesIO
+    resp = client.post(
+        "/channels/ch/youtube/upload-secrets",
+        data={"client_secrets": (BytesIO(b"not json"), "x.json")},
+        content_type="multipart/form-data",
+        follow_redirects=False,
+    )
+    # Redirect with flash error, no file written
+    assert resp.status_code == 302
+    assert not (yt_root / "ch" / "client_secrets.json").exists()
+
+
+def test_upload_secrets_rejects_missing_oauth_keys(tmp_path):
+    """JSON valid but missing 'web' or 'installed' key — not an OAuth client."""
+    app = _make_app(tmp_path)
+    yt_root = tmp_path / "yt_creds"
+    app.config["SHORTBOT_YT_CREDS_DIR"] = yt_root
+    client = app.test_client()
+    from io import BytesIO
+    bad = json.dumps({"random": "thing"}).encode("utf-8")
+    resp = client.post(
+        "/channels/ch/youtube/upload-secrets",
+        data={"client_secrets": (BytesIO(bad), "x.json")},
+        content_type="multipart/form-data",
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+    assert not (yt_root / "ch" / "client_secrets.json").exists()
+
+
+def test_upload_secrets_404_when_channel_missing(tmp_path):
+    app = _make_app(tmp_path)
+    app.config["SHORTBOT_YT_CREDS_DIR"] = tmp_path / "yt_creds"
+    client = app.test_client()
+    from io import BytesIO
+    resp = client.post(
+        "/channels/nonexistent/youtube/upload-secrets",
+        data={"client_secrets": (BytesIO(b"{}"), "x.json")},
+        content_type="multipart/form-data",
+    )
+    assert resp.status_code == 404
