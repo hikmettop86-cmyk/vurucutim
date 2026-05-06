@@ -51,7 +51,14 @@ def detail(short_id):
     s = Short.query.filter_by(id=short_id).first()
     if s is None or s.deleted_at is not None:
         abort(404)
-    return render_template("shorts/detail.html.j2", s=s)
+    from short_bot.youtube import auth as _yt_auth
+    from short_bot.web.models import YoutubeUpload
+    yt_root = current_app.config.get("SHORTBOT_YT_CREDS_DIR")
+    yt_connected = bool(yt_root and _yt_auth.has_credentials(yt_root, s.channel))
+    yt_upload = (YoutubeUpload.query.filter_by(short_id=s.id)
+                 .order_by(YoutubeUpload.uploaded_at.desc()).first())
+    return render_template("shorts/detail.html.j2", s=s,
+                           yt_connected=yt_connected, yt_upload=yt_upload)
 
 
 @bp.route("/shorts/run-now", methods=["POST"])

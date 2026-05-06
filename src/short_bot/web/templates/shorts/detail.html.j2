@@ -1,5 +1,5 @@
 {% extends "base.html.j2" %}
-{% block title %}short-bot — {{ s.title }}{% endblock %}
+{% block title %}Vurucu TİM — {{ s.title }}{% endblock %}
 {% block content %}
 <a href="/shorts" class="text-claude-muted hover:text-claude-text text-sm">← Shorts</a>
 <div class="flex justify-between items-start mt-2 mb-1">
@@ -20,6 +20,23 @@
         Sil
       </button>
     </form>
+    {% if yt_upload and yt_upload.status == 'success' %}
+      <a href="{{ yt_upload.video_url }}" target="_blank"
+         class="bg-claude-success/10 ring-1 ring-claude-success/30 text-claude-success px-3 py-2 rounded-lg text-sm">
+        ▶ YouTube ({{ yt_upload.video_id }})
+      </a>
+    {% else %}
+      <form method="POST" action="/shorts/{{ s.id }}/upload-youtube" class="inline"
+            onsubmit="return confirm('Bu shortu YouTube\'a yükle?');">
+        <button class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm text-claude-text {% if not yt_connected %}opacity-50 cursor-not-allowed{% endif %}"
+                {% if not yt_connected %}disabled title="Önce kanal edit sayfasından YouTube bağla"{% endif %}>
+          ↑ YouTube'a Yükle
+        </button>
+      </form>
+      {% if yt_upload and yt_upload.status == 'failed' %}
+        <div class="text-xs text-claude-error mt-1">Son deneme başarısız: {{ yt_upload.error[:80] }}</div>
+      {% endif %}
+    {% endif %}
   </div>
 </div>
 <div class="text-claude-muted text-sm mb-6">
