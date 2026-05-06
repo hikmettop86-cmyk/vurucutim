@@ -48,7 +48,7 @@
 </div>
 
 {# ── Main form — Alpine root state ──────────────────────────────────────── #}
-<form method="POST" class="grid grid-cols-2 gap-8 mt-2"
+<form id="edit-save-form" method="POST" class="grid grid-cols-2 gap-8 mt-2"
       x-data='{
         primary: "{{ (c.dna.palette.primary if c.dna else c.colors.primary) }}",
         accent: "{{ (c.dna.palette.accent if c.dna else c.colors.accent) }}",
@@ -220,20 +220,21 @@
                 <span class="text-claude-success">Bağlı</span>
               </div>
             </div>
-            <form method="POST" action="/channels/{{ c.slug }}/youtube/disconnect"
-                  onsubmit="return confirm('YouTube bağlantısı kaldırılsın mı? (token silinecek, kanal_info kalır)');">
-              <button class="text-xs px-3 py-1.5 rounded-lg bg-claude-error/10 ring-1 ring-claude-error/30 text-claude-error">
-                Bağlantıyı kes
-              </button>
-            </form>
+            <button form="yt-disconnect-form"
+                    formmethod="POST"
+                    formaction="/channels/{{ c.slug }}/youtube/disconnect"
+                    onclick="return confirm('YouTube bağlantısı kaldırılsın mı? (token silinecek, kanal_info kalır)');"
+                    class="text-xs px-3 py-1.5 rounded-lg bg-claude-error/10 ring-1 ring-claude-error/30 text-claude-error">
+              Bağlantıyı kes
+            </button>
           </div>
         {% else %}
           {% if yt_has_secrets %}
-            <form method="POST" action="/channels/{{ c.slug }}/youtube/connect">
-              <button class="bg-claude-accent hover:bg-claude-accent-hover text-white px-4 py-2 rounded-lg text-sm">
-                ▶ YouTube Bağla
-              </button>
-            </form>
+            <button form="yt-connect-form" formmethod="POST"
+                    formaction="/channels/{{ c.slug }}/youtube/connect"
+                    class="bg-claude-accent hover:bg-claude-accent-hover text-white px-4 py-2 rounded-lg text-sm">
+              ▶ YouTube Bağla
+            </button>
             <div class="text-[10px] text-claude-subtle">
               Tarayıcı Google'a yönlendirecek, izin verince bu kanal YouTube hesabınla eşleşir.
             </div>
@@ -248,15 +249,15 @@
               <div>
                 <strong>Adım 2:</strong> İndirdiğin <code>client_secrets.json</code>'u aşağıdaki kutuya sürükle veya seç:
               </div>
-              <form method="POST" action="/channels/{{ c.slug }}/youtube/upload-secrets"
-                    enctype="multipart/form-data"
-                    class="flex items-center gap-2 mt-2">
+              <div class="flex items-center gap-2 mt-2">
                 <input type="file" name="client_secrets" accept="application/json,.json" required
+                       form="yt-upload-secrets-form"
                        class="text-xs flex-1 file:bg-claude-surface-alt file:border-0 file:px-3 file:py-1.5 file:rounded file:text-claude-text file:cursor-pointer file:mr-2">
-                <button class="bg-claude-accent hover:bg-claude-accent-hover text-white px-3 py-1.5 rounded-lg text-xs">
+                <button form="yt-upload-secrets-form" type="submit"
+                        class="bg-claude-accent hover:bg-claude-accent-hover text-white px-3 py-1.5 rounded-lg text-xs">
                   ↑ Yükle
                 </button>
-              </form>
+              </div>
               <div class="text-[10px] text-claude-subtle">
                 Dosya şuraya kaydedilecek:
                 <code class="break-all">{{ yt_secrets_abs }}\client_secrets.json</code>
@@ -751,4 +752,15 @@
 
   </div>
 </form>
+
+{# Companion forms for YouTube actions — kept outside the channel-save form
+   because HTML5 forbids nested forms. Buttons inside the save form reference
+   these via form="<id>" attribute. #}
+<form id="yt-disconnect-form" method="POST"
+      action="/channels/{{ c.slug }}/youtube/disconnect" class="hidden"></form>
+<form id="yt-connect-form" method="POST"
+      action="/channels/{{ c.slug }}/youtube/connect" class="hidden"></form>
+<form id="yt-upload-secrets-form" method="POST"
+      action="/channels/{{ c.slug }}/youtube/upload-secrets"
+      enctype="multipart/form-data" class="hidden"></form>
 {% endblock %}
