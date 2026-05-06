@@ -99,5 +99,7 @@ def create_app(
     if scheduler:
         from short_bot.web.scheduler import init_scheduler
         init_scheduler(app)
+        from short_bot.web.scheduler_stats import init_stats_scheduler
+        init_stats_scheduler(app)
 
     return app
