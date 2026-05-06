@@ -13,6 +13,7 @@ from pathlib import Path
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import Flow
 
 SCOPES = [
     "https://www.googleapis.com/auth/youtube.upload",
@@ -54,3 +55,16 @@ def delete_credentials(root: Path, slug: str) -> None:
     token_path = credentials_dir(root, slug) / "token.json"
     if token_path.exists():
         token_path.unlink()
+
+
+def build_flow(root: Path, slug: str, *, redirect_uri: str) -> Flow:
+    """Construct an OAuth Flow from this channel's client_secrets.json."""
+    secrets_path = credentials_dir(root, slug) / "client_secrets.json"
+    if not secrets_path.is_file():
+        raise FileNotFoundError(
+            f"client_secrets.json not found at {secrets_path}. "
+            "Download from Google Cloud Console and place it there."
+        )
+    return Flow.from_client_secrets_file(
+        str(secrets_path), scopes=SCOPES, redirect_uri=redirect_uri,
+    )

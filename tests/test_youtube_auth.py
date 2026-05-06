@@ -80,3 +80,31 @@ def test_load_credentials_refreshes_when_expired(tmp_path):
     # Renewed token must be persisted
     persisted = (d / "token.json").read_text(encoding="utf-8")
     assert '"token": "new"' in persisted
+
+
+def test_build_flow_loads_client_secrets(tmp_path):
+    secrets_path = tmp_path / "creds" / "ch" / "client_secrets.json"
+    secrets_path.parent.mkdir(parents=True)
+    secrets_path.write_text(json.dumps({
+        "web": {
+            "client_id": "x.apps.googleusercontent.com",
+            "client_secret": "secret",
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "redirect_uris": ["http://127.0.0.1:5005/oauth/callback"],
+        }
+    }))
+    from short_bot.youtube.auth import build_flow
+    flow = build_flow(tmp_path / "creds", "ch",
+                       redirect_uri="http://127.0.0.1:5005/oauth/callback")
+    assert flow is not None
+    auth_url, state = flow.authorization_url(state="ch", access_type="offline",
+                                              prompt="consent")
+    assert "accounts.google.com" in auth_url
+    assert "state=ch" in auth_url
+
+
+def test_build_flow_raises_when_secrets_missing(tmp_path):
+    from short_bot.youtube.auth import build_flow
+    with pytest.raises(FileNotFoundError, match="client_secrets.json"):
+        build_flow(tmp_path / "creds", "ch", redirect_uri="http://x/cb")
