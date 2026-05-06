@@ -14,6 +14,7 @@ from pathlib import Path
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
+from googleapiclient.discovery import build
 
 SCOPES = [
     "https://www.googleapis.com/auth/youtube.upload",
@@ -68,3 +69,28 @@ def build_flow(root: Path, slug: str, *, redirect_uri: str) -> Flow:
     return Flow.from_client_secrets_file(
         str(secrets_path), scopes=SCOPES, redirect_uri=redirect_uri,
     )
+
+
+def fetch_and_save_channel_info(root: Path, slug: str, creds: Credentials) -> dict:
+    """Call channels().list(mine=True), persist response as channel_info.json."""
+    youtube = build("youtube", "v3", credentials=creds)
+    resp = youtube.channels().list(
+        part="snippet,statistics", mine=True,
+    ).execute()
+    items = resp.get("items", [])
+    if not items:
+        raise RuntimeError("YouTube channels().list returned no items for this account")
+    info = items[0]
+    d = credentials_dir(root, slug)
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "channel_info.json").write_text(
+        json.dumps(info, ensure_ascii=False, indent=2), encoding="utf-8",
+    )
+    return info
+
+
+def load_channel_info(root: Path, slug: str) -> dict | None:
+    p = credentials_dir(root, slug) / "channel_info.json"
+    if not p.is_file():
+        return None
+    return json.loads(p.read_text(encoding="utf-8"))

@@ -108,3 +108,40 @@ def test_build_flow_raises_when_secrets_missing(tmp_path):
     from short_bot.youtube.auth import build_flow
     with pytest.raises(FileNotFoundError, match="client_secrets.json"):
         build_flow(tmp_path / "creds", "ch", redirect_uri="http://x/cb")
+
+
+def test_fetch_and_save_channel_info_writes_json(tmp_path):
+    fake_creds = MagicMock()
+    with patch("short_bot.youtube.auth.build") as mbuild:
+        api = MagicMock()
+        mbuild.return_value = api
+        api.channels.return_value.list.return_value.execute.return_value = {
+            "items": [{
+                "id": "UC123",
+                "snippet": {"title": "Test Kanal"},
+                "statistics": {"subscriberCount": "42", "videoCount": "7"},
+            }]
+        }
+        from short_bot.youtube.auth import fetch_and_save_channel_info
+        info = fetch_and_save_channel_info(tmp_path / "creds", "ch", fake_creds)
+
+    assert info["id"] == "UC123"
+    assert info["snippet"]["title"] == "Test Kanal"
+    saved = json.loads(
+        (tmp_path / "creds" / "ch" / "channel_info.json").read_text(encoding="utf-8")
+    )
+    assert saved["id"] == "UC123"
+
+
+def test_load_channel_info_returns_dict(tmp_path):
+    d = tmp_path / "creds" / "ch"
+    d.mkdir(parents=True)
+    (d / "channel_info.json").write_text(json.dumps({"id": "UC9", "snippet": {"title": "X"}}))
+    from short_bot.youtube.auth import load_channel_info
+    info = load_channel_info(tmp_path / "creds", "ch")
+    assert info["id"] == "UC9"
+
+
+def test_load_channel_info_returns_none_when_missing(tmp_path):
+    from short_bot.youtube.auth import load_channel_info
+    assert load_channel_info(tmp_path / "creds", "missing") is None
