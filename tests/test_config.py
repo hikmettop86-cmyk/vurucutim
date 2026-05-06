@@ -53,8 +53,8 @@ def test_load_channel_invalid_slug(tmp_path):
 
 
 def test_list_channels(tmp_path):
-    (tmp_path / "a.yaml").write_text("slug: a\nname: A\nkeywords: []\nlanguage: tr\nschedule_cron: ''\nduration_s: 30\nmin_score: 0\nmax_candidates_per_run: 1\ntemplate: default\ncolors: {primary: '#0', accent: '#1', bg_gradient: ['#2','#3']}\nhandle: x\noutput_dir: x\nenabled: true\ncta: {enabled: false, text: '', icons: [], duration_s: 0, show_handle: false}\n", encoding="utf-8")
-    (tmp_path / "b.yaml").write_text("slug: b\nname: B\nkeywords: []\nlanguage: tr\nschedule_cron: ''\nduration_s: 30\nmin_score: 0\nmax_candidates_per_run: 1\ntemplate: default\ncolors: {primary: '#0', accent: '#1', bg_gradient: ['#2','#3']}\nhandle: x\noutput_dir: x\nenabled: false\ncta: {enabled: false, text: '', icons: [], duration_s: 0, show_handle: false}\n", encoding="utf-8")
+    (tmp_path / "a.yaml").write_text("slug: a\nname: A\nkeywords: [a]\nlanguage: tr\nschedule_cron: ''\nduration_s: 30\nmin_score: 0\nmax_candidates_per_run: 1\ntemplate: default\ncolors: {primary: '#0', accent: '#1', bg_gradient: ['#2','#3']}\nhandle: x\noutput_dir: x\nenabled: true\ncta: {enabled: false, text: '', icons: [], duration_s: 0, show_handle: false}\n", encoding="utf-8")
+    (tmp_path / "b.yaml").write_text("slug: b\nname: B\nkeywords: [b]\nlanguage: tr\nschedule_cron: ''\nduration_s: 30\nmin_score: 0\nmax_candidates_per_run: 1\ntemplate: default\ncolors: {primary: '#0', accent: '#1', bg_gradient: ['#2','#3']}\nhandle: x\noutput_dir: x\nenabled: false\ncta: {enabled: false, text: '', icons: [], duration_s: 0, show_handle: false}\n", encoding="utf-8")
     chans = list_channels(tmp_path, enabled_only=True)
     assert len(chans) == 1 and chans[0].slug == "a"
 
@@ -72,7 +72,7 @@ def test_load_settings_missing_required_raises(tmp_path):
 def test_load_channel_missing_required_raises(tmp_path):
     # Missing 'colors' key
     (tmp_path / "ch.yaml").write_text(
-        "slug: test\nname: Test\nkeywords: []\nlanguage: tr\n"
+        "slug: test\nname: Test\nkeywords: [a]\nlanguage: tr\n"
         "schedule_cron: ''\nduration_s: 30\nmin_score: 0\n"
         "max_candidates_per_run: 1\ntemplate: default\n"
         "handle: '@x'\noutput_dir: x\nenabled: true\n"
@@ -84,8 +84,8 @@ def test_load_channel_missing_required_raises(tmp_path):
 
 
 def test_list_channels_includes_disabled_when_not_filtered(tmp_path):
-    (tmp_path / "a.yaml").write_text("slug: a\nname: A\nkeywords: []\nlanguage: tr\nschedule_cron: ''\nduration_s: 30\nmin_score: 0\nmax_candidates_per_run: 1\ntemplate: default\ncolors: {primary: '#0', accent: '#1', bg_gradient: ['#2','#3']}\nhandle: x\noutput_dir: x\nenabled: true\ncta: {enabled: false, text: '', icons: [], duration_s: 0, show_handle: false}\n", encoding="utf-8")
-    (tmp_path / "b.yaml").write_text("slug: b\nname: B\nkeywords: []\nlanguage: tr\nschedule_cron: ''\nduration_s: 30\nmin_score: 0\nmax_candidates_per_run: 1\ntemplate: default\ncolors: {primary: '#0', accent: '#1', bg_gradient: ['#2','#3']}\nhandle: x\noutput_dir: x\nenabled: false\ncta: {enabled: false, text: '', icons: [], duration_s: 0, show_handle: false}\n", encoding="utf-8")
+    (tmp_path / "a.yaml").write_text("slug: a\nname: A\nkeywords: [a]\nlanguage: tr\nschedule_cron: ''\nduration_s: 30\nmin_score: 0\nmax_candidates_per_run: 1\ntemplate: default\ncolors: {primary: '#0', accent: '#1', bg_gradient: ['#2','#3']}\nhandle: x\noutput_dir: x\nenabled: true\ncta: {enabled: false, text: '', icons: [], duration_s: 0, show_handle: false}\n", encoding="utf-8")
+    (tmp_path / "b.yaml").write_text("slug: b\nname: B\nkeywords: [b]\nlanguage: tr\nschedule_cron: ''\nduration_s: 30\nmin_score: 0\nmax_candidates_per_run: 1\ntemplate: default\ncolors: {primary: '#0', accent: '#1', bg_gradient: ['#2','#3']}\nhandle: x\noutput_dir: x\nenabled: false\ncta: {enabled: false, text: '', icons: [], duration_s: 0, show_handle: false}\n", encoding="utf-8")
     chans = list_channels(tmp_path, enabled_only=False)
     slugs = {c.slug for c in chans}
     assert slugs == {"a", "b"}
@@ -244,7 +244,7 @@ dna:
 
 def test_load_channel_no_dna_block_returns_none(tmp_path):
     (tmp_path / "ch.yaml").write_text(
-        "slug: test\nname: Test\nlanguage: tr\nkeywords: []\n"
+        "slug: test\nname: Test\nlanguage: tr\nkeywords: [a]\n"
         "schedule_cron: ''\nduration_s: 30\nmin_score: 0\n"
         "max_candidates_per_run: 1\ntemplate: newscast\n"
         "colors: {primary: '#000000', accent: '#ffffff', bg_gradient: ['#000000','#111111']}\n"
@@ -296,7 +296,7 @@ dna:
 def test_load_channel_legacy_template_default_maps_to_newscast(tmp_path):
     """Backward-compat: 'template: default' should be loaded as 'newscast'."""
     (tmp_path / "ch.yaml").write_text(
-        "slug: test\nname: Test\nlanguage: tr\nkeywords: []\n"
+        "slug: test\nname: Test\nlanguage: tr\nkeywords: [a]\n"
         "schedule_cron: ''\nduration_s: 30\nmin_score: 0\n"
         "max_candidates_per_run: 1\ntemplate: default\n"
         "colors: {primary: '#000000', accent: '#ffffff', bg_gradient: ['#000000','#111111']}\n"
@@ -310,7 +310,7 @@ def test_load_channel_legacy_template_default_maps_to_newscast(tmp_path):
 
 def test_load_channel_with_script_model_override(tmp_path):
     (tmp_path / "ch.yaml").write_text(
-        "slug: test\nname: Test\nlanguage: tr\nkeywords: []\n"
+        "slug: test\nname: Test\nlanguage: tr\nkeywords: [a]\n"
         "schedule_cron: ''\nduration_s: 30\nmin_score: 0\n"
         "max_candidates_per_run: 1\ntemplate: newscast\nscript_model: sonnet\n"
         "colors: {primary: '#000000', accent: '#ffffff', bg_gradient: ['#000000','#111111']}\n"
@@ -320,3 +320,84 @@ def test_load_channel_with_script_model_override(tmp_path):
     )
     c = load_channel(tmp_path / "ch.yaml")
     assert c.script_model == "sonnet"
+
+
+def test_rss_channel_with_empty_keywords_is_rejected(tmp_path):
+    """Regression: RSS-mode channel with empty keywords used to crash mid-pipeline
+    at fetch_rss. Now it fails fast at load time."""
+    (tmp_path / "ch.yaml").write_text(
+        "slug: ch\nname: C\nkeywords: []\nlanguage: tr\n"
+        "schedule_cron: '* * * * *'\nduration_s: 6\nmin_score: 6.0\n"
+        "max_candidates_per_run: 10\ntemplate: newscast\n"
+        "colors: {primary: '#000', accent: '#111', bg_gradient: ['#000','#111']}\n"
+        "handle: '@c'\noutput_dir: out\nenabled: true\n"
+        "cta: {enabled: false, text: '', icons: [], duration_s: 0, show_handle: false}\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="content_source='rss' but no keywords"):
+        load_channel(tmp_path / "ch.yaml")
+
+
+def test_generator_channel_with_empty_keywords_is_allowed(tmp_path):
+    """Generator-mode channels legitimately have empty keywords."""
+    (tmp_path / "ch.yaml").write_text(
+        "slug: ch\nname: C\nkeywords: []\nlanguage: tr\n"
+        "schedule_cron: '* * * * *'\nduration_s: 6\nmin_score: 6.0\n"
+        "max_candidates_per_run: 10\ntemplate: newscast\n"
+        "content_source: generator\n"
+        "generator:\n  topic: 'sözlük üzerine kısa şiirsel sözler ve özlü sözler'\n"
+        "  forbidden_lookback: 100\n  max_retries: 3\n"
+        "colors: {primary: '#000', accent: '#111', bg_gradient: ['#000','#111']}\n"
+        "handle: '@c'\noutput_dir: out\nenabled: true\n"
+        "cta: {enabled: false, text: '', icons: [], duration_s: 0, show_handle: false}\n",
+        encoding="utf-8",
+    )
+    c = load_channel(tmp_path / "ch.yaml")
+    assert c.content_source == "generator"
+    assert c.keywords == []
+
+
+def test_bg_video_config_defaults():
+    from short_bot.config import BgVideoConfig
+    cfg = BgVideoConfig()
+    assert cfg.enabled is False
+    assert cfg.scale == 0.88
+    assert cfg.blur_px == 30
+    assert cfg.dim == 0.4
+
+
+def test_bg_video_config_accepts_valid_scale():
+    from short_bot.config import BgVideoConfig
+    BgVideoConfig(scale=0.88)
+    BgVideoConfig(scale=0.80)
+
+
+def test_bg_video_config_rejects_invalid_scale():
+    from pydantic import ValidationError
+    from short_bot.config import BgVideoConfig
+    with pytest.raises(ValidationError):
+        BgVideoConfig(scale=0.5)
+    with pytest.raises(ValidationError):
+        BgVideoConfig(scale=1.0)
+
+
+def test_bg_video_config_blur_range():
+    from pydantic import ValidationError
+    from short_bot.config import BgVideoConfig
+    BgVideoConfig(blur_px=0)
+    BgVideoConfig(blur_px=80)
+    with pytest.raises(ValidationError):
+        BgVideoConfig(blur_px=-1)
+    with pytest.raises(ValidationError):
+        BgVideoConfig(blur_px=81)
+
+
+def test_bg_video_config_dim_range():
+    from pydantic import ValidationError
+    from short_bot.config import BgVideoConfig
+    BgVideoConfig(dim=0.0)
+    BgVideoConfig(dim=1.0)
+    with pytest.raises(ValidationError):
+        BgVideoConfig(dim=-0.1)
+    with pytest.raises(ValidationError):
+        BgVideoConfig(dim=1.5)

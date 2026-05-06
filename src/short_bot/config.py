@@ -42,6 +42,13 @@ class YoutubeChannelConfig(BaseModel):
     cron_preset: str | None = None
 
 
+class BgVideoConfig(BaseModel):
+    enabled: bool = False
+    scale: Literal[0.88, 0.80] = 0.88
+    blur_px: int = Field(ge=0, le=80, default=30)
+    dim: float = Field(ge=0.0, le=1.0, default=0.4)
+
+
 @dataclass(frozen=True)
 class ChannelConfig:
     slug: str
