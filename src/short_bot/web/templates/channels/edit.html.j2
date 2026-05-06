@@ -121,10 +121,60 @@
         </label>
         {% endif %}
 
-        <label class="block">
-          <span class="text-xs text-claude-muted uppercase">Cron</span>
-          <input type="text" name="schedule_cron" value="{{ c.schedule_cron }}"
-                 class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 font-mono text-sm text-claude-text">
+        <label class="block"
+               x-data='{
+                  preset: "{{ current_cron_preset }}",
+                  cron: "{{ c.schedule_cron }}",
+                  dailyHour: 9,
+                  weeklyDay: 1,
+                  weeklyHour: 9,
+                  recompute() {
+                    if (this.preset === "hourly") this.cron = "0 * * * *";
+                    else if (this.preset === "every_2h") this.cron = "0 */2 * * *";
+                    else if (this.preset === "daily_picker") this.cron = `0 ${this.dailyHour} * * *`;
+                    else if (this.preset === "weekly_picker") this.cron = `0 ${this.weeklyHour} * * ${this.weeklyDay}`;
+                  }
+                }'
+               x-init="if (preset.startsWith(`daily_`)) { dailyHour = parseInt(preset.split(`_`)[1] || 9); preset = `daily_picker`; }
+                       if (preset.startsWith(`weekly_`)) { let p = preset.split(`_`); weeklyDay = parseInt(p[1] || 1); weeklyHour = parseInt(p[2] || 9); preset = `weekly_picker`; }">
+          <span class="text-xs text-claude-muted uppercase">Cron preset</span>
+          <select x-model="preset" @change="recompute()"
+                  class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
+            <option value="hourly">Saat başı</option>
+            <option value="every_2h">2 saatte bir</option>
+            <option value="daily_picker">Günde bir (saat seç)</option>
+            <option value="weekly_picker">Haftada bir (gün + saat seç)</option>
+            <option value="custom">Özel cron</option>
+          </select>
+          <div x-show="preset === 'daily_picker'" class="mt-2 flex gap-2 items-center">
+            <span class="text-xs text-claude-muted">Saat:</span>
+            <input type="number" min="0" max="23" x-model.number="dailyHour" @change="recompute()"
+                   class="bg-claude-surface border border-claude-border px-2 py-1 rounded w-20 text-sm">
+            <span class="text-xs text-claude-muted">:00</span>
+          </div>
+          <div x-show="preset === 'weekly_picker'" class="mt-2 flex gap-2 items-center flex-wrap">
+            <span class="text-xs text-claude-muted">Gün:</span>
+            <select x-model.number="weeklyDay" @change="recompute()"
+                    class="bg-claude-surface border border-claude-border px-2 py-1 rounded text-sm">
+              <option value="1">Pazartesi</option><option value="2">Salı</option>
+              <option value="3">Çarşamba</option><option value="4">Perşembe</option>
+              <option value="5">Cuma</option><option value="6">Cumartesi</option>
+              <option value="0">Pazar</option>
+            </select>
+            <span class="text-xs text-claude-muted">Saat:</span>
+            <input type="number" min="0" max="23" x-model.number="weeklyHour" @change="recompute()"
+                   class="bg-claude-surface border border-claude-border px-2 py-1 rounded w-20 text-sm">
+            <span class="text-xs text-claude-muted">:00</span>
+          </div>
+          <div x-show="preset === 'custom'" class="mt-2">
+            <input type="text" name="schedule_cron" x-model="cron"
+                   class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full font-mono text-sm">
+          </div>
+          <input type="hidden" name="schedule_cron" x-model="cron" x-show="preset !== 'custom'">
+          <input type="hidden" name="yt_cron_preset" x-bind:value="
+                preset === 'daily_picker' ? `daily_${String(dailyHour).padStart(2,'0')}`
+                : preset === 'weekly_picker' ? `weekly_${weeklyDay}_${String(weeklyHour).padStart(2,'0')}`
+                : preset">
           <span class="text-xs text-claude-muted block mt-1">→ {{ cron_human }}</span>
         </label>
 
@@ -302,6 +352,13 @@
               <option value="unlisted" {% if p == 'unlisted' %}selected{% endif %}>unlisted</option>
               <option value="private"  {% if p == 'private'  %}selected{% endif %}>private</option>
             </select>
+          </label>
+          <label class="block">
+            <span class="text-xs text-claude-muted">Min skor (auto-upload)</span>
+            <input type="number" step="0.5" min="0" max="10" name="yt_min_score_for_upload"
+                   value="{{ (c.youtube.min_score_for_upload if c.youtube else 8.0) }}"
+                   class="bg-claude-surface border border-claude-border px-2 py-1 rounded w-full text-xs mt-1">
+            <span class="text-[10px] text-claude-subtle">RSS-mode: skor ≥ bu değer ise auto-upload. Generator-mode: yok sayılır. 0 = filtre yok.</span>
           </label>
           <label class="block">
             <span class="text-xs text-claude-muted">Category ID</span>

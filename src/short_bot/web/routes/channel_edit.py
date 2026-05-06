@@ -37,6 +37,10 @@ def edit(slug):
     yt_info = _yt_auth.load_channel_info(yt_root, slug) if yt_root and yt_connected else None
     yt_secrets_path = (yt_root / slug / "client_secrets.json") if yt_root else None
     yt_has_secrets = bool(yt_secrets_path and yt_secrets_path.is_file())
+    from short_bot.web.cron_preset import cron_to_preset
+    current_cron_preset = (cfg.youtube.cron_preset
+                            if (cfg.youtube and cfg.youtube.cron_preset)
+                            else cron_to_preset(cfg.schedule_cron))
     return render_template("channels/edit.html.j2", c=cfg,
                            archetypes=ARCHETYPES,
                            cron_human=describe_cron(cfg.schedule_cron),
@@ -44,7 +48,8 @@ def edit(slug):
                            music_info=music_info,
                            yt_connected=yt_connected, yt_info=yt_info,
                            yt_has_secrets=yt_has_secrets,
-                           yt_secrets_abs=str((yt_root / slug).resolve()) if yt_root else "")
+                           yt_secrets_abs=str((yt_root / slug).resolve()) if yt_root else "",
+                           current_cron_preset=current_cron_preset)
 
 
 def _form_get_int(key: str, default: int) -> int:
