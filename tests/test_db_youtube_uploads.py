@@ -48,3 +48,26 @@ def test_list_youtube_uploads_for_channel_orders_recent_first(tmp_path):
     assert len(rows) == 2
     assert rows[0].short_id == sid2
     assert rows[1].short_id == sid1
+
+
+def test_get_last_youtube_upload_at_returns_most_recent(tmp_path):
+    from short_bot.db import get_last_youtube_upload_at
+    eng = init_db(tmp_path / "x.sqlite")
+    assert get_last_youtube_upload_at(eng) is None
+    sid = record_short(eng, channel="ch", rss_item_guid="g", title="T",
+                        file_path="x.mp4", duration_s=6, script_json="{}", render_ms=1)
+    record_youtube_upload(eng, short_id=sid, video_id="v1",
+                           status="success", error=None,
+                           video_url="https://youtu.be/v1")
+    ts = get_last_youtube_upload_at(eng)
+    assert ts is not None
+
+
+def test_get_last_youtube_upload_at_ignores_failed_rows(tmp_path):
+    from short_bot.db import get_last_youtube_upload_at
+    eng = init_db(tmp_path / "x.sqlite")
+    sid = record_short(eng, channel="ch", rss_item_guid="g", title="T",
+                        file_path="x.mp4", duration_s=6, script_json="{}", render_ms=1)
+    record_youtube_upload(eng, short_id=sid, video_id=None,
+                           status="failed", error="x", video_url=None)
+    assert get_last_youtube_upload_at(eng) is None

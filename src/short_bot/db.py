@@ -290,3 +290,17 @@ def get_rss_item_for_short(eng: Engine, *, short_id: int):
             .where(rss_items.c.channel == s.channel)
             .limit(1)
         ).first()
+
+
+def get_last_youtube_upload_at(eng: Engine):
+    """Return the uploaded_at timestamp of the most recent successful upload
+    across all channels, or None when no successes exist. Used for global
+    cooldown / stagger between auto-uploads."""
+    with eng.connect() as conn:
+        row = conn.execute(
+            select(youtube_uploads.c.uploaded_at)
+            .where(youtube_uploads.c.status == "success")
+            .order_by(youtube_uploads.c.uploaded_at.desc())
+            .limit(1)
+        ).first()
+        return row[0] if row else None
