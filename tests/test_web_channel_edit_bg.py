@@ -91,3 +91,27 @@ def test_edit_post_disables_bg_video_omits_block(app, tmp_path):
     })
     raw_after = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
     assert "bg_video" not in raw_after
+
+
+def test_edit_page_warns_when_pexels_key_absent(app, tmp_path):
+    """Without a pexels_api_key in secrets, the edit page must warn the user."""
+    body = app.test_client().get("/channels/demo/edit").data.decode("utf-8")
+    assert "Pexels API key tanımlı değil" in body
+    assert "/settings" in body  # link target
+
+
+def test_edit_page_no_warning_when_pexels_key_present(app, tmp_path):
+    """With a pexels_api_key set, no warning is shown."""
+    secrets_path = tmp_path / "data" / "secrets.yaml"
+    secrets_path.parent.mkdir(parents=True, exist_ok=True)
+    secrets_path.write_text("pexels_api_key: TESTKEY\n", encoding="utf-8")
+    # Re-create the app with the secrets path pointing at our seeded file
+    from short_bot.web import create_app
+    app2 = create_app(
+        config_dir=tmp_path / "config",
+        db_path=tmp_path / "x.sqlite",
+        secrets_path=secrets_path,
+        scheduler=False,
+    )
+    body = app2.test_client().get("/channels/demo/edit").data.decode("utf-8")
+    assert "Pexels API key tanımlı değil" not in body

@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from flask import (Blueprint, abort, current_app, flash, redirect,
                    render_template, request, url_for)
 
@@ -41,6 +43,16 @@ def edit(slug):
     current_cron_preset = (cfg.youtube.cron_preset
                             if (cfg.youtube and cfg.youtube.cron_preset)
                             else cron_to_preset(cfg.schedule_cron))
+    # Check if Pexels API key is configured (for bg_video UI hint)
+    import yaml as _yaml
+    secrets_path = current_app.config.get("SHORTBOT_SECRETS_PATH")
+    pexels_key_set = False
+    if secrets_path and Path(secrets_path).exists():
+        try:
+            secrets = _yaml.safe_load(Path(secrets_path).read_text(encoding="utf-8")) or {}
+            pexels_key_set = bool(secrets.get("pexels_api_key"))
+        except Exception:
+            pexels_key_set = False
     return render_template("channels/edit.html.j2", c=cfg,
                            archetypes=ARCHETYPES,
                            cron_human=describe_cron(cfg.schedule_cron),
@@ -49,7 +61,8 @@ def edit(slug):
                            yt_connected=yt_connected, yt_info=yt_info,
                            yt_has_secrets=yt_has_secrets,
                            yt_secrets_abs=str((yt_root / slug).resolve()) if yt_root else "",
-                           current_cron_preset=current_cron_preset)
+                           current_cron_preset=current_cron_preset,
+                           pexels_key_set=pexels_key_set)
 
 
 def _form_get_int(key: str, default: int) -> int:

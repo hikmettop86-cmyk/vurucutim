@@ -72,6 +72,12 @@
           <input type="checkbox" name="bg_video_enabled"> Etkin
         </label>
       </div>
+      {% if not pexels_key_set %}
+      <div class="bg-amber-900/30 border border-amber-700 text-amber-200 text-xs rounded px-3 py-2 mb-3">
+        ⚠ Pexels API key tanımlı değil.
+        <a href="/settings" class="underline hover:text-amber-100">Ayarlar sayfasından gir</a>.
+      </div>
+      {% endif %}
       <div class="grid grid-cols-3 gap-3">
         <label class="text-xs">
           <span class="block text-claude-muted mb-1">Çerçeve oranı</span>

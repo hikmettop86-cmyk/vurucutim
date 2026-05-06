@@ -127,3 +127,9 @@ def test_new_channel_without_bg_video_omits_block(app):
     assert yaml_path.exists()
     raw = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
     assert "bg_video" not in raw
+
+
+def test_new_channel_form_warns_when_pexels_key_absent(app):
+    body = app.test_client().get("/channels/new").data.decode("utf-8")
+    assert "Pexels API key tanımlı değil" in body
+    assert "/settings" in body

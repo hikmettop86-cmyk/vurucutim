@@ -264,9 +264,10 @@ def test_pipeline_pexels_returns_none_when_search_empty(tmp_path, monkeypatch):
     assert out is None
 
 
-def test_pipeline_passes_bg_video_to_composer_when_enabled(monkeypatch, tmp_path):
-    """Integration: when channel has bg_video enabled and a key, the cached video
-    path lands in compose_video kwargs."""
+def test_resolve_pexels_bg_returns_first_downloaded_candidate_with_key(monkeypatch, tmp_path):
+    """End-to-end resolver path: env-var key → search → download → returns cached path.
+    Confirms the integration of secret resolution, archetype query, and cache lookup
+    in a single call."""
     from short_bot.config import BgVideoConfig
     from short_bot.pexels import PexelsCandidate
     monkeypatch.setenv("PEXELS_API_KEY", "K")
@@ -279,13 +280,6 @@ def test_pipeline_passes_bg_video_to_composer_when_enabled(monkeypatch, tmp_path
                         lambda *a, **k: [PexelsCandidate(id=1, url="https://x/a.mp4", duration_s=5)])
     monkeypatch.setattr("short_bot.pexels.download_video",
                         lambda url, cache_dir, **k: fake_bg)
-
-    captured = {}
-    def fake_compose(frames, music, out, **kw):
-        captured.update(kw)
-        out.write_bytes(b"fake-mp4")
-        return out
-    monkeypatch.setattr("short_bot.pipeline.compose_video", fake_compose)
 
     from short_bot.pipeline import _resolve_pexels_bg
     ch = _make_test_channel(bg_video=BgVideoConfig(enabled=True, scale=0.80))

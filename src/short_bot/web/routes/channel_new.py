@@ -1,5 +1,6 @@
 import re
 import unicodedata
+from pathlib import Path
 
 from flask import (Blueprint, abort, current_app, flash, redirect,
                    render_template, request, session, url_for)
@@ -21,7 +22,16 @@ def _slug_from_name(name: str) -> str:
 
 @bp.route("/channels/new")
 def form():
-    return render_template("channels/new.html.j2")
+    import yaml as _yaml
+    secrets_path = current_app.config.get("SHORTBOT_SECRETS_PATH")
+    pexels_key_set = False
+    if secrets_path and Path(secrets_path).exists():
+        try:
+            secrets = _yaml.safe_load(Path(secrets_path).read_text(encoding="utf-8")) or {}
+            pexels_key_set = bool(secrets.get("pexels_api_key"))
+        except Exception:
+            pexels_key_set = False
+    return render_template("channels/new.html.j2", pexels_key_set=pexels_key_set)
 
 
 @bp.route("/channels/new/generate", methods=["POST"])
