@@ -143,8 +143,8 @@
           <span class="text-xs text-claude-muted uppercase">Cron preset</span>
           <select x-model="preset" @change="recompute()"
                   class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
-            <option value="every_10min">10 dakikada bir (skor takibi)</option>
-            <option value="every_30min">30 dakikada bir (skor takibi)</option>
+            <option value="every_10min">10 dakikada bir</option>
+            <option value="every_30min">30 dakikada bir</option>
             <option value="hourly">Saat başı (60 dk)</option>
             <option value="every_2h">2 saatte bir (120 dk)</option>
             <option value="every_4h">4 saatte bir (240 dk)</option>
@@ -152,6 +152,10 @@
             <option value="weekly_picker">Haftada bir (gün + saat seç)</option>
             <option value="custom">Özel cron</option>
           </select>
+          <div class="text-[10px] text-claude-subtle mt-1">
+            Skor takibi tüm presetlerde geçerli — alttaki "Otomatik yükle" + "Min skor" ayarlarına bağlı.
+            Sıkı tarama için 10dk / 30dk seç.
+          </div>
           <div x-show="preset === 'daily_picker'" class="mt-2 flex gap-2 items-center">
             <span class="text-xs text-claude-muted">Saat:</span>
             <input type="number" min="0" max="23" x-model.number="dailyHour" @change="recompute()"
