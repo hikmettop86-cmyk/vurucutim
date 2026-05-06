@@ -30,7 +30,10 @@ def generate():
     language = request.form.get("language", "tr").strip()
     if language not in SUPPORTED_LANGUAGES:
         abort(400)
-    keywords = [k.strip() for k in request.form.get("keywords", "").split(",") if k.strip()]
+    keywords_raw = request.form.get("keywords", "")
+    keywords = [k.strip() for k in keywords_raw.split(",") if k.strip()]
+    content_source = request.form.get("content_source", "rss")
+    generator_topic = request.form.get("generator_topic", "").strip()
     settings = current_app.config["SHORTBOT_SETTINGS"]
     try:
         dna = generate_dna(
@@ -46,6 +49,20 @@ def generate():
     session["wizard_dna"] = dna.model_dump_json()
     session["wizard_name"] = name
     session["wizard_language"] = language
+    session["wizard_keywords"] = keywords_raw
+    session["wizard_content_source"] = content_source
+    session["wizard_generator_topic"] = generator_topic
+    # Stash bg_video form values in session for the save step
+    bg_v_enabled = request.form.get("bg_video_enabled") == "on"
+    if bg_v_enabled:
+        session["wizard_bg_video"] = {
+            "enabled": True,
+            "scale_raw": request.form.get("bg_video_scale", "0.88"),
+            "blur_raw":  request.form.get("bg_video_blur_px", "30"),
+            "dim_raw":   request.form.get("bg_video_dim", "0.4"),
+        }
+    else:
+        session.pop("wizard_bg_video", None)
     return render_template("_partials/dna_preview.html.j2",
                            error=None, dna=dna, name=name, language=language)
 
@@ -57,8 +74,12 @@ def save():
     dna = DnaSpec.model_validate_json(session["wizard_dna"])
     name = session.get("wizard_name", request.form.get("name", "Channel"))
     language = session.get("wizard_language", request.form.get("language", "tr"))
-    content_source = request.form.get("content_source", "rss")
-    keywords = [k.strip() for k in request.form.get("keywords", "").split(",") if k.strip()]
+    content_source = session.get("wizard_content_source",
+                                  request.form.get("content_source", "rss"))
+    keywords_raw = session.get("wizard_keywords", request.form.get("keywords", ""))
+    keywords = [k.strip() for k in keywords_raw.split(",") if k.strip()]
+    generator_topic_in = session.get("wizard_generator_topic",
+                                       request.form.get("generator_topic", "")).strip()
     slug = _slug_from_name(name)
 
     cfg_dir = current_app.config["SHORTBOT_CONFIG_DIR"]
@@ -85,11 +106,31 @@ def save():
     generator = None
     if content_source == "generator":
         from short_bot.config import GeneratorConfig
-        topic = request.form.get("generator_topic", "").strip()
-        if len(topic) < 10:
+        if len(generator_topic_in) < 10:
             flash("generator.topic en az 10 karakter olmalı.", "error")
             return redirect(url_for("channel_new.form"))
-        generator = GeneratorConfig(topic=topic)
+        generator = GeneratorConfig(topic=generator_topic_in)
+
+    # Build BgVideoConfig from session (if user enabled bg_video in step 1)
+    bg_video = None
+    bg_v_data = session.get("wizard_bg_video")
+    if bg_v_data and bg_v_data.get("enabled"):
+        from short_bot.config import BgVideoConfig
+        try:
+            scale = float(bg_v_data.get("scale_raw", "0.88"))
+            if scale not in (0.88, 0.80):
+                scale = 0.88
+        except (TypeError, ValueError):
+            scale = 0.88
+        try:
+            blur = int(bg_v_data.get("blur_raw", "30"))
+        except (TypeError, ValueError):
+            blur = 30
+        try:
+            dim = float(bg_v_data.get("dim_raw", "0.4"))
+        except (TypeError, ValueError):
+            dim = 0.4
+        bg_video = BgVideoConfig(enabled=True, scale=scale, blur_px=blur, dim=dim)
 
     cfg = ChannelConfig(
         slug=slug, name=name, keywords=keywords,
@@ -107,9 +148,11 @@ def save():
         language=language, dna=dna, script_model=None,
         content_source=content_source,
         generator=generator,
+        bg_video=bg_video,
     )
     save_channel(yaml_path, cfg)
-    session.pop("wizard_dna", None)
-    session.pop("wizard_name", None)
-    session.pop("wizard_language", None)
+    for k in ("wizard_dna", "wizard_name", "wizard_language",
+              "wizard_keywords", "wizard_content_source", "wizard_generator_topic",
+              "wizard_bg_video"):
+        session.pop(k, None)
     return redirect(url_for("channel_edit.edit", slug=slug))
