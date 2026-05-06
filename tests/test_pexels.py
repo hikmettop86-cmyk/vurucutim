@@ -135,3 +135,54 @@ def test_search_videos_passes_authorization_header_and_orientation():
     assert captured["params"]["query"] == "query"
     assert captured["params"]["orientation"] == "portrait"
     assert captured["params"]["per_page"] == 3
+
+
+from short_bot.pexels import download_video
+
+
+def test_download_video_returns_cached_path_when_already_present(tmp_path):
+    cache = tmp_path / "videos"
+    cache.mkdir()
+    import hashlib
+    url = "https://example.com/clip.mp4"
+    key = hashlib.sha1(url.encode("utf-8")).hexdigest()[:16]
+    cached = cache / f"{key}.mp4"
+    cached.write_bytes(b"already-here")
+
+    with patch("short_bot.pexels.requests.get") as gm:
+        out = download_video(url, cache)
+    assert out == cached
+    gm.assert_not_called()
+
+
+def test_download_video_writes_response_body_to_cache(tmp_path):
+    cache = tmp_path / "videos"
+    fake = MagicMock()
+    fake.status_code = 200
+    fake.iter_content.return_value = iter([b"chunk1", b"chunk2"])
+    fake.__enter__ = lambda self: self
+    fake.__exit__ = lambda *a: None
+
+    with patch("short_bot.pexels.requests.get", return_value=fake):
+        out = download_video("https://example.com/x.mp4", cache)
+    assert out is not None
+    assert out.exists()
+    assert out.read_bytes() == b"chunk1chunk2"
+
+
+def test_download_video_returns_none_on_http_error(tmp_path):
+    fake = MagicMock()
+    fake.status_code = 404
+    fake.__enter__ = lambda self: self
+    fake.__exit__ = lambda *a: None
+    with patch("short_bot.pexels.requests.get", return_value=fake):
+        out = download_video("https://example.com/x.mp4", tmp_path / "videos")
+    assert out is None
+
+
+def test_download_video_returns_none_on_request_exception(tmp_path):
+    import requests
+    with patch("short_bot.pexels.requests.get",
+               side_effect=requests.RequestException("boom")):
+        out = download_video("https://example.com/x.mp4", tmp_path / "videos")
+    assert out is None

@@ -1,6 +1,7 @@
 """Pexels Videos API client + archetype-pool query selector + secret resolver."""
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 import random
@@ -102,4 +103,29 @@ def search_videos(
             url=url,
             duration_s=int(v.get("duration", 0)),
         ))
+    return out
+
+
+def download_video(url: str, cache_dir: Path, *, timeout_s: int = 60) -> Path | None:
+    """Stream-download to cache_dir/<sha1>.mp4. Idempotent. Returns None on failure."""
+    cache_dir = Path(cache_dir)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    key = hashlib.sha1(url.encode("utf-8")).hexdigest()[:16]
+    out = cache_dir / f"{key}.mp4"
+    if out.exists() and out.stat().st_size > 0:
+        return out
+    try:
+        with requests.get(url, stream=True, timeout=timeout_s) as r:
+            if r.status_code != 200:
+                logger.warning(f"pexels download HTTP {r.status_code} for {url[:80]}")
+                return None
+            with open(out, "wb") as fh:
+                for chunk in r.iter_content(chunk_size=64 * 1024):
+                    if chunk:
+                        fh.write(chunk)
+    except requests.RequestException as e:
+        logger.warning(f"pexels download failed for {url[:80]}: {e}")
+        if out.exists():
+            out.unlink(missing_ok=True)
+        return None
     return out
