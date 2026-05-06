@@ -16,6 +16,10 @@ def preset_to_cron(preset: str) -> str | None:
         return "0 * * * *"
     if preset == "every_2h":
         return "0 */2 * * *"
+    if preset == "every_10min":
+        return "*/10 * * * *"
+    if preset == "every_30min":
+        return "*/30 * * * *"
     if preset == "custom":
         return None
     m = _DAILY_RE.match(preset)
@@ -36,6 +40,8 @@ def preset_to_cron(preset: str) -> str | None:
 
 _CRON_HOURLY = "0 * * * *"
 _CRON_EVERY_2H = "0 */2 * * *"
+_CRON_EVERY_10MIN = "*/10 * * * *"
+_CRON_EVERY_30MIN = "*/30 * * * *"
 _DAILY_CRON_RE = re.compile(r"^0 (\d{1,2}) \* \* \*$")
 _WEEKLY_CRON_RE = re.compile(r"^0 (\d{1,2}) \* \* (\d)$")
 
@@ -46,6 +52,10 @@ def cron_to_preset(cron: str) -> str:
         return "hourly"
     if cron == _CRON_EVERY_2H:
         return "every_2h"
+    if cron == _CRON_EVERY_10MIN:
+        return "every_10min"
+    if cron == _CRON_EVERY_30MIN:
+        return "every_30min"
     m = _DAILY_CRON_RE.match(cron)
     if m:
         return f"daily_{int(m.group(1)):02d}"

@@ -131,6 +131,8 @@
                   recompute() {
                     if (this.preset === "hourly") this.cron = "0 * * * *";
                     else if (this.preset === "every_2h") this.cron = "0 */2 * * *";
+                    else if (this.preset === "every_10min") this.cron = "*/10 * * * *";
+                    else if (this.preset === "every_30min") this.cron = "*/30 * * * *";
                     else if (this.preset === "daily_picker") this.cron = `0 ${this.dailyHour} * * *`;
                     else if (this.preset === "weekly_picker") this.cron = `0 ${this.weeklyHour} * * ${this.weeklyDay}`;
                   }
@@ -142,6 +144,8 @@
                   class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
             <option value="hourly">Saat başı</option>
             <option value="every_2h">2 saatte bir</option>
+            <option value="every_10min">10 dakikada bir (skor takibi)</option>
+            <option value="every_30min">30 dakikada bir (skor takibi)</option>
             <option value="daily_picker">Günde bir (saat seç)</option>
             <option value="weekly_picker">Haftada bir (gün + saat seç)</option>
             <option value="custom">Özel cron</option>

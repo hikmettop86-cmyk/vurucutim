@@ -40,4 +40,20 @@ def test_round_trip_known_strings():
 
 def test_unknown_cron_string_is_custom():
     assert cron_to_preset("0 8,14,20 * * *") == "custom"
-    assert cron_to_preset("*/30 * * * *") == "custom"
+    assert cron_to_preset("*/15 * * * *") == "custom"
+
+
+def test_every_10min():
+    assert preset_to_cron("every_10min") == "*/10 * * * *"
+
+
+def test_every_30min():
+    assert preset_to_cron("every_30min") == "*/30 * * * *"
+
+
+def test_every_10min_round_trip():
+    assert cron_to_preset("*/10 * * * *") == "every_10min"
+
+
+def test_every_30min_round_trip():
+    assert cron_to_preset("*/30 * * * *") == "every_30min"
