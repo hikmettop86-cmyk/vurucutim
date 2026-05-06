@@ -1,4 +1,4 @@
-"""Settings page: view + edit settings.yaml."""
+"""Settings page: view + edit settings.yaml + write Pexels API key to data/secrets.yaml."""
 from pathlib import Path
 
 import yaml
@@ -12,9 +12,34 @@ def _settings_path() -> Path:
     return current_app.config["SHORTBOT_CONFIG_DIR"] / "settings.yaml"
 
 
+def _secrets_path() -> Path:
+    return Path(current_app.config["SHORTBOT_SECRETS_PATH"])
+
+
+def _load_secrets() -> dict:
+    p = _secrets_path()
+    if not p.exists():
+        return {}
+    return yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+
+
+def _save_secrets(data: dict) -> None:
+    p = _secrets_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
+                 encoding="utf-8")
+
+
+def _mask_key(key: str) -> str:
+    if not key:
+        return ""
+    return "•" * 8 + (key[-4:] if len(key) >= 4 else "")
+
+
 @bp.route("/settings", methods=["GET"])
 def view():
     data = yaml.safe_load(_settings_path().read_text(encoding="utf-8")) or {}
+    secrets = _load_secrets()
     paths = {
         "Config dir": str(current_app.config["SHORTBOT_CONFIG_DIR"]),
         "DB":         str(current_app.config["SHORTBOT_DB_PATH"]),
@@ -24,13 +49,17 @@ def view():
         "Locks":      str(current_app.config["SHORTBOT_LOCK_DIR"]),
         "Logs":       str(current_app.config["SHORTBOT_LOGS_DIR"]),
         "Output":     str(current_app.config["SHORTBOT_OUTPUT_ROOT"]),
+        "Secrets":    str(_secrets_path()),
     }
-    return render_template("settings.html.j2", data=data, paths=paths)
+    pexels_key_masked = _mask_key(secrets.get("pexels_api_key", ""))
+    return render_template("settings.html.j2", data=data, paths=paths,
+                            pexels_key_masked=pexels_key_masked,
+                            pexels_key_set=bool(secrets.get("pexels_api_key")))
 
 
 @bp.route("/settings", methods=["POST"])
 def save():
-    """Update editable settings.yaml fields. Restart needed for some to take effect."""
+    """Update settings.yaml and (separately) data/secrets.yaml for Pexels key."""
     path = _settings_path()
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
 
@@ -58,6 +87,19 @@ def save():
     models["default"] = request.form.get("model_default", models.get("default"))
     data["claude_models"] = models
 
-    path.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    path.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
+                    encoding="utf-8")
+
+    # Pexels key — separate file
+    secrets = _load_secrets()
+    new_key = request.form.get("pexels_api_key", "").strip()
+    clear = request.form.get("pexels_api_key_clear") == "1"
+    if new_key:
+        secrets["pexels_api_key"] = new_key
+        _save_secrets(secrets)
+    elif clear:
+        secrets.pop("pexels_api_key", None)
+        _save_secrets(secrets)
+
     flash("Ayarlar kaydedildi. Bazı değişiklikler için panel yeniden başlatılmalı.", "success")
     return redirect(url_for("settings.view"))

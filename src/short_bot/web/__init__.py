@@ -26,6 +26,7 @@ def create_app(
     lock_dir: Path | str = "data/locks",
     logs_dir: Path | str = "logs/runs",
     output_root: Path | str = "output",
+    secrets_path: Path | str | None = None,
     scheduler: bool = True,
 ) -> Flask:
     """Construct the Flask app. `scheduler=False` for tests."""
@@ -67,6 +68,9 @@ def create_app(
     app.config["SHORTBOT_YT_CREDS_DIR"] = (
         db_path.parent / "youtube_credentials"
     ).resolve()
+    app.config["SHORTBOT_SECRETS_PATH"] = (
+        Path(secrets_path) if secrets_path is not None else Path("data") / "secrets.yaml"
+    )
     app.config["SHORTBOT_SETTINGS"] = load_settings(config_dir / "settings.yaml")
 
     db.init_app(app)
