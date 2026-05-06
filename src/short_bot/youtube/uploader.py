@@ -12,17 +12,30 @@ from googleapiclient.http import MediaFileUpload
 
 def build_snippet(*, header_top: str, header_bottom: str, body_paragraph: str,
                   handle: str, keywords: list[str], category_id: str,
-                  language: str = "tr") -> dict:
-    title = f"{header_top} | {header_bottom}".strip()[:100]
-    description = (
-        f"{body_paragraph}\n\n"
-        f"#shorts\n"
-        f"{handle}"
-    )[:5000]
+                  language: str = "tr",
+                  generated: dict | None = None) -> dict:
+    """Build YouTube videos.insert() snippet body.
+
+    If `generated` (from Sonnet metadata writer) is provided, use its
+    title/description/tags directly. Otherwise fall back to a basic
+    "{top} | {bottom}" + body_paragraph + #shorts construction.
+    """
+    if generated:
+        title = generated.get("title", "")[:100]
+        description = generated.get("description", "")[:5000]
+        tags = list(generated.get("tags", []))[:30]
+    else:
+        title = f"{header_top} | {header_bottom}".strip()[:100]
+        description = (
+            f"{body_paragraph}\n\n"
+            f"#shorts\n"
+            f"{handle}"
+        )[:5000]
+        tags = list(keywords)[:30]
     return {
         "title": title,
         "description": description,
-        "tags": list(keywords)[:30],
+        "tags": tags,
         "categoryId": category_id,
         "defaultLanguage": language,
     }

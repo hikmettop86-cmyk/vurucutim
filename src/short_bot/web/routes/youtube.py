@@ -4,9 +4,10 @@ from flask import (Blueprint, abort, current_app, flash, redirect,
                    request, url_for)
 
 from short_bot.config import load_channel
-from short_bot.db import init_db, record_youtube_upload
+from short_bot.db import init_db, record_youtube_upload, get_rss_item_for_short
 from short_bot.web.models import Short
 from short_bot.youtube import auth as yt_auth
+from short_bot.youtube.metadata_writer import generate_youtube_metadata
 from short_bot.youtube.uploader import build_snippet, build_status, upload_video
 
 bp = Blueprint("youtube", __name__)
@@ -91,17 +92,39 @@ def upload(short_id):
     ai = yt_cfg.ai_content if yt_cfg else True
 
     script = _json.loads(s.script_json or "{}")
+
+    eng = init_db(current_app.config["SHORTBOT_DB_PATH"])
+
+    settings = current_app.config["SHORTBOT_SETTINGS"]
+    rss_row = get_rss_item_for_short(eng, short_id=short_id)
+    rss_source = rss_row.source if rss_row else None
+    rss_link = rss_row.link if rss_row else None
+
+    generated = None
+    try:
+        meta = generate_youtube_metadata(
+            channel=cfg, script=script,
+            rss_source=rss_source, rss_link=rss_link,
+            claude_path=settings.claude_cli_path,
+            model=settings.claude_models.get("default", "sonnet"),
+        )
+        generated = {"title": meta.title, "description": meta.description, "tags": meta.tags}
+        current_app.logger.info("youtube: Sonnet metadata generated for short %s", short_id)
+    except Exception as e:
+        current_app.logger.warning(
+            "youtube: Sonnet metadata failed for short %s, falling back: %s", short_id, e,
+        )
+
     snippet = build_snippet(
         header_top=script.get("header_top", ""),
         header_bottom=script.get("header_bottom", ""),
         body_paragraph=script.get("body_paragraph", ""),
         handle=cfg.handle, keywords=cfg.keywords or [],
-        category_id=category_id,
-        language=cfg.language,
+        category_id=category_id, language=cfg.language,
+        generated=generated,
     )
     status = build_status(privacy_status=privacy, ai_content=ai)
 
-    eng = init_db(current_app.config["SHORTBOT_DB_PATH"])
     try:
         video_id = upload_video(
             credentials=creds, file_path=Path(s.file_path),

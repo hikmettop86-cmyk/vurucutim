@@ -305,3 +305,86 @@ def test_reset_404_when_channel_missing(tmp_path):
     client = app.test_client()
     resp = client.post("/channels/nonexistent/youtube/reset")
     assert resp.status_code == 404
+
+
+def test_upload_route_uses_sonnet_metadata_when_available(tmp_path):
+    app = _make_app(tmp_path)
+    yt_root = tmp_path / "yt_creds"
+    (yt_root / "ch").mkdir(parents=True)
+    (yt_root / "ch" / "token.json").write_text(json.dumps({
+        "token": "x", "refresh_token": "y", "client_id": "x",
+        "client_secret": "y", "token_uri": "https://oauth2.googleapis.com/token",
+        "scopes": ["https://www.googleapis.com/auth/youtube.upload"],
+    }))
+    app.config["SHORTBOT_YT_CREDS_DIR"] = yt_root
+    out_dir = tmp_path / "out" / "ch"; out_dir.mkdir(parents=True)
+    mp4 = out_dir / "v.mp4"; mp4.write_bytes(b"\x00")
+
+    from short_bot.db import init_db, record_short
+    eng = init_db(app.config["SHORTBOT_DB_PATH"])
+    sid = record_short(eng, channel="ch", rss_item_guid="g1",
+                        title="T", file_path=str(mp4), duration_s=6,
+                        script_json='{"header_top":"A","header_bottom":"B",'
+                                     '"photo_overlay":"X","body_paragraph":"yyyyyyyyyyyyyyyyyyyy",'
+                                     '"highlights":[],"category":"x","mood":"neutral"}',
+                        render_ms=1)
+
+    from short_bot.youtube.metadata_writer import YoutubeMetadata
+    fake_meta = YoutubeMetadata(
+        title="Sonnet üretti bunu",
+        description="Sonnet'in zengin açıklaması — kaynak vs telif",
+        tags=["sonnet", "ai", "shorts"],
+    )
+
+    with patch("short_bot.youtube.auth.Credentials") as MockCreds, \
+         patch("short_bot.web.routes.youtube.upload_video", return_value="VID") as mup, \
+         patch("short_bot.web.routes.youtube.generate_youtube_metadata",
+               return_value=fake_meta) as mmeta:
+        mock_cred = MagicMock(); mock_cred.expired = False
+        MockCreds.from_authorized_user_info.return_value = mock_cred
+        client = app.test_client()
+        resp = client.post(f"/shorts/{sid}/upload-youtube", follow_redirects=False)
+    assert resp.status_code == 302
+    mmeta.assert_called_once()
+    # Snippet built with generated metadata
+    sent_snippet = mup.call_args.kwargs["snippet"]
+    assert sent_snippet["title"] == "Sonnet üretti bunu"
+    assert "zengin açıklaması" in sent_snippet["description"]
+    assert "sonnet" in sent_snippet["tags"]
+
+
+def test_upload_route_falls_back_when_sonnet_fails(tmp_path):
+    """Sonnet errors must NOT kill the upload — fall back to bare header concat."""
+    app = _make_app(tmp_path)
+    yt_root = tmp_path / "yt_creds"
+    (yt_root / "ch").mkdir(parents=True)
+    (yt_root / "ch" / "token.json").write_text(json.dumps({
+        "token": "x", "refresh_token": "y", "client_id": "x",
+        "client_secret": "y", "token_uri": "https://oauth2.googleapis.com/token",
+        "scopes": ["https://www.googleapis.com/auth/youtube.upload"],
+    }))
+    app.config["SHORTBOT_YT_CREDS_DIR"] = yt_root
+    out_dir = tmp_path / "out" / "ch"; out_dir.mkdir(parents=True)
+    mp4 = out_dir / "v.mp4"; mp4.write_bytes(b"\x00")
+    from short_bot.db import init_db, record_short
+    eng = init_db(app.config["SHORTBOT_DB_PATH"])
+    sid = record_short(eng, channel="ch", rss_item_guid="g1",
+                        title="T", file_path=str(mp4), duration_s=6,
+                        script_json='{"header_top":"A","header_bottom":"B",'
+                                     '"photo_overlay":"X","body_paragraph":"yyyyyyyyyyyyyyyyyyyy",'
+                                     '"highlights":[],"category":"x","mood":"neutral"}',
+                        render_ms=1)
+
+    with patch("short_bot.youtube.auth.Credentials") as MockCreds, \
+         patch("short_bot.web.routes.youtube.upload_video", return_value="VID") as mup, \
+         patch("short_bot.web.routes.youtube.generate_youtube_metadata",
+               side_effect=RuntimeError("sonnet down")):
+        mock_cred = MagicMock(); mock_cred.expired = False
+        MockCreds.from_authorized_user_info.return_value = mock_cred
+        client = app.test_client()
+        resp = client.post(f"/shorts/{sid}/upload-youtube", follow_redirects=False)
+    assert resp.status_code == 302
+    sent_snippet = mup.call_args.kwargs["snippet"]
+    # Fallback uses header_top | header_bottom
+    assert sent_snippet["title"] == "A | B"
+    assert "#shorts" in sent_snippet["description"]

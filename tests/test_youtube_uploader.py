@@ -133,3 +133,37 @@ def test_build_snippet_respects_explicit_language():
         language="de",
     )
     assert snippet["defaultLanguage"] == "de"
+
+
+def test_build_snippet_uses_generated_metadata_when_provided():
+    snippet = build_snippet(
+        header_top="A", header_bottom="B", body_paragraph="x" * 30,
+        handle="@x", keywords=["fallback"], category_id="24", language="tr",
+        generated={
+            "title": "Sonnet'in başlığı",
+            "description": "Sonnet'in zengin açıklaması\n\n#shorts",
+            "tags": ["bilim", "uzay", "shorts"],
+        },
+    )
+    assert snippet["title"] == "Sonnet'in başlığı"
+    assert "zengin açıklaması" in snippet["description"]
+    assert snippet["tags"] == ["bilim", "uzay", "shorts"]
+
+
+def test_build_snippet_falls_back_when_generated_is_none():
+    snippet = build_snippet(
+        header_top="A", header_bottom="B", body_paragraph="gövde " * 5,
+        handle="@x", keywords=["a", "b"], category_id="24", generated=None,
+    )
+    assert snippet["title"] == "A | B"
+    assert "#shorts" in snippet["description"]
+    assert snippet["tags"] == ["a", "b"]
+
+
+def test_build_snippet_truncates_generated_title_to_100():
+    snippet = build_snippet(
+        header_top="x", header_bottom="y", body_paragraph="z" * 30,
+        handle="@x", keywords=[], category_id="24",
+        generated={"title": "Ç" * 200, "description": "ok ok ok", "tags": []},
+    )
+    assert len(snippet["title"]) == 100
