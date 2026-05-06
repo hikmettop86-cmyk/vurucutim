@@ -11,7 +11,8 @@ from googleapiclient.http import MediaFileUpload
 
 
 def build_snippet(*, header_top: str, header_bottom: str, body_paragraph: str,
-                  handle: str, keywords: list[str], category_id: str) -> dict:
+                  handle: str, keywords: list[str], category_id: str,
+                  language: str = "tr") -> dict:
     title = f"{header_top} | {header_bottom}".strip()[:100]
     description = (
         f"{body_paragraph}\n\n"
@@ -23,7 +24,7 @@ def build_snippet(*, header_top: str, header_bottom: str, body_paragraph: str,
         "description": description,
         "tags": list(keywords)[:30],
         "categoryId": category_id,
-        "defaultLanguage": "tr",
+        "defaultLanguage": language,
     }
 
 

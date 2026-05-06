@@ -116,3 +116,20 @@ def test_upload_video_gives_up_after_max_retries(tmp_path):
                 status={"privacyStatus": "public"},
                 max_retries=3,
             )
+
+
+def test_build_snippet_language_default_is_tr():
+    snippet = build_snippet(
+        header_top="A", header_bottom="B", body_paragraph="x" * 30,
+        handle="@x", keywords=[], category_id="24",
+    )
+    assert snippet["defaultLanguage"] == "tr"
+
+
+def test_build_snippet_respects_explicit_language():
+    snippet = build_snippet(
+        header_top="A", header_bottom="B", body_paragraph="x" * 30,
+        handle="@x", keywords=[], category_id="24",
+        language="de",
+    )
+    assert snippet["defaultLanguage"] == "de"

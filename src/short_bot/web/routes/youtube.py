@@ -97,14 +97,14 @@ def upload(short_id):
         body_paragraph=script.get("body_paragraph", ""),
         handle=cfg.handle, keywords=cfg.keywords or [],
         category_id=category_id,
+        language=cfg.language,
     )
     status = build_status(privacy_status=privacy, ai_content=ai)
 
     eng = init_db(current_app.config["SHORTBOT_DB_PATH"])
     try:
-        from pathlib import Path as _Path
         video_id = upload_video(
-            credentials=creds, file_path=_Path(s.file_path),
+            credentials=creds, file_path=Path(s.file_path),
             snippet=snippet, status=status,
         )
         url = f"https://youtu.be/{video_id}"
