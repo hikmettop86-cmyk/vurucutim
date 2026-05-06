@@ -75,6 +75,7 @@ class ChannelConfig:
     content_source: Literal["rss", "generator"] = "rss"
     generator: GeneratorConfig | None = None
     youtube: YoutubeChannelConfig | None = None
+    bg_video: BgVideoConfig | None = None
 
 
 def load_settings(path: Path) -> Settings:
@@ -155,6 +156,9 @@ def load_channel(path: Path) -> ChannelConfig:
     yt_data = data.get("youtube")
     youtube = YoutubeChannelConfig.model_validate(yt_data) if yt_data else None
 
+    bg_video_data = data.get("bg_video")
+    bg_video = BgVideoConfig.model_validate(bg_video_data) if bg_video_data else None
+
     cta = data.get("cta", {})
     return ChannelConfig(
         slug=slug,
@@ -181,6 +185,7 @@ def load_channel(path: Path) -> ChannelConfig:
         content_source=content_source,
         generator=generator,
         youtube=youtube,
+        bg_video=bg_video,
     )
 
 
@@ -231,6 +236,13 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
         }
         if cfg.youtube.cron_preset:
             data["youtube"]["cron_preset"] = cfg.youtube.cron_preset
+    if cfg.bg_video is not None and cfg.bg_video.enabled:
+        data["bg_video"] = {
+            "enabled": cfg.bg_video.enabled,
+            "scale": cfg.bg_video.scale,
+            "blur_px": cfg.bg_video.blur_px,
+            "dim": cfg.bg_video.dim,
+        }
     if cfg.dna is not None:
         # mode='json' → tuple becomes list, ready for YAML round-trip
         data["dna"] = cfg.dna.model_dump(mode="json")

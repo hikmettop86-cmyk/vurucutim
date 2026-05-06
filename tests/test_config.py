@@ -401,3 +401,83 @@ def test_bg_video_config_dim_range():
         BgVideoConfig(dim=-0.1)
     with pytest.raises(ValidationError):
         BgVideoConfig(dim=1.5)
+
+
+def _minimal_channel_yaml(bg_video_block: str = "") -> str:
+    """Return a YAML body that parses to a valid channel; optionally append a bg_video block."""
+    return f"""\
+slug: test-bg
+name: Test BG
+keywords: [x]
+language: tr
+schedule_cron: 0 * * * *
+duration_s: 6
+min_score: 6.0
+max_candidates_per_run: 5
+template: newscast
+colors:
+  primary: '#c81e1e'
+  accent: '#ffea3b'
+  bg_gradient: ['#000000', '#111111']
+handle: '@x'
+output_dir: output/test-bg
+enabled: true
+cta:
+  enabled: false
+  text: ''
+  icons: []
+  duration_s: 0
+  show_handle: false
+{bg_video_block}
+"""
+
+
+def test_load_channel_bg_video_absent_yields_none(tmp_path):
+    from short_bot.config import load_channel
+    p = tmp_path / "c.yaml"
+    p.write_text(_minimal_channel_yaml(), encoding="utf-8")
+    c = load_channel(p)
+    assert c.bg_video is None
+
+
+def test_load_channel_bg_video_block_parses(tmp_path):
+    from short_bot.config import load_channel
+    p = tmp_path / "c.yaml"
+    block = "bg_video:\n  enabled: true\n  scale: 0.80\n  blur_px: 20\n  dim: 0.3\n"
+    p.write_text(_minimal_channel_yaml(block), encoding="utf-8")
+    c = load_channel(p)
+    assert c.bg_video is not None
+    assert c.bg_video.enabled is True
+    assert c.bg_video.scale == 0.80
+    assert c.bg_video.blur_px == 20
+    assert c.bg_video.dim == 0.3
+
+
+def test_save_channel_round_trip_preserves_bg_video(tmp_path):
+    import yaml
+    from short_bot.config import load_channel, save_channel
+    src = tmp_path / "c.yaml"
+    block = "bg_video:\n  enabled: true\n  scale: 0.88\n  blur_px: 30\n  dim: 0.4\n"
+    src.write_text(_minimal_channel_yaml(block), encoding="utf-8")
+    c = load_channel(src)
+
+    dst = tmp_path / "out.yaml"
+    save_channel(dst, c)
+    raw = yaml.safe_load(dst.read_text(encoding="utf-8"))
+    assert raw["bg_video"]["enabled"] is True
+    assert raw["bg_video"]["scale"] == 0.88
+    assert raw["bg_video"]["blur_px"] == 30
+    assert raw["bg_video"]["dim"] == 0.4
+
+
+def test_save_channel_omits_bg_video_when_disabled_default(tmp_path):
+    """Channels without bg_video shouldn't gain the block on save (keeps YAML clean)."""
+    import yaml
+    from short_bot.config import load_channel, save_channel
+    src = tmp_path / "c.yaml"
+    src.write_text(_minimal_channel_yaml(), encoding="utf-8")
+    c = load_channel(src)
+    dst = tmp_path / "out.yaml"
+    save_channel(dst, c)
+    raw = yaml.safe_load(dst.read_text(encoding="utf-8"))
+    assert "bg_video" not in raw
