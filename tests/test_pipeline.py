@@ -1,4 +1,5 @@
 import json
+import logging
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch, MagicMock
@@ -8,6 +9,30 @@ import pytest
 from short_bot.config import ChannelConfig, Settings
 from short_bot.models import NewsItem, ScoredItem, Script, Highlight, RenderJob
 from short_bot.pipeline import run_pipeline
+
+
+def _silent_log():
+    log = logging.getLogger("test.silent")
+    log.handlers = []
+    log.addHandler(logging.NullHandler())
+    return log
+
+
+def _make_test_channel(*, bg_video=None):
+    """Minimal ChannelConfig sufficient for _resolve_pexels_bg."""
+    from short_bot.config import ChannelConfig
+    return ChannelConfig(
+        slug="t", name="T", keywords=["x"],
+        rss_locale="hl=tr&gl=TR&ceid=TR:tr",
+        schedule_cron="0 * * * *", duration_s=6, min_score=6.0,
+        max_candidates_per_run=5, template="newscast",
+        colors={"primary": "#000", "accent": "#fff",
+                "bg_gradient": ["#000", "#111"]},
+        handle="@x", output_dir="output/t",
+        enabled=True, cta_enabled=False, cta_text="",
+        cta_icons=[], cta_duration_s=0, cta_show_handle=False,
+        language="tr", bg_video=bg_video,
+    )
 
 
 def _settings():
@@ -166,3 +191,74 @@ def test_pipeline_passes_channel_aware_args(tmp_path):
     _, kwargs = write_script_mock.call_args
     assert kwargs.get("channel") is channel
     assert kwargs.get("model") == "haiku"
+
+
+def test_pipeline_skips_pexels_when_bg_video_disabled(tmp_path, monkeypatch):
+    """When bg_video is None on the channel, Pexels code paths must not be called."""
+    from short_bot.pipeline import _resolve_pexels_bg
+    ch = _make_test_channel(bg_video=None)
+    secrets_path = tmp_path / "secrets.yaml"
+    cache = tmp_path / "cache"
+
+    called = {"search": 0, "download": 0}
+    monkeypatch.setattr("short_bot.pexels.search_videos",
+                        lambda *a, **k: (called.__setitem__("search", called["search"] + 1) or []))
+    monkeypatch.setattr("short_bot.pexels.download_video",
+                        lambda *a, **k: (called.__setitem__("download", called["download"] + 1) or None))
+
+    out = _resolve_pexels_bg(channel=ch, cache_dir=cache, secrets_path=secrets_path,
+                              log=_silent_log())
+    assert out is None
+    assert called["search"] == 0
+    assert called["download"] == 0
+
+
+def test_pipeline_pexels_fallback_when_no_api_key(tmp_path, monkeypatch):
+    from short_bot.pipeline import _resolve_pexels_bg
+    from short_bot.config import BgVideoConfig
+    monkeypatch.delenv("PEXELS_API_KEY", raising=False)
+    ch = _make_test_channel(bg_video=BgVideoConfig(enabled=True))
+    secrets_path = tmp_path / "secrets.yaml"
+    out = _resolve_pexels_bg(channel=ch, cache_dir=tmp_path / "cache",
+                              secrets_path=secrets_path, log=_silent_log())
+    assert out is None
+
+
+def test_pipeline_pexels_downloads_first_successful_candidate(tmp_path, monkeypatch):
+    from short_bot.pipeline import _resolve_pexels_bg
+    from short_bot.config import BgVideoConfig
+    from short_bot.pexels import PexelsCandidate
+    monkeypatch.setenv("PEXELS_API_KEY", "TESTKEY")
+
+    ch = _make_test_channel(bg_video=BgVideoConfig(enabled=True))
+
+    fake_candidates = [
+        PexelsCandidate(id=1, url="https://x/a.mp4", duration_s=10),
+        PexelsCandidate(id=2, url="https://x/b.mp4", duration_s=12),
+    ]
+    monkeypatch.setattr("short_bot.pexels.search_videos",
+                        lambda *a, **k: fake_candidates)
+
+    cached = tmp_path / "cache" / "pexels_videos" / "abc.mp4"
+    cached.parent.mkdir(parents=True)
+    cached.write_bytes(b"video")
+
+    monkeypatch.setattr("short_bot.pexels.download_video",
+                        lambda url, cache_dir, **k: cached if "a.mp4" in url else None)
+
+    out = _resolve_pexels_bg(channel=ch, cache_dir=tmp_path / "cache",
+                              secrets_path=tmp_path / "secrets.yaml",
+                              log=_silent_log())
+    assert out == cached
+
+
+def test_pipeline_pexels_returns_none_when_search_empty(tmp_path, monkeypatch):
+    from short_bot.pipeline import _resolve_pexels_bg
+    from short_bot.config import BgVideoConfig
+    monkeypatch.setenv("PEXELS_API_KEY", "TESTKEY")
+    ch = _make_test_channel(bg_video=BgVideoConfig(enabled=True))
+    monkeypatch.setattr("short_bot.pexels.search_videos", lambda *a, **k: [])
+    out = _resolve_pexels_bg(channel=ch, cache_dir=tmp_path / "cache",
+                              secrets_path=tmp_path / "secrets.yaml",
+                              log=_silent_log())
+    assert out is None

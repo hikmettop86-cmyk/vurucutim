@@ -40,6 +40,12 @@ from short_bot.generated_db import (
     update_generated_short_id,
 )
 from short_bot.image_picker import pick_image_for_generator
+import short_bot.pexels as _pexels_mod
+from short_bot.pexels import (
+    load_secrets as _load_secrets,
+    pick_query_for_archetype,
+    resolve_pexels_api_key,
+)
 
 _GENERATOR_TOPIC_DIST_DAYS = 7   # window for topic_distribution Sonnet hint
 
@@ -171,6 +177,41 @@ def _teardown_logger(log: logging.Logger) -> None:
                 except Exception:
                     pass
                 sub.removeHandler(h)
+
+
+def _resolve_pexels_bg(*, channel, cache_dir, secrets_path, log) -> Path | None:
+    """Search/download a Pexels bg video for `channel`. None on opt-out / failure."""
+    if channel.bg_video is None or not channel.bg_video.enabled:
+        return None
+    api_key = resolve_pexels_api_key(_load_secrets(secrets_path))
+    if not api_key:
+        log.warning("  bg_video enabled but PEXELS_API_KEY not set → fallback")
+        return None
+    archetype = (channel.dna.archetype if channel.dna is not None
+                 else channel.template)
+    query = pick_query_for_archetype(archetype)
+    log.info(f"  pexels search: query={query!r}")
+    candidates = _pexels_mod.search_videos(query, api_key, max_results=3)
+    if not candidates:
+        log.warning("  pexels: no candidates returned → fallback")
+        return None
+    bg_cache = Path(cache_dir) / "pexels_videos"
+    for cand in candidates:
+        path = _pexels_mod.download_video(cand.url, bg_cache)
+        if path is not None:
+            log.info(f"  pexels accepted: {path.name} (id={cand.id})")
+            return path
+    log.warning("  pexels: all candidate downloads failed → fallback")
+    return None
+
+
+def current_app_secrets_path() -> Path:
+    """Resolve the secrets path (data/secrets.yaml relative to cwd).
+
+    Pipeline runs both inside Flask (web 'Run now') and standalone (CLI/cron).
+    Keep simple: data/secrets.yaml next to the cwd's data directory. If a project-level
+    DATA_DIR helper exists in the future, swap to that — but don't refactor for it now."""
+    return Path("data") / "secrets.yaml"
 
 
 def run_pipeline(
@@ -349,9 +390,22 @@ def _run_rss(*, channel, run_id, log, eng, settings,
         # Build SFX schedule for CTA window
         sfx_overlays = _build_cta_sfx(channel)
 
-        compose_video(frames_dir, music, out_path,
-                      fps=30, ffmpeg_path=settings.ffmpeg_path,
-                      sfx_overlays=sfx_overlays)
+        secrets_path = current_app_secrets_path()
+        bg_video_path = _resolve_pexels_bg(
+            channel=channel, cache_dir=cache_dir,
+            secrets_path=secrets_path, log=log,
+        )
+
+        bv = channel.bg_video
+        compose_video(
+            frames_dir, music, out_path,
+            fps=30, ffmpeg_path=settings.ffmpeg_path,
+            sfx_overlays=sfx_overlays,
+            bg_video_path=bg_video_path,
+            bg_blur_px=bv.blur_px if bv else 30,
+            bg_dim=bv.dim if bv else 0.4,
+            fg_scale=bv.scale if (bv and bg_video_path) else 1.0,
+        )
         render_ms = int((time.perf_counter() - t0) * 1000)
         log.info(f"  → {out_path.name} ({render_ms}ms)")
 
