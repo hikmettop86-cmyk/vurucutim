@@ -57,3 +57,11 @@ def test_every_10min_round_trip():
 
 def test_every_30min_round_trip():
     assert cron_to_preset("*/30 * * * *") == "every_30min"
+
+
+def test_every_4h():
+    assert preset_to_cron("every_4h") == "0 */4 * * *"
+
+
+def test_every_4h_round_trip():
+    assert cron_to_preset("0 */4 * * *") == "every_4h"
