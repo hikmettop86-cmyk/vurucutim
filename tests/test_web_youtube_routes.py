@@ -129,3 +129,12 @@ def test_disconnect_removes_token(tmp_path):
     assert resp.status_code == 302
     assert not (yt_root / "ch" / "token.json").exists()
     assert (yt_root / "ch" / "channel_info.json").exists()
+
+
+def test_disconnect_404_when_channel_missing(tmp_path):
+    app = _make_app(tmp_path)
+    app.config["SHORTBOT_YT_CREDS_DIR"] = tmp_path / "yt_creds"
+    client = app.test_client()
+    resp = client.post("/channels/nonexistent/youtube/disconnect",
+                       follow_redirects=False)
+    assert resp.status_code == 404
