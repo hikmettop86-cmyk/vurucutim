@@ -5,7 +5,7 @@ import re
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from short_bot.dna import DnaSpec
 from short_bot.locale import RSS_LOCALES, SUPPORTED_LANGUAGES
@@ -38,6 +38,8 @@ class YoutubeChannelConfig(BaseModel):
     ai_content: bool = True
     category_id: str = "24"
     privacy_status: Literal["public", "unlisted", "private"] = "public"
+    min_score_for_upload: float = Field(default=8.0, ge=0.0, le=10.0)
+    cron_preset: str | None = None
 
 
 @dataclass(frozen=True)
@@ -218,7 +220,10 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
             "ai_content": cfg.youtube.ai_content,
             "category_id": cfg.youtube.category_id,
             "privacy_status": cfg.youtube.privacy_status,
+            "min_score_for_upload": cfg.youtube.min_score_for_upload,
         }
+        if cfg.youtube.cron_preset:
+            data["youtube"]["cron_preset"] = cfg.youtube.cron_preset
     if cfg.dna is not None:
         # mode='json' → tuple becomes list, ready for YAML round-trip
         data["dna"] = cfg.dna.model_dump(mode="json")

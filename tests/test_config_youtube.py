@@ -68,3 +68,33 @@ def test_youtube_invalid_privacy_rejected(tmp_path):
     ), encoding="utf-8")
     with pytest.raises(ValueError):
         load_channel(tmp_path / "ch.yaml")
+
+
+def test_youtube_min_score_default_is_8(tmp_path):
+    (tmp_path / "ch.yaml").write_text(_base_yaml(
+        "youtube:\n  auto_upload: true\n"
+    ), encoding="utf-8")
+    c = load_channel(tmp_path / "ch.yaml")
+    assert c.youtube.min_score_for_upload == 8.0
+    assert c.youtube.cron_preset is None
+
+
+def test_youtube_min_score_zero_means_no_filter(tmp_path):
+    (tmp_path / "ch.yaml").write_text(_base_yaml(
+        "youtube:\n  auto_upload: true\n  min_score_for_upload: 0.0\n"
+    ), encoding="utf-8")
+    c = load_channel(tmp_path / "ch.yaml")
+    assert c.youtube.min_score_for_upload == 0.0
+
+
+def test_youtube_cron_preset_persists(tmp_path):
+    src = tmp_path / "ch.yaml"
+    src.write_text(_base_yaml(
+        "youtube:\n  auto_upload: true\n  cron_preset: daily_09\n"
+    ), encoding="utf-8")
+    cfg = load_channel(src)
+    assert cfg.youtube.cron_preset == "daily_09"
+    out = tmp_path / "saved.yaml"
+    save_channel(out, cfg)
+    reloaded = load_channel(out)
+    assert reloaded.youtube.cron_preset == "daily_09"
