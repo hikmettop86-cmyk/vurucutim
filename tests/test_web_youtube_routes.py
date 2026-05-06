@@ -61,3 +61,12 @@ def test_connect_flashes_error_when_secrets_missing(tmp_path):
     resp = client.post("/channels/ch/youtube/connect", follow_redirects=False)
     assert resp.status_code == 302
     assert "/channels/ch/edit" in resp.headers["Location"]
+
+
+def test_connect_404_when_channel_missing(tmp_path):
+    app = _make_app(tmp_path)
+    app.config["SHORTBOT_YT_CREDS_DIR"] = tmp_path / "yt_creds"
+    client = app.test_client()
+    resp = client.post("/channels/nonexistent/youtube/connect",
+                       follow_redirects=False)
+    assert resp.status_code == 404
