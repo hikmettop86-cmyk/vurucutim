@@ -70,3 +70,47 @@ def test_connect_404_when_channel_missing(tmp_path):
     resp = client.post("/channels/nonexistent/youtube/connect",
                        follow_redirects=False)
     assert resp.status_code == 404
+
+
+def test_callback_exchanges_code_and_saves_token(tmp_path):
+    app = _make_app(tmp_path)
+    yt_root = tmp_path / "yt_creds"
+    (yt_root / "ch").mkdir(parents=True)
+    (yt_root / "ch" / "client_secrets.json").write_text(json.dumps({
+        "web": {
+            "client_id": "x.apps.googleusercontent.com", "client_secret": "secret",
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "redirect_uris": ["http://127.0.0.1:5005/oauth/callback"],
+        }}))
+    app.config["SHORTBOT_YT_CREDS_DIR"] = yt_root
+    client = app.test_client()
+
+    fake_creds = MagicMock()
+    fake_creds.to_json.return_value = '{"token":"abc","scopes":["x"]}'
+    fake_info = {"id": "UC9", "snippet": {"title": "T"},
+                  "statistics": {"subscriberCount": "1", "videoCount": "1"}}
+
+    with patch("short_bot.youtube.auth.Flow.from_client_secrets_file") as mflow_cls:
+        flow = MagicMock()
+        flow.credentials = fake_creds
+        mflow_cls.return_value = flow
+        with patch("short_bot.web.routes.youtube.yt_auth.fetch_and_save_channel_info",
+                   return_value=fake_info) as mfetch:
+            resp = client.get("/oauth/callback?code=fakecode&state=ch",
+                              follow_redirects=False)
+
+    assert resp.status_code == 302
+    assert "/channels/ch/edit" in resp.headers["Location"]
+    flow.fetch_token.assert_called_once_with(code="fakecode")
+    assert (yt_root / "ch" / "token.json").exists()
+    mfetch.assert_called_once()
+
+
+def test_callback_404_on_unknown_state(tmp_path):
+    app = _make_app(tmp_path)
+    app.config["SHORTBOT_YT_CREDS_DIR"] = tmp_path / "yt_creds"
+    client = app.test_client()
+    resp = client.get("/oauth/callback?code=x&state=missing",
+                      follow_redirects=False)
+    assert resp.status_code == 404

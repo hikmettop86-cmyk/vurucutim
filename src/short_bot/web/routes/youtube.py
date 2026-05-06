@@ -33,3 +33,25 @@ def connect(slug):
         state=slug, access_type="offline", prompt="consent",
     )
     return redirect(auth_url)
+
+
+@bp.route("/oauth/callback")
+def callback():
+    state = request.args.get("state", "")
+    code = request.args.get("code", "")
+    if not state or not code:
+        abort(400)
+    cfg_path = current_app.config["SHORTBOT_CONFIG_DIR"] / "channels" / f"{state}.yaml"
+    if not cfg_path.exists():
+        abort(404)
+    try:
+        flow = yt_auth.build_flow(_yt_root(), state, redirect_uri=_redirect_uri())
+        flow.fetch_token(code=code)
+        creds = flow.credentials
+        yt_auth.save_credentials(_yt_root(), state, creds)
+        info = yt_auth.fetch_and_save_channel_info(_yt_root(), state, creds)
+        title = info.get("snippet", {}).get("title", state)
+        flash(f"YouTube kanalı bağlandı: {title}", "success")
+    except Exception as e:
+        flash(f"YouTube bağlantı başarısız: {e}", "error")
+    return redirect(url_for("channel_edit.edit", slug=state))
