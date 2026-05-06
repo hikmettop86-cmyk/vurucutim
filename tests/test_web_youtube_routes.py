@@ -114,3 +114,18 @@ def test_callback_404_on_unknown_state(tmp_path):
     resp = client.get("/oauth/callback?code=x&state=missing",
                       follow_redirects=False)
     assert resp.status_code == 404
+
+
+def test_disconnect_removes_token(tmp_path):
+    app = _make_app(tmp_path)
+    yt_root = tmp_path / "yt_creds"
+    (yt_root / "ch").mkdir(parents=True)
+    (yt_root / "ch" / "token.json").write_text("{}")
+    (yt_root / "ch" / "channel_info.json").write_text("{}")
+    app.config["SHORTBOT_YT_CREDS_DIR"] = yt_root
+    client = app.test_client()
+    resp = client.post("/channels/ch/youtube/disconnect",
+                       follow_redirects=False)
+    assert resp.status_code == 302
+    assert not (yt_root / "ch" / "token.json").exists()
+    assert (yt_root / "ch" / "channel_info.json").exists()
