@@ -70,7 +70,35 @@
       }'>
 
   {# ═══════════════════════════════════════════════════════════════════════
-     LEFT COLUMN
+     LEFT COLUMN — Preview (sticky)
+     ═══════════════════════════════════════════════════════════════════════ #}
+  <div class="space-y-4">
+    <div class="sticky top-[130px]">
+      <div class="bg-white border border-claude-border rounded-xl shadow-soft">
+        <div class="px-5 py-3 border-b border-claude-border/40">
+          <h2 class="font-serif text-base font-semibold flex items-center gap-2">
+            <span class="text-lg opacity-70">🔍</span> Önizleme
+          </h2>
+        </div>
+        <div class="p-5">
+          <div class="relative bg-black rounded-lg overflow-hidden mx-auto"
+               style="width: 100%; max-width: 360px; aspect-ratio: 9/16;">
+            <iframe x-bind:src="`/preview/{{ c.slug }}?archetype=${encodeURIComponent(archetype)}&primary=${encodeURIComponent(primary)}&accent=${encodeURIComponent(accent)}&font_headline=${encodeURIComponent(fontHeadline)}&font_body=${encodeURIComponent(fontBody)}&banner_shape=${encodeURIComponent(bannerShape)}&highlight_style=${encodeURIComponent(highlightStyle)}&chip_style=${encodeURIComponent(chipStyle)}&category_icon=${encodeURIComponent(categoryIcon)}&bg_grad_1=${encodeURIComponent(bgGrad1)}&bg_grad_2=${encodeURIComponent(bgGrad2)}&body_bg_1=${encodeURIComponent(bodyBg1)}&body_bg_2=${encodeURIComponent(bodyBg2)}&text_main=${encodeURIComponent(textMain)}&text_muted=${encodeURIComponent(textMuted)}&header_top_color=${encodeURIComponent(headerTopColor)}&header_bottom_color=${encodeURIComponent(headerBottomColor)}`"
+                    src="/preview/{{ c.slug }}"
+                    scrolling="no"
+                    class="absolute top-0 left-0 border-0"
+                    style="width: 1080px; height: 1920px; transform: scale(0.333); transform-origin: top left;"></iframe>
+          </div>
+          <p class="text-xs text-claude-muted mt-2 text-center">
+            Gerçek 1080×1920 short, ölçekli önizleme.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ═══════════════════════════════════════════════════════════════════════
+     RIGHT COLUMN — All editable cards
      ═══════════════════════════════════════════════════════════════════════ #}
   <div class="space-y-4">
 
@@ -646,30 +674,6 @@
     <button type="submit" class="bg-claude-accent hover:bg-claude-accent-hover text-white px-4 py-2 rounded-lg font-semibold mt-2 w-full">
       Kaydet
     </button>
-  </div>
-
-  {# ═══════════════════════════════════════════════════════════════════════
-     RIGHT COLUMN
-     ═══════════════════════════════════════════════════════════════════════ #}
-  <div>
-
-    {# ── Preview card (NOT collapsible, sticky) ───────────────────────── #}
-    <div class="bg-white border border-claude-border rounded-xl shadow-soft mb-4 p-5 sticky top-[130px]">
-      <h2 class="font-serif text-base font-semibold flex items-center gap-2 mb-4">
-        <span class="text-lg opacity-70">🔍</span> Önizleme
-      </h2>
-      <div class="relative bg-black rounded-lg overflow-hidden mx-auto"
-           style="width: 100%; max-width: 360px; aspect-ratio: 9/16;">
-        <iframe x-bind:src="`/preview/{{ c.slug }}?archetype=${encodeURIComponent(archetype)}&primary=${encodeURIComponent(primary)}&accent=${encodeURIComponent(accent)}&font_headline=${encodeURIComponent(fontHeadline)}&font_body=${encodeURIComponent(fontBody)}&banner_shape=${encodeURIComponent(bannerShape)}&highlight_style=${encodeURIComponent(highlightStyle)}&chip_style=${encodeURIComponent(chipStyle)}&category_icon=${encodeURIComponent(categoryIcon)}&bg_grad_1=${encodeURIComponent(bgGrad1)}&bg_grad_2=${encodeURIComponent(bgGrad2)}&body_bg_1=${encodeURIComponent(bodyBg1)}&body_bg_2=${encodeURIComponent(bodyBg2)}&text_main=${encodeURIComponent(textMain)}&text_muted=${encodeURIComponent(textMuted)}&header_top_color=${encodeURIComponent(headerTopColor)}&header_bottom_color=${encodeURIComponent(headerBottomColor)}`"
-                src="/preview/{{ c.slug }}"
-                scrolling="no"
-                class="absolute top-0 left-0 border-0"
-                style="width: 1080px; height: 1920px; transform: scale(0.333); transform-origin: top left;"></iframe>
-      </div>
-      <p class="text-xs text-claude-muted mt-2 text-center">
-        Gerçek 1080×1920 short, ölçekli önizleme.
-      </p>
-    </div>
 
     {# ── Card: Son çalışmalar (closed by default) ─────────────────────── #}
     <div x-data="{ open: false }" class="bg-white border border-claude-border rounded-xl shadow-soft mb-4">
