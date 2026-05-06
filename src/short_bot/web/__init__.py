@@ -12,7 +12,7 @@ from pathlib import Path
 from flask import Flask
 
 from short_bot.config import load_settings
-from short_bot.db import init_db
+from short_bot.db import cleanup_zombie_runs, init_db
 from short_bot.web.extensions import db
 
 
@@ -33,7 +33,14 @@ def create_app(
     db_path = Path(db_path).resolve()    # absolute, avoids cwd surprises
 
     # Ensure schema exists (Phase 1+2 init_db is idempotent + adds pragmas)
-    init_db(db_path)
+    eng = init_db(db_path)
+    # Self-heal zombie runs from a prior crash/restart (releases stale locks too)
+    n = cleanup_zombie_runs(eng, Path(lock_dir), age_minutes=60)
+    if n:
+        import logging
+        logging.getLogger("short_bot.web").warning(
+            "startup: cleaned %d zombie run(s)", n
+        )
 
     app = Flask(
         __name__,
@@ -53,7 +60,13 @@ def create_app(
     app.config["SHORTBOT_CACHE_DIR"] = Path(cache_dir)
     app.config["SHORTBOT_LOCK_DIR"] = Path(lock_dir)
     app.config["SHORTBOT_LOGS_DIR"] = Path(logs_dir)
-    app.config["SHORTBOT_OUTPUT_ROOT"] = Path(output_root)
+    # Resolve to absolute — Flask's send_from_directory with a relative
+    # `directory` looks under app.root_path (src/short_bot/web), not cwd,
+    # which breaks /output/<file> with 404.
+    app.config["SHORTBOT_OUTPUT_ROOT"] = Path(output_root).resolve()
+    app.config["SHORTBOT_YT_CREDS_DIR"] = (
+        db_path.parent / "youtube_credentials"
+    ).resolve()
     app.config["SHORTBOT_SETTINGS"] = load_settings(config_dir / "settings.yaml")
 
     db.init_app(app)
