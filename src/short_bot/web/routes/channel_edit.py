@@ -31,11 +31,20 @@ def edit(slug):
         "mp3_count": (sum(1 for _ in ch_music_dir.rglob("*.mp3"))
                       if ch_music_dir.is_dir() else 0),
     }
+    from short_bot.youtube import auth as _yt_auth
+    yt_root = current_app.config.get("SHORTBOT_YT_CREDS_DIR")
+    yt_connected = bool(yt_root and _yt_auth.has_credentials(yt_root, slug))
+    yt_info = _yt_auth.load_channel_info(yt_root, slug) if yt_root and yt_connected else None
+    yt_secrets_path = (yt_root / slug / "client_secrets.json") if yt_root else None
+    yt_has_secrets = bool(yt_secrets_path and yt_secrets_path.is_file())
     return render_template("channels/edit.html.j2", c=cfg,
                            archetypes=ARCHETYPES,
                            cron_human=describe_cron(cfg.schedule_cron),
                            runs=runs,
-                           music_info=music_info)
+                           music_info=music_info,
+                           yt_connected=yt_connected, yt_info=yt_info,
+                           yt_has_secrets=yt_has_secrets,
+                           yt_secrets_abs=str((yt_root / slug).resolve()) if yt_root else "")
 
 
 def _form_get_int(key: str, default: int) -> int:

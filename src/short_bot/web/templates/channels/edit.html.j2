@@ -1,5 +1,5 @@
 {% extends "base.html.j2" %}
-{% block title %}short-bot — {{ c.slug }}{% endblock %}
+{% block title %}Vurucu TİM — {{ c.slug }}{% endblock %}
 {% block content %}
 <a href="/channels" class="text-claude-muted hover:text-claude-text text-sm">← Kanallar</a>
 
@@ -52,6 +52,10 @@
         bgGrad2: "{{ (c.dna.palette.bg_gradient[1] if c.dna else c.colors.bg_gradient[1]) }}",
         bodyBg1: "{{ (c.dna.palette.body_bg[0] if c.dna else "#1a1a2a") }}",
         bodyBg2: "{{ (c.dna.palette.body_bg[1] if c.dna else "#0a0a1a") }}",
+        textMain: "{{ (c.dna.palette.text_main if c.dna else "#ffffff") }}",
+        textMuted: "{{ (c.dna.palette.text_muted if c.dna else "#cccccc") }}",
+        headerTopColor: "{{ (c.dna.palette.header_top_color if c.dna else "") }}",
+        headerBottomColor: "{{ (c.dna.palette.header_bottom_color if c.dna else "") }}",
         fontHeadline: "{{ (c.dna.fonts.headline if c.dna else "Inter") }}",
         fontBody: "{{ (c.dna.fonts.body if c.dna else "Inter") }}",
         bannerShape: "{{ (c.dna.banner_shape if c.dna else "flat") }}",
@@ -110,6 +114,108 @@
       <input type="checkbox" name="enabled" value="1" {% if c.enabled %}checked{% endif %}>
       <span>Aktif (cron'a göre otomatik üretilir)</span>
     </label>
+
+    <div class="border-t border-claude-border pt-4 mt-6">
+      <div class="text-xs text-claude-muted uppercase tracking-wider mb-2">Özel müzik klasörü</div>
+      <div class="bg-claude-surface border border-claude-border rounded-lg p-3 text-xs space-y-1">
+        <div class="font-mono text-claude-text break-all">{{ music_info.abs_path }}</div>
+        {% if music_info.exists and music_info.mp3_count > 0 %}
+          <div class="text-claude-success">
+            ✓ Klasör mevcut · <strong>{{ music_info.mp3_count }}</strong> mp3 dosyası — bu kanal için bunlardan rastgele seçilir.
+          </div>
+        {% elif music_info.exists %}
+          <div class="text-claude-muted">
+            Klasör mevcut ama boş. mp3 atınca aktifleşir, aksi halde varsayılan müzik kullanılır.
+          </div>
+        {% else %}
+          <div class="text-claude-muted">
+            Klasör henüz yok. Yukarıdaki yola mp3 atarsan bu kanal için özel müzik aktif olur. Aksi halde varsayılan
+            <code class="text-claude-text">assets/music/&lt;mood&gt;/</code> kullanılır.
+          </div>
+        {% endif %}
+        <div class="text-claude-subtle">
+          İpucu: Mood ayrımı yapmak istersen <code class="text-claude-text">{{ c.slug }}/breaking/</code>,
+          <code class="text-claude-text">{{ c.slug }}/neutral/</code>, <code class="text-claude-text">{{ c.slug }}/upbeat/</code>
+          alt klasörleri oluştur. Yapmazsan dosyalar düz klasörden seçilir.
+        </div>
+      </div>
+    </div>
+
+    <div class="border-t border-claude-border pt-4 mt-6">
+      <div class="text-xs text-claude-muted uppercase tracking-wider mb-2">YouTube bağlantısı</div>
+      <div class="bg-claude-surface border border-claude-border rounded-lg p-4 space-y-3">
+        {% if yt_connected and yt_info %}
+          <div class="flex items-center gap-3">
+            <span class="text-xl">▶</span>
+            <div class="flex-1 text-sm">
+              <div class="font-semibold">{{ yt_info.snippet.title }}</div>
+              <div class="text-xs text-claude-muted">
+                {{ yt_info.statistics.subscriberCount }} abone ·
+                {{ yt_info.statistics.videoCount }} video ·
+                <span class="text-claude-success">Bağlı</span>
+              </div>
+            </div>
+            <form method="POST" action="/channels/{{ c.slug }}/youtube/disconnect"
+                  onsubmit="return confirm('YouTube bağlantısı kaldırılsın mı? (token silinecek, kanal_info kalır)');">
+              <button class="text-xs px-3 py-1.5 rounded-lg bg-claude-error/10 ring-1 ring-claude-error/30 text-claude-error">
+                Bağlantıyı kes
+              </button>
+            </form>
+          </div>
+        {% else %}
+          {% if yt_has_secrets %}
+            <form method="POST" action="/channels/{{ c.slug }}/youtube/connect">
+              <button class="bg-claude-accent hover:bg-claude-accent-hover text-white px-4 py-2 rounded-lg text-sm">
+                ▶ YouTube Bağla
+              </button>
+            </form>
+            <div class="text-[10px] text-claude-subtle">
+              Tarayıcı Google'a yönlendirecek, izin verince bu kanal YouTube hesabınla eşleşir.
+            </div>
+          {% else %}
+            <div class="text-xs text-claude-muted">
+              <strong>Adım 1:</strong>
+              <a href="https://console.cloud.google.com/" target="_blank" class="text-claude-accent underline">Google Cloud Console</a>
+              → yeni proje → APIs: YouTube Data API v3 + YouTube Analytics API → OAuth Consent (External) →
+              OAuth Client (Web type, redirect: <code>http://127.0.0.1:5005/oauth/callback</code>) → JSON indir.
+              <br><strong>Adım 2:</strong> İndirdiğin JSON'u şu yola koy:
+              <code class="block mt-1 font-mono text-[11px] text-claude-text break-all">{{ yt_secrets_abs }}\client_secrets.json</code>
+              <br><strong>Adım 3:</strong> Sayfayı yenile, "YouTube Bağla" butonu görünecek.
+            </div>
+          {% endif %}
+        {% endif %}
+
+        <div class="grid grid-cols-2 gap-3 pt-3 border-t border-claude-border/40">
+          <label class="flex items-center gap-2 text-xs">
+            <input type="checkbox" name="yt_auto_upload" value="1"
+                   {% if c.youtube and c.youtube.auto_upload %}checked{% endif %}>
+            Otomatik yükle (render bitince)
+          </label>
+          <label class="flex items-center gap-2 text-xs">
+            <input type="checkbox" name="yt_ai_content" value="1"
+                   {% if (c.youtube.ai_content if c.youtube else True) %}checked{% endif %}>
+            AI içerik etiketi (önerilen)
+          </label>
+          <label class="block">
+            <span class="text-xs text-claude-muted">Privacy</span>
+            <select name="yt_privacy_status"
+                    class="bg-claude-surface border border-claude-border px-2 py-1 rounded w-full text-xs mt-1">
+              {% set p = (c.youtube.privacy_status if c.youtube else 'public') %}
+              <option value="public"   {% if p == 'public'   %}selected{% endif %}>public</option>
+              <option value="unlisted" {% if p == 'unlisted' %}selected{% endif %}>unlisted</option>
+              <option value="private"  {% if p == 'private'  %}selected{% endif %}>private</option>
+            </select>
+          </label>
+          <label class="block">
+            <span class="text-xs text-claude-muted">Category ID</span>
+            <input type="text" name="yt_category_id"
+                   value="{{ (c.youtube.category_id if c.youtube else '24') }}"
+                   class="bg-claude-surface border border-claude-border px-2 py-1 rounded w-full text-xs mt-1">
+            <span class="text-[10px] text-claude-subtle">24=Entertainment, 28=Tech, 17=Sport, 22=People</span>
+          </label>
+        </div>
+      </div>
+    </div>
 
     <h2 class="font-serif text-lg font-bold mt-6 border-t border-claude-border pt-4">CTA (Beğen-Abone-Paylaş)</h2>
     <label class="flex items-center gap-2">
@@ -197,6 +303,61 @@
       </label>
     </div>
 
+    <div class="border-t border-claude-border/50 mt-4 pt-3">
+      <div class="text-xs text-claude-subtle uppercase tracking-wider mb-2">Yazı renkleri</div>
+      <div class="grid grid-cols-2 gap-3">
+        <label class="block">
+          <span class="text-xs text-claude-muted uppercase">Ana metin (body)</span>
+          <input type="color" name="dna_text_main" x-model="textMain"
+                 value="{{ c.dna.palette.text_main }}"
+                 class="bg-claude-surface border border-claude-border rounded-lg w-full mt-1 h-9">
+          <span class="text-[10px] text-claude-subtle">Gövde paragrafı, ana yazı</span>
+        </label>
+        <label class="block">
+          <span class="text-xs text-claude-muted uppercase">Sönük metin</span>
+          <input type="color" name="dna_text_muted" x-model="textMuted"
+                 value="{{ c.dna.palette.text_muted }}"
+                 class="bg-claude-surface border border-claude-border rounded-lg w-full mt-1 h-9">
+          <span class="text-[10px] text-claude-subtle">Handle, alt yazı, ikincil</span>
+        </label>
+      </div>
+      <div class="text-[10px] text-claude-subtle mt-2">
+        Default: başlık üst → Accent rengi, başlık alt → Ana metin rengi.
+      </div>
+      <div class="grid grid-cols-2 gap-3 mt-3">
+        <label class="block">
+          <span class="text-xs text-claude-muted uppercase">Başlık üst (özel)</span>
+          <div class="flex gap-1 mt-1">
+            <input type="color" name="dna_header_top_color" x-model="headerTopColor"
+                   :disabled="!headerTopColor"
+                   class="bg-claude-surface border border-claude-border rounded-lg flex-1 h-9"
+                   :class="!headerTopColor && 'opacity-40'">
+            <button type="button"
+                    @click="headerTopColor = headerTopColor ? '' : '{{ (c.dna.palette.accent if c.dna else "#c96442") }}'"
+                    class="bg-claude-surface border border-claude-border px-2 rounded-lg text-xs hover:bg-claude-surface-alt"
+                    x-text="headerTopColor ? '↺' : '+ Aç'"></button>
+          </div>
+          <span class="text-[10px] text-claude-subtle"
+                x-text="headerTopColor ? 'Override: ' + headerTopColor : 'Default (Accent)'"></span>
+        </label>
+        <label class="block">
+          <span class="text-xs text-claude-muted uppercase">Başlık alt (özel)</span>
+          <div class="flex gap-1 mt-1">
+            <input type="color" name="dna_header_bottom_color" x-model="headerBottomColor"
+                   :disabled="!headerBottomColor"
+                   class="bg-claude-surface border border-claude-border rounded-lg flex-1 h-9"
+                   :class="!headerBottomColor && 'opacity-40'">
+            <button type="button"
+                    @click="headerBottomColor = headerBottomColor ? '' : '{{ (c.dna.palette.text_main if c.dna else "#ffffff") }}'"
+                    class="bg-claude-surface border border-claude-border px-2 rounded-lg text-xs hover:bg-claude-surface-alt"
+                    x-text="headerBottomColor ? '↺' : '+ Aç'"></button>
+          </div>
+          <span class="text-[10px] text-claude-subtle"
+                x-text="headerBottomColor ? 'Override: ' + headerBottomColor : 'Default (Ana metin)'"></span>
+        </label>
+      </div>
+    </div>
+
     <div class="grid grid-cols-2 gap-3">
       <label class="block">
         <span class="text-xs text-claude-muted uppercase">Headline font</span>
@@ -271,6 +432,13 @@
                class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-xs font-mono text-claude-text">
       </label>
     </div>
+
+    <label class="block mt-3">
+      <span class="text-xs text-claude-muted uppercase">UI badge (sahne tepesi)</span>
+      <input type="text" name="dna_ui_badge" value="{{ c.dna.ui_badge }}"
+             maxlength="24" placeholder="boş = locale default (SON DAKİKA)"
+             class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-claude-text">
+    </label>
 
     <h2 class="font-serif text-lg font-bold mt-6 border-t border-claude-border pt-4">DNA — Tone</h2>
 
@@ -361,7 +529,7 @@
     <h2 class="font-serif text-lg font-bold mb-4">Önizleme</h2>
     <div class="relative bg-black rounded-lg overflow-hidden mx-auto"
          style="width: 100%; max-width: 360px; aspect-ratio: 9/16;">
-      <iframe x-bind:src="`/preview/{{ c.slug }}?archetype=${encodeURIComponent(archetype)}&primary=${encodeURIComponent(primary)}&accent=${encodeURIComponent(accent)}&font_headline=${encodeURIComponent(fontHeadline)}&font_body=${encodeURIComponent(fontBody)}&banner_shape=${encodeURIComponent(bannerShape)}&highlight_style=${encodeURIComponent(highlightStyle)}&chip_style=${encodeURIComponent(chipStyle)}&category_icon=${encodeURIComponent(categoryIcon)}&bg_grad_1=${encodeURIComponent(bgGrad1)}&bg_grad_2=${encodeURIComponent(bgGrad2)}&body_bg_1=${encodeURIComponent(bodyBg1)}&body_bg_2=${encodeURIComponent(bodyBg2)}`"
+      <iframe x-bind:src="`/preview/{{ c.slug }}?archetype=${encodeURIComponent(archetype)}&primary=${encodeURIComponent(primary)}&accent=${encodeURIComponent(accent)}&font_headline=${encodeURIComponent(fontHeadline)}&font_body=${encodeURIComponent(fontBody)}&banner_shape=${encodeURIComponent(bannerShape)}&highlight_style=${encodeURIComponent(highlightStyle)}&chip_style=${encodeURIComponent(chipStyle)}&category_icon=${encodeURIComponent(categoryIcon)}&bg_grad_1=${encodeURIComponent(bgGrad1)}&bg_grad_2=${encodeURIComponent(bgGrad2)}&body_bg_1=${encodeURIComponent(bodyBg1)}&body_bg_2=${encodeURIComponent(bodyBg2)}&text_main=${encodeURIComponent(textMain)}&text_muted=${encodeURIComponent(textMuted)}&header_top_color=${encodeURIComponent(headerTopColor)}&header_bottom_color=${encodeURIComponent(headerBottomColor)}`"
               src="/preview/{{ c.slug }}"
               scrolling="no"
               class="absolute top-0 left-0 border-0"
@@ -402,8 +570,8 @@
             {% endif %}
           </td>
           <td class="p-2 text-claude-muted">
-            {% if r.ended_at and r.started_at %}
-              {{ ((r.ended_at - r.started_at).total_seconds() | int) }}s
+            {% if r.duration_seconds is not none %}
+              {{ r.duration_seconds }}s
             {% else %}—{% endif %}
           </td>
           <td class="p-2 text-right">
