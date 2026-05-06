@@ -9,6 +9,7 @@ Each channel has its own Google Cloud project. Files live under
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 from google.auth.transport.requests import Request
@@ -56,6 +57,17 @@ def delete_credentials(root: Path, slug: str) -> None:
     token_path = credentials_dir(root, slug) / "token.json"
     if token_path.exists():
         token_path.unlink()
+
+
+def purge_credentials(root: Path, slug: str) -> None:
+    """Hard reset — delete the entire per-channel credentials directory
+    (token.json + channel_info.json + client_secrets.json + anything else).
+
+    Use when the user wants to start over (revoked OAuth app, switched
+    Google project, accidental wrong account)."""
+    d = credentials_dir(root, slug)
+    if d.exists():
+        shutil.rmtree(d, ignore_errors=True)
 
 
 def build_flow(root: Path, slug: str, *, redirect_uri: str) -> Flow:

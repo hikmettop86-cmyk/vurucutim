@@ -283,3 +283,25 @@ def test_upload_secrets_404_when_channel_missing(tmp_path):
         content_type="multipart/form-data",
     )
     assert resp.status_code == 404
+
+
+def test_reset_removes_all_files(tmp_path):
+    app = _make_app(tmp_path)
+    yt_root = tmp_path / "yt_creds"
+    (yt_root / "ch").mkdir(parents=True)
+    (yt_root / "ch" / "token.json").write_text("{}")
+    (yt_root / "ch" / "channel_info.json").write_text("{}")
+    (yt_root / "ch" / "client_secrets.json").write_text("{}")
+    app.config["SHORTBOT_YT_CREDS_DIR"] = yt_root
+    client = app.test_client()
+    resp = client.post("/channels/ch/youtube/reset", follow_redirects=False)
+    assert resp.status_code == 302
+    assert not (yt_root / "ch").exists()
+
+
+def test_reset_404_when_channel_missing(tmp_path):
+    app = _make_app(tmp_path)
+    app.config["SHORTBOT_YT_CREDS_DIR"] = tmp_path / "yt_creds"
+    client = app.test_client()
+    resp = client.post("/channels/nonexistent/youtube/reset")
+    assert resp.status_code == 404

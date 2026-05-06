@@ -122,6 +122,17 @@ def upload(short_id):
     return redirect(url_for("shorts.detail", short_id=short_id))
 
 
+@bp.route("/channels/<slug>/youtube/reset", methods=["POST"])
+def reset(slug):
+    cfg_path = current_app.config["SHORTBOT_CONFIG_DIR"] / "channels" / f"{slug}.yaml"
+    if not cfg_path.exists():
+        abort(404)
+    yt_auth.purge_credentials(_yt_root(), slug)
+    flash("YouTube'a ait tüm dosyalar silindi (token, kanal bilgisi, client_secrets).",
+          "success")
+    return redirect(url_for("channel_edit.edit", slug=slug))
+
+
 @bp.route("/channels/<slug>/youtube/upload-secrets", methods=["POST"])
 def upload_secrets(slug):
     cfg_path = current_app.config["SHORTBOT_CONFIG_DIR"] / "channels" / f"{slug}.yaml"

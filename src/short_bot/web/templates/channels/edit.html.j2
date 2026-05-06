@@ -220,13 +220,22 @@
                 <span class="text-claude-success">Bağlı</span>
               </div>
             </div>
-            <button form="yt-disconnect-form"
-                    formmethod="POST"
-                    formaction="/channels/{{ c.slug }}/youtube/disconnect"
-                    onclick="return confirm('YouTube bağlantısı kaldırılsın mı? (token silinecek, kanal_info kalır)');"
-                    class="text-xs px-3 py-1.5 rounded-lg bg-claude-error/10 ring-1 ring-claude-error/30 text-claude-error">
-              Bağlantıyı kes
-            </button>
+            <div class="flex gap-2">
+              <button form="yt-disconnect-form"
+                      formmethod="POST"
+                      formaction="/channels/{{ c.slug }}/youtube/disconnect"
+                      onclick="return confirm('YouTube bağlantısı kaldırılsın mı? (token silinecek, kanal_info kalır)');"
+                      class="text-xs px-3 py-1.5 rounded-lg bg-claude-error/10 ring-1 ring-claude-error/30 text-claude-error">
+                Bağlantıyı kes
+              </button>
+              <button form="yt-reset-form"
+                      formmethod="POST"
+                      formaction="/channels/{{ c.slug }}/youtube/reset"
+                      onclick="return confirm('TÜM YouTube dosyalarını sil? (token, kanal_info, client_secrets — geri alınamaz)');"
+                      class="text-xs px-3 py-1.5 rounded-lg bg-claude-error/15 ring-1 ring-claude-error/40 text-claude-error hover:bg-claude-error/25">
+                🗑 Tümünü sıfırla
+              </button>
+            </div>
           </div>
         {% else %}
           {% if yt_has_secrets %}
@@ -238,6 +247,13 @@
             <div class="text-[10px] text-claude-subtle">
               Tarayıcı Google'a yönlendirecek, izin verince bu kanal YouTube hesabınla eşleşir.
             </div>
+            <button form="yt-reset-form"
+                    formmethod="POST"
+                    formaction="/channels/{{ c.slug }}/youtube/reset"
+                    onclick="return confirm('client_secrets.json silinsin? (yeniden yüklemen gerekir)');"
+                    class="text-xs px-3 py-1.5 rounded-lg bg-claude-error/15 ring-1 ring-claude-error/40 text-claude-error hover:bg-claude-error/25 mt-2">
+              🗑 client_secrets.json sil
+            </button>
           {% else %}
             <div class="text-xs text-claude-muted space-y-2">
               <div>
@@ -763,4 +779,6 @@
 <form id="yt-upload-secrets-form" method="POST"
       action="/channels/{{ c.slug }}/youtube/upload-secrets"
       enctype="multipart/form-data" class="hidden"></form>
+<form id="yt-reset-form" method="POST"
+      action="/channels/{{ c.slug }}/youtube/reset" class="hidden"></form>
 {% endblock %}

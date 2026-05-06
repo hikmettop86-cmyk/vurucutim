@@ -145,3 +145,19 @@ def test_load_channel_info_returns_dict(tmp_path):
 def test_load_channel_info_returns_none_when_missing(tmp_path):
     from short_bot.youtube.auth import load_channel_info
     assert load_channel_info(tmp_path / "creds", "missing") is None
+
+
+def test_purge_credentials_removes_entire_dir(tmp_path):
+    d = tmp_path / "creds" / "ch"
+    d.mkdir(parents=True)
+    (d / "token.json").write_text("{}")
+    (d / "channel_info.json").write_text("{}")
+    (d / "client_secrets.json").write_text("{}")
+    from short_bot.youtube.auth import purge_credentials
+    purge_credentials(tmp_path / "creds", "ch")
+    assert not d.exists()
+
+
+def test_purge_credentials_idempotent_when_dir_missing(tmp_path):
+    from short_bot.youtube.auth import purge_credentials
+    purge_credentials(tmp_path / "creds", "missing")  # should not raise
