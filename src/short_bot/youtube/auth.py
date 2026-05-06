@@ -99,6 +99,8 @@ def fetch_and_save_channel_info(root: Path, slug: str, creds: Credentials) -> di
     (d / "channel_info.json").write_text(
         json.dumps(info, ensure_ascii=False, indent=2), encoding="utf-8",
     )
+    from short_bot.youtube.avatar import fetch_and_cache_avatar
+    fetch_and_cache_avatar(root, slug, info)
     return info
 
 

@@ -446,3 +446,30 @@ def get_quota_used_today(eng: Engine, *, channel: str) -> int:
             .where(youtube_quota.c.date == today_iso)
         ).first()
         return int(row[0]) if row else 0
+
+
+def count_uploads_for_channel(eng: Engine, channel: str) -> int:
+    """Total successful YT uploads for a channel (joined via shorts.channel)."""
+    from sqlalchemy import func
+    with eng.connect() as conn:
+        row = conn.execute(
+            select(func.count())
+            .select_from(youtube_uploads.join(shorts, youtube_uploads.c.short_id == shorts.c.id))
+            .where(shorts.c.channel == channel)
+            .where(youtube_uploads.c.status == "success")
+        ).first()
+        return int(row[0]) if row else 0
+
+
+def last_upload_at_for_channel(eng: Engine, channel: str):
+    """Most recent successful upload timestamp for a channel, or None."""
+    with eng.connect() as conn:
+        row = conn.execute(
+            select(youtube_uploads.c.uploaded_at)
+            .select_from(youtube_uploads.join(shorts, youtube_uploads.c.short_id == shorts.c.id))
+            .where(shorts.c.channel == channel)
+            .where(youtube_uploads.c.status == "success")
+            .order_by(youtube_uploads.c.uploaded_at.desc())
+            .limit(1)
+        ).first()
+        return row[0] if row else None

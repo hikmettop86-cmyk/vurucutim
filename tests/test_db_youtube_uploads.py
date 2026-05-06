@@ -71,3 +71,39 @@ def test_get_last_youtube_upload_at_ignores_failed_rows(tmp_path):
     record_youtube_upload(eng, short_id=sid, video_id=None,
                            status="failed", error="x", video_url=None)
     assert get_last_youtube_upload_at(eng) is None
+
+
+def test_count_uploads_for_channel(tmp_path):
+    from short_bot.db import (
+        init_db, record_short, record_youtube_upload, count_uploads_for_channel,
+    )
+    eng = init_db(tmp_path / "x.sqlite")
+    s1 = record_short(eng, channel="ch", rss_item_guid="g1", title="T",
+                       file_path="x.mp4", duration_s=6, script_json="{}", render_ms=1)
+    s2 = record_short(eng, channel="ch", rss_item_guid="g2", title="T2",
+                       file_path="y.mp4", duration_s=6, script_json="{}", render_ms=1)
+    s3 = record_short(eng, channel="other", rss_item_guid="g3", title="T3",
+                       file_path="z.mp4", duration_s=6, script_json="{}", render_ms=1)
+    record_youtube_upload(eng, short_id=s1, video_id="V1",
+                           status="success", error=None, video_url="https://yt/V1")
+    record_youtube_upload(eng, short_id=s2, video_id=None,
+                           status="failed", error="x", video_url=None)
+    record_youtube_upload(eng, short_id=s3, video_id="V3",
+                           status="success", error=None, video_url="https://yt/V3")
+    assert count_uploads_for_channel(eng, "ch") == 1
+    assert count_uploads_for_channel(eng, "other") == 1
+    assert count_uploads_for_channel(eng, "missing") == 0
+
+
+def test_last_upload_at_for_channel(tmp_path):
+    from short_bot.db import (
+        init_db, record_short, record_youtube_upload, last_upload_at_for_channel,
+    )
+    eng = init_db(tmp_path / "x.sqlite")
+    assert last_upload_at_for_channel(eng, "ch") is None
+    s1 = record_short(eng, channel="ch", rss_item_guid="g1", title="T",
+                       file_path="x.mp4", duration_s=6, script_json="{}", render_ms=1)
+    record_youtube_upload(eng, short_id=s1, video_id="V1",
+                           status="success", error=None, video_url="https://yt/V1")
+    ts = last_upload_at_for_channel(eng, "ch")
+    assert ts is not None

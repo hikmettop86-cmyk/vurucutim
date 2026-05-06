@@ -3,32 +3,81 @@
 {% block content %}
 <div class="flex justify-between items-center mb-6">
   <h1 class="font-serif text-3xl font-bold">YouTube</h1>
+  <div class="text-xs text-claude-muted">
+    {{ summaries | length }} bağlı kanal · stats günlük 03:00'da çekilir
+  </div>
 </div>
 
 {% if summaries %}
-  <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
     {% for s in summaries %}
     <a href="/channels/{{ s.slug }}/edit"
-       class="bg-claude-surface border border-claude-border rounded-lg p-5 hover:bg-claude-surface-alt transition-colors block">
-      <div class="font-semibold text-base">{{ s.yt_title }}</div>
-      <div class="text-claude-muted text-xs mt-1">{{ s.slug }}</div>
-      {% if s.subscribers is not none %}
-      <div class="grid grid-cols-2 gap-3 mt-3 text-sm">
-        <div>
-          <div class="text-claude-muted uppercase text-[10px]">Abone</div>
-          <div class="font-bold">{{ "{:,}".format(s.subscribers).replace(',', '.') }}</div>
-        </div>
-        <div>
-          <div class="text-claude-muted uppercase text-[10px]">Toplam izlenme</div>
-          <div class="font-bold">{{ "{:,}".format(s.total_views).replace(',', '.') }}</div>
+       class="bg-white border border-claude-border rounded-xl shadow-soft hover:shadow-card transition-all overflow-hidden block">
+      {# Header — avatar + title + handle #}
+      <div class="flex items-start gap-3 p-4 border-b border-claude-border/40">
+        {% if s.has_avatar %}
+          <img src="/youtube-avatars/{{ s.slug }}" alt=""
+               class="w-12 h-12 rounded-full bg-claude-surface-alt flex-shrink-0 object-cover">
+        {% else %}
+          <div class="w-12 h-12 rounded-full bg-claude-surface-alt flex-shrink-0 flex items-center justify-center text-claude-muted">▶</div>
+        {% endif %}
+        <div class="flex-1 min-w-0">
+          <div class="font-semibold truncate">{{ s.yt_title }}</div>
+          <div class="text-xs text-claude-muted truncate">
+            {% if s.yt_handle %}@{{ s.yt_handle }} · {% endif %}{{ s.slug }}
+          </div>
+          {% if s.yt_description_short %}
+            <div class="text-[11px] text-claude-subtle mt-1 line-clamp-2">{{ s.yt_description_short }}</div>
+          {% endif %}
         </div>
       </div>
-      <div class="text-[10px] text-claude-subtle mt-2">
-        Snapshot: {{ s.latest_snapshot }} · {{ s.history_days }} günlük geçmiş
+
+      {# Big numbers — abone & izlenme & video sayısı #}
+      <div class="grid grid-cols-3 gap-3 p-4 border-b border-claude-border/40">
+        <div>
+          <div class="text-[10px] text-claude-muted uppercase tracking-wider">Abone</div>
+          <div class="font-bold text-2xl">
+            {% if s.subscribers is not none %}{{ "{:,}".format(s.subscribers).replace(',', '.') }}{% else %}—{% endif %}
+          </div>
+          {% if s.subs_delta_7d is not none %}
+            <div class="text-xs {% if s.subs_delta_7d > 0 %}text-claude-success{% elif s.subs_delta_7d < 0 %}text-claude-error{% else %}text-claude-muted{% endif %}">
+              {% if s.subs_delta_7d > 0 %}↑ +{{ s.subs_delta_7d }}{% elif s.subs_delta_7d < 0 %}↓ {{ s.subs_delta_7d }}{% else %}→ 0{% endif %} (7g)
+            </div>
+          {% endif %}
+        </div>
+        <div>
+          <div class="text-[10px] text-claude-muted uppercase tracking-wider">İzlenme</div>
+          <div class="font-bold text-2xl">
+            {% if s.total_views is not none %}{{ "{:,}".format(s.total_views).replace(',', '.') }}{% else %}—{% endif %}
+          </div>
+          {% if s.views_delta_7d is not none %}
+            <div class="text-xs {% if s.views_delta_7d > 0 %}text-claude-success{% else %}text-claude-muted{% endif %}">
+              {% if s.views_delta_7d > 0 %}↑ +{{ "{:,}".format(s.views_delta_7d).replace(',', '.') }}{% elif s.views_delta_7d < 0 %}↓ {{ s.views_delta_7d }}{% else %}→ 0{% endif %} (7g)
+            </div>
+          {% endif %}
+        </div>
+        <div>
+          <div class="text-[10px] text-claude-muted uppercase tracking-wider">Video</div>
+          <div class="font-bold text-2xl">{{ s.video_count }}</div>
+          <div class="text-xs text-claude-muted">{{ s.bot_uploaded }} bot</div>
+        </div>
       </div>
-      {% else %}
-      <div class="text-claude-subtle text-xs mt-3">Henüz stats yok — yarın 03:00'da çekilecek.</div>
-      {% endif %}
+
+      {# Footer — son upload + son snapshot #}
+      <div class="px-4 py-3 grid grid-cols-2 gap-3 text-[11px] text-claude-muted bg-claude-surface/40">
+        <div>
+          <div class="uppercase text-[9px]">Son yüklenen</div>
+          <div class="font-medium text-claude-text">
+            {% if s.last_upload_at %}{{ s.last_upload_at.strftime('%d %b %H:%M') }}{% else %}—{% endif %}
+          </div>
+        </div>
+        <div>
+          <div class="uppercase text-[9px]">Son snapshot</div>
+          <div class="font-medium text-claude-text">
+            {% if s.snapshot %}{{ s.snapshot }}{% else %}—{% endif %}
+          </div>
+        </div>
+      </div>
     </a>
     {% endfor %}
   </div>

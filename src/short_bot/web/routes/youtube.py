@@ -1,7 +1,7 @@
 import json as _json
 from pathlib import Path
 from flask import (Blueprint, abort, current_app, flash, redirect,
-                   request, url_for)
+                   request, send_from_directory, url_for)
 
 from short_bot.config import load_channel
 from short_bot.db import init_db, record_youtube_upload, get_rss_item_for_short
@@ -22,6 +22,17 @@ def _redirect_uri() -> str:
     host = getattr(s, "web_host", "127.0.0.1")
     port = getattr(s, "web_port", 5005)
     return f"http://{host}:{port}/oauth/callback"
+
+
+@bp.route("/youtube-avatars/<slug>")
+def avatar(slug):
+    """Serve cached channel avatar. Returns 404 if not yet downloaded."""
+    yt_root = Path(current_app.config["SHORTBOT_YT_CREDS_DIR"]).resolve()
+    target = yt_root / slug / "avatar.jpg"
+    if not target.is_file():
+        abort(404)
+    return send_from_directory(yt_root, f"{slug}/avatar.jpg",
+                                 mimetype="image/jpeg")
 
 
 @bp.route("/channels/<slug>/youtube/connect", methods=["POST"])
