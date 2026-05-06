@@ -1,0 +1,43 @@
+{% extends "base.html.j2" %}
+{% block title %}Vurucu TİM — YouTube{% endblock %}
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+  <h1 class="font-serif text-3xl font-bold">YouTube</h1>
+</div>
+
+{% if summaries %}
+  <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+    {% for s in summaries %}
+    <a href="/channels/{{ s.slug }}/edit"
+       class="bg-claude-surface border border-claude-border rounded-lg p-5 hover:bg-claude-surface-alt transition-colors block">
+      <div class="font-semibold text-base">{{ s.yt_title }}</div>
+      <div class="text-claude-muted text-xs mt-1">{{ s.slug }}</div>
+      {% if s.subscribers is not none %}
+      <div class="grid grid-cols-2 gap-3 mt-3 text-sm">
+        <div>
+          <div class="text-claude-muted uppercase text-[10px]">Abone</div>
+          <div class="font-bold">{{ "{:,}".format(s.subscribers).replace(',', '.') }}</div>
+        </div>
+        <div>
+          <div class="text-claude-muted uppercase text-[10px]">Toplam izlenme</div>
+          <div class="font-bold">{{ "{:,}".format(s.total_views).replace(',', '.') }}</div>
+        </div>
+      </div>
+      <div class="text-[10px] text-claude-subtle mt-2">
+        Snapshot: {{ s.latest_snapshot }} · {{ s.history_days }} günlük geçmiş
+      </div>
+      {% else %}
+      <div class="text-claude-subtle text-xs mt-3">Henüz stats yok — yarın 03:00'da çekilecek.</div>
+      {% endif %}
+    </a>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="bg-claude-surface border border-claude-border rounded-lg p-8 text-center">
+    <div class="text-claude-muted">Henüz YouTube'a bağlı kanal yok.</div>
+    <a href="/channels" class="text-claude-accent hover:underline text-sm mt-2 inline-block">
+      Kanal edit sayfasından "▶ YouTube Bağla" ile başla →
+    </a>
+  </div>
+{% endif %}
+{% endblock %}

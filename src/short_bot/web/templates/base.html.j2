@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}short-bot{% endblock %}</title>
+  <title>{% block title %}Vurucu TİM{% endblock %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:wght@400;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:ital,wght@0,400;0,600;0,700;1,400;1,700&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -14,19 +14,26 @@
         extend: {
           colors: {
             'claude-bg': '#faf9f5',
-            'claude-surface': '#f0ede4',
-            'claude-surface-alt': '#e8e4d8',
+            'claude-surface': '#f5f2ea',
+            'claude-surface-alt': '#ece8dc',
             'claude-text': '#141413',
             'claude-muted': '#6b6863',
+            'claude-subtle': '#94918a',
             'claude-accent': '#c96442',
             'claude-accent-hover': '#b85638',
+            'claude-accent-soft': '#f4ddd3',
             'claude-border': '#e3e0d4',
+            'claude-border-strong': '#cfcbb8',
             'claude-error': '#cc3333',
             'claude-success': '#3a7d44',
           },
           fontFamily: {
             serif: ['"Source Serif 4"', 'Georgia', 'serif'],
             sans: ['Inter', 'system-ui', 'sans-serif'],
+          },
+          boxShadow: {
+            'soft': '0 1px 2px rgba(20,20,19,0.04), 0 1px 1px rgba(20,20,19,0.02)',
+            'card': '0 1px 3px rgba(20,20,19,0.06), 0 4px 12px rgba(20,20,19,0.04)',
           }
         }
       }
@@ -36,47 +43,79 @@
   <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
   <style>
     [x-cloak] { display: none !important; }
-    body { font-family: 'Inter', sans-serif; }
-    h1, h2, h3 { font-family: 'Source Serif 4', Georgia, serif; }
+    body { font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }
+    h1, h2, h3 { font-family: 'Source Serif 4', Georgia, serif; letter-spacing: -0.01em; }
+    .nav-link { position: relative; transition: color 150ms ease; }
+    .nav-link::after {
+      content: '';
+      position: absolute;
+      left: 0; right: 0; bottom: -14px;
+      height: 2px;
+      background: #c96442;
+      transform: scaleX(0);
+      transform-origin: center;
+      transition: transform 180ms ease;
+    }
+    .nav-link.active { color: #141413; }
+    .nav-link.active::after { transform: scaleX(1); }
+    .nav-link:hover::after { transform: scaleX(0.5); }
   </style>
 </head>
-<body class="bg-claude-bg text-claude-text min-h-screen">
-  <nav class="bg-claude-surface border-b border-claude-border px-6 py-3 flex items-center gap-6">
-    <a href="/" class="font-serif font-bold text-claude-accent text-lg">short-bot</a>
-    <a href="/" class="text-claude-text/80 hover:text-claude-text text-sm">Dashboard</a>
-    <a href="/shorts" class="text-claude-text/80 hover:text-claude-text text-sm">Shorts</a>
-    <a href="/rss" class="text-claude-text/80 hover:text-claude-text text-sm">RSS</a>
-    <a href="/channels" class="text-claude-text/80 hover:text-claude-text text-sm">Kanallar</a>
-    <a href="/logs" class="text-claude-text/80 hover:text-claude-text text-sm">Loglar</a>
-
-    <span class="ml-auto flex items-center gap-2 text-xs">
-      {% if system_running_count and system_running_count > 0 %}
-        <span class="flex items-center gap-1 text-yellow-600">
-          <span class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></span>
-          {{ system_running_count }} çalışıyor
-        </span>
-      {% else %}
-        <span class="flex items-center gap-1 text-claude-success">
-          <span class="w-2 h-2 rounded-full bg-claude-success"></span>
-          idle
-        </span>
-      {% endif %}
-    </span>
-    <a href="/settings" class="text-claude-text/80 hover:text-claude-text text-sm">Ayarlar</a>
+<body class="bg-claude-bg text-claude-text min-h-screen flex flex-col">
+  {% set p = request.path %}
+  <nav class="bg-claude-surface/80 backdrop-blur border-b border-claude-border sticky top-0 z-40">
+    <div class="container mx-auto max-w-6xl px-6 py-3 flex items-center gap-7">
+      <a href="/" class="flex items-center gap-2 group">
+        <span class="w-8 h-8 rounded-md bg-claude-accent text-white flex items-center justify-center font-serif italic text-lg shadow-soft group-hover:bg-claude-accent-hover transition-colors">V</span>
+        <span class="font-serif font-bold text-claude-text text-base tracking-tight">Vurucu <span class="text-claude-accent">TİM</span></span>
+      </a>
+      <div class="flex items-center gap-7 text-sm text-claude-muted ml-2">
+        <a href="/" class="nav-link hover:text-claude-text {% if p == '/' %}active{% endif %}">Dashboard</a>
+        <a href="/shorts" class="nav-link hover:text-claude-text {% if p.startswith('/shorts') %}active{% endif %}">Shorts</a>
+        <a href="/rss" class="nav-link hover:text-claude-text {% if p.startswith('/rss') %}active{% endif %}">RSS</a>
+        <a href="/channels" class="nav-link hover:text-claude-text {% if p.startswith('/channels') %}active{% endif %}">Kanallar</a>
+        <a href="/youtube" class="nav-link hover:text-claude-text {% if p.startswith('/youtube') %}active{% endif %}">YouTube</a>
+        <a href="/logs" class="nav-link hover:text-claude-text {% if p.startswith('/logs') %}active{% endif %}">Loglar</a>
+      </div>
+      <span class="ml-auto flex items-center gap-2 text-xs">
+        {% if system_running_count and system_running_count > 0 %}
+          <span class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-yellow-50 ring-1 ring-yellow-200 text-yellow-700">
+            <span class="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse"></span>
+            {{ system_running_count }} çalışıyor
+          </span>
+        {% else %}
+          <span class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-claude-success/10 ring-1 ring-claude-success/30 text-claude-success">
+            <span class="w-1.5 h-1.5 rounded-full bg-claude-success"></span>
+            idle
+          </span>
+        {% endif %}
+      </span>
+      <a href="/settings" class="nav-link text-sm text-claude-muted hover:text-claude-text {% if p.startswith('/settings') %}active{% endif %}">Ayarlar</a>
+      <button hx-post="/system/restart"
+              hx-confirm="Sunucu yeniden başlatılsın mı? (5 saniye sürer)"
+              hx-swap="none"
+              class="text-xs px-2.5 py-1 rounded-full bg-claude-surface ring-1 ring-claude-border text-claude-muted hover:text-claude-text hover:bg-claude-surface-alt transition-colors"
+              title="Sunucuyu yeniden başlat">↻</button>
+    </div>
   </nav>
+  <script>
+    document.body.addEventListener('schedule-refresh', () => {
+      setTimeout(() => location.reload(), 5500);
+    });
+  </script>
 
   {# Flash toasts (auto-dismiss after 4s) #}
-  <div class="fixed top-4 right-4 z-50 space-y-2 w-80" id="flash-stack">
+  <div class="fixed top-20 right-4 z-50 space-y-2 w-80" id="flash-stack">
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% for category, msg in messages %}
         <div x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 4000)"
              x-transition:leave="transition ease-in duration-300"
              x-transition:leave-start="opacity-100 translate-x-0"
              x-transition:leave-end="opacity-0 translate-x-4"
-             class="border rounded-lg px-4 py-3 text-sm shadow-md
-                    {% if category == 'error' %}bg-claude-error/10 border-claude-error/40 text-claude-error
-                    {% elif category == 'success' %}bg-claude-success/10 border-claude-success/40 text-claude-success
-                    {% else %}bg-claude-surface border-claude-border text-claude-text{% endif %}">
+             class="border rounded-lg px-4 py-3 text-sm shadow-card
+                    {% if category == 'error' %}bg-white border-claude-error/40 text-claude-error
+                    {% elif category == 'success' %}bg-white border-claude-success/40 text-claude-success
+                    {% else %}bg-white border-claude-border text-claude-text{% endif %}">
           <div class="flex items-start gap-2">
             <span>
               {% if category == 'error' %}✗{% elif category == 'success' %}✓{% else %}ℹ{% endif %}
@@ -89,8 +128,15 @@
     {% endwith %}
   </div>
 
-  <main class="container mx-auto px-6 py-8 max-w-7xl">
+  <main class="container mx-auto px-6 py-10 max-w-6xl flex-1 w-full">
     {% block content %}{% endblock %}
   </main>
+
+  <footer class="border-t border-claude-border py-5 mt-auto">
+    <div class="container mx-auto max-w-6xl px-6 flex items-center justify-between text-xs text-claude-subtle">
+      <span class="font-serif italic">Vurucu TİM</span>
+      <span>Otomatik kısa video üretim paneli</span>
+    </div>
+  </footer>
 </body>
 </html>
