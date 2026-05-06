@@ -64,3 +64,55 @@ def test_upload_video_returns_video_id(tmp_path):
             status={"privacyStatus": "public"},
         )
     assert video_id == "VID123"
+
+
+def test_upload_video_retries_on_resumable_error(tmp_path):
+    from googleapiclient.errors import ResumableUploadError
+    fake_mp4 = tmp_path / "v.mp4"
+    fake_mp4.write_bytes(b"\x00" * 1024)
+    fake_creds = MagicMock()
+
+    with patch("short_bot.youtube.uploader.build") as mbuild, \
+         patch("short_bot.youtube.uploader.MediaFileUpload"):
+        api = MagicMock()
+        mbuild.return_value = api
+        bad_resp = MagicMock(); bad_resp.status = 500; bad_resp.reason = "x"
+        request_first = MagicMock()
+        request_first.next_chunk.side_effect = ResumableUploadError(bad_resp, b"err")
+        request_ok = MagicMock()
+        request_ok.next_chunk.return_value = (None, {"id": "VID999"})
+        api.videos.return_value.insert.side_effect = [request_first, request_ok]
+
+        with patch("short_bot.youtube.uploader.time.sleep"):
+            vid = upload_video(
+                credentials=fake_creds, file_path=fake_mp4,
+                snippet={"title": "T", "description": "D",
+                          "tags": [], "categoryId": "24"},
+                status={"privacyStatus": "public"},
+            )
+    assert vid == "VID999"
+
+
+def test_upload_video_gives_up_after_max_retries(tmp_path):
+    from googleapiclient.errors import ResumableUploadError
+    fake_mp4 = tmp_path / "v.mp4"
+    fake_mp4.write_bytes(b"\x00")
+    fake_creds = MagicMock()
+
+    bad_resp = MagicMock(); bad_resp.status = 500; bad_resp.reason = "x"
+    err = ResumableUploadError(bad_resp, b"err")
+
+    with patch("short_bot.youtube.uploader.build") as mbuild, \
+         patch("short_bot.youtube.uploader.MediaFileUpload"), \
+         patch("short_bot.youtube.uploader.time.sleep"):
+        api = MagicMock(); mbuild.return_value = api
+        request = MagicMock(); request.next_chunk.side_effect = err
+        api.videos.return_value.insert.return_value = request
+        with pytest.raises(ResumableUploadError):
+            upload_video(
+                credentials=fake_creds, file_path=fake_mp4,
+                snippet={"title": "T", "description": "D",
+                          "tags": [], "categoryId": "24"},
+                status={"privacyStatus": "public"},
+                max_retries=3,
+            )
