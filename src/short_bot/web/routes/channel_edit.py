@@ -23,10 +23,19 @@ def edit(slug):
     from short_bot.web.models import Run
     runs = (Run.query.filter_by(channel=slug)
             .order_by(Run.started_at.desc()).limit(20).all())
+    music_root = current_app.config["SHORTBOT_MUSIC_ROOT"]
+    ch_music_dir = music_root / slug
+    music_info = {
+        "abs_path": str(ch_music_dir.resolve()),
+        "exists": ch_music_dir.is_dir(),
+        "mp3_count": (sum(1 for _ in ch_music_dir.rglob("*.mp3"))
+                      if ch_music_dir.is_dir() else 0),
+    }
     return render_template("channels/edit.html.j2", c=cfg,
                            archetypes=ARCHETYPES,
                            cron_human=describe_cron(cfg.schedule_cron),
-                           runs=runs)
+                           runs=runs,
+                           music_info=music_info)
 
 
 def _form_get_int(key: str, default: int) -> int:
@@ -54,7 +63,7 @@ def save(slug):
         abort(404)
     cfg = load_channel(path)
 
-    keywords = _form_get_list("keywords")
+    keywords = _form_get_list("keywords") or list(cfg.keywords)
 
     new_dna = cfg.dna
     if cfg.dna:
@@ -71,6 +80,12 @@ def save(slug):
                 "accent": request.form.get("dna_accent", cfg.dna.palette.accent),
                 "bg_gradient": [bg1, bg2],
                 "body_bg": [body1, body2],
+                "text_main": request.form.get("dna_text_main", cfg.dna.palette.text_main),
+                "text_muted": request.form.get("dna_text_muted", cfg.dna.palette.text_muted),
+                # Default to "" so toggle-off (disabled input not submitted)
+                # actually CLEARS a previously set override.
+                "header_top_color": request.form.get("dna_header_top_color", ""),
+                "header_bottom_color": request.form.get("dna_header_bottom_color", ""),
             }),
             "fonts": cfg.dna.fonts.model_copy(update={
                 "headline": request.form.get("dna_font_headline", cfg.dna.fonts.headline),
@@ -92,6 +107,7 @@ def save(slug):
             "category_icon": request.form.get("dna_category_icon", cfg.dna.category_icon),
             "search_query_template": request.form.get("dna_search_query_template",
                                                        cfg.dna.search_query_template),
+            "ui_badge": request.form.get("dna_ui_badge", cfg.dna.ui_badge),
         })
         # Rebuild CSS
         templates_dir = current_app.config["SHORTBOT_TEMPLATES_DIR"]
@@ -126,6 +142,19 @@ def save(slug):
             max_retries=max_retries, fuzzy_threshold=fuzzy_threshold,
         )
 
+    from short_bot.config import YoutubeChannelConfig
+    new_youtube = cfg.youtube
+    yt_present = any(k in request.form for k in
+                      ("yt_auto_upload", "yt_ai_content", "yt_category_id",
+                       "yt_privacy_status"))
+    if yt_present:
+        new_youtube = YoutubeChannelConfig(
+            auto_upload=(request.form.get("yt_auto_upload") == "1"),
+            ai_content=(request.form.get("yt_ai_content") == "1"),
+            category_id=request.form.get("yt_category_id", "24"),
+            privacy_status=request.form.get("yt_privacy_status", "public"),
+        )
+
     new_cfg = ChannelConfig(
         slug=cfg.slug,
         name=cfg.name,
@@ -155,6 +184,7 @@ def save(slug):
         script_model=cfg.script_model,
         content_source=cfg.content_source,
         generator=new_generator,
+        youtube=new_youtube,
     )
     save_channel(path, new_cfg)
     flash("Kanal güncellendi.", "success")
