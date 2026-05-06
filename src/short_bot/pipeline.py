@@ -16,7 +16,11 @@ from filelock import FileLock, Timeout
 from short_bot.config import ChannelConfig, Settings
 from short_bot.db import (
     init_db, mark_processed, record_short, record_rss_item,
-    start_run, finish_run,
+    start_run, finish_run, get_last_youtube_upload_at,
+)
+from short_bot.youtube import auth as _yt_auth
+from short_bot.youtube.auto_upload import (
+    should_auto_upload, run_auto_upload,
 )
 from short_bot.models import RenderJob
 from short_bot.fetcher import fetch_rss
@@ -38,6 +42,42 @@ from short_bot.generated_db import (
 from short_bot.image_picker import pick_image_for_generator
 
 _GENERATOR_TOPIC_DIST_DAYS = 7   # window for topic_distribution Sonnet hint
+
+
+def _resolve_ui_labels(channel: ChannelConfig) -> dict[str, str]:
+    labels = dict(ui_labels_for(channel.language))
+    if channel.dna and channel.dna.ui_badge.strip():
+        labels["breaking"] = channel.dna.ui_badge.strip()
+    return labels
+
+
+def _maybe_auto_upload(*, eng, short_id: int, channel, picked_score: float | None,
+                       log, yt_creds_root: Path, claude_path: str,
+                       model: str, cooldown_minutes: int = 5) -> None:
+    """Post-render hook: if channel opts in, evaluate gates + run upload."""
+    if channel.youtube is None or not channel.youtube.auto_upload:
+        return
+    creds = _yt_auth.load_credentials(yt_creds_root, channel.slug)
+    if creds is None:
+        log.info("[YT] auto-upload atlandı — kanal bağlanmamış (token.json yok)")
+        return
+    last_at = get_last_youtube_upload_at(eng)
+    decision = should_auto_upload(
+        channel=channel, picked_score=picked_score,
+        last_upload_at=last_at, cooldown_minutes=cooldown_minutes,
+    )
+    if not decision.eligible:
+        log.info(f"[YT] auto-upload atlandı — {decision.reason}")
+        return
+    log.info(f"[YT] auto-upload başlıyor (short {short_id})")
+    try:
+        result = run_auto_upload(
+            eng=eng, short_id=short_id, channel=channel,
+            credentials=creds, claude_path=claude_path, model=model,
+        )
+        log.info(f"[YT] auto-upload başarılı: {result.video_url}")
+    except Exception as e:
+        log.warning(f"[YT] auto-upload hatası: {e}")
 
 
 @dataclass
@@ -84,6 +124,13 @@ def _build_cta_sfx(channel) -> list:
     ]
 
 
+_RUN_SUB_LOGGERS = (
+    "short_bot.image_picker",
+    "short_bot.image_search",
+    "short_bot.wikimedia_search",
+)
+
+
 def _setup_logger(log_path: Path) -> logging.Logger:
     log_path.parent.mkdir(parents=True, exist_ok=True)
     logger = logging.getLogger(f"shortbot.run.{log_path.stem}")
@@ -95,7 +142,35 @@ def _setup_logger(log_path: Path) -> logging.Logger:
     sh = logging.StreamHandler()
     sh.setFormatter(logging.Formatter("[%(levelname)s] %(message)s"))
     logger.addHandler(sh)
+    # Forward asset-fase module logs to this run's file so failure reasons
+    # (DDG empty, Claude vision reject, etc.) show up in the run log.
+    sub_fmt = logging.Formatter("%(asctime)s [%(levelname)s] [%(name)s] %(message)s")
+    for name in _RUN_SUB_LOGGERS:
+        sub = logging.getLogger(name)
+        sub.setLevel(logging.INFO)
+        sub_fh = logging.FileHandler(log_path, encoding="utf-8")
+        sub_fh.setFormatter(sub_fmt)
+        sub_fh._shortbot_run = True
+        sub.addHandler(sub_fh)
     return logger
+
+
+def _teardown_logger(log: logging.Logger) -> None:
+    for h in list(log.handlers):
+        try:
+            h.close()
+        except Exception:
+            pass
+        log.removeHandler(h)
+    for name in _RUN_SUB_LOGGERS:
+        sub = logging.getLogger(name)
+        for h in list(sub.handlers):
+            if getattr(h, "_shortbot_run", False):
+                try:
+                    h.close()
+                except Exception:
+                    pass
+                sub.removeHandler(h)
 
 
 def run_pipeline(
@@ -147,13 +222,7 @@ def run_pipeline(
             finish_run(eng, run_id, status="failed", short_id=None, error=str(e))
             return RunResult(run_id=run_id, status="failed", short_path=None, error=str(e))
     finally:
-        # Close log handlers to release the file
-        for h in list(log.handlers):
-            try:
-                h.close()
-            except Exception:
-                pass
-            log.removeHandler(h)
+        _teardown_logger(log)
         # Dispose engine to release the SQLite connection pool (CLI use case)
         eng.dispose()
 
@@ -191,7 +260,11 @@ def _run_rss(*, channel, run_id, log, eng, settings,
 
     log.info("[3/8] score_items")
     candidates = new_items[:channel.max_candidates_per_run]
-    scored = score_items(candidates, claude_path=settings.claude_cli_path)
+    scored = score_items(
+        candidates,
+        claude_path=settings.claude_cli_path,
+        model=settings.claude_models.get("default", "haiku"),
+    )
     top = select_top(scored, min_score=channel.min_score, n=1)
     picked_guid = top[0].item.guid if top else None
     for s in scored:
@@ -237,7 +310,7 @@ def _run_rss(*, channel, run_id, log, eng, settings,
                                     channel=channel)
         if bg:
             log.info(f"  ddg image accepted: {bg.name}")
-    music = pick_music(music_root, mood=script.mood)
+    music = pick_music(music_root, mood=script.mood, channel_slug=channel.slug)
     log.info(f"  → bg={'cached' if bg else 'none'} music={music.name}")
 
     log.info("[7/8] render_frames")
@@ -260,7 +333,7 @@ def _run_rss(*, channel, run_id, log, eng, settings,
         frames_dir = Path(tmpd) / "frames"
         t0 = time.perf_counter()
         template_path = templates_dir / f"{channel.template}.html.j2"
-        ui_labels = ui_labels_for(channel.language)
+        ui_labels = _resolve_ui_labels(channel)
         dna_css_path = Path("templates") / "css" / f"{channel.slug}.css"
         dna_css = dna_css_path.read_text(encoding="utf-8") if dna_css_path.exists() else ""
         render_frames(job, template_path, frames_dir,
@@ -290,6 +363,15 @@ def _run_rss(*, channel, run_id, log, eng, settings,
         script_json=script.model_dump_json(), render_ms=render_ms,
     )
     finish_run(eng, run_id, status="success", short_id=short_id, error=None)
+    yt_creds_root = (Path(eng.url.database).parent / "youtube_credentials").resolve() \
+        if eng.url.database else Path("data/youtube_credentials").resolve()
+    _maybe_auto_upload(
+        eng=eng, short_id=short_id, channel=channel,
+        picked_score=picked.score, log=log,
+        yt_creds_root=yt_creds_root,
+        claude_path=settings.claude_cli_path,
+        model=settings.claude_models.get("default", "haiku"),
+    )
     log.info(f"=== success short_id={short_id} ===")
     return RunResult(run_id=run_id, status="success", short_path=out_path, error=None)
 
@@ -362,7 +444,7 @@ def _run_generator(*, channel, run_id, log, eng, settings,
         cache_dir=images_cache,
         claude_path=settings.claude_cli_path,
     )
-    music = pick_music(music_root, mood=chosen_result.script.mood)
+    music = pick_music(music_root, mood=chosen_result.script.mood, channel_slug=channel.slug)
     log.info(f"  → bg={'cached' if bg else 'none'} music={music.name}")
 
     # Phase 5+6: render + compose (same RenderJob shape as RSS path)
@@ -380,7 +462,7 @@ def _run_generator(*, channel, run_id, log, eng, settings,
         frames_dir = Path(tmpd) / "frames"
         t0 = time.perf_counter()
         template_path = templates_dir / f"{channel.template}.html.j2"
-        ui_labels = ui_labels_for(channel.language)
+        ui_labels = _resolve_ui_labels(channel)
         dna_css_path = Path("templates") / "css" / f"{channel.slug}.css"
         dna_css = dna_css_path.read_text(encoding="utf-8") if dna_css_path.exists() else ""
         render_frames(job, template_path, frames_dir,
@@ -408,6 +490,15 @@ def _run_generator(*, channel, run_id, log, eng, settings,
     )
     update_generated_short_id(eng, generated_id, short_id)
     finish_run(eng, run_id, status="success", short_id=short_id, error=None)
+    yt_creds_root = (Path(eng.url.database).parent / "youtube_credentials").resolve() \
+        if eng.url.database else Path("data/youtube_credentials").resolve()
+    _maybe_auto_upload(
+        eng=eng, short_id=short_id, channel=channel,
+        picked_score=None, log=log,
+        yt_creds_root=yt_creds_root,
+        claude_path=settings.claude_cli_path,
+        model=settings.claude_models.get("default", "haiku"),
+    )
     log.info(f"=== success short_id={short_id} ===")
     return RunResult(run_id=run_id, status="success",
                      short_path=out_path, error=None)
