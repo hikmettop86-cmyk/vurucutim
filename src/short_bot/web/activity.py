@@ -13,7 +13,7 @@ from typing import Literal
 from sqlalchemy import select
 from sqlalchemy.engine import Engine
 
-from short_bot.db import runs
+from short_bot.db import runs, shorts as shorts_table
 
 
 EventType = Literal["run", "short", "youtube", "error"]
@@ -34,6 +34,7 @@ class ActivityEvent:
 
 _RUN_ICON = "🔍"
 _ERROR_ICON = "⚠"
+_SHORT_ICON = "✓"
 
 
 def _aware(dt: datetime) -> datetime:
@@ -77,10 +78,34 @@ def _build_run_events(eng: Engine, *, since: datetime) -> list[ActivityEvent]:
     return out
 
 
+def _build_short_events(eng: Engine, *, since: datetime) -> list[ActivityEvent]:
+    """One event per short produced (deleted_at IS NULL only)."""
+    out: list[ActivityEvent] = []
+    with eng.connect() as conn:
+        rows = conn.execute(
+            select(shorts_table)
+            .where(shorts_table.c.deleted_at.is_(None))
+            .where(shorts_table.c.created_at >= since)
+            .order_by(shorts_table.c.created_at.desc())
+        ).fetchall()
+    for r in rows:
+        ts = _aware(r.created_at)
+        title = (r.title or "")[:80]
+        out.append(ActivityEvent(
+            timestamp=ts, type="short", channel=r.channel,
+            title=f"Video · {r.channel}",
+            detail=f"{title} · {r.duration_s}s · {r.render_ms}ms",
+            status="success",
+            link=f"/shorts/{r.id}",
+            icon=_SHORT_ICON,
+        ))
+    return out
+
+
 def build_activity_events(eng: Engine, *, since: datetime) -> list[ActivityEvent]:
     """Return a time-sorted (DESC) list of events from since onwards.
-    Currently includes only run/error events from the runs table; later tasks
-    UNION shorts and youtube_uploads."""
-    events = _build_run_events(eng, since=since)
+    Sources: finished runs (success/failed/no_candidates) and produced shorts.
+    Later tasks add youtube_uploads."""
+    events = _build_run_events(eng, since=since) + _build_short_events(eng, since=since)
     events.sort(key=lambda e: e.timestamp, reverse=True)
     return events
