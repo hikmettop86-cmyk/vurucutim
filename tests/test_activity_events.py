@@ -1,0 +1,70 @@
+from datetime import datetime, timedelta, timezone
+
+import pytest
+
+from short_bot.db import init_db, start_run, finish_run
+
+
+@pytest.fixture
+def eng(tmp_path):
+    return init_db(tmp_path / "x.sqlite")
+
+
+def _utc_now():
+    return datetime.now(timezone.utc)
+
+
+def test_activity_event_dataclass_shape():
+    from short_bot.web.activity import ActivityEvent
+    e = ActivityEvent(
+        timestamp=_utc_now(), type="run", channel="ch1",
+        title="t", detail="d", status="success",
+        link="/logs?channel=ch1", icon="🔍",
+    )
+    # Frozen — must reject mutation
+    with pytest.raises(Exception):
+        e.title = "other"
+
+
+def test_build_activity_events_includes_successful_run(eng):
+    rid = start_run(eng, "ch1", trigger="manual", log_path="x.log")
+    finish_run(eng, rid, status="success", short_id=None, error=None)
+
+    from short_bot.web.activity import build_activity_events
+    events = build_activity_events(eng, since=_utc_now() - timedelta(hours=1))
+    runs = [e for e in events if e.type == "run"]
+    assert len(runs) == 1
+    assert runs[0].channel == "ch1"
+    assert runs[0].status == "success"
+
+
+def test_build_activity_events_failed_run_becomes_error_type(eng):
+    rid = start_run(eng, "ch1", trigger="cron", log_path="x.log")
+    finish_run(eng, rid, status="failed", short_id=None, error="boom")
+
+    from short_bot.web.activity import build_activity_events
+    events = build_activity_events(eng, since=_utc_now() - timedelta(hours=1))
+    errors = [e for e in events if e.type == "error"]
+    assert len(errors) == 1
+    assert errors[0].channel == "ch1"
+    assert errors[0].status == "failed"
+    assert "boom" in errors[0].detail
+
+
+def test_build_activity_events_excludes_runs_before_since(eng):
+    rid = start_run(eng, "ch1", trigger="manual", log_path="x.log")
+    finish_run(eng, rid, status="success", short_id=None, error=None)
+
+    from short_bot.web.activity import build_activity_events
+    # since 1 hour in the future → no events
+    events = build_activity_events(eng, since=_utc_now() + timedelta(hours=1))
+    assert events == []
+
+
+def test_build_activity_events_running_run_not_emitted_as_event(eng):
+    """Running runs (ended_at IS NULL) belong on the live-runs panel, not the feed."""
+    start_run(eng, "ch1", trigger="manual", log_path="x.log")  # not finished
+
+    from short_bot.web.activity import build_activity_events
+    events = build_activity_events(eng, since=_utc_now() - timedelta(hours=1))
+    assert events == []
