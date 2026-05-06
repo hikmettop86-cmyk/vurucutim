@@ -26,6 +26,7 @@ def compose_video(
     bg_blur_px: int = 30,
     bg_dim: float = 0.4,
     fg_scale: float = 1.0,
+    duration_s: int | None = None,
 ) -> Path:
     """Compose final video.
 
@@ -61,6 +62,14 @@ def compose_video(
             sfx_overlays=sfx_overlays, music_volume=music_volume,
             bg_blur_px=bg_blur_px, bg_dim=bg_dim, fg_scale=fg_scale,
         )
+
+    # Global duration cap (defense-in-depth: relying on -shortest is fragile
+    # when overlay filter's default repeatlast=1 keeps emitting frames after
+    # the foreground PNG seq ends).
+    if duration_s is not None:
+        # Insert "-t {duration_s}" immediately after the binary + "-y"
+        # i.e., positions 0 and 1 are [ffmpeg_path, "-y"]; insert at 2.
+        cmd[2:2] = ["-t", str(duration_s)]
 
     cmd += [
         "-map", video_map,
@@ -150,7 +159,7 @@ def _build_bg_video_cmd(
         f"eq=brightness={brightness:.2f}:saturation={bg_dim:.2f}[bg]"
     )
     fg_chain = f"[1:v]scale=iw*{fg_scale}:ih*{fg_scale},format=rgba[fg]"
-    overlay_chain = "[bg][fg]overlay=(W-w)/2:(H-h)/2:format=auto[outv]"
+    overlay_chain = "[bg][fg]overlay=(W-w)/2:(H-h)/2:shortest=1:format=auto[outv]"
 
     # Audio (same logic as legacy, but music is input 2 and SFX 3+)
     if not sfx_overlays:

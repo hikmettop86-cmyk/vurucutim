@@ -131,9 +131,24 @@ def _build_cta_sfx(channel) -> list:
 
 
 _RUN_SUB_LOGGERS = (
+    "short_bot.assets",
+    "short_bot.claude_cli",
+    "short_bot.composer",
+    "short_bot.dedup",
+    "short_bot.dna",
+    "short_bot.dna_smoke",
+    "short_bot.extractor",
+    "short_bot.fetcher",
+    "short_bot.generator",
     "short_bot.image_picker",
     "short_bot.image_search",
+    "short_bot.pexels",
+    "short_bot.renderer",
+    "short_bot.scorer",
+    "short_bot.script_writer",
     "short_bot.wikimedia_search",
+    "short_bot.youtube.auth",
+    "short_bot.youtube.uploader",
 )
 
 
@@ -405,6 +420,7 @@ def _run_rss(*, channel, run_id, log, eng, settings,
             bg_blur_px=bv.blur_px if bv else 30,
             bg_dim=bv.dim if bv else 0.4,
             fg_scale=bv.scale if (bv and bg_video_path) else 1.0,
+            duration_s=channel.duration_s,
         )
         render_ms = int((time.perf_counter() - t0) * 1000)
         log.info(f"  → {out_path.name} ({render_ms}ms)")
@@ -545,6 +561,7 @@ def _run_generator(*, channel, run_id, log, eng, settings,
             bg_blur_px=bv.blur_px if bv else 30,
             bg_dim=bv.dim if bv else 0.4,
             fg_scale=bv.scale if (bv and bg_video_path) else 1.0,
+            duration_s=channel.duration_s,
         )
         render_ms = int((time.perf_counter() - t0) * 1000)
         log.info(f"  → {out_path.name} ({render_ms}ms)")

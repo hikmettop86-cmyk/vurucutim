@@ -111,3 +111,80 @@ def test_compose_with_bg_video_propagates_ffmpeg_failure(tmp_path):
     with patch("short_bot.composer.subprocess.run", return_value=fail):
         with pytest.raises(RuntimeError, match="ffmpeg failed"):
             compose_video(frames, music, out, bg_video_path=bg)
+
+
+def test_compose_with_bg_video_emits_t_flag_when_duration_s_provided(tmp_path):
+    """duration_s caps the output via global -t flag, preventing music-length runaway."""
+    frames, music, out = _setup_inputs(tmp_path)
+    bg = tmp_path / "bg.mp4"
+    bg.write_bytes(b"x")
+    captured = {}
+
+    def fake_run(cmd, **kw):
+        captured["cmd"] = cmd
+        out.write_bytes(b"fake")
+        return _ok_proc()
+
+    with patch("short_bot.composer.subprocess.run", side_effect=fake_run):
+        compose_video(frames, music, out, bg_video_path=bg, duration_s=6)
+    cmd = captured["cmd"]
+    # -t 6 should appear as a global flag (before -i inputs and after the binary)
+    assert "-t" in cmd
+    t_idx = cmd.index("-t")
+    assert cmd[t_idx + 1] == "6"
+
+
+def test_compose_with_bg_video_overlay_uses_shortest_flag(tmp_path):
+    """The overlay filter must include shortest=1 so the foreground PNG seq end-time
+    bounds the video stream (not bg looping forever)."""
+    frames, music, out = _setup_inputs(tmp_path)
+    bg = tmp_path / "bg.mp4"
+    bg.write_bytes(b"x")
+    captured = {}
+
+    def fake_run(cmd, **kw):
+        captured["cmd"] = cmd
+        out.write_bytes(b"fake")
+        return _ok_proc()
+
+    with patch("short_bot.composer.subprocess.run", side_effect=fake_run):
+        compose_video(frames, music, out, bg_video_path=bg, fg_scale=0.88)
+    cmd_str = " ".join(captured["cmd"])
+    assert "shortest=1" in cmd_str  # overlay end-time bounded
+
+
+def test_compose_legacy_path_unchanged_by_duration_s_kwarg(tmp_path):
+    """duration_s kwarg should also work in legacy path (no bg) without breaking it."""
+    frames, music, out = _setup_inputs(tmp_path)
+    captured = {}
+
+    def fake_run(cmd, **kw):
+        captured["cmd"] = cmd
+        out.write_bytes(b"fake")
+        return _ok_proc()
+
+    with patch("short_bot.composer.subprocess.run", side_effect=fake_run):
+        compose_video(frames, music, out, duration_s=6)
+    cmd = captured["cmd"]
+    # Legacy path still single-input PNG seq (2 -i flags total) and now also has -t
+    assert cmd.count("-i") == 2
+    assert "-t" in cmd
+    t_idx = cmd.index("-t")
+    assert cmd[t_idx + 1] == "6"
+
+
+def test_compose_omits_t_flag_when_duration_s_is_none(tmp_path):
+    """Backward compat: callers that don't pass duration_s get the legacy
+    no-explicit-cap behavior (relies on -shortest)."""
+    frames, music, out = _setup_inputs(tmp_path)
+    captured = {}
+
+    def fake_run(cmd, **kw):
+        captured["cmd"] = cmd
+        out.write_bytes(b"fake")
+        return _ok_proc()
+
+    with patch("short_bot.composer.subprocess.run", side_effect=fake_run):
+        compose_video(frames, music, out)
+    cmd = captured["cmd"]
+    assert "-t" not in cmd

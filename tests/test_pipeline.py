@@ -287,3 +287,32 @@ def test_resolve_pexels_bg_returns_first_downloaded_candidate_with_key(monkeypat
                                    secrets_path=tmp_path / "secrets.yaml",
                                    log=_silent_log())
     assert bg_path == fake_bg
+
+
+def test_run_sub_loggers_covers_all_short_bot_modules():
+    """Make sure log forwarding includes every short_bot module that emits at runtime,
+    so per-run log files contain a complete trace."""
+    from short_bot.pipeline import _RUN_SUB_LOGGERS
+    expected = {
+        "short_bot.assets",
+        "short_bot.claude_cli",
+        "short_bot.composer",
+        "short_bot.dedup",
+        "short_bot.dna",
+        "short_bot.dna_smoke",
+        "short_bot.extractor",
+        "short_bot.fetcher",
+        "short_bot.generator",
+        "short_bot.image_picker",
+        "short_bot.image_search",
+        "short_bot.pexels",
+        "short_bot.renderer",
+        "short_bot.scorer",
+        "short_bot.script_writer",
+        "short_bot.wikimedia_search",
+        "short_bot.youtube.auth",
+        "short_bot.youtube.uploader",
+    }
+    actual = set(_RUN_SUB_LOGGERS)
+    missing = expected - actual
+    assert not missing, f"Missing module(s) in _RUN_SUB_LOGGERS: {missing}"
