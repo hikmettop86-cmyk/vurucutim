@@ -176,6 +176,28 @@ def save(slug):
             cron_preset=(request.form.get("yt_cron_preset") or None),
         )
 
+    bg_v_enabled = request.form.get("bg_video_enabled") == "on"
+    if bg_v_enabled:
+        from short_bot.config import BgVideoConfig
+        try:
+            scale = float(request.form.get("bg_video_scale", "0.88"))
+            if scale not in (0.88, 0.80):
+                scale = 0.88
+        except (TypeError, ValueError):
+            scale = 0.88
+        try:
+            blur = int(request.form.get("bg_video_blur_px", "30"))
+        except (TypeError, ValueError):
+            blur = 30
+        try:
+            dim = float(request.form.get("bg_video_dim", "0.4"))
+        except (TypeError, ValueError):
+            dim = 0.4
+        new_bg_video = BgVideoConfig(enabled=True, scale=scale,
+                                       blur_px=blur, dim=dim)
+    else:
+        new_bg_video = None
+
     new_cfg = ChannelConfig(
         slug=cfg.slug,
         name=cfg.name,
@@ -206,6 +228,7 @@ def save(slug):
         content_source=cfg.content_source,
         generator=new_generator,
         youtube=new_youtube,
+        bg_video=new_bg_video,
     )
     save_channel(path, new_cfg)
     flash("Kanal güncellendi.", "success")
