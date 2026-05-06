@@ -1,11 +1,15 @@
 """Pexels Videos API client + archetype-pool query selector + secret resolver."""
 from __future__ import annotations
 
+import logging
 import os
 import random
 from pathlib import Path
+from typing import Literal
 
+import requests
 import yaml
+from pydantic import BaseModel
 
 
 def load_secrets(secrets_path: Path) -> dict:
@@ -38,3 +42,64 @@ def pick_query_for_archetype(archetype: str) -> str:
     if not pool:
         return "abstract motion background"
     return random.choice(pool)
+
+
+logger = logging.getLogger(__name__)
+
+_PEXELS_SEARCH_URL = "https://api.pexels.com/videos/search"
+
+
+class PexelsCandidate(BaseModel):
+    id: int
+    url: str          # highest-resolution mp4 link
+    duration_s: int
+
+
+def _pick_best_mp4(video_files: list[dict]) -> str | None:
+    """From a Pexels video's file list, return the highest-resolution mp4 link."""
+    mp4s = [
+        f for f in video_files
+        if f.get("file_type") == "video/mp4" and f.get("link")
+    ]
+    if not mp4s:
+        return None
+    mp4s.sort(key=lambda f: (f.get("width", 0) * f.get("height", 0)), reverse=True)
+    return mp4s[0]["link"]
+
+
+def search_videos(
+    query: str,
+    api_key: str,
+    *,
+    max_results: int = 5,
+    orientation: Literal["portrait", "landscape", "square"] = "portrait",
+    timeout_s: int = 15,
+) -> list[PexelsCandidate]:
+    """Search Pexels Videos. Returns [] on any error or empty result."""
+    if not api_key:
+        return []
+    try:
+        r = requests.get(
+            _PEXELS_SEARCH_URL,
+            headers={"Authorization": api_key},
+            params={"query": query, "orientation": orientation, "per_page": max_results},
+            timeout=timeout_s,
+        )
+    except requests.RequestException as e:
+        logger.warning(f"pexels search request failed: {e}")
+        return []
+    if r.status_code != 200:
+        logger.warning(f"pexels search HTTP {r.status_code}: {r.text[:200]}")
+        return []
+    payload = r.json() or {}
+    out: list[PexelsCandidate] = []
+    for v in payload.get("videos", []):
+        url = _pick_best_mp4(v.get("video_files", []))
+        if not url:
+            continue
+        out.append(PexelsCandidate(
+            id=int(v.get("id", 0)),
+            url=url,
+            duration_s=int(v.get("duration", 0)),
+        ))
+    return out
