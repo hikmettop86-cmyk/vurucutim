@@ -529,9 +529,23 @@ def _run_generator(*, channel, run_id, log, eng, settings,
         slug = _slugify(chosen_result.text)
         out_path = out_dir / f"{datetime.now(timezone.utc):%Y-%m-%d}_{slug}.mp4"
         sfx_overlays = _build_cta_sfx(channel)
-        compose_video(frames_dir, music, out_path,
-                      fps=30, ffmpeg_path=settings.ffmpeg_path,
-                      sfx_overlays=sfx_overlays)
+
+        secrets_path = current_app_secrets_path()
+        bg_video_path = _resolve_pexels_bg(
+            channel=channel, cache_dir=cache_dir,
+            secrets_path=secrets_path, log=log,
+        )
+
+        bv = channel.bg_video
+        compose_video(
+            frames_dir, music, out_path,
+            fps=30, ffmpeg_path=settings.ffmpeg_path,
+            sfx_overlays=sfx_overlays,
+            bg_video_path=bg_video_path,
+            bg_blur_px=bv.blur_px if bv else 30,
+            bg_dim=bv.dim if bv else 0.4,
+            fg_scale=bv.scale if (bv and bg_video_path) else 1.0,
+        )
         render_ms = int((time.perf_counter() - t0) * 1000)
         log.info(f"  → {out_path.name} ({render_ms}ms)")
 

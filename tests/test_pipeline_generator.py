@@ -78,8 +78,7 @@ def test_generator_pipeline_success(tmp_path):
          patch("short_bot.pipeline.render_frames"), \
          patch("short_bot.pipeline.compose_video") as compose:
         # Make compose write a fake mp4 file at the expected path
-        def _write_fake_mp4(frames_dir, music, op, *, fps, ffmpeg_path,
-                             sfx_overlays):
+        def _write_fake_mp4(frames_dir, music, op, **kw):
             op.parent.mkdir(parents=True, exist_ok=True)
             op.write_bytes(b"fake mp4")
         compose.side_effect = _write_fake_mp4
@@ -136,7 +135,7 @@ def test_generator_records_used_status_and_short_id(tmp_path):
                return_value=Path("dummy.mp3")), \
          patch("short_bot.pipeline.render_frames"), \
          patch("short_bot.pipeline.compose_video") as compose:
-        def _w(frames_dir, music, op, *, fps, ffmpeg_path, sfx_overlays):
+        def _w(frames_dir, music, op, **kw):
             op.parent.mkdir(parents=True, exist_ok=True)
             op.write_bytes(b"fake")
         compose.side_effect = _w
@@ -160,3 +159,89 @@ def test_generator_records_used_status_and_short_id(tmp_path):
     assert len(rows) == 1
     assert rows[0].status == "used"
     assert rows[0].short_id is not None
+
+
+def test_generator_pipeline_passes_bg_video_path_to_composer(monkeypatch, tmp_path):
+    """When the generator-mode channel has bg_video enabled and a Pexels key is
+    present, _run_generator must call compose_video with bg_video_path set."""
+    from short_bot.config import BgVideoConfig
+    from short_bot.pexels import PexelsCandidate
+
+    # Set Pexels env so resolve_pexels_api_key returns it
+    monkeypatch.setenv("PEXELS_API_KEY", "K")
+
+    # Mock Pexels search/download
+    fake_bg = tmp_path / "fake_bg.mp4"
+    fake_bg.write_bytes(b"x")
+    monkeypatch.setattr("short_bot.pexels.search_videos",
+                        lambda *a, **k: [PexelsCandidate(id=1, url="https://x/a.mp4", duration_s=5)])
+    monkeypatch.setattr("short_bot.pexels.download_video",
+                        lambda url, cache_dir, **k: fake_bg)
+
+    # Capture compose_video kwargs
+    captured: dict = {}
+
+    def fake_compose(frames, music, out, **kw):
+        captured.update(kw)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(b"fake-mp4")
+
+    monkeypatch.setattr("short_bot.pipeline.compose_video", fake_compose)
+
+    # Build a channel with bg_video enabled
+    cfg = _gen_channel(tmp_path)
+    cfg = ChannelConfig(
+        **{**cfg.__dict__, "bg_video": BgVideoConfig(enabled=True, scale=0.80)}
+    )
+    logs = tmp_path / "logs"
+    logs.mkdir()
+
+    with patch("short_bot.pipeline.generate_quote", return_value=_ok_result()), \
+         patch("short_bot.pipeline.pick_image_for_generator", return_value=None), \
+         patch("short_bot.pipeline.pick_music", return_value=Path("dummy.mp3")), \
+         patch("short_bot.pipeline.render_frames"):
+        result = run_pipeline(
+            channel=cfg, settings=_settings(),
+            db_path=tmp_path / "db.sqlite",
+            music_root=tmp_path, templates_dir=tmp_path,
+            cache_dir=tmp_path / "cache",
+            lock_dir=tmp_path / "locks", logs_dir=logs, trigger="test",
+        )
+
+    assert result.status == "success"
+    assert captured.get("bg_video_path") == fake_bg
+    assert captured.get("fg_scale") == 0.80
+
+
+def test_generator_pipeline_legacy_when_bg_video_disabled(monkeypatch, tmp_path):
+    """Without bg_video on the channel, compose_video receives bg_video_path=None
+    and fg_scale=1.0 (legacy fullscreen layout)."""
+    captured: dict = {}
+
+    def fake_compose(frames, music, out, **kw):
+        captured.update(kw)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(b"fake-mp4")
+
+    monkeypatch.setattr("short_bot.pipeline.compose_video", fake_compose)
+
+    # Channel with no bg_video (default None)
+    cfg = _gen_channel(tmp_path)
+    logs = tmp_path / "logs"
+    logs.mkdir()
+
+    with patch("short_bot.pipeline.generate_quote", return_value=_ok_result()), \
+         patch("short_bot.pipeline.pick_image_for_generator", return_value=None), \
+         patch("short_bot.pipeline.pick_music", return_value=Path("dummy.mp3")), \
+         patch("short_bot.pipeline.render_frames"):
+        result = run_pipeline(
+            channel=cfg, settings=_settings(),
+            db_path=tmp_path / "db.sqlite",
+            music_root=tmp_path, templates_dir=tmp_path,
+            cache_dir=tmp_path / "cache",
+            lock_dir=tmp_path / "locks", logs_dir=logs, trigger="test",
+        )
+
+    assert result.status == "success"
+    assert captured.get("bg_video_path") is None
+    assert captured.get("fg_scale", 1.0) == 1.0
