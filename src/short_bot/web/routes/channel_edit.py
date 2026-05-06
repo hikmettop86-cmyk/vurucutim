@@ -155,13 +155,20 @@ def save(slug):
     new_youtube = cfg.youtube
     yt_present = any(k in request.form for k in
                       ("yt_auto_upload", "yt_ai_content", "yt_category_id",
-                       "yt_privacy_status"))
+                       "yt_privacy_status", "yt_min_score_for_upload",
+                       "yt_cron_preset"))
     if yt_present:
+        try:
+            yt_min = float(request.form.get("yt_min_score_for_upload", "8.0"))
+        except (TypeError, ValueError):
+            yt_min = 8.0
         new_youtube = YoutubeChannelConfig(
             auto_upload=(request.form.get("yt_auto_upload") == "1"),
             ai_content=(request.form.get("yt_ai_content") == "1"),
             category_id=request.form.get("yt_category_id", "24"),
             privacy_status=request.form.get("yt_privacy_status", "public"),
+            min_score_for_upload=yt_min,
+            cron_preset=(request.form.get("yt_cron_preset") or None),
         )
 
     new_cfg = ChannelConfig(

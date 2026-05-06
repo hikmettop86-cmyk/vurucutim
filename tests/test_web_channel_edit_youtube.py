@@ -47,3 +47,23 @@ def test_post_persists_youtube_block(tmp_path):
     assert cfg.youtube.auto_upload is True
     assert cfg.youtube.category_id == "28"
     assert cfg.youtube.privacy_status == "unlisted"
+
+
+def test_post_persists_min_score_and_cron_preset(tmp_path):
+    app = _make_app(tmp_path)
+    client = app.test_client()
+    resp = client.post("/channels/ch/edit", data={
+        "schedule_cron": "0 9 * * *", "duration_s": "6",
+        "min_score": "6.0", "max_candidates_per_run": "10",
+        "handle": "@ch",
+        "yt_auto_upload": "1", "yt_ai_content": "1",
+        "yt_category_id": "24", "yt_privacy_status": "public",
+        "yt_min_score_for_upload": "8.5",
+        "yt_cron_preset": "daily_09",
+    }, follow_redirects=False)
+    assert resp.status_code == 302
+    from short_bot.config import load_channel
+    cfg = load_channel(tmp_path / "config" / "channels" / "ch.yaml")
+    assert cfg.youtube.min_score_for_upload == 8.5
+    assert cfg.youtube.cron_preset == "daily_09"
+    assert cfg.schedule_cron == "0 9 * * *"
