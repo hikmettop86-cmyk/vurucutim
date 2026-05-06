@@ -40,6 +40,7 @@ cta:
   show_handle: false
 """, encoding="utf-8")
     return create_app(config_dir=cfg_dir, db_path=tmp_path / "x.sqlite",
+                      secrets_path=tmp_path / "data" / "secrets.yaml",
                       scheduler=False)
 
 

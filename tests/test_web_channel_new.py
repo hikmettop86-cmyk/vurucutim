@@ -16,7 +16,9 @@ def app(tmp_path):
         "claude_models:\n  dna: opus\n  default: haiku\n",
         encoding="utf-8",
     )
-    return create_app(config_dir=cfg_dir, db_path=tmp_path / "x.sqlite", scheduler=False)
+    return create_app(config_dir=cfg_dir, db_path=tmp_path / "x.sqlite",
+                      secrets_path=tmp_path / "data" / "secrets.yaml",
+                      scheduler=False)
 
 
 def _fake_dna():
