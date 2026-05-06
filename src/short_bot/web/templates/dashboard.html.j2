@@ -66,4 +66,31 @@
   <div class="col-span-4 text-claude-muted text-center py-8">Henüz Short yok.</div>
   {% endfor %}
 </div>
+
+{% if yt_summaries %}
+<h2 class="font-serif text-xl font-bold mb-4 mt-8">YouTube Kanalları</h2>
+<div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+  {% for s in yt_summaries %}
+  <a href="/channels/{{ s.slug }}/edit"
+     class="bg-claude-surface border border-claude-border rounded-lg p-5 hover:bg-claude-surface-alt transition-colors">
+    <div class="font-semibold text-base">{{ s.yt_title }}</div>
+    <div class="text-claude-muted text-xs mt-1">{{ s.slug }}</div>
+    {% if s.subscribers is not none %}
+    <div class="grid grid-cols-2 gap-3 mt-3 text-sm">
+      <div>
+        <div class="text-claude-muted uppercase text-[10px]">Abone</div>
+        <div class="font-bold">{{ "{:,}".format(s.subscribers).replace(',', '.') }}</div>
+      </div>
+      <div>
+        <div class="text-claude-muted uppercase text-[10px]">Toplam izlenme</div>
+        <div class="font-bold">{{ "{:,}".format(s.total_views).replace(',', '.') }}</div>
+      </div>
+    </div>
+    {% else %}
+    <div class="text-claude-subtle text-xs mt-3">Henüz stats yok — yarın 03:00'da çekilecek.</div>
+    {% endif %}
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
 {% endblock %}

@@ -371,6 +371,47 @@
       </div>
     </div>
 
+    {# ── Card: YouTube İstatistikleri (closed by default) ────────────── #}
+    <div x-data="{ open: false }" class="bg-white border border-claude-border rounded-xl shadow-soft mb-4">
+      <button type="button" @click="open = !open"
+              class="w-full flex items-center justify-between px-5 py-3 hover:bg-claude-surface/40 text-left">
+        <h2 class="font-serif text-base font-semibold flex items-center gap-2">
+          <span class="text-lg opacity-70">📊</span> YouTube İstatistikleri
+        </h2>
+        <span x-text="open ? '−' : '+'" class="text-claude-muted text-xl leading-none w-5 text-center"></span>
+      </button>
+      <div x-show="open" class="px-5 pb-5 pt-3 space-y-3 border-t border-claude-border/40">
+        {% if yt_history %}
+          {% set latest = yt_history[0] %}
+          <div class="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <div class="text-claude-muted uppercase text-[10px]">Abone</div>
+              <div class="font-bold text-lg">{{ "{:,}".format(latest.subscribers).replace(',', '.') }}</div>
+            </div>
+            <div>
+              <div class="text-claude-muted uppercase text-[10px]">Toplam izlenme</div>
+              <div class="font-bold text-lg">{{ "{:,}".format(latest.total_views).replace(',', '.') }}</div>
+            </div>
+          </div>
+          <div class="text-xs text-claude-muted">
+            Son güncelleme: {{ latest.updated_at.strftime('%d %b %H:%M') if latest.updated_at else latest.snapshot_date }}
+            · {{ yt_history|length }} günlük geçmiş
+          </div>
+        {% else %}
+          <div class="text-xs text-claude-muted">Henüz stats çekilmedi.</div>
+        {% endif %}
+        <div class="text-[10px] text-claude-subtle">
+          Quota bugün: {{ yt_quota_today }} unit (10000/gün limit)
+        </div>
+        <button form="yt-refresh-stats-form"
+                formmethod="POST"
+                formaction="/channels/{{ c.slug }}/youtube/refresh-stats"
+                class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border px-3 py-1.5 rounded-lg text-xs">
+          🔄 Şimdi yenile
+        </button>
+      </div>
+    </div>
+
     {# ── Card: CTA (closed by default) ───────────────────────────────── #}
     <div x-data="{ open: false }" class="bg-white border border-claude-border rounded-xl shadow-soft mb-4">
       <button type="button" @click="open = !open"
@@ -878,4 +919,6 @@
       enctype="multipart/form-data" class="hidden"></form>
 <form id="yt-reset-form" method="POST"
       action="/channels/{{ c.slug }}/youtube/reset" class="hidden"></form>
+<form id="yt-refresh-stats-form" method="POST"
+      action="/channels/{{ c.slug }}/youtube/refresh-stats" class="hidden"></form>
 {% endblock %}

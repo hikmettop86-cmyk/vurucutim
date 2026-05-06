@@ -53,6 +53,10 @@ def edit(slug):
             pexels_key_set = bool(secrets.get("pexels_api_key"))
         except Exception:
             pexels_key_set = False
+    from short_bot.db import get_channel_stats_history, init_db, get_quota_used_today
+    eng = init_db(current_app.config["SHORTBOT_DB_PATH"])
+    yt_history = get_channel_stats_history(eng, channel=slug, days=30)
+    yt_quota_today = get_quota_used_today(eng, channel=slug)
     return render_template("channels/edit.html.j2", c=cfg,
                            archetypes=ARCHETYPES,
                            cron_human=describe_cron(cfg.schedule_cron),
@@ -62,7 +66,9 @@ def edit(slug):
                            yt_has_secrets=yt_has_secrets,
                            yt_secrets_abs=str((yt_root / slug).resolve()) if yt_root else "",
                            current_cron_preset=current_cron_preset,
-                           pexels_key_set=pexels_key_set)
+                           pexels_key_set=pexels_key_set,
+                           yt_history=yt_history,
+                           yt_quota_today=yt_quota_today)
 
 
 def _form_get_int(key: str, default: int) -> int:

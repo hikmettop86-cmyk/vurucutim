@@ -2,9 +2,9 @@
 {% block title %}Vurucu TİM — {{ s.title }}{% endblock %}
 {% block content %}
 <a href="/shorts" class="text-claude-muted hover:text-claude-text text-sm">← Shorts</a>
-<div class="flex justify-between items-start mt-2 mb-1">
-  <h1 class="font-serif text-3xl font-bold">{{ s.title }}</h1>
-  <div class="flex gap-2">
+<div class="flex flex-col gap-3 mt-2 mb-1">
+  <h1 class="font-serif text-3xl font-bold break-words line-clamp-2" title="{{ s.title }}">{{ s.title }}</h1>
+  <div class="flex flex-wrap gap-2">
     <a href="{{ s.file_url }}" download
        class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm text-claude-text">
       ↓ İndir
@@ -26,22 +26,56 @@
         ▶ YouTube ({{ yt_upload.video_id }})
       </a>
     {% else %}
-      <form method="POST" action="/shorts/{{ s.id }}/upload-youtube" class="inline"
-            onsubmit="return confirm('Bu shortu YouTube\'a yükle?');">
-        <button class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm text-claude-text {% if not yt_connected %}opacity-50 cursor-not-allowed{% endif %}"
-                {% if not yt_connected %}disabled title="Önce kanal edit sayfasından YouTube bağla"{% endif %}>
-          ↑ YouTube'a Yükle
-        </button>
-      </form>
-      {% if yt_upload and yt_upload.status == 'failed' %}
-        <div class="text-xs text-claude-error mt-1">Son deneme başarısız: {{ yt_upload.error[:80] }}</div>
-      {% endif %}
+      <div class="flex flex-col gap-1">
+        <form method="POST" action="/shorts/{{ s.id }}/upload-youtube" class="inline"
+              onsubmit="return confirm('Bu shortu YouTube\'a yükle?');">
+          <button class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm text-claude-text {% if not yt_connected %}opacity-50 cursor-not-allowed{% endif %}"
+                  {% if not yt_connected %}disabled title="Önce kanal edit sayfasından YouTube bağla"{% endif %}>
+            ↑ YouTube'a Yükle
+          </button>
+        </form>
+        {% if yt_upload and yt_upload.status == 'failed' %}
+          <div class="text-xs text-claude-error">Son deneme başarısız: {{ yt_upload.error[:80] }}</div>
+        {% endif %}
+      </div>
     {% endif %}
   </div>
 </div>
 <div class="text-claude-muted text-sm mb-6">
   {{ s.channel }} · {{ s.created_at.strftime('%d %b %Y, %H:%M') }} · {{ s.duration_s }}s · render {{ s.render_ms }}ms
 </div>
+
+{% if yt_video_stats %}
+  {% set v = yt_video_stats[0] %}
+  <div class="bg-claude-surface border border-claude-border rounded-lg p-4 mt-4 mb-4">
+    <div class="text-xs text-claude-muted uppercase tracking-wider mb-2">YouTube performansı</div>
+    <div class="grid grid-cols-3 gap-4 text-sm">
+      <div>
+        <div class="text-[10px] text-claude-muted uppercase">İzlenme</div>
+        <div class="font-bold text-lg">{{ "{:,}".format(v.views).replace(',', '.') }}</div>
+      </div>
+      <div>
+        <div class="text-[10px] text-claude-muted uppercase">Beğeni</div>
+        <div class="font-bold text-lg">{{ v.likes }}</div>
+      </div>
+      <div>
+        <div class="text-[10px] text-claude-muted uppercase">Yorum</div>
+        <div class="font-bold text-lg">{{ v.comments }}</div>
+      </div>
+      <div>
+        <div class="text-[10px] text-claude-muted uppercase">İzleme dakikası (7g)</div>
+        <div class="font-bold text-lg">{{ "%.1f"|format(v.watch_time_min) }}</div>
+      </div>
+      <div>
+        <div class="text-[10px] text-claude-muted uppercase">Ort. izleme süresi</div>
+        <div class="font-bold text-lg">{{ "%.0f"|format(v.avg_view_duration_s) }}s</div>
+      </div>
+    </div>
+    <div class="text-[10px] text-claude-subtle mt-2">
+      Snapshot: {{ v.snapshot_date }} · Kümülatif istatistikler.
+    </div>
+  </div>
+{% endif %}
 
 <div class="grid grid-cols-3 gap-6">
   <div class="col-span-1">

@@ -1,47 +1,71 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from flask import (Blueprint, abort, current_app, flash, make_response,
                    redirect, render_template, request, url_for)
 
 from short_bot.config import load_channel
 from short_bot.web.extensions import db
-from short_bot.web.models import Short
+from short_bot.web.models import Short, YoutubeUpload
 from short_bot.web.runs import launch_pipeline
 
 bp = Blueprint("shorts", __name__)
 
 
-@bp.route("/shorts")
-def list_view():
-    from short_bot.config import list_channels
-    channel = request.args.get("channel", "").strip()
-    q = request.args.get("q", "").strip()
-    query = Short.query.filter(Short.deleted_at.is_(None))
+def _apply_filters(query, *, channel, q, since, youtube):
+    """Apply optional filters used by both /shorts and /shorts/grid."""
     if channel:
         query = query.filter(Short.channel == channel)
     if q:
         query = query.filter(Short.title.ilike(f"%{q}%"))
+    if since == "1h":
+        query = query.filter(Short.created_at >= datetime.utcnow() - timedelta(hours=1))
+    elif since == "today":
+        today_start = datetime.combine(datetime.utcnow().date(), datetime.min.time())
+        query = query.filter(Short.created_at >= today_start)
+    elif since == "week":
+        query = query.filter(Short.created_at >= datetime.utcnow() - timedelta(days=7))
+    if youtube == "yes":
+        query = (query.join(YoutubeUpload, YoutubeUpload.short_id == Short.id)
+                       .filter(YoutubeUpload.status == "success")
+                       .distinct())
+    elif youtube == "no":
+        success_subq = (db.session.query(YoutubeUpload.short_id)
+                         .filter(YoutubeUpload.status == "success"))
+        query = query.filter(~Short.id.in_(success_subq))
+    return query
+
+
+def _read_filter_args():
+    return {
+        "channel": request.args.get("channel", "").strip(),
+        "q":       request.args.get("q", "").strip(),
+        "since":   request.args.get("since", "").strip(),
+        "youtube": request.args.get("youtube", "").strip(),
+    }
+
+
+@bp.route("/shorts")
+def list_view():
+    from short_bot.config import list_channels
+    f = _read_filter_args()
+    query = Short.query.filter(Short.deleted_at.is_(None))
+    query = _apply_filters(query, **f)
     shorts = query.order_by(Short.created_at.desc()).limit(60).all()
     all_channels = list_channels(
         current_app.config["SHORTBOT_CONFIG_DIR"] / "channels", enabled_only=False
     )
     return render_template("shorts/list.html.j2",
-                            channel=channel,
-                            q=q,
                             shorts=shorts,
-                            all_channels=all_channels)
+                            all_channels=all_channels,
+                            **f)
 
 
 @bp.route("/shorts/grid")
 def grid_partial():
     """HTMX partial: filter result grid swap."""
-    channel = request.args.get("channel", "").strip()
-    q = request.args.get("q", "").strip()
+    f = _read_filter_args()
     query = Short.query.filter(Short.deleted_at.is_(None))
-    if channel:
-        query = query.filter(Short.channel == channel)
-    if q:
-        query = query.filter(Short.title.ilike(f"%{q}%"))
+    query = _apply_filters(query, **f)
     shorts = query.order_by(Short.created_at.desc()).limit(60).all()
     return render_template("_partials/shorts_grid.html.j2", shorts=shorts)
 
@@ -57,8 +81,12 @@ def detail(short_id):
     yt_connected = bool(yt_root and _yt_auth.has_credentials(yt_root, s.channel))
     yt_upload = (YoutubeUpload.query.filter_by(short_id=s.id)
                  .order_by(YoutubeUpload.uploaded_at.desc()).first())
+    from short_bot.db import get_video_stats_for_short, init_db
+    eng = init_db(current_app.config["SHORTBOT_DB_PATH"])
+    yt_video_stats = get_video_stats_for_short(eng, short_id=s.id, days=30)
     return render_template("shorts/detail.html.j2", s=s,
-                           yt_connected=yt_connected, yt_upload=yt_upload)
+                           yt_connected=yt_connected, yt_upload=yt_upload,
+                           yt_video_stats=yt_video_stats)
 
 
 @bp.route("/shorts/run-now", methods=["POST"])
