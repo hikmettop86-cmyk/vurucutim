@@ -5,6 +5,7 @@ import re
 from typing import Literal
 
 import yaml
+from pydantic import BaseModel
 
 from short_bot.dna import DnaSpec
 from short_bot.locale import RSS_LOCALES, SUPPORTED_LANGUAGES
@@ -32,6 +33,13 @@ class GeneratorConfig:
     fuzzy_threshold: float | None = None
 
 
+class YoutubeChannelConfig(BaseModel):
+    auto_upload: bool = False
+    ai_content: bool = True
+    category_id: str = "24"
+    privacy_status: Literal["public", "unlisted", "private"] = "public"
+
+
 @dataclass(frozen=True)
 class ChannelConfig:
     slug: str
@@ -57,6 +65,7 @@ class ChannelConfig:
     script_model: str | None = None
     content_source: Literal["rss", "generator"] = "rss"
     generator: GeneratorConfig | None = None
+    youtube: YoutubeChannelConfig | None = None
 
 
 def load_settings(path: Path) -> Settings:
@@ -107,6 +116,13 @@ def load_channel(path: Path) -> ChannelConfig:
             f"content_source must be 'rss' or 'generator', got {content_source!r}"
         )
 
+    keywords = list(data.get("keywords", []))
+    if content_source == "rss" and not keywords:
+        raise ValueError(
+            f"channel {slug!r} has content_source='rss' but no keywords. "
+            f"Either add keywords or set content_source: generator (with a generator block)."
+        )
+
     generator = None
     if content_source == "generator":
         gen_data = data.get("generator")
@@ -127,11 +143,14 @@ def load_channel(path: Path) -> ChannelConfig:
                               if "fuzzy_threshold" in gen_data else None),
         )
 
+    yt_data = data.get("youtube")
+    youtube = YoutubeChannelConfig.model_validate(yt_data) if yt_data else None
+
     cta = data.get("cta", {})
     return ChannelConfig(
         slug=slug,
         name=data["name"],
-        keywords=list(data.get("keywords", [])),
+        keywords=keywords,
         rss_locale=rss_locale,
         schedule_cron=data["schedule_cron"],
         duration_s=int(data["duration_s"]),
@@ -152,6 +171,7 @@ def load_channel(path: Path) -> ChannelConfig:
         script_model=data.get("script_model"),
         content_source=content_source,
         generator=generator,
+        youtube=youtube,
     )
 
 
@@ -192,6 +212,13 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
         if cfg.generator.fuzzy_threshold is not None:
             gen_data["fuzzy_threshold"] = cfg.generator.fuzzy_threshold
         data["generator"] = gen_data
+    if cfg.youtube is not None:
+        data["youtube"] = {
+            "auto_upload": cfg.youtube.auto_upload,
+            "ai_content": cfg.youtube.ai_content,
+            "category_id": cfg.youtube.category_id,
+            "privacy_status": cfg.youtube.privacy_status,
+        }
     if cfg.dna is not None:
         # mode='json' → tuple becomes list, ready for YAML round-trip
         data["dna"] = cfg.dna.model_dump(mode="json")
