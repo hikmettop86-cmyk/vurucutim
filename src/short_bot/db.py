@@ -269,3 +269,24 @@ def list_youtube_uploads_for_channel(eng: Engine, channel: str, *, limit: int = 
             .order_by(youtube_uploads.c.uploaded_at.desc())
             .limit(limit)
         ))
+
+
+def get_rss_item_for_short(eng: Engine, *, short_id: int):
+    """Return the rss_items row matching this short's rss_item_guid, or None.
+
+    Generator-mode shorts have rss_item_guid=None and naturally return None.
+    Used to surface source/link for YouTube descriptions.
+    """
+    with eng.connect() as conn:
+        s = conn.execute(
+            select(shorts.c.rss_item_guid, shorts.c.channel)
+            .where(shorts.c.id == short_id)
+        ).first()
+        if s is None or s.rss_item_guid is None:
+            return None
+        return conn.execute(
+            select(rss_items)
+            .where(rss_items.c.guid == s.rss_item_guid)
+            .where(rss_items.c.channel == s.channel)
+            .limit(1)
+        ).first()
