@@ -84,6 +84,43 @@ youtube_uploads = Table(
 )
 Index("idx_yt_uploads_short", youtube_uploads.c.short_id, youtube_uploads.c.uploaded_at)
 
+youtube_video_stats = Table(
+    "youtube_video_stats", metadata,
+    Column("video_id", String, nullable=False),
+    Column("snapshot_date", String, nullable=False),
+    Column("views", Integer, default=0),
+    Column("likes", Integer, default=0),
+    Column("comments", Integer, default=0),
+    Column("watch_time_min", Float, default=0.0),
+    Column("avg_view_duration_s", Float, default=0.0),
+    Column("updated_at", DateTime, default=_utcnow),
+)
+Index("idx_yt_video_stats_video_date",
+      youtube_video_stats.c.video_id, youtube_video_stats.c.snapshot_date,
+      unique=True)
+
+youtube_channel_stats = Table(
+    "youtube_channel_stats", metadata,
+    Column("channel", String, nullable=False),
+    Column("snapshot_date", String, nullable=False),
+    Column("subscribers", Integer, default=0),
+    Column("total_views", Integer, default=0),
+    Column("updated_at", DateTime, default=_utcnow),
+)
+Index("idx_yt_channel_stats_chan_date",
+      youtube_channel_stats.c.channel, youtube_channel_stats.c.snapshot_date,
+      unique=True)
+
+youtube_quota = Table(
+    "youtube_quota", metadata,
+    Column("channel", String, nullable=False),
+    Column("date", String, nullable=False),
+    Column("units_used", Integer, default=0),
+    Column("updated_at", DateTime, default=_utcnow),
+)
+Index("idx_yt_quota_chan_date",
+      youtube_quota.c.channel, youtube_quota.c.date, unique=True)
+
 
 def init_db(db_path: Path | str) -> Engine:
     """Create engine, enable WAL + FK + busy_timeout, create schema if absent."""
@@ -304,3 +341,108 @@ def get_last_youtube_upload_at(eng: Engine):
             .limit(1)
         ).first()
         return row[0] if row else None
+
+
+def upsert_video_stats(eng: Engine, *, video_id: str, snapshot_date,
+                       views: int, likes: int, comments: int,
+                       watch_time_min: float, avg_view_duration_s: float) -> None:
+    """UPSERT a video stats row keyed on (video_id, snapshot_date)."""
+    from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+    iso = snapshot_date.isoformat()
+    with eng.begin() as conn:
+        stmt = sqlite_insert(youtube_video_stats).values(
+            video_id=video_id, snapshot_date=iso,
+            views=views, likes=likes, comments=comments,
+            watch_time_min=watch_time_min,
+            avg_view_duration_s=avg_view_duration_s,
+            updated_at=_utcnow(),
+        )
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["video_id", "snapshot_date"],
+            set_=dict(
+                views=views, likes=likes, comments=comments,
+                watch_time_min=watch_time_min,
+                avg_view_duration_s=avg_view_duration_s,
+                updated_at=_utcnow(),
+            ),
+        )
+        conn.execute(stmt)
+
+
+def get_video_stats_for_short(eng: Engine, *, short_id: int, days: int = 30):
+    """Recent stats rows for the short's YouTube video, newest first."""
+    cutoff = (datetime.now(timezone.utc).date() - timedelta(days=days)).isoformat()
+    with eng.connect() as conn:
+        upload = conn.execute(
+            select(youtube_uploads.c.video_id)
+            .where(youtube_uploads.c.short_id == short_id)
+            .where(youtube_uploads.c.status == "success")
+            .order_by(youtube_uploads.c.uploaded_at.desc())
+            .limit(1)
+        ).first()
+        if upload is None or upload.video_id is None:
+            return []
+        return list(conn.execute(
+            select(youtube_video_stats)
+            .where(youtube_video_stats.c.video_id == upload.video_id)
+            .where(youtube_video_stats.c.snapshot_date >= cutoff)
+            .order_by(youtube_video_stats.c.snapshot_date.desc())
+        ))
+
+
+def upsert_channel_stats(eng: Engine, *, channel: str, snapshot_date,
+                          subscribers: int, total_views: int) -> None:
+    from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+    iso = snapshot_date.isoformat()
+    with eng.begin() as conn:
+        stmt = sqlite_insert(youtube_channel_stats).values(
+            channel=channel, snapshot_date=iso,
+            subscribers=subscribers, total_views=total_views,
+            updated_at=_utcnow(),
+        )
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["channel", "snapshot_date"],
+            set_=dict(subscribers=subscribers, total_views=total_views,
+                      updated_at=_utcnow()),
+        )
+        conn.execute(stmt)
+
+
+def get_channel_stats_history(eng: Engine, *, channel: str, days: int = 7):
+    cutoff = (datetime.now(timezone.utc).date() - timedelta(days=days)).isoformat()
+    with eng.connect() as conn:
+        return list(conn.execute(
+            select(youtube_channel_stats)
+            .where(youtube_channel_stats.c.channel == channel)
+            .where(youtube_channel_stats.c.snapshot_date >= cutoff)
+            .order_by(youtube_channel_stats.c.snapshot_date.desc())
+        ))
+
+
+def incr_quota(eng: Engine, *, channel: str, units: int) -> None:
+    from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+    today_iso = datetime.now(timezone.utc).date().isoformat()
+    with eng.begin() as conn:
+        stmt = sqlite_insert(youtube_quota).values(
+            channel=channel, date=today_iso, units_used=units,
+            updated_at=_utcnow(),
+        )
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["channel", "date"],
+            set_=dict(
+                units_used=youtube_quota.c.units_used + units,
+                updated_at=_utcnow(),
+            ),
+        )
+        conn.execute(stmt)
+
+
+def get_quota_used_today(eng: Engine, *, channel: str) -> int:
+    today_iso = datetime.now(timezone.utc).date().isoformat()
+    with eng.connect() as conn:
+        row = conn.execute(
+            select(youtube_quota.c.units_used)
+            .where(youtube_quota.c.channel == channel)
+            .where(youtube_quota.c.date == today_iso)
+        ).first()
+        return int(row[0]) if row else 0

@@ -86,3 +86,32 @@ class YoutubeUpload(db.Model):
     status = db.Column(db.String, nullable=False)
     error = db.Column(db.Text)
     uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class YoutubeVideoStats(db.Model):
+    __tablename__ = "youtube_video_stats"
+    video_id = db.Column(db.String, primary_key=True)
+    snapshot_date = db.Column(db.String, primary_key=True)
+    views = db.Column(db.Integer, default=0)
+    likes = db.Column(db.Integer, default=0)
+    comments = db.Column(db.Integer, default=0)
+    watch_time_min = db.Column(db.Float, default=0.0)
+    avg_view_duration_s = db.Column(db.Float, default=0.0)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class YoutubeChannelStats(db.Model):
+    __tablename__ = "youtube_channel_stats"
+    channel = db.Column(db.String, primary_key=True)
+    snapshot_date = db.Column(db.String, primary_key=True)
+    subscribers = db.Column(db.Integer, default=0)
+    total_views = db.Column(db.Integer, default=0)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class YoutubeQuota(db.Model):
+    __tablename__ = "youtube_quota"
+    channel = db.Column(db.String, primary_key=True)
+    date = db.Column(db.String, primary_key=True)
+    units_used = db.Column(db.Integer, default=0)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
