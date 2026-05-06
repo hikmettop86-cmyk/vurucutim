@@ -26,3 +26,6 @@ logs/runs/*
 
 # scratch / one-off renders
 tmp/
+
+# Secrets (Pexels API key, etc.) — never commit
+data/secrets.yaml
