@@ -75,7 +75,7 @@ runs = Table(
 youtube_uploads = Table(
     "youtube_uploads", metadata,
     Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("short_id", Integer, nullable=False),
+    Column("short_id", Integer, ForeignKey("shorts.id"), nullable=False),
     Column("video_id", String),
     Column("video_url", String),
     Column("status", String, nullable=False),
