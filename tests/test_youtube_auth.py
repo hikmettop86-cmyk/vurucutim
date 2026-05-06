@@ -161,3 +161,8 @@ def test_purge_credentials_removes_entire_dir(tmp_path):
 def test_purge_credentials_idempotent_when_dir_missing(tmp_path):
     from short_bot.youtube.auth import purge_credentials
     purge_credentials(tmp_path / "creds", "missing")  # should not raise
+
+
+def test_scopes_include_analytics():
+    from short_bot.youtube.auth import SCOPES
+    assert "https://www.googleapis.com/auth/yt-analytics.readonly" in SCOPES
