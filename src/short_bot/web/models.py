@@ -4,7 +4,7 @@ These tables already exist (created by `short_bot.db.init_db()`). The ORM
 classes here are read/write mappings — `db.create_all()` is a no-op since
 the schema is identical.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from short_bot.web.extensions import db
@@ -64,3 +64,25 @@ class Run(db.Model):
     short_id = db.Column(db.Integer, db.ForeignKey("shorts.id"))
     error = db.Column(db.Text)
     log_path = db.Column(db.Text)
+
+    @property
+    def duration_seconds(self) -> int | None:
+        """Wall-clock seconds between start and end. Tolerates rows where one
+        timestamp is tz-aware (recent inserts) and the other is tz-naive
+        (older inserts) by treating naive as UTC."""
+        if self.started_at is None or self.ended_at is None:
+            return None
+        s = self.started_at if self.started_at.tzinfo else self.started_at.replace(tzinfo=timezone.utc)
+        e = self.ended_at if self.ended_at.tzinfo else self.ended_at.replace(tzinfo=timezone.utc)
+        return int((e - s).total_seconds())
+
+
+class YoutubeUpload(db.Model):
+    __tablename__ = "youtube_uploads"
+    id = db.Column(db.Integer, primary_key=True)
+    short_id = db.Column(db.Integer, db.ForeignKey("shorts.id"), nullable=False)
+    video_id = db.Column(db.String)
+    video_url = db.Column(db.String)
+    status = db.Column(db.String, nullable=False)
+    error = db.Column(db.Text)
+    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)

@@ -72,6 +72,18 @@ runs = Table(
     Column("log_path", Text),
 )
 
+youtube_uploads = Table(
+    "youtube_uploads", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("short_id", Integer, nullable=False),
+    Column("video_id", String),
+    Column("video_url", String),
+    Column("status", String, nullable=False),
+    Column("error", Text),
+    Column("uploaded_at", DateTime, default=_utcnow),
+)
+Index("idx_yt_uploads_short", youtube_uploads.c.short_id, youtube_uploads.c.uploaded_at)
+
 
 def init_db(db_path: Path | str) -> Engine:
     """Create engine, enable WAL + FK + busy_timeout, create schema if absent."""
@@ -178,4 +190,82 @@ def finish_run(
         conn.execute(runs.update().where(runs.c.id == run_id).values(
             ended_at=_utcnow(), status=status,
             short_id=short_id, error=error,
+        ))
+
+
+def cleanup_zombie_runs(
+    eng: Engine, lock_dir: Path | None = None, *, age_minutes: int = 60,
+) -> int:
+    """Mark stale 'running' rows as failed and delete their lock files.
+
+    A pipeline that died mid-run (process killed, OOM, panel restart) leaves
+    runs.status='running' and a stranded data/locks/<slug>.lock file. New
+    triggers then hit FileLock Timeout and the daemon thread swallows it.
+    Run this on web app startup to self-heal.
+
+    Uses SQLite's datetime() function for tolerant timestamp parsing — the
+    runs.started_at column may contain either 'YYYY-MM-DD HH:MM:SS.ffffff'
+    (SQLAlchemy default) or ISO 8601 with 'T'/tz suffix from older inserts.
+    """
+    from sqlalchemy import text
+    with eng.begin() as conn:
+        stale = list(conn.execute(text(
+            "SELECT id, channel FROM runs "
+            "WHERE status = 'running' "
+            "AND datetime(started_at) < datetime('now', :delta)"
+        ), {"delta": f"-{age_minutes} minutes"}))
+        if not stale:
+            return 0
+        ids = [r.id for r in stale]
+        placeholders = ",".join(f":id{i}" for i in range(len(ids)))
+        params = {f"id{i}": v for i, v in enumerate(ids)}
+        params["err"] = (
+            f"zombie cleanup (stale >{age_minutes}min, process likely killed)"
+        )
+        conn.execute(text(
+            "UPDATE runs SET ended_at = datetime('now'), status = 'failed', "
+            f"error = :err WHERE id IN ({placeholders})"
+        ), params)
+    if lock_dir is not None:
+        for r in stale:
+            lock_path = Path(lock_dir) / f"{r.channel}.lock"
+            try:
+                lock_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+    return len(stale)
+
+
+def record_youtube_upload(
+    eng: Engine, *, short_id: int, video_id: str | None,
+    status: str, error: str | None, video_url: str | None,
+) -> int:
+    with eng.begin() as conn:
+        result = conn.execute(youtube_uploads.insert().values(
+            short_id=short_id, video_id=video_id, video_url=video_url,
+            status=status, error=error, uploaded_at=_utcnow(),
+        ))
+        return result.inserted_primary_key[0]
+
+
+def get_youtube_upload_for_short(eng: Engine, *, short_id: int):
+    """Most recent upload row for a short, or None."""
+    with eng.connect() as conn:
+        return conn.execute(
+            select(youtube_uploads)
+            .where(youtube_uploads.c.short_id == short_id)
+            .order_by(youtube_uploads.c.uploaded_at.desc())
+            .limit(1)
+        ).first()
+
+
+def list_youtube_uploads_for_channel(eng: Engine, channel: str, *, limit: int = 20):
+    """Recent uploads for a channel (joined via shorts.channel)."""
+    with eng.connect() as conn:
+        return list(conn.execute(
+            select(youtube_uploads)
+            .join(shorts, youtube_uploads.c.short_id == shorts.c.id)
+            .where(shorts.c.channel == channel)
+            .order_by(youtube_uploads.c.uploaded_at.desc())
+            .limit(limit)
         ))
