@@ -13,6 +13,7 @@ from dataclasses import dataclass
 
 from playwright.sync_api import sync_playwright
 
+from short_bot.models import Highlight, Script
 from short_bot.templates_config import ARCHETYPE_OVERFLOW_FIELDS
 
 
@@ -210,3 +211,78 @@ def format_feedback(report: OverflowReport) -> str:
             "keep them at the same length."
         )
     return "\n".join(lines)
+
+
+# Pydantic min_length floors from models.py:40-46 — truncate must respect them.
+_FIELD_MIN_CHARS: dict[str, int] = {
+    "header_top": 1,
+    "header_bottom": 1,
+    "photo_overlay": 1,
+    "body_paragraph": 20,
+}
+
+
+def _smart_cut(text: str, target_chars: int) -> str:
+    """Truncate at word boundary, append U+2026 ellipsis. Preserves whole words.
+
+    If text is already <= target_chars, returns text unchanged.
+    If target_chars is <1, returns "" (caller should floor by min_length first).
+    """
+    if target_chars < 1:
+        return ""
+    if len(text) <= target_chars:
+        return text
+
+    # Hard cut at target, then back up to the previous space.
+    cut = text[:target_chars]
+    # Prefer last space; if no space (single word), keep hard cut as-is.
+    last_space = cut.rfind(" ")
+    if last_space >= max(1, target_chars // 2):
+        cut = cut[:last_space]
+    cut = cut.rstrip()
+    if not cut:
+        cut = text[:target_chars].rstrip()
+    return cut + "…"
+
+
+def truncate_to_fit(script: Script, report: OverflowReport) -> Script:
+    """Hard-cut overflowing fields and rebuild the Script.
+
+    Floors recommended_max_chars by the Pydantic field's min_length
+    (slight overflow may remain on the smallest fields, but the script
+    will validate).
+
+    For body_paragraph: any highlight whose text is no longer contained
+    in the truncated body is dropped — otherwise the
+    `highlights_must_be_substrings` model_validator (models.py:55-62)
+    raises ValidationError.
+
+    Raises ValidationError if the resulting Script still cannot be built
+    (very rare edge case — caller in pipeline catches and falls back).
+    """
+    updates: dict[str, object] = {}
+
+    for name, fo in report.fields.items():
+        if not fo.has_overflow:
+            continue
+        if name not in _FIELD_MIN_CHARS:
+            continue
+        original = getattr(script, name)
+        target = max(_FIELD_MIN_CHARS[name], fo.recommended_max_chars)
+        truncated = _smart_cut(original, target)
+        # Floor: if smart_cut removed too much (single long word), keep at
+        # least min_length chars by hard-cutting the original text.
+        if len(truncated) < _FIELD_MIN_CHARS[name]:
+            truncated = original[:_FIELD_MIN_CHARS[name]]
+        updates[name] = truncated
+
+    if not updates:
+        return script
+
+    # If body changed, drop highlights whose text no longer appears.
+    if "body_paragraph" in updates:
+        new_body = updates["body_paragraph"]
+        kept = [h for h in script.highlights if h.text in new_body]
+        updates["highlights"] = kept
+
+    return script.model_copy(update=updates)
