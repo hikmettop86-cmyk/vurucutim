@@ -179,3 +179,34 @@ def check_overflow(
             recommended_max_chars=int(m["recommended_max_chars"]),
         )
     return OverflowReport(archetype=archetype, fields=out)
+
+
+def format_feedback(report: OverflowReport) -> str:
+    """English block appended to the LLM script-generation prompt on retry.
+
+    Why English: existing prompts in script_writer.build_script_prompt are
+    English (`TASK: Convert this news ...`). Output language is controlled
+    separately via `Output language: <name>`, so DE/FR/EN channels still get
+    correct field values.
+    """
+    bad = [f for f in report.fields.values() if f.has_overflow]
+    if not bad:
+        return ""
+
+    lines = ["PREVIOUS ATTEMPT OVERFLOWED THESE FIELDS — REWRITE SHORTER:"]
+    for f in bad:
+        lines.append(
+            f"- {f.name}: currently {f.current_chars} chars, "
+            f"must be <= {f.recommended_max_chars} chars "
+            f"({f.max_lines}-line limit)"
+        )
+
+    ok = sorted(
+        n for n, f in report.fields.items() if not f.has_overflow
+    )
+    if ok:
+        lines.append(
+            "Other fields (" + ", ".join(ok) + ") are OK, "
+            "keep them at the same length."
+        )
+    return "\n".join(lines)
