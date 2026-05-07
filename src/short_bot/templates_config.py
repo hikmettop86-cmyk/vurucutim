@@ -145,4 +145,15 @@ ARCHETYPE_OVERFLOW_FIELDS: dict[str, list[OverflowField]] = {
         OverflowField("photo_overlay",  ".locale-pin",    1),  # single line below photo
         OverflowField("body_paragraph", ".body",          8),
     ],
+    # gundem: daily agenda list format. 100px Anton .top (yellow, uppercase) → 2 lines;
+    # 38px Inter .bot (muted purple, semi-bold) → 2 lines; NO photo_overlay — slim 240px
+    # photo strip with no overlay text element. .list-container renders body_paragraph
+    # as N numbered items (split on '\n'), each ~38px text → ~2 lines per item, up to 4
+    # items = ~8 visual lines total.
+    "gundem": [
+        OverflowField("header_top",     ".header .top",       2),
+        OverflowField("header_bottom",  ".header .bot",       2),
+        # No photo_overlay — gundem has only the slim photo strip with no overlay text
+        OverflowField("body_paragraph", ".list-container",    8),  # ~4 items × ~2 lines each
+    ],
 }
