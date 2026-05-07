@@ -156,7 +156,10 @@ def write_script(
     claude_path: str = "claude",
     channel: ChannelConfig | None = None,
     model: str = "default",
+    overflow_feedback: str = "",
 ) -> Script:
     prompt = (build_script_prompt_for_channel(item, body, channel)
               if channel is not None else build_script_prompt(item, body))
+    if overflow_feedback:
+        prompt = prompt + "\n\n" + overflow_feedback + "\n"
     return run_json(prompt, Script, claude_path=claude_path, model=model, retries=3)
