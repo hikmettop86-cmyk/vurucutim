@@ -82,7 +82,8 @@ function createWizardWindow() {
 }
 
 function isFirstRun() {
-  return !fs.existsSync(paths.initializedFlag());
+  // First run if .initialized is missing OR venv is missing (Flask can't boot without it)
+  return !fs.existsSync(paths.initializedFlag()) || !fs.existsSync(paths.venvPython());
 }
 
 function markInitialized() {
