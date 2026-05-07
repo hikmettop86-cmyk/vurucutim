@@ -135,4 +135,14 @@ ARCHETYPE_OVERFLOW_FIELDS: dict[str, list[OverflowField]] = {
         OverflowField("photo_overlay",  ".city",            1),
         OverflowField("body_paragraph", ".body",            4),
     ],
+    # yerel: LIGHT cream theme (local/community paper aesthetic). 56px Playfair italic .top
+    # (terracotta) → 2 lines; 78px Playfair .bot (charcoal) → 2 lines; 26px Lora italic
+    # .locale-pin (OUTSIDE .photo, in document flow) → 1 line; 36px Lora body clamped at
+    # 8 lines CSS (-webkit-line-clamp: 8). Budget = clamp so any cut triggers retry.
+    "yerel": [
+        OverflowField("header_top",     ".header .top",   2),
+        OverflowField("header_bottom",  ".header .bot",   2),
+        OverflowField("photo_overlay",  ".locale-pin",    1),  # single line below photo
+        OverflowField("body_paragraph", ".body",          8),
+    ],
 }
