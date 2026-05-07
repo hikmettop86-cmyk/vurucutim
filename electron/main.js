@@ -3,6 +3,13 @@ const path = require('node:path');
 const fs = require('node:fs');
 const paths = require('./src/paths');
 
+// Force Local AppData (not Roaming) and capitalized app name
+// Reason: Roaming AppData may sync via OneDrive/AD policies, causing SQLite lock corruption.
+// Must run before app.whenReady() — userData path is locked once any path API is called.
+app.setName('VurucuTim');
+const _localAppData = process.env.LOCALAPPDATA || path.join(require('node:os').homedir(), 'AppData', 'Local');
+app.setPath('userData', path.join(_localAppData, 'VurucuTim'));
+
 let mainWindow = null;
 
 function ensureUserDirs() {
