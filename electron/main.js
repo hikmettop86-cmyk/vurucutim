@@ -53,9 +53,10 @@ async function bootFlaskAndOpenPanel() {
     createMainWindow(`http://127.0.0.1:${port}`);
   } catch (err) {
     log.error('flask boot failed:', err);
+    const stderrLog = path.join(paths.logsDir(), 'panel_stderr.log');
     dialog.showErrorBox(
       'VurucuTim açılamadı',
-      `Bot arka planı başlatılamadı.\n\nHata: ${err.message}\n\nLog: ${paths.logsDir()}\\panel_stderr.log`
+      `Bot arka planı başlatılamadı.\n\nHata: ${err.message}\n\nLog: ${stderrLog}`
     );
     app.quit();
   }
@@ -75,7 +76,12 @@ app.on('window-all-closed', () => {
 app.on('before-quit', async (e) => {
   if (runner.isRunning()) {
     e.preventDefault();
-    await runner.stop();
-    app.exit(0);
+    const log = require('./src/logger');
+    try {
+      await runner.stop();
+    } catch (err) {
+      log.error('before-quit: runner.stop() failed:', err);
+    }
+    app.quit();
   }
 });
