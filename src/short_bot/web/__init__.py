@@ -33,8 +33,12 @@ def create_app(
     """Construct the Flask app. `scheduler=False` for tests."""
     # Allow Electron / installer to override paths via env vars.
     # Set BEFORE any Path() normalization so overrides win over defaults.
+    # NOTE: SHORT_BOT_DATA_DIR shadows the db_path/cache_dir/lock_dir arguments
+    # if set — explicit args passed by callers are ignored. Empty string is rejected.
     config_dir = os.environ.get("SHORT_BOT_CONFIG_DIR", config_dir)
     _data_override = os.environ.get("SHORT_BOT_DATA_DIR")
+    if _data_override is not None and not _data_override.strip():
+        raise ValueError("SHORT_BOT_DATA_DIR must be non-empty if set")
     if _data_override:
         db_path = Path(_data_override) / "short_bot.sqlite"
         cache_dir = Path(_data_override) / "cache"
