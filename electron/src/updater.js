@@ -1,5 +1,6 @@
 const { autoUpdater } = require('electron-updater');
-const { dialog, app } = require('electron');
+const { app, BrowserWindow, ipcMain } = require('electron');
+const path = require('node:path');
 const log = require('./logger');
 const prefs = require('./preferences');
 
@@ -10,9 +11,13 @@ autoUpdater.autoInstallOnAppQuit = false;   // user must explicitly accept
 let _ctx = null;
 let _manualTriggered = false;
 let _updateState = 'idle';   // idle | checking | available | downloading | downloaded | error
+let _pendingInfo = null;
+let _dialogWin = null;
+let _ipcRegistered = false;
 
 function init(ctx) {
   _ctx = ctx;
+  registerIpcOnce();
 
   autoUpdater.on('checking-for-update', () => {
     _updateState = 'checking';
@@ -22,6 +27,7 @@ function init(ctx) {
     _updateState = 'idle';
     log.info('updater: up to date', info?.version);
     if (_manualTriggered) {
+      const { dialog } = require('electron');
       try {
         dialog.showMessageBox({
           type: 'info',
@@ -43,38 +49,71 @@ function init(ctx) {
   autoUpdater.on('update-downloaded', (info) => {
     _updateState = 'downloaded';
     log.info('updater: downloaded', info.version);
-    promptInstall(info.version);
+    _pendingInfo = info;
+    openDialog();
   });
   autoUpdater.on('error', (err) => {
     _updateState = 'error';
     log.error('updater: error', err);
     if (_manualTriggered) {
+      const { dialog } = require('electron');
       try { dialog.showErrorBox('Güncelleme hatası', err.message || String(err)); } catch (_) {}
     }
   });
 }
 
-async function promptInstall(version) {
-  let r;
-  try {
-    r = await dialog.showMessageBox({
-      type: 'info',
-      title: 'VurucuTim Güncellemesi Hazır',
-      message: `v${version} yüklenmeye hazır.`,
-      detail: 'Yüklemek için uygulama yeniden başlatılacak. Aktif işler iptal olabilir.',
-      buttons: ['Yükle ve Yeniden Başlat', 'Sonra'],
-      defaultId: 0,
-      cancelId: 1,
-    });
-  } catch (_) {
-    return;
-  }
-  if (r.response === 0) {
+function registerIpcOnce() {
+  if (_ipcRegistered) return;
+  _ipcRegistered = true;
+
+  ipcMain.handle('vt:get-update-info', () => ({
+    currentVersion: app.getVersion(),
+    newVersion: _pendingInfo?.version || '?',
+    releaseNotes: _pendingInfo?.releaseNotes || '',
+  }));
+
+  ipcMain.handle('vt:update-install', async () => {
     if (_ctx?.beforeQuit) {
       try { await _ctx.beforeQuit(); } catch (e) { log.warn('updater beforeQuit failed:', e.message); }
     }
+    if (_dialogWin) { try { _dialogWin.close(); } catch (_) {} }
     autoUpdater.quitAndInstall(false, true);
+  });
+
+  ipcMain.handle('vt:update-postpone', () => {
+    if (_dialogWin) { try { _dialogWin.close(); } catch (_) {} }
+  });
+}
+
+function openDialog() {
+  if (_dialogWin) {
+    try { _dialogWin.show(); _dialogWin.focus(); return; } catch (_) {}
   }
+  _dialogWin = new BrowserWindow({
+    width: 460,
+    height: 320,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    title: 'VurucuTim Güncellemesi',
+    backgroundColor: '#1e1e1e',
+    autoHideMenuBar: true,
+    frame: false,                 // chromeless for cleaner look
+    alwaysOnTop: true,
+    skipTaskbar: false,
+    webPreferences: {
+      preload: path.join(__dirname, '..', 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  _dialogWin.loadFile(path.join(__dirname, '..', 'update-dialog', 'index.html'));
+  _dialogWin.once('ready-to-show', () => {
+    _dialogWin.show();
+    _dialogWin.focus();
+  });
+  _dialogWin.on('closed', () => { _dialogWin = null; });
 }
 
 async function checkManually() {
@@ -106,4 +145,4 @@ function startBackgroundPolling() {
 
 function state() { return _updateState; }
 
-module.exports = { init, checkManually, startBackgroundPolling, state };
+module.exports = { init, checkManually, startBackgroundPolling, state, openDialog };

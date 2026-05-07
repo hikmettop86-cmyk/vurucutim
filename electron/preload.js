@@ -13,4 +13,8 @@ contextBridge.exposeInMainWorld('vt', {
     ipcRenderer.on('vt:install-progress', listener);
     return () => ipcRenderer.removeListener('vt:install-progress', listener);
   },
+  // Update dialog
+  getUpdateInfo: () => ipcRenderer.invoke('vt:get-update-info'),
+  updateInstall: () => ipcRenderer.invoke('vt:update-install'),
+  updatePostpone: () => ipcRenderer.invoke('vt:update-postpone'),
 });
