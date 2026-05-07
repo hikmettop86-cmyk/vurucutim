@@ -8,6 +8,7 @@ const installer = require('./src/dep-installer');
 const prefs = require('./src/preferences');
 const tray = require('./src/tray');
 const autostart = require('./src/autostart');
+const updater = require('./src/updater');
 
 // Force Local AppData (not Roaming) and capitalized app name
 // Reason: Roaming AppData may sync via OneDrive/AD policies, causing SQLite lock corruption.
@@ -183,10 +184,7 @@ if (!gotLock) {
         await createWizardWindow();
         tray.refreshMenu();
       },
-      checkUpdates: () => {
-        // Faz 6 will wire updater
-        log.info('check-updates: not yet wired (Faz 6)');
-      },
+      checkUpdates: () => updater.checkManually(),
       setAutostart: (enabled) => {
         autostart.set(enabled);
         prefs.update({ autostart: enabled });
@@ -198,6 +196,13 @@ if (!gotLock) {
         app.quit();   // before-quit handler will drain runner.stop()
       },
     });
+
+    updater.init({
+      beforeQuit: async () => {
+        try { await runner.stop(); } catch (_) {}
+      },
+    });
+    updater.startBackgroundPolling();
   });
 }
 
