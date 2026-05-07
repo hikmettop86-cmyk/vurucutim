@@ -65,21 +65,16 @@ async function main() {
     { stdio: 'inherit' },
   );
 
-  // Patch python311._pth: enable site (needed for pip to work in venv parent)
+  // REMOVE python311._pth — its presence forces "isolated mode" which ignores
+  // PYTHONPATH and site.py. We need both for our --target site-packages strategy.
+  // Without _pth, embedded Python falls back to normal sys.path behavior:
+  //   - python311.zip is still auto-added (stdlib stays accessible)
+  //   - PYTHONPATH env var is honored
+  //   - site.py runs (so .pth files inside site-packages are processed)
   const pthFile = path.join(outDir, 'python311._pth');
   if (fs.existsSync(pthFile)) {
-    let content = fs.readFileSync(pthFile, 'utf-8');
-    if (content.includes('#import site')) {
-      content = content.replace('#import site', 'import site');
-      fs.writeFileSync(pthFile, content, 'utf-8');
-      console.log('Patched python311._pth (enabled `import site`).');
-    } else if (content.includes('import site')) {
-      console.log('python311._pth already has `import site` enabled.');
-    } else {
-      console.log('WARNING: python311._pth has no `import site` line — manual review may be needed.');
-    }
-  } else {
-    console.log('WARNING: python311._pth not found at', pthFile);
+    fs.unlinkSync(pthFile);
+    console.log('Removed python311._pth (PYTHONPATH + site.py now active).');
   }
 
   console.log('Python embeddable ready at:', outDir);
