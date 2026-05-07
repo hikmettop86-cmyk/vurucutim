@@ -125,4 +125,14 @@ ARCHETYPE_OVERFLOW_FIELDS: dict[str, list[OverflowField]] = {
         OverflowField("photo_overlay",  ".photo .tech-tag",  2),
         OverflowField("body_paragraph", ".body",             8),
     ],
+    # hava-durumu: NO photo band. Sky gradient. 360px Inter .top (massive temp display)
+    # → 1 line for short temp strings like "23°" (≤8 chars, production use); 200px .bot
+    # → 1 line for emoji/short descriptor; .city kicker (photo_overlay, 48px) → 1 line;
+    # 36px Inter body clamped at 4 lines CSS (-webkit-line-clamp: 4), short forecast summary.
+    "hava-durumu": [
+        OverflowField("header_top",     ".header .top",     1),  # 360px temp must be ≤8 chars
+        OverflowField("header_bottom",  ".header .bot",     1),
+        OverflowField("photo_overlay",  ".city",            1),
+        OverflowField("body_paragraph", ".body",            4),
+    ],
 }
