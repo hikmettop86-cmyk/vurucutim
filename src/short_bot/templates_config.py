@@ -94,4 +94,14 @@ ARCHETYPE_OVERFLOW_FIELDS: dict[str, list[OverflowField]] = {
         OverflowField("photo_overlay",  ".photo .source",    2),
         OverflowField("body_paragraph", ".body",             9),
     ],
+    # ekonomi: 60px JetBrains Mono .top (green, uppercase) → 2 lines for 25-char inputs;
+    # 90px Inter .bot → 2 lines; 88px JetBrains Mono .ticker-num (gold callout) → 2 lines;
+    # 42px Inter body clamped at 9 lines CSS (-webkit-line-clamp: 9). Budget = clamp so
+    # any cut triggers retry.
+    "ekonomi": [
+        OverflowField("header_top",     ".header .top",       2),
+        OverflowField("header_bottom",  ".header .bot",       2),
+        OverflowField("photo_overlay",  ".photo .ticker-num", 2),
+        OverflowField("body_paragraph", ".body",              9),
+    ],
 }
