@@ -3,17 +3,111 @@
 {% block content %}
 <h1 class="font-serif text-3xl font-bold mb-6">Akış</h1>
 
-<div id="activity-feed" class="space-y-1">
-  {% for e in events %}
-  <div class="flex items-center gap-3 text-sm px-3 py-2 rounded hover:bg-claude-surface">
-    <span class="font-mono text-xs text-claude-muted w-20 shrink-0">{{ e.timestamp.strftime('%H:%M:%S') }}</span>
-    <span>{{ e.icon }}</span>
-    <span class="px-2 py-0.5 rounded text-xs bg-claude-surface-alt">{{ e.channel }}</span>
-    <span class="font-medium">{{ e.title }}</span>
-    <span class="text-claude-muted text-xs flex-1 truncate">{{ e.detail }}</span>
+{# ─── Zone 1: 24h summary cards ───────────────────────────────── #}
+<div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-8">
+  <a href="/activity?type=run" class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border rounded-lg p-4 transition-colors">
+    <div class="text-xs text-claude-muted uppercase tracking-wider">Run (24s)</div>
+    <div class="text-2xl font-bold mt-1">{{ summary.runs_24h }}</div>
+    <div class="text-xs text-claude-muted mt-1">
+      <span class="text-claude-success">✓ {{ summary.runs_success_24h }}</span>
+      ·
+      <span class="text-claude-error">✗ {{ summary.runs_failed_24h }}</span>
+    </div>
+  </a>
+  <a href="/activity?type=short" class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border rounded-lg p-4 transition-colors">
+    <div class="text-xs text-claude-muted uppercase tracking-wider">Short (24s)</div>
+    <div class="text-2xl font-bold mt-1">{{ summary.shorts_24h }}</div>
+  </a>
+  <a href="/activity?type=youtube" class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border rounded-lg p-4 transition-colors">
+    <div class="text-xs text-claude-muted uppercase tracking-wider">YT yüklendi (24s)</div>
+    <div class="text-2xl font-bold mt-1">{{ summary.youtube_success_24h }}</div>
+  </a>
+  <a href="/activity?type=error" class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border rounded-lg p-4 transition-colors {% if summary.errors_24h > 0 %}animate-pulse ring-2 ring-claude-error{% endif %}">
+    <div class="text-xs text-claude-muted uppercase tracking-wider">Hata (24s)</div>
+    <div class="text-2xl font-bold mt-1 {{ 'text-claude-error' if summary.errors_24h > 0 else 'text-claude-success' }}">
+      {{ summary.errors_24h }}
+    </div>
+  </a>
+</div>
+
+{# ─── Zone 2: Live runs ───────────────────────────────────────── #}
+<div class="mb-8">
+  <h2 class="font-serif text-xl font-bold mb-3">Şu an çalışan</h2>
+  <div class="bg-claude-surface border border-claude-border rounded-lg p-4">
+    {% if running %}
+      <ul class="space-y-2">
+        {% for r in running %}
+        <li class="flex items-center gap-3 text-sm" x-data="{ start: {{ r.started_at.timestamp() }}, now: Date.now() / 1000 }" x-init="setInterval(() => now = Date.now() / 1000, 1000)">
+          <span class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></span>
+          <span class="font-medium">{{ r.channel }}</span>
+          <span class="text-claude-muted text-xs">{{ r.trigger }}</span>
+          <span class="text-claude-muted text-xs">başladı {{ r.started_at.strftime('%H:%M:%S') }}</span>
+          <span class="ml-auto font-mono text-xs text-claude-muted">
+            <span x-text="String(Math.floor((now - start) / 60)).padStart(2, '0') + ':' + String(Math.floor((now - start) % 60)).padStart(2, '0')"></span> geçti
+          </span>
+        </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <div class="text-claude-muted text-sm text-center py-3">Şu an çalışan run yok.</div>
+    {% endif %}
   </div>
+</div>
+
+{# ─── Zone 3: Filterable timeline feed ─────────────────────────── #}
+<div class="flex items-center justify-between mb-4">
+  <h2 class="font-serif text-xl font-bold">Akış</h2>
+  <form class="flex gap-2 items-center" method="GET" action="/activity">
+    <select name="channel" class="bg-claude-surface border border-claude-border px-2 py-1 rounded text-xs text-claude-text">
+      <option value="">Tüm kanallar</option>
+      {% for c in channels %}
+        <option value="{{ c.slug }}" {% if f_channel == c.slug %}selected{% endif %}>{{ c.slug }}</option>
+      {% endfor %}
+    </select>
+    <select name="type" class="bg-claude-surface border border-claude-border px-2 py-1 rounded text-xs text-claude-text">
+      <option value="">Tüm tipler</option>
+      <option value="run"     {% if f_type == 'run' %}selected{% endif %}>Run</option>
+      <option value="short"   {% if f_type == 'short' %}selected{% endif %}>Short</option>
+      <option value="youtube" {% if f_type == 'youtube' %}selected{% endif %}>YouTube</option>
+      <option value="error"   {% if f_type == 'error' %}selected{% endif %}>Hata</option>
+    </select>
+    <select name="status" class="bg-claude-surface border border-claude-border px-2 py-1 rounded text-xs text-claude-text">
+      <option value="">Tüm durumlar</option>
+      <option value="success"        {% if f_status == 'success' %}selected{% endif %}>success</option>
+      <option value="failed"         {% if f_status == 'failed' %}selected{% endif %}>failed</option>
+      <option value="no_candidates"  {% if f_status == 'no_candidates' %}selected{% endif %}>no_candidates</option>
+    </select>
+    <select name="since" class="bg-claude-surface border border-claude-border px-2 py-1 rounded text-xs text-claude-text">
+      <option value="1h"  {% if f_since == '1h' %}selected{% endif %}>Son 1 saat</option>
+      <option value="24h" {% if f_since == '24h' %}selected{% endif %}>Son 24 saat</option>
+      <option value="7d"  {% if f_since == '7d' %}selected{% endif %}>Son 7 gün</option>
+      <option value="30d" {% if f_since == '30d' %}selected{% endif %}>Son 30 gün</option>
+    </select>
+    <button type="submit" class="text-xs bg-claude-accent hover:bg-claude-accent-hover text-white px-3 py-1 rounded">Filtre</button>
+    <a href="/activity" class="text-xs text-claude-muted hover:text-claude-text underline ml-1">temizle</a>
+  </form>
+</div>
+
+<div id="activity-feed" class="bg-claude-surface border border-claude-border rounded-lg divide-y divide-claude-border">
+  {% for e in events %}
+  <a href="{{ e.link }}" class="flex items-center gap-3 text-sm px-3 py-2 hover:bg-claude-surface-alt
+       {% if e.type == 'error' %}bg-red-50/40{% endif %}">
+    <span class="font-mono text-xs text-claude-muted w-20 shrink-0">{{ e.timestamp.strftime('%H:%M:%S') }}</span>
+    <span class="w-5 text-center">{{ e.icon }}</span>
+    <span class="px-2 py-0.5 rounded text-xs bg-claude-surface-alt shrink-0">{{ e.channel }}</span>
+    <span class="font-medium shrink-0">{{ e.title }}</span>
+    <span class="text-claude-muted text-xs truncate">{{ e.detail }}</span>
+    {% if e.status %}
+    <span class="ml-auto text-[10px] uppercase tracking-wider px-2 py-0.5 rounded
+        {% if e.status == 'success' %}bg-claude-success/10 text-claude-success
+        {% elif e.status == 'failed' %}bg-claude-error/10 text-claude-error
+        {% else %}bg-claude-surface-alt text-claude-muted{% endif %}">
+      {{ e.status }}
+    </span>
+    {% endif %}
+  </a>
   {% else %}
-  <div class="text-claude-muted text-center py-8">Henüz aktivite yok.</div>
+  <div class="text-claude-muted text-center py-8">Bu filtre için sonuç yok.</div>
   {% endfor %}
 </div>
 {% endblock %}
