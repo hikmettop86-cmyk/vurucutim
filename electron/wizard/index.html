@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'">
+  <title>VurucuTim — Kurulum</title>
+  <link rel="stylesheet" href="wizard.css">
+</head>
+<body>
+  <main class="wizard">
+    <header>
+      <h1>VurucuTim İlk Kurulum</h1>
+      <p class="sub">Sistemini kontrol ediyorum…</p>
+    </header>
+
+    <section id="dep-list" class="dep-list" aria-live="polite">
+      <!-- populated by wizard.js -->
+    </section>
+
+    <section id="summary" class="summary hidden">
+      <p><strong>Toplam indirilecek:</strong> <span id="total-mb">—</span></p>
+      <p><strong>Tahmini süre:</strong> <span id="eta">—</span></p>
+    </section>
+
+    <section id="progress" class="progress hidden">
+      <div class="bar"><div class="bar-fill" id="bar-fill"></div></div>
+      <p id="phase-label">Hazırlanıyor…</p>
+      <details>
+        <summary>Detaylı log</summary>
+        <pre id="log"></pre>
+      </details>
+    </section>
+
+    <section id="error" class="error hidden">
+      <h2>Hata</h2>
+      <p id="error-msg"></p>
+      <button id="btn-retry">Tekrar Dene</button>
+      <button id="btn-skip-after-error">Yine de Devam Et</button>
+    </section>
+
+    <footer>
+      <label class="opt"><input type="checkbox" id="opt-autostart"> Sistem başlarken aç</label>
+      <div class="actions">
+        <button id="btn-skip" class="secondary">Atla ve Devam Et</button>
+        <button id="btn-install" class="primary">Hepsini Kur</button>
+      </div>
+    </footer>
+  </main>
+  <script src="wizard.js"></script>
+</body>
+</html>
