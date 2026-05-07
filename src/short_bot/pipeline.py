@@ -36,6 +36,7 @@ from short_bot.overflow import (
     format_feedback,
     truncate_to_fit,
 )
+from short_bot.templates_config import ARCHETYPE_OVERFLOW_FIELDS
 from short_bot.composer import compose_video
 from short_bot.locale import ui_labels_for
 from short_bot.generator import (
@@ -367,22 +368,31 @@ def _run_rss(*, channel, run_id, log, eng, settings,
             log.warning("  trafilatura empty → fallback description")
         log.info(f"  → body {len(body_try)} chars")
 
-        log.info(f"  write_script + overflow check (model={script_model})")
-        template_path = templates_dir / f"{channel.template}.html.j2"
-        script_try, _overflow_retries = write_script_with_overflow_check(
-            item=candidate.item,
-            body_html=body_try,
-            channel=channel,
-            template_path=template_path,
-            job_template_args={
-                "music_path": Path("dummy.mp3"),
-                "ui_language": channel.language,
-            },
-            max_retries=2,
-            log=log,
-            claude_path=settings.claude_cli_path,
-            model=script_model,
-        )
+        log.info(f"  write_script (model={script_model})")
+        if channel.template in ARCHETYPE_OVERFLOW_FIELDS:
+            template_path = templates_dir / f"{channel.template}.html.j2"
+            script_try, _overflow_retries = write_script_with_overflow_check(
+                item=candidate.item,
+                body_html=body_try,
+                channel=channel,
+                template_path=template_path,
+                job_template_args={
+                    "music_path": Path("dummy.mp3"),
+                    "ui_language": channel.language,
+                },
+                max_retries=2,
+                log=log,
+                claude_path=settings.claude_cli_path,
+                model=script_model,
+            )
+        else:
+            log.info(f"  template '{channel.template}' not in overflow config "
+                     f"— skipping overflow check")
+            script_try = write_script(
+                candidate.item, body_try,
+                claude_path=settings.claude_cli_path,
+                channel=channel, model=script_model,
+            )
         log.info(f"  → {script_try.header_top} | {script_try.header_bottom}")
 
         log.info("  assets/image")
