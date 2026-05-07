@@ -54,9 +54,12 @@ ARCHETYPE_OVERFLOW_FIELDS: dict[str, list[OverflowField]] = {
         OverflowField("body_paragraph", ".body",             7),
     ],
     "meme": [
-        OverflowField("header_top",     ".header .top",      2),
-        OverflowField("header_bottom",  ".header .bot",      2),
+        OverflowField("header_top",     ".header .top",         2),
         OverflowField("photo_overlay",  ".photo .overlay-text", 2),
-        OverflowField("body_paragraph", ".body",             2),
+        # Meme template (templates/meme.html.j2:140-149) has no .header .bot
+        # element — header is only `<span class="top">`. The `.body` element
+        # renders `script.header_bottom`, NOT body_paragraph. body_paragraph
+        # is unused by meme.
+        OverflowField("header_bottom",  ".body",                2),
     ],
 }
