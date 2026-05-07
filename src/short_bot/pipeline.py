@@ -29,7 +29,13 @@ from short_bot.scorer import score_items, select_top
 from short_bot.extractor import extract_article
 from short_bot.script_writer import write_script
 from short_bot.assets import download_and_blur_thumb, pick_music
-from short_bot.renderer import render_frames
+from short_bot.renderer import render_frames, build_html
+from short_bot.overflow import (
+    OverflowReport,
+    check_overflow,
+    format_feedback,
+    truncate_to_fit,
+)
 from short_bot.composer import compose_video
 from short_bot.locale import ui_labels_for
 from short_bot.generator import (
@@ -361,10 +367,22 @@ def _run_rss(*, channel, run_id, log, eng, settings,
             log.warning("  trafilatura empty → fallback description")
         log.info(f"  → body {len(body_try)} chars")
 
-        log.info(f"  write_script (model={script_model})")
-        script_try = write_script(candidate.item, body_try,
-                                  claude_path=settings.claude_cli_path,
-                                  channel=channel, model=script_model)
+        log.info(f"  write_script + overflow check (model={script_model})")
+        template_path = templates_dir / f"{channel.template}.html.j2"
+        script_try, _overflow_retries = write_script_with_overflow_check(
+            item=candidate.item,
+            body_html=body_try,
+            channel=channel,
+            template_path=template_path,
+            job_template_args={
+                "music_path": Path("dummy.mp3"),
+                "ui_language": channel.language,
+            },
+            max_retries=2,
+            log=log,
+            claude_path=settings.claude_cli_path,
+            model=script_model,
+        )
         log.info(f"  → {script_try.header_top} | {script_try.header_bottom}")
 
         log.info("  assets/image")
@@ -638,3 +656,82 @@ def _run_generator(*, channel, run_id, log, eng, settings,
     log.info(f"=== success short_id={short_id} ===")
     return RunResult(run_id=run_id, status="success",
                      short_path=out_path, error=None)
+
+
+def _build_check_job(script, channel, *, music_path, ui_language):
+    """Lightweight RenderJob for in-memory overflow check.
+
+    No bg image (Pexels download may not have happened yet at this point —
+    template falls back to gradient when bg_image_path is None).
+    Music path is required by RenderJob dataclass but unused by build_html.
+    """
+    from short_bot.models import RenderJob   # local import to avoid cycles
+    return RenderJob(
+        script=script,
+        bg_image_path=None,
+        music_path=music_path,
+        channel_colors=channel.colors,
+        handle=channel.handle,
+        duration_s=channel.duration_s,
+        language=ui_language,
+        cta_enabled=False,   # CTA layer would only confuse measurements
+    )
+
+
+def write_script_with_overflow_check(
+    *,
+    item,
+    body_html: str,
+    channel,
+    template_path,
+    job_template_args: dict,
+    max_retries: int = 2,
+    log,
+    claude_path: str = "claude",
+    model: str = "default",
+) -> tuple:
+    """Returns (final_script, retry_count).
+
+    retry_count: 0 = clean on first attempt
+                 1-2 = clean after N retries
+                 max_retries+1 (=3) = truncate fallback used (or attempted)
+    """
+    feedback = ""
+    last_script = None
+    last_report: OverflowReport | None = None
+
+    for attempt in range(max_retries + 1):  # 0, 1, 2 → 3 attempts
+        script = write_script(item, body_html, channel=channel,
+                              overflow_feedback=feedback,
+                              claude_path=claude_path, model=model)
+        last_script = script
+
+        check_job = _build_check_job(script, channel, **job_template_args)
+        html = build_html(check_job, template_path)
+
+        try:
+            report = check_overflow(html, archetype=channel.template)
+        except Exception as e:  # noqa: BLE001 — Playwright/timeout are runtime
+            log.warning(f"[overflow] check failed (attempt {attempt + 1}): "
+                        f"{e} — using script as-is")
+            return script, attempt
+
+        if not report.has_any_overflow():
+            log.info(f"[overflow] check #{attempt + 1}: clean")
+            return script, attempt
+
+        last_report = report
+        log.info(f"[overflow] check #{attempt + 1}: {report.summary()}")
+
+        if attempt < max_retries:
+            feedback = format_feedback(report)
+            log.info("[overflow] retry write_script with feedback")
+
+    # All attempts overflowed — truncate fallback.
+    log.warning("[overflow] all retries failed -> truncate_to_fit fallback")
+    try:
+        return truncate_to_fit(last_script, last_report), max_retries + 1
+    except Exception as e:  # noqa: BLE001 — Pydantic ValidationError or ValueError
+        log.warning(f"[overflow] truncate failed ({e}) "
+                    f"- using last script as-is")
+        return last_script, max_retries + 1
