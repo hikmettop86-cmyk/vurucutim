@@ -12,6 +12,7 @@ files:
   - preload.js
   - src/**/*
   - wizard/**/*
+  - update-dialog/**/*
   - assets/icon.png
   - "!test/**/*"
   - "!scripts/**/*"
