@@ -73,10 +73,22 @@ function registerIpcOnce() {
   }));
 
   ipcMain.handle('vt:update-install', async () => {
+    // CRITICAL: signal app-wide that this is a real quit (not "hide to tray")
+    // and tear down resources so NSIS can replace the .exe without "cannot be closed".
+    app.isQuitting = true;
     if (_ctx?.beforeQuit) {
       try { await _ctx.beforeQuit(); } catch (e) { log.warn('updater beforeQuit failed:', e.message); }
     }
-    if (_dialogWin) { try { _dialogWin.close(); } catch (_) {} }
+    // Destroy all windows (close handlers preventDefault otherwise — they hide to tray)
+    try {
+      for (const w of BrowserWindow.getAllWindows()) {
+        try { w.destroy(); } catch (_) {}
+      }
+    } catch (_) {}
+    // Tear down tray icon so the process can fully exit
+    if (_ctx?.tray?.destroy) {
+      try { _ctx.tray.destroy(); } catch (_) {}
+    }
     autoUpdater.quitAndInstall(false, true);
   });
 

@@ -235,6 +235,7 @@ if (!gotLock) {
       beforeQuit: async () => {
         try { await runner.stop(); } catch (_) {}
       },
+      tray,
     });
     updater.startBackgroundPolling();
   });
