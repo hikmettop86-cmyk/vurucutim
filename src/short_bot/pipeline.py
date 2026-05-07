@@ -367,10 +367,22 @@ def _run_rss(*, channel, run_id, log, eng, settings,
             log.warning("  trafilatura empty → fallback description")
         log.info(f"  → body {len(body_try)} chars")
 
-        log.info(f"  write_script (model={script_model})")
-        script_try = write_script(candidate.item, body_try,
-                                  claude_path=settings.claude_cli_path,
-                                  channel=channel, model=script_model)
+        log.info(f"  write_script + overflow check (model={script_model})")
+        template_path = templates_dir / f"{channel.template}.html.j2"
+        script_try, _overflow_retries = write_script_with_overflow_check(
+            item=candidate.item,
+            body_html=body_try,
+            channel=channel,
+            template_path=template_path,
+            job_template_args={
+                "music_path": Path("dummy.mp3"),
+                "ui_language": channel.language,
+            },
+            max_retries=2,
+            log=log,
+            claude_path=settings.claude_cli_path,
+            model=script_model,
+        )
         log.info(f"  → {script_try.header_top} | {script_try.header_bottom}")
 
         log.info("  assets/image")
@@ -675,6 +687,8 @@ def write_script_with_overflow_check(
     job_template_args: dict,
     max_retries: int = 2,
     log,
+    claude_path: str = "claude",
+    model: str = "default",
 ) -> tuple:
     """Returns (final_script, retry_count).
 
@@ -688,7 +702,8 @@ def write_script_with_overflow_check(
 
     for attempt in range(max_retries + 1):  # 0, 1, 2 → 3 attempts
         script = write_script(item, body_html, channel=channel,
-                              overflow_feedback=feedback)
+                              overflow_feedback=feedback,
+                              claude_path=claude_path, model=model)
         last_script = script
 
         check_job = _build_check_job(script, channel, **job_template_args)
