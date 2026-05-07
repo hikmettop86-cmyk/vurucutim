@@ -116,7 +116,7 @@ function registerIpc() {
   });
 }
 
-async function bootFlaskAndOpenPanel() {
+async function bootFlaskAndOpenPanel({ allowRecovery = true } = {}) {
   const log = require('./src/logger');
   try {
     const port = await runner.start();
@@ -127,6 +127,22 @@ async function bootFlaskAndOpenPanel() {
     }
   } catch (err) {
     log.error('flask boot failed:', err);
+
+    if (allowRecovery && !isHiddenStart) {
+      // Likely cause: dependencies missing or partially installed.
+      // Reset initialization marker and trigger recovery wizard so user can fix it.
+      log.warn('triggering recovery wizard');
+      try { fs.unlinkSync(paths.initializedFlag()); } catch (_) {}
+      try {
+        const res = await createWizardWindow();
+        log.info('recovery wizard finished:', res.status);
+        // Retry boot once after recovery
+        return await bootFlaskAndOpenPanel({ allowRecovery: false });
+      } catch (recErr) {
+        log.error('recovery wizard error:', recErr);
+      }
+    }
+
     const stderrLog = path.join(paths.logsDir(), 'panel_stderr.log');
     dialog.showErrorBox(
       'VurucuTim açılamadı',
