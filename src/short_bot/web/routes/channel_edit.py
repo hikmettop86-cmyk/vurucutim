@@ -86,17 +86,22 @@ def music_init(slug):
 @bp.route("/channels/<slug>/music/open", methods=["POST"])
 def music_open(slug):
     """Open the channel music dir in Windows Explorer (creates it first if needed)."""
-    import os, subprocess, sys
+    import subprocess, sys
     music_root = current_app.config["SHORTBOT_MUSIC_ROOT"]
     base = music_root / slug
     base.mkdir(parents=True, exist_ok=True)
+    abs_path = str(base.resolve())
     try:
         if sys.platform == "win32":
-            os.startfile(str(base.resolve()))
+            # explorer.exe is more reliable than os.startfile in spawned child processes.
+            subprocess.Popen(["explorer", abs_path])
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", abs_path])
         else:
-            subprocess.Popen(["xdg-open", str(base.resolve())])
+            subprocess.Popen(["xdg-open", abs_path])
+        flash(f"Klasör açıldı: {abs_path}", "ok")
     except Exception as e:
-        flash(f"Klasör açılamadı: {e}", "err")
+        flash(f"Klasör açılamadı: {e} ({abs_path})", "err")
     return redirect(url_for("channel_edit.edit", slug=slug) + "#music")
 
 
