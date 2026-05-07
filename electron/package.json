@@ -8,7 +8,7 @@
   "private": true,
   "scripts": {
     "start": "electron .",
-    "test": "node --test test/",
+    "test": "node --test test/*.test.js",
     "fetch-python": "node scripts/fetch-python-embed.js",
     "sync-version": "node scripts/sync-version.js",
     "prebuild": "npm run sync-version && npm run fetch-python",
