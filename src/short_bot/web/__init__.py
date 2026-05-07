@@ -7,6 +7,7 @@ Usage:
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from flask import Flask
@@ -30,6 +31,17 @@ def create_app(
     scheduler: bool = True,
 ) -> Flask:
     """Construct the Flask app. `scheduler=False` for tests."""
+    # Allow Electron / installer to override paths via env vars.
+    # Set BEFORE any Path() normalization so overrides win over defaults.
+    config_dir = os.environ.get("SHORT_BOT_CONFIG_DIR", config_dir)
+    _data_override = os.environ.get("SHORT_BOT_DATA_DIR")
+    if _data_override:
+        db_path = Path(_data_override) / "short_bot.sqlite"
+        cache_dir = Path(_data_override) / "cache"
+        lock_dir = Path(_data_override) / "locks"
+    logs_dir = os.environ.get("SHORT_BOT_LOGS_DIR", logs_dir)
+    output_root = os.environ.get("SHORT_BOT_OUTPUT_ROOT", output_root)
+
     config_dir = Path(config_dir)
     db_path = Path(db_path).resolve()    # absolute, avoids cwd surprises
 
