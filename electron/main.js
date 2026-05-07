@@ -1,7 +1,8 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, dialog } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const paths = require('./src/paths');
+const runner = require('./src/python-runner');
 
 // Force Local AppData (not Roaming) and capitalized app name
 // Reason: Roaming AppData may sync via OneDrive/AD policies, causing SQLite lock corruption.
@@ -26,7 +27,7 @@ function ensureUserDirs() {
   }
 }
 
-function createMainWindow() {
+function createMainWindow(url) {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -41,22 +42,40 @@ function createMainWindow() {
       nodeIntegration: false,
     },
   });
-
-  // For now: load a placeholder page. Faz 2'de Python spawn + Flask URL gelecek.
-  mainWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(
-    '<h1 style="font-family:sans-serif;color:#ccc;background:#1e1e1e;height:100vh;display:flex;align-items:center;justify-content:center;margin:0">VurucuTim — boot</h1>'
-  ));
-
+  mainWindow.loadURL(url);
   mainWindow.on('closed', () => { mainWindow = null; });
 }
 
-app.whenReady().then(() => {
+async function bootFlaskAndOpenPanel() {
+  const log = require('./src/logger');
+  try {
+    const port = await runner.start();
+    createMainWindow(`http://127.0.0.1:${port}`);
+  } catch (err) {
+    log.error('flask boot failed:', err);
+    dialog.showErrorBox(
+      'VurucuTim açılamadı',
+      `Bot arka planı başlatılamadı.\n\nHata: ${err.message}\n\nLog: ${paths.logsDir()}\\panel_stderr.log`
+    );
+    app.quit();
+  }
+}
+
+app.whenReady().then(async () => {
   ensureUserDirs();
   const log = require('./src/logger');
   log.info('app ready, version:', app.getVersion());
-  createMainWindow();
+  await bootFlaskAndOpenPanel();
 });
 
 app.on('window-all-closed', () => {
-  app.quit();   // Faz 5'te tray ile değişecek
+  app.quit();
+});
+
+app.on('before-quit', async (e) => {
+  if (runner.isRunning()) {
+    e.preventDefault();
+    await runner.stop();
+    app.exit(0);
+  }
 });
