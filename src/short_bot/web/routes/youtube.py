@@ -37,6 +37,7 @@ def avatar(slug):
 
 @bp.route("/channels/<slug>/youtube/connect", methods=["POST"])
 def connect(slug):
+    from flask import session
     cfg_path = current_app.config["SHORTBOT_CONFIG_DIR"] / "channels" / f"{slug}.yaml"
     if not cfg_path.exists():
         abort(404)
@@ -49,11 +50,16 @@ def connect(slug):
     auth_url, _state = flow.authorization_url(
         state=slug, access_type="offline", prompt="consent",
     )
+    # Persist PKCE code_verifier across the OAuth roundtrip — google-auth-oauthlib auto-generates
+    # one at authorization_url() time and Google will require it back in fetch_token().
+    session[f"yt_oauth_verifier:{slug}"] = flow.code_verifier
+    session.permanent = True
     return redirect(auth_url)
 
 
 @bp.route("/oauth/callback")
 def callback():
+    from flask import session
     state = request.args.get("state", "")
     code = request.args.get("code", "")
     if not state or not code:
@@ -63,6 +69,8 @@ def callback():
         abort(404)
     try:
         flow = yt_auth.build_flow(_yt_root(), state, redirect_uri=_redirect_uri())
+        # Restore the PKCE code_verifier saved during /connect.
+        flow.code_verifier = session.pop(f"yt_oauth_verifier:{state}", None)
         flow.fetch_token(code=code)
         creds = flow.credentials
         yt_auth.save_credentials(_yt_root(), state, creds)
