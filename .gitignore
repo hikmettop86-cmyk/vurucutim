@@ -66,3 +66,8 @@ data/youtube_credentials/
 
 # Tests not distributed
 tests/
+
+# Electron build artifacts
+electron/node_modules/
+electron/dist/
+electron/cache/
