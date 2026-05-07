@@ -7,6 +7,7 @@ const detector = require('./src/dep-detector');
 const installer = require('./src/dep-installer');
 const prefs = require('./src/preferences');
 const tray = require('./src/tray');
+const autostart = require('./src/autostart');
 
 // Force Local AppData (not Roaming) and capitalized app name
 // Reason: Roaming AppData may sync via OneDrive/AD policies, causing SQLite lock corruption.
@@ -14,6 +15,8 @@ const tray = require('./src/tray');
 app.setName('VurucuTim');
 const _localAppData = process.env.LOCALAPPDATA || path.join(require('node:os').homedir(), 'AppData', 'Local');
 app.setPath('userData', path.join(_localAppData, 'VurucuTim'));
+
+const isHiddenStart = process.argv.includes('--hidden');
 
 let mainWindow = null;
 let wizardWindow = null;
@@ -26,16 +29,29 @@ function ensureUserDirs() {
   ]) fs.mkdirSync(d, { recursive: true });
 }
 
+let _firstHide = true;
 function createMainWindow(url) {
   mainWindow = new BrowserWindow({
     width: 1280, height: 800, minWidth: 960, minHeight: 600,
     title: 'VurucuTim', backgroundColor: '#1e1e1e', autoHideMenuBar: true,
+    show: !isHiddenStart,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true, nodeIntegration: false,
     },
   });
   mainWindow.loadURL(url);
+
+  mainWindow.on('close', (e) => {
+    if (!app.isQuitting) {
+      e.preventDefault();
+      mainWindow.hide();
+      if (_firstHide) {
+        tray.notifyHidden();
+        _firstHide = false;
+      }
+    }
+  });
   mainWindow.on('closed', () => { mainWindow = null; });
 }
 
@@ -98,7 +114,11 @@ async function bootFlaskAndOpenPanel() {
   const log = require('./src/logger');
   try {
     const port = await runner.start();
-    createMainWindow(`http://127.0.0.1:${port}`);
+    if (!isHiddenStart) {
+      createMainWindow(`http://127.0.0.1:${port}`);
+    } else {
+      log.info('hidden start: window not created — tray-only mode');
+    }
   } catch (err) {
     log.error('flask boot failed:', err);
     const stderrLog = path.join(paths.logsDir(), 'panel_stderr.log');
@@ -134,6 +154,9 @@ if (!gotLock) {
       // Continue regardless of skip/ok — user may have only configured Claude manually
     }
 
+    // Sync autostart with prefs (might have been changed by wizard or in a prior session)
+    autostart.syncFromPrefs(prefs);
+
     // Minimum bootstrap: settings.yaml MUST exist for Flask to boot.
     // copyExampleSettings is idempotent (skips if file exists).
     try {
@@ -165,22 +188,23 @@ if (!gotLock) {
         log.info('check-updates: not yet wired (Faz 6)');
       },
       setAutostart: (enabled) => {
-        // Faz 5 Task 15 will wire autostart properly
-        const p = require('./src/preferences');
-        p.update({ autostart: enabled });
+        autostart.set(enabled);
+        prefs.update({ autostart: enabled });
         tray.refreshMenu();
       },
-      quitApp: async () => {
+      quitApp: () => {
         app.isQuitting = true;
-        try { await runner.stop(); } catch (_) {}
         tray.destroy();
-        app.exit(0);
+        app.quit();   // before-quit handler will drain runner.stop()
       },
     });
   });
 }
 
-app.on('window-all-closed', () => app.quit());
+app.on('window-all-closed', (e) => {
+  // Tray keeps app running; only quit via tray "Çıkış" or Cmd+Q (which sets app.isQuitting via before-quit chain).
+  // Don't call app.quit() here.
+});
 
 app.on('before-quit', async (e) => {
   if (runner.isRunning()) {
