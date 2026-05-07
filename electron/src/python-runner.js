@@ -31,8 +31,10 @@ function pythonExe() {
 
 function buildEnv(port) {
   const env = { ...process.env };
-  const extraPath = paths.shortBotSrc();
-  env.PYTHONPATH = env.PYTHONPATH ? `${extraPath};${env.PYTHONPATH}` : extraPath;
+  // shortBotSrc FIRST (always-current after updates) then sitePackages (for deps)
+  const parts = [paths.shortBotSrc(), paths.sitePackagesDir()];
+  if (env.PYTHONPATH) parts.push(env.PYTHONPATH);
+  env.PYTHONPATH = parts.join(';');
   env.SHORT_BOT_PORT = String(port);
   if (fs.existsSync(paths.ffmpegBin())) {
     env.PATH = `${path.dirname(paths.ffmpegBin())};${env.PATH ?? ''}`;

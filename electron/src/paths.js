@@ -31,16 +31,24 @@ function musicRoot() {
   return path.join(userData(), 'assets', 'music');
 }
 
+function sitePackagesDir() {
+  // Flat pip --target dir (replaces traditional venv — embedded Python lacks venv module)
+  return path.join(userData(), 'python-site-packages');
+}
+
+// Backwards-compat aliases (still used by some modules; will be removed in future cleanup):
 function venvDir() {
-  return path.join(userData(), 'venv');
+  return sitePackagesDir();
 }
 
 function venvPython() {
-  return path.join(venvDir(), 'Scripts', 'python.exe');
+  // No real venv interpreter — always use embedded Python with PYTHONPATH set elsewhere
+  return embeddedPython();
 }
 
 function venvPip() {
-  return path.join(venvDir(), 'Scripts', 'pip.exe');
+  // pip is invoked as `python -m pip` — this path may not exist physically
+  return path.join(sitePackagesDir(), 'Scripts', 'pip.exe');
 }
 
 function depsDir() {
@@ -94,7 +102,7 @@ module.exports = {
   APP_NAME,
   userData, configDir, settingsYaml,
   dataDir, logsDir, outputDir, musicRoot,
-  venvDir, venvPython, venvPip,
+  sitePackagesDir, venvDir, venvPython, venvPip,
   depsDir, ffmpegBin,
   preferencesFile, initializedFlag,
   resourcesDir, embeddedPython,

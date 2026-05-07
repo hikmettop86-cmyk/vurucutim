@@ -39,43 +39,62 @@ function runStream(cmd, args, { cwd, env, onProgress } = {}) {
 }
 
 async function installVenv({ onProgress } = {}) {
-  if (fs.existsSync(paths.venvPython())) {
-    onProgress?.('venv zaten mevcut, atlanıyor');
+  // Embedded Python lacks `venv` module. Instead bootstrap pip into a flat
+  // --target site-packages dir and use that for all subsequent installs.
+  const sitePackages = paths.sitePackagesDir();
+  fs.mkdirSync(sitePackages, { recursive: true });
+
+  const pipPkg = path.join(sitePackages, 'pip');
+  if (fs.existsSync(pipPkg)) {
+    onProgress?.('pip zaten mevcut, atlanıyor');
     return;
   }
-  await runStream(paths.embeddedPython(), ['-m', 'venv', paths.venvDir()], { onProgress });
-  // pip kurulu değilse get-pip ile manuel kur (embed Python pth düzeltmesinden sonra olabilir)
-  const havePip = fs.existsSync(paths.venvPip());
-  if (!havePip) {
-    onProgress?.('venv pip bulunamadı, get-pip indiriliyor');
-    const tmpDir = path.join(paths.userData(), 'tmp');
-    fs.mkdirSync(tmpDir, { recursive: true });
-    const getPip = path.join(tmpDir, 'get-pip.py');
-    await downloadFile('https://bootstrap.pypa.io/get-pip.py', getPip, { onProgress });
-    await runStream(paths.venvPython(), [getPip], { onProgress });
-  }
+
+  onProgress?.('get-pip.py indiriliyor');
+  const tmpDir = path.join(paths.userData(), 'tmp');
+  fs.mkdirSync(tmpDir, { recursive: true });
+  const getPip = path.join(tmpDir, 'get-pip.py');
+  await downloadFile('https://bootstrap.pypa.io/get-pip.py', getPip, { onProgress });
+
+  onProgress?.('pip kuruluyor (--target)');
+  await runStream(paths.embeddedPython(), [
+    getPip,
+    `--target=${sitePackages}`,
+    '--no-warn-script-location',
+    '--no-cache-dir',
+  ], {
+    env: { ...process.env, PYTHONPATH: sitePackages },
+    onProgress,
+  });
 }
 
 async function installPipPackages({ onProgress } = {}) {
-  // pip install -e {shortBotRoot} → uses pyproject.toml in resources/short-bot/
-  const args = ['-m', 'pip', 'install', '-e', paths.shortBotRoot(), '--upgrade', '--no-warn-script-location'];
+  // pip install --target → flat layout (no venv possible with embedded Python).
+  // We install short-bot itself + its deps (from pyproject.toml).
+  // Note: cannot use -e (editable) with --target. Source is shadowed by shortBotSrc on PYTHONPATH.
+  const sitePackages = paths.sitePackagesDir();
+  const args = [
+    '-m', 'pip', 'install',
+    `--target=${sitePackages}`,
+    '--upgrade',
+    '--no-warn-script-location',
+    paths.shortBotRoot(),
+  ];
+  const env = { ...process.env, PYTHONPATH: sitePackages };
   try {
-    await runStream(paths.venvPython(), args, { onProgress });
+    await runStream(paths.embeddedPython(), args, { env, onProgress });
   } catch (e) {
-    // Fallback: prefer prebuilt wheels (avoids MSVC build for native packages)
     onProgress?.('Build hatası — prebuilt wheels deneniyor');
-    await runStream(paths.venvPython(), [...args, '--only-binary=:all:'], { onProgress });
+    await runStream(paths.embeddedPython(), [...args, '--only-binary=:all:'], { env, onProgress });
   }
 }
 
 async function installPlaywrightChromium({ onProgress } = {}) {
-  const env = { ...process.env };
-  // Allow mirror override (env-var) without code change
-  // PLAYWRIGHT_DOWNLOAD_HOST=https://npmmirror.com/mirrors/playwright
+  const env = { ...process.env, PYTHONPATH: paths.sitePackagesDir() };
   let lastErr = null;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      await runStream(paths.venvPython(), ['-m', 'playwright', 'install', 'chromium'], { env, onProgress });
+      await runStream(paths.embeddedPython(), ['-m', 'playwright', 'install', 'chromium'], { env, onProgress });
       return;
     } catch (e) {
       lastErr = e;
@@ -237,12 +256,15 @@ async function copyBundledMusic({ onProgress } = {}) {
 }
 
 async function initDb({ onProgress } = {}) {
+  const parts = [paths.shortBotSrc(), paths.sitePackagesDir()];
+  if (process.env.PYTHONPATH) parts.push(process.env.PYTHONPATH);
   const env = {
     ...process.env,
-    PYTHONPATH: paths.shortBotRoot() + (process.env.PYTHONPATH ? `;${process.env.PYTHONPATH}` : ''),
+    PYTHONPATH: parts.join(';'),
     SHORT_BOT_DATA_DIR: paths.dataDir(),
+    SHORT_BOT_CONFIG_DIR: paths.configDir(),
   };
-  await runStream(paths.venvPython(), ['-m', 'short_bot', 'init'], {
+  await runStream(paths.embeddedPython(), ['-m', 'short_bot', 'init'], {
     cwd: paths.shortBotRoot(), env, onProgress,
   });
 }

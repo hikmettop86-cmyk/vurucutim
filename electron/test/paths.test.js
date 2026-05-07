@@ -25,8 +25,13 @@ test('configDir is under userData', () => {
   assert.ok(paths.configDir().endsWith(path.join('VurucuTim', 'config')));
 });
 
-test('venvPython is under userData/venv/Scripts', () => {
-  assert.ok(paths.venvPython().includes(path.join('VurucuTim', 'venv', 'Scripts', 'python.exe')));
+test('venvPython resolves to embedded python (no real venv on embed)', () => {
+  // venvPython is now an alias for embeddedPython since embedded Python lacks venv module
+  assert.strictEqual(paths.venvPython(), paths.embeddedPython());
+});
+
+test('sitePackagesDir is under userData/python-site-packages', () => {
+  assert.ok(paths.sitePackagesDir().endsWith(path.join('VurucuTim', 'python-site-packages')));
 });
 
 test('embeddedPython is under resources/python in packaged app', () => {

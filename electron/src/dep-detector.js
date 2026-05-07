@@ -12,21 +12,24 @@ function execP(cmd, args = [], opts = {}) {
 }
 
 async function detectVenv() {
-  const ok = fs.existsSync(paths.venvPython());
+  // Check pip is bootstrapped into the flat site-packages dir
+  const ok = fs.existsSync(path.join(paths.sitePackagesDir(), 'pip'));
   return {
     id: 'venv',
-    label: 'Python venv (sanal ortam)',
+    label: 'Python ortamı (pip)',
     status: ok ? 'ok' : 'missing',
-    detail: ok ? paths.venvPython() : 'kurulacak',
+    detail: ok ? paths.sitePackagesDir() : 'kurulacak',
   };
 }
 
 async function detectPipPackages() {
-  if (!fs.existsSync(paths.venvPython())) {
-    return { id: 'pip', label: 'Python paketleri', status: 'missing', detail: 'venv yok' };
+  const sitePackages = paths.sitePackagesDir();
+  if (!fs.existsSync(path.join(sitePackages, 'pip'))) {
+    return { id: 'pip', label: 'Python paketleri', status: 'missing', detail: 'pip yok' };
   }
   const probe = `import flask, playwright, feedparser, trafilatura, sqlalchemy, jinja2, ffmpeg, apscheduler, googleapiclient; print("ok")`;
-  const r = await execP(paths.venvPython(), ['-c', probe]);
+  const env = { ...process.env, PYTHONPATH: sitePackages };
+  const r = await execP(paths.embeddedPython(), ['-c', probe], { env });
   if (!r.err && r.stdout.includes('ok')) {
     return { id: 'pip', label: 'Python paketleri', status: 'ok' };
   }
@@ -34,10 +37,12 @@ async function detectPipPackages() {
 }
 
 async function detectPlaywrightChromium() {
-  if (!fs.existsSync(paths.venvPython())) {
-    return { id: 'chromium', label: 'Playwright Chromium', status: 'missing', detail: 'venv yok' };
+  const sitePackages = paths.sitePackagesDir();
+  if (!fs.existsSync(path.join(sitePackages, 'pip'))) {
+    return { id: 'chromium', label: 'Playwright Chromium', status: 'missing', detail: 'pip yok' };
   }
-  const r = await execP(paths.venvPython(), ['-m', 'playwright', 'install', '--dry-run', 'chromium']);
+  const env = { ...process.env, PYTHONPATH: sitePackages };
+  const r = await execP(paths.embeddedPython(), ['-m', 'playwright', 'install', '--dry-run', 'chromium'], { env });
   if (!r.err && /already installed|is already/i.test(r.stdout + r.stderr)) {
     return { id: 'chromium', label: 'Playwright Chromium', status: 'ok' };
   }
