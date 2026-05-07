@@ -44,6 +44,9 @@ short-bot = "short_bot.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+"short_bot.web" = ["sample_scripts/*.json", "templates/**/*.html.j2"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-v --tb=short"

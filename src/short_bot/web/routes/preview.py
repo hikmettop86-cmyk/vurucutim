@@ -13,10 +13,10 @@ bp = Blueprint("preview", __name__)
 
 
 def _load_sample_script(language: str) -> Script:
-    fixtures = Path(__file__).resolve().parents[4] / "tests" / "fixtures"
-    sample_path = fixtures / f"sample_script_{language}.json"
+    samples = Path(__file__).resolve().parents[1] / "sample_scripts"
+    sample_path = samples / f"sample_script_{language}.json"
     if not sample_path.exists():
-        sample_path = fixtures / "sample_script_tr.json"
+        sample_path = samples / "sample_script_tr.json"
     data = json.loads(sample_path.read_text(encoding="utf-8"))
     data["highlights"] = [Highlight(**h) for h in data.get("highlights", [])]
     return Script(**data)
