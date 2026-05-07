@@ -1,0 +1,20 @@
+{% for e in events %}
+<a href="{{ e.link }}" class="flex items-center gap-3 text-sm px-3 py-2 hover:bg-claude-surface-alt
+     {% if e.type == 'error' %}bg-red-50/40{% endif %}">
+  <span class="font-mono text-xs text-claude-muted w-20 shrink-0">{{ e.timestamp.strftime('%H:%M:%S') }}</span>
+  <span class="w-5 text-center">{{ e.icon }}</span>
+  <span class="px-2 py-0.5 rounded text-xs bg-claude-surface-alt shrink-0">{{ e.channel }}</span>
+  <span class="font-medium shrink-0">{{ e.title }}</span>
+  <span class="text-claude-muted text-xs truncate">{{ e.detail }}</span>
+  {% if e.status %}
+  <span class="ml-auto text-[10px] uppercase tracking-wider px-2 py-0.5 rounded
+      {% if e.status == 'success' %}bg-claude-success/10 text-claude-success
+      {% elif e.status == 'failed' %}bg-claude-error/10 text-claude-error
+      {% else %}bg-claude-surface-alt text-claude-muted{% endif %}">
+    {{ e.status }}
+  </span>
+  {% endif %}
+</a>
+{% else %}
+<div class="text-claude-muted text-center py-8">Bu filtre için sonuç yok.</div>
+{% endfor %}

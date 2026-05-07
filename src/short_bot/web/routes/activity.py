@@ -74,3 +74,25 @@ def view():
         f_status=request.args.get("status", "").strip(),
         f_since=f["since_key"],
     )
+
+
+@bp.route("/activity/feed")
+def feed_partial():
+    """htmx partial: renders only the feed rows. Filters apply."""
+    eng = init_db(current_app.config["SHORTBOT_DB_PATH"])
+    f = _parse_filters()
+    events = build_activity_events(
+        eng,
+        since=f["since"], channel=f["channel"],
+        types=f["types"], status=f["status"],
+        limit=200, cursor=f["cursor"],
+    )
+    return render_template("_partials/activity_feed.html.j2", events=events)
+
+
+@bp.route("/activity/live-runs")
+def live_runs_partial():
+    """htmx partial: renders only the live-runs section."""
+    eng = init_db(current_app.config["SHORTBOT_DB_PATH"])
+    running = list_running_runs(eng)
+    return render_template("_partials/activity_live_runs.html.j2", running=running)

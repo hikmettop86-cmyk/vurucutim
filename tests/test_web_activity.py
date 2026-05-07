@@ -77,3 +77,41 @@ def test_activity_errors_card_pulses_when_failed_runs_present(app, tmp_path):
 
     body = app.test_client().get("/activity").data.decode("utf-8")
     assert "animate-pulse" in body
+
+
+def test_activity_feed_partial_returns_only_feed_html(app):
+    """The /activity/feed endpoint returns the rows only — no nav, no h1, no
+    summary cards. htmx swaps it into #activity-feed."""
+    resp = app.test_client().get("/activity/feed")
+    assert resp.status_code == 200
+    body = resp.data.decode("utf-8")
+    assert "<nav" not in body
+    assert "<h1" not in body
+    assert "Şu an çalışan" not in body  # not in this partial
+    # Feed content present
+    assert "ch1" in body
+
+
+def test_activity_live_runs_partial_returns_only_live_runs(app):
+    resp = app.test_client().get("/activity/live-runs")
+    assert resp.status_code == 200
+    body = resp.data.decode("utf-8")
+    assert "<nav" not in body
+    assert "<h1" not in body
+    # No running runs in seeded data
+    assert "Şu an çalışan run yok" in body or "çalışan" in body.lower()
+
+
+def test_activity_feed_partial_respects_filters(app):
+    """Filter query params apply to the partial."""
+    body = app.test_client().get("/activity/feed?type=short").data.decode("utf-8")
+    assert "My Short" in body  # short event still visible
+
+
+def test_activity_page_includes_htmx_attrs_for_auto_refresh(app):
+    body = app.test_client().get("/activity").data.decode("utf-8")
+    # Feed and live runs should both auto-refresh via htmx polling
+    assert 'hx-get="/activity/feed"' in body
+    assert 'hx-get="/activity/live-runs"' in body
+    assert "every 10s" in body or 'every 10s"' in body
+    assert "every 5s" in body or 'every 5s"' in body
