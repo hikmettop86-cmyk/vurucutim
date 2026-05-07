@@ -74,7 +74,18 @@ async function start() {
   log.info(`python-runner: chosen port ${chosenPort}`);
 
   const py = pythonExe();
-  const args = ['-m', 'short_bot', 'web', '--port', String(chosenPort)];
+  // Pass ALL paths as CLI args (don't rely on cwd-relative defaults — cwd is read-only when packaged).
+  const templatesDir = path.join(paths.shortBotRoot(), 'templates');
+  const args = [
+    '-m', 'short_bot', 'web',
+    '--port', String(chosenPort),
+    '--config-dir', paths.configDir(),
+    '--data-dir', paths.dataDir(),
+    '--templates-dir', templatesDir,
+    '--music-root', paths.musicRoot(),
+    '--logs-dir', paths.logsDir(),
+    '--output-root', paths.outputDir(),
+  ];
   const env = buildEnv(chosenPort);
   log.info(`python-runner: spawn ${py} ${args.join(' ')}`);
 
