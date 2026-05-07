@@ -12,6 +12,23 @@ from flask import Blueprint, flash, redirect, request, url_for
 
 bp = Blueprint("system", __name__)
 
+import importlib.metadata
+
+
+@bp.route("/healthz")
+def healthz():
+    """Liveness/readiness probe — used by Electron to detect Flask boot.
+
+    Returns 200 + JSON payload as soon as the Flask app is serving requests.
+    DB connections + scheduler are checked indirectly: if create_app() failed
+    they wouldn't have reached here.
+    """
+    try:
+        version = importlib.metadata.version("short-bot")
+    except importlib.metadata.PackageNotFoundError:
+        version = "0.0.0-dev"
+    return {"status": "ok", "version": version}
+
 
 def _project_root() -> Path:
     # web/routes/system.py → web/routes → web → short_bot → src → repo root
