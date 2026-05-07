@@ -69,16 +69,44 @@ async function installVenv({ onProgress } = {}) {
 }
 
 async function installPipPackages({ onProgress } = {}) {
-  // pip install --target → flat layout (no venv possible with embedded Python).
-  // We install short-bot itself + its deps (from pyproject.toml).
-  // Note: cannot use -e (editable) with --target. Source is shadowed by shortBotSrc on PYTHONPATH.
+  // We CANNOT pip-install short-bot itself: its source lives under read-only
+  // `Program Files` and pip needs to write `egg-info` there. Instead, parse
+  // pyproject.toml ourselves and install only the dependencies. short_bot is
+  // imported via PYTHONPATH = shortBotSrc + sitePackages (set in python-runner).
   const sitePackages = paths.sitePackagesDir();
+  const pyproject = path.join(paths.shortBotRoot(), 'pyproject.toml');
+  if (!fs.existsSync(pyproject)) {
+    throw new Error(`pyproject.toml bulunamadı: ${pyproject}`);
+  }
+
+  // Use embedded Python's tomllib to read deps (avoid pulling in JS toml lib).
+  const readDepsScript = `
+import tomllib, json, sys
+with open(r'${pyproject.replace(/\\/g, '\\\\')}', 'rb') as f:
+    data = tomllib.load(f)
+deps = data.get('project', {}).get('dependencies', [])
+print(json.dumps(deps))
+`;
+  const readEnv = { ...process.env, PYTHONPATH: sitePackages };
+  const { execFile } = require('child_process');
+  const deps = await new Promise((resolve, reject) => {
+    execFile(paths.embeddedPython(), ['-c', readDepsScript], { env: readEnv, timeout: 15000 }, (err, stdout, stderr) => {
+      if (err) return reject(new Error(`pyproject.toml okunamadı: ${stderr || err.message}`));
+      try { resolve(JSON.parse(stdout.trim())); }
+      catch (e) { reject(new Error(`Geçersiz JSON: ${stdout}`)); }
+    });
+  });
+  if (!Array.isArray(deps) || deps.length === 0) {
+    throw new Error('pyproject.toml içinde [project].dependencies bulunamadı');
+  }
+  onProgress?.(`pyproject.toml: ${deps.length} bağımlılık tespit edildi`);
+
   const args = [
     '-m', 'pip', 'install',
     `--target=${sitePackages}`,
     '--upgrade',
     '--no-warn-script-location',
-    paths.shortBotRoot(),
+    ...deps,
   ];
   const env = { ...process.env, PYTHONPATH: sitePackages };
   try {
