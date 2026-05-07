@@ -59,6 +59,7 @@ docs/superpowers/
 
 # Misc temp/debug
 *.html
+!electron/wizard/*.html
 test_output.log
 
 # YouTube credentials — NEVER commit (token.json, client_secrets.json contain secrets)
