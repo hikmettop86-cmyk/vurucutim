@@ -115,4 +115,14 @@ ARCHETYPE_OVERFLOW_FIELDS: dict[str, list[OverflowField]] = {
         OverflowField("photo_overlay",  ".photo .stats",         2),
         OverflowField("body_paragraph", ".body",                 7),
     ],
+    # tech-haber: LIGHT theme (Apple-keynote / Wired aesthetic). 36px Inter .top (electric-blue,
+    # uppercase) → 2 lines; 96px Inter .bot (Apple charcoal) → 2 lines; 26px .tech-tag pill
+    # chip top-left of photo → 2 lines; 38px Inter body clamped at 8 lines CSS
+    # (-webkit-line-clamp: 8). Budget = clamp so any cut triggers retry.
+    "tech-haber": [
+        OverflowField("header_top",     ".header .top",      2),
+        OverflowField("header_bottom",  ".header .bot",      2),
+        OverflowField("photo_overlay",  ".photo .tech-tag",  2),
+        OverflowField("body_paragraph", ".body",             8),
+    ],
 }
