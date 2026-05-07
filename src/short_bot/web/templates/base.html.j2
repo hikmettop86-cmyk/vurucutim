@@ -71,6 +71,7 @@
       </a>
       <div class="flex items-center gap-7 text-sm text-claude-muted ml-2">
         <a href="/" class="nav-link hover:text-claude-text {% if p == '/' %}active{% endif %}">Dashboard</a>
+        <a href="/activity" class="nav-link hover:text-claude-text {% if p.startswith('/activity') %}active{% endif %}">Akış</a>
         <a href="/shorts" class="nav-link hover:text-claude-text {% if p.startswith('/shorts') %}active{% endif %}">Shorts</a>
         <a href="/rss" class="nav-link hover:text-claude-text {% if p.startswith('/rss') %}active{% endif %}">RSS</a>
         <a href="/channels" class="nav-link hover:text-claude-text {% if p.startswith('/channels') %}active{% endif %}">Kanallar</a>

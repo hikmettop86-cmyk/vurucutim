@@ -1,0 +1,19 @@
+{% extends "base.html.j2" %}
+{% block title %}Vurucu TİM — Akış{% endblock %}
+{% block content %}
+<h1 class="font-serif text-3xl font-bold mb-6">Akış</h1>
+
+<div id="activity-feed" class="space-y-1">
+  {% for e in events %}
+  <div class="flex items-center gap-3 text-sm px-3 py-2 rounded hover:bg-claude-surface">
+    <span class="font-mono text-xs text-claude-muted w-20 shrink-0">{{ e.timestamp.strftime('%H:%M:%S') }}</span>
+    <span>{{ e.icon }}</span>
+    <span class="px-2 py-0.5 rounded text-xs bg-claude-surface-alt">{{ e.channel }}</span>
+    <span class="font-medium">{{ e.title }}</span>
+    <span class="text-claude-muted text-xs flex-1 truncate">{{ e.detail }}</span>
+  </div>
+  {% else %}
+  <div class="text-claude-muted text-center py-8">Henüz aktivite yok.</div>
+  {% endfor %}
+</div>
+{% endblock %}
