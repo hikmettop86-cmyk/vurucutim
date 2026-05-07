@@ -1,6 +1,7 @@
 """System actions: restart the server from the UI."""
 from __future__ import annotations
 
+import importlib.metadata
 import os
 import subprocess
 import sys
@@ -11,8 +12,6 @@ from pathlib import Path
 from flask import Blueprint, flash, redirect, request, url_for
 
 bp = Blueprint("system", __name__)
-
-import importlib.metadata
 
 
 @bp.route("/healthz")
