@@ -11,13 +11,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from playwright.sync_api import (
-    sync_playwright,
-    Error as PlaywrightError,
-    TimeoutError as PlaywrightTimeout,
-)
+from playwright.sync_api import sync_playwright
 
-from short_bot.templates_config import ARCHETYPE_OVERFLOW_FIELDS, OverflowField
+from short_bot.templates_config import ARCHETYPE_OVERFLOW_FIELDS
 
 
 @dataclass
@@ -75,11 +71,14 @@ _MEASURE_JS = r"""
       (parseFloat(cs.fontSize) * 1.2);
 
     let unclampedScrollH = el.scrollHeight;
-    let clampedClientH = el.clientHeight;
     let overflowedByClamp = false;
 
-    // Body uses -webkit-line-clamp; remove it to measure the natural height.
-    if (f.name === "body_paragraph") {
+    // Feature-detect line-clamp instead of gating on field name — meme's
+    // .body renders header_bottom (not body_paragraph) and other archetypes
+    // could remap fields to clamped elements too.
+    const isClamped = cs.webkitLineClamp && cs.webkitLineClamp !== "none" &&
+                      cs.display === "-webkit-box";
+    if (isClamped) {
       const origClamp = el.style.webkitLineClamp;
       const origDisplay = el.style.display;
       const origMask = el.style.webkitMaskImage;
@@ -102,7 +101,6 @@ _MEASURE_JS = r"""
       const allowedH = f.max_lines * lineHeightPx;
       overflowedByClamp = realH > allowedH + 1;
       unclampedScrollH = realH;
-      clampedClientH = allowedH;
     }
 
     // Line-count comparison avoids false positives from font ink overflow
