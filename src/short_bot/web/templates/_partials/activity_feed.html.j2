@@ -16,5 +16,25 @@
   {% endif %}
 </a>
 {% else %}
-<div class="text-claude-muted text-center py-8">Bu filtre için sonuç yok.</div>
+{% if has_filters %}
+<div class="text-claude-muted text-center py-8">
+  Bu filtre için sonuç yok.
+  <a href="/activity" class="underline hover:text-claude-text ml-1">Filtreyi temizle</a>.
+</div>
+{% else %}
+<div class="text-claude-muted text-center py-8">
+  Henüz aktivite yok. İlk run'ı başlatınca burada görünecek.
+</div>
+{% endif %}
 {% endfor %}
+
+{% if next_cursor %}
+<div class="px-3 py-3 text-center border-t border-claude-border">
+  <a href="/activity/feed?cursor={{ next_cursor }}{% if f_channel %}&channel={{ f_channel }}{% endif %}{% if f_type %}&type={{ f_type }}{% endif %}{% if f_status %}&status={{ f_status }}{% endif %}&since={{ f_since }}&limit={{ limit }}"
+     hx-get="/activity/feed?cursor={{ next_cursor }}{% if f_channel %}&channel={{ f_channel }}{% endif %}{% if f_type %}&type={{ f_type }}{% endif %}{% if f_status %}&status={{ f_status }}{% endif %}&since={{ f_since }}&limit={{ limit }}"
+     hx-target="#activity-feed" hx-swap="innerHTML"
+     class="text-xs text-claude-muted hover:text-claude-text underline">
+    Daha eski yükle ↓
+  </a>
+</div>
+{% endif %}

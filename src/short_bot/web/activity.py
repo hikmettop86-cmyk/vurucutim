@@ -248,11 +248,18 @@ class RunningRun:
 
 
 def list_running_runs(eng: Engine) -> list[RunningRun]:
-    """Runs with ended_at IS NULL ordered by started_at DESC."""
+    """Runs with ended_at IS NULL ordered by started_at DESC.
+
+    Bounded to the last 60 minutes to match cleanup_zombie_runs behavior at
+    app startup — older 'running' rows are abandoned never-finished runs and
+    shouldn't pile up in the live panel.
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=60)
     with eng.connect() as conn:
         rows = conn.execute(
             select(runs.c.id, runs.c.channel, runs.c.trigger, runs.c.started_at)
             .where(runs.c.ended_at.is_(None))
+            .where(runs.c.started_at >= cutoff)
             .order_by(runs.c.started_at.desc())
         ).fetchall()
     return [

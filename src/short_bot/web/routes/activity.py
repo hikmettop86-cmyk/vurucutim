@@ -78,16 +78,40 @@ def view():
 
 @bp.route("/activity/feed")
 def feed_partial():
-    """htmx partial: renders only the feed rows. Filters apply."""
+    """htmx partial: renders only the feed rows. Filters apply.
+
+    Optional ?limit=N override (default 200) to support tests + future tuning.
+    """
     eng = init_db(current_app.config["SHORTBOT_DB_PATH"])
     f = _parse_filters()
+    try:
+        limit = int(request.args.get("limit", "200"))
+    except (TypeError, ValueError):
+        limit = 200
+    limit = max(1, min(limit, 500))  # clamp
     events = build_activity_events(
         eng,
         since=f["since"], channel=f["channel"],
         types=f["types"], status=f["status"],
-        limit=200, cursor=f["cursor"],
+        limit=limit, cursor=f["cursor"],
     )
-    return render_template("_partials/activity_feed.html.j2", events=events)
+    has_filters = bool(
+        f["channel"] or f["status"]
+        or (f["types"] != ALL_TYPES)
+        or (f["since_key"] != "24h")
+    )
+    next_cursor = events[-1].timestamp.isoformat() if len(events) >= limit else None
+    return render_template(
+        "_partials/activity_feed.html.j2",
+        events=events,
+        has_filters=has_filters,
+        next_cursor=next_cursor,
+        f_channel=f["channel"] or "",
+        f_type=request.args.get("type", "").strip(),
+        f_status=request.args.get("status", "").strip(),
+        f_since=f["since_key"],
+        limit=limit,
+    )
 
 
 @bp.route("/activity/live-runs")
