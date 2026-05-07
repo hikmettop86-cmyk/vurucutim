@@ -31,6 +31,8 @@
           <span class="text-claude-muted">below threshold</span>
         {% elif it.status == 'duplicate' %}
           <span class="bg-claude-error text-white px-2 py-0.5 rounded text-[10px] uppercase">duplicate</span>
+        {% elif it.status == 'image_rejected' %}
+          <span class="bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded text-[10px] uppercase ring-1 ring-yellow-300" title="Görsel bulunamadığı için atlandı; bir sonraki run'da tekrar denenebilir">image rejected</span>
         {% else %}
           <span class="text-claude-muted">{{ it.status or '—' }}</span>
         {% endif %}

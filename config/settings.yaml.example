@@ -31,4 +31,5 @@ log_level: INFO
 # Claude model secimi (degistirme gerek yok)
 claude_models:
   dna: opus      # Kanal DNA olusturma — Opus kullanir (~30-60s)
-  default: haiku # Geri kalan tum islemler — Haiku kullanir (hizli + ucuz)
+  default: haiku # Skoring + diger islemler — Haiku kullanir (hizli + ucuz)
+  script: sonnet # Script yazimi — Sonnet kullanir (Haiku basliklarda klise/yanlis caption uretiyordu)

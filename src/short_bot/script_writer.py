@@ -50,7 +50,7 @@ ARCHETYPE_PROMPTS = {
     "stadium": """ARCHETYPE: stadium — sports broadcast energy
 - header_top: SCORE format ("TEAM 2-1 TEAM") OR action word
 - header_bottom: event/stage ("90+3", "FINAL")
-- photo_overlay: dramatic moment description
+- photo_overlay: 2-5 words, action/stat caption like "PENALTI KAÇTI", "SON DAKİKA GOLÜ", "İLK 11'DE YOK". DO NOT describe the photo content (no "the player's face", "üzgün taraftar" etc.) — write a short caption tag.
 - body_paragraph: 3-4 sentences, energetic sports-broadcast tone
 - highlights: red=goal/critical event, yellow=player name/stat
 - mood: breaking for last-minute, upbeat for victory

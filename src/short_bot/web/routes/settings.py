@@ -85,6 +85,7 @@ def save():
     models = data.get("claude_models", {})
     models["dna"]     = request.form.get("model_dna", models.get("dna"))
     models["default"] = request.form.get("model_default", models.get("default"))
+    models["script"]  = request.form.get("model_script", models.get("script"))
     data["claude_models"] = models
 
     path.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False),

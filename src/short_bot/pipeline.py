@@ -48,6 +48,7 @@ from short_bot.pexels import (
 )
 
 _GENERATOR_TOPIC_DIST_DAYS = 7   # window for topic_distribution Sonnet hint
+_IMAGE_RETRY_MAX = 3   # try this many top candidates before giving up on image
 
 
 def _resolve_ui_labels(channel: ChannelConfig) -> dict[str, str]:
@@ -321,51 +322,101 @@ def _run_rss(*, channel, run_id, log, eng, settings,
         claude_path=settings.claude_cli_path,
         model=settings.claude_models.get("default", "haiku"),
     )
-    top = select_top(scored, min_score=channel.min_score, n=1)
-    picked_guid = top[0].item.guid if top else None
-    for s in scored:
-        status = "selected" if s.item.guid == picked_guid else "below_threshold"
-        record_rss_item(eng, guid=s.item.guid, channel=channel.slug,
-                        title=s.item.title, link=s.item.link, source=s.item.source,
-                        pub_date=s.item.pub_date, thumb_url=s.item.thumb_url,
-                        score=s.score, status=status)
-    if not top:
+    top_n_candidates = select_top(scored, min_score=channel.min_score,
+                                  n=_IMAGE_RETRY_MAX)
+    if not top_n_candidates:
         log.info(f"no item ≥ {channel.min_score} → finish")
+        for s in scored:
+            record_rss_item(eng, guid=s.item.guid, channel=channel.slug,
+                            title=s.item.title, link=s.item.link, source=s.item.source,
+                            pub_date=s.item.pub_date, thumb_url=s.item.thumb_url,
+                            score=s.score, status="below_threshold")
         # Show top 3 for calibration / debug
         top_seen = sorted(scored, key=lambda s: s.score, reverse=True)[:3]
         for i, s in enumerate(top_seen, 1):
             log.info(f"  top#{i} score={s.score:.1f} | {s.item.title[:80]}")
         finish_run(eng, run_id, status="no_candidates", short_id=None, error=None)
         return RunResult(run_id=run_id, status="no_candidates", short_path=None, error=None)
-    picked = top[0]
-    log.info(f"  → picked {picked.item.guid} (score={picked.score})")
 
-    log.info("[4/8] extract_article")
-    body = extract_article(picked.item.link)
-    if body is None:
-        body = picked.item.description or picked.item.title
-        log.warning("  trafilatura empty → fallback description")
-    log.info(f"  → body {len(body)} chars")
+    log.info(f"  → {len(top_n_candidates)} candidate(s) ≥ {channel.min_score} "
+             f"(retry-on-no-image up to {_IMAGE_RETRY_MAX})")
+    top_guids = {c.item.guid for c in top_n_candidates}
 
-    log.info("[5/8] write_script")
-    script_model = channel.script_model or settings.claude_models.get("default", "default")
-    script = write_script(picked.item, body, claude_path=settings.claude_cli_path,
-                          channel=channel, model=script_model)
-    log.info(f"  → {script.header_top} | {script.header_bottom}")
+    script_model = (channel.script_model
+                    or settings.claude_models.get("script")
+                    or settings.claude_models.get("default", "haiku"))
 
-    log.info("[6/8] assets")
+    picked = None
+    body = None
+    script = None
     bg = None
-    if picked.item.thumb_url:
-        bg = download_and_blur_thumb(picked.item.thumb_url, cache_dir)
-    if bg is None:
-        # Fallback: search DDG + verify with Claude vision
-        from short_bot.image_picker import pick_image_for_script
-        images_cache = cache_dir / "images"
-        bg = pick_image_for_script(script, images_cache,
-                                    claude_path=settings.claude_cli_path,
-                                    channel=channel)
-        if bg:
-            log.info(f"  ddg image accepted: {bg.name}")
+    for attempt, candidate in enumerate(top_n_candidates, 1):
+        log.info(f"[4-6/8] candidate {attempt}/{len(top_n_candidates)} "
+                 f"score={candidate.score:.1f} | {candidate.item.title[:80]}")
+
+        log.info("  extract_article")
+        body_try = extract_article(candidate.item.link)
+        if body_try is None:
+            body_try = candidate.item.description or candidate.item.title
+            log.warning("  trafilatura empty → fallback description")
+        log.info(f"  → body {len(body_try)} chars")
+
+        log.info(f"  write_script (model={script_model})")
+        script_try = write_script(candidate.item, body_try,
+                                  claude_path=settings.claude_cli_path,
+                                  channel=channel, model=script_model)
+        log.info(f"  → {script_try.header_top} | {script_try.header_bottom}")
+
+        log.info("  assets/image")
+        bg_try = None
+        if candidate.item.thumb_url:
+            bg_try = download_and_blur_thumb(candidate.item.thumb_url, cache_dir)
+        if bg_try is None:
+            from short_bot.image_picker import pick_image_for_script
+            images_cache = cache_dir / "images"
+            bg_try = pick_image_for_script(script_try, images_cache,
+                                           claude_path=settings.claude_cli_path,
+                                           channel=channel)
+            if bg_try:
+                log.info(f"  ddg image accepted: {bg_try.name}")
+
+        if bg_try is None:
+            log.warning(f"  candidate {attempt} no image → image_rejected, trying next")
+            record_rss_item(eng, guid=candidate.item.guid, channel=channel.slug,
+                            title=candidate.item.title, link=candidate.item.link,
+                            source=candidate.item.source, pub_date=candidate.item.pub_date,
+                            thumb_url=candidate.item.thumb_url, score=candidate.score,
+                            status="image_rejected")
+            continue
+
+        picked = candidate
+        body = body_try
+        script = script_try
+        bg = bg_try
+        log.info(f"  → picked {picked.item.guid} (attempt {attempt})")
+        break
+
+    # Record below_threshold items (those not in top_n)
+    for s in scored:
+        if s.item.guid not in top_guids:
+            record_rss_item(eng, guid=s.item.guid, channel=channel.slug,
+                            title=s.item.title, link=s.item.link, source=s.item.source,
+                            pub_date=s.item.pub_date, thumb_url=s.item.thumb_url,
+                            score=s.score, status="below_threshold")
+
+    if picked is None:
+        msg = f"no usable image after {len(top_n_candidates)} candidates"
+        log.warning(f"{msg} → finish")
+        finish_run(eng, run_id, status="no_candidates", short_id=None, error=msg)
+        return RunResult(run_id=run_id, status="no_candidates",
+                         short_path=None, error=msg)
+
+    record_rss_item(eng, guid=picked.item.guid, channel=channel.slug,
+                    title=picked.item.title, link=picked.item.link,
+                    source=picked.item.source, pub_date=picked.item.pub_date,
+                    thumb_url=picked.item.thumb_url, score=picked.score,
+                    status="selected")
+
     music = pick_music(music_root, mood=script.mood, channel_slug=channel.slug)
     log.info(f"  → bg={'cached' if bg else 'none'} music={music.name}")
 

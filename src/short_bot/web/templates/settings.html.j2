@@ -59,7 +59,7 @@
     </div>
 
     <h2 class="font-serif text-lg font-bold mt-6 border-t border-claude-border pt-4">Claude Modelleri</h2>
-    <div class="grid grid-cols-2 gap-3">
+    <div class="grid grid-cols-3 gap-3">
       <label class="block">
         <span class="text-xs text-claude-muted uppercase">DNA üretimi</span>
         <select name="model_dna"
@@ -70,11 +70,20 @@
         </select>
       </label>
       <label class="block">
-        <span class="text-xs text-claude-muted uppercase">Varsayılan (skor + script)</span>
+        <span class="text-xs text-claude-muted uppercase">Varsayılan (skor)</span>
         <select name="model_default"
                 class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
           {% for m in ["opus", "sonnet", "haiku"] %}
             <option value="{{ m }}" {% if data.claude_models.default == m %}selected{% endif %}>{{ m }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="block">
+        <span class="text-xs text-claude-muted uppercase">Script yazımı</span>
+        <select name="model_script"
+                class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
+          {% for m in ["opus", "sonnet", "haiku"] %}
+            <option value="{{ m }}" {% if data.claude_models.script == m %}selected{% endif %}>{{ m }}</option>
           {% endfor %}
         </select>
       </label>
