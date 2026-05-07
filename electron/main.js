@@ -133,6 +133,14 @@ if (!gotLock) {
       // Continue regardless of skip/ok — user may have only configured Claude manually
     }
 
+    // Minimum bootstrap: settings.yaml MUST exist for Flask to boot.
+    // copyExampleSettings is idempotent (skips if file exists).
+    try {
+      await installer.copyExampleSettings({ onProgress: (l) => log.info('bootstrap:', l) });
+    } catch (err) {
+      log.warn('bootstrap copyExampleSettings failed (non-fatal, may already exist):', err.message);
+    }
+
     await bootFlaskAndOpenPanel();
   });
 }
