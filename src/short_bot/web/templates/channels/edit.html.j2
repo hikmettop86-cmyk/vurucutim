@@ -256,6 +256,20 @@
             alt klasörleri oluştur. Yapmazsan dosyalar düz klasörden seçilir.
           </div>
         </div>
+        <div class="flex gap-2 pt-1">
+          <form method="post" action="{{ url_for('channel_edit.music_open', slug=c.slug) }}" class="inline">
+            <button type="submit" class="px-3 py-1.5 text-xs bg-claude-text text-white rounded-md hover:opacity-90">
+              📂 Klasörü Aç
+            </button>
+          </form>
+          {% if not music_info.exists or music_info.mp3_count == 0 %}
+            <form method="post" action="{{ url_for('channel_edit.music_init', slug=c.slug) }}" class="inline">
+              <button type="submit" class="px-3 py-1.5 text-xs bg-white border border-claude-border rounded-md hover:bg-claude-surface/40">
+                ➕ Klasörleri Oluştur (breaking / neutral / upbeat)
+              </button>
+            </form>
+          {% endif %}
+        </div>
       </div>
     </div>
 

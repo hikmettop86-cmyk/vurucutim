@@ -71,6 +71,35 @@ def edit(slug):
                            yt_quota_today=yt_quota_today)
 
 
+@bp.route("/channels/<slug>/music/init", methods=["POST"])
+def music_init(slug):
+    """Create channel music directory (+ mood subdirs)."""
+    music_root = current_app.config["SHORTBOT_MUSIC_ROOT"]
+    base = music_root / slug
+    base.mkdir(parents=True, exist_ok=True)
+    for mood in ("breaking", "neutral", "upbeat"):
+        (base / mood).mkdir(parents=True, exist_ok=True)
+    flash(f"Müzik klasörleri hazır: {base.resolve()}", "ok")
+    return redirect(url_for("channel_edit.edit", slug=slug) + "#music")
+
+
+@bp.route("/channels/<slug>/music/open", methods=["POST"])
+def music_open(slug):
+    """Open the channel music dir in Windows Explorer (creates it first if needed)."""
+    import os, subprocess, sys
+    music_root = current_app.config["SHORTBOT_MUSIC_ROOT"]
+    base = music_root / slug
+    base.mkdir(parents=True, exist_ok=True)
+    try:
+        if sys.platform == "win32":
+            os.startfile(str(base.resolve()))
+        else:
+            subprocess.Popen(["xdg-open", str(base.resolve())])
+    except Exception as e:
+        flash(f"Klasör açılamadı: {e}", "err")
+    return redirect(url_for("channel_edit.edit", slug=slug) + "#music")
+
+
 def _form_get_int(key: str, default: int) -> int:
     try:
         return int(request.form.get(key, default))
