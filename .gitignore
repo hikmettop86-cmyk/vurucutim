@@ -63,3 +63,6 @@ test_output.log
 
 # YouTube credentials — NEVER commit (token.json, client_secrets.json contain secrets)
 data/youtube_credentials/
+
+# Tests not distributed
+tests/
