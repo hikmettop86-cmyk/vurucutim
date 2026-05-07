@@ -292,7 +292,11 @@ async function initDb({ onProgress } = {}) {
     SHORT_BOT_DATA_DIR: paths.dataDir(),
     SHORT_BOT_CONFIG_DIR: paths.configDir(),
   };
-  await runStream(paths.embeddedPython(), ['-m', 'short_bot', 'init'], {
+  // Explicit --db-path because the CLI default is cwd-relative; cwd is read-only
+  // when installed to Program Files. dataDir() is under %LOCALAPPDATA% (writable).
+  fs.mkdirSync(paths.dataDir(), { recursive: true });
+  const dbPath = path.join(paths.dataDir(), 'short_bot.sqlite');
+  await runStream(paths.embeddedPython(), ['-m', 'short_bot', 'init', '--db-path', dbPath], {
     cwd: paths.shortBotRoot(), env, onProgress,
   });
 }
