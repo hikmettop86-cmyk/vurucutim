@@ -82,8 +82,11 @@ function createWizardWindow() {
 }
 
 function isFirstRun() {
-  // First run if .initialized is missing OR venv is missing (Flask can't boot without it)
-  return !fs.existsSync(paths.initializedFlag()) || !fs.existsSync(paths.venvPython());
+  // First run if .initialized is missing OR pip site-packages are missing (Flask can't boot without them)
+  if (!fs.existsSync(paths.initializedFlag())) return true;
+  const pipDir = path.join(paths.sitePackagesDir(), 'pip');
+  if (!fs.existsSync(pipDir)) return true;
+  return false;
 }
 
 function markInitialized() {
