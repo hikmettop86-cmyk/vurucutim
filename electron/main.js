@@ -9,6 +9,7 @@ const prefs = require('./src/preferences');
 const tray = require('./src/tray');
 const autostart = require('./src/autostart');
 const updater = require('./src/updater');
+const migrations = require('./src/migrations');
 
 // Force Local AppData (not Roaming) and capitalized app name
 // Reason: Roaming AppData may sync via OneDrive/AD policies, causing SQLite lock corruption.
@@ -164,6 +165,14 @@ if (!gotLock) {
       await installer.copyExampleSettings({ onProgress: (l) => log.info('bootstrap:', l) });
     } catch (err) {
       log.warn('bootstrap copyExampleSettings failed (non-fatal, may already exist):', err.message);
+    }
+
+    // Version migration — re-run pip + playwright if version changed since last successful boot.
+    try {
+      const m = await migrations.maybeMigrate((line) => log.info('migrate:', line));
+      if (m.migrated) log.info(`migrated ${m.from ?? '(none)'} → ${m.to}`);
+    } catch (err) {
+      log.error('migration failed (continuing — Flask will try to boot anyway):', err.message);
     }
 
     await bootFlaskAndOpenPanel();
