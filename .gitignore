@@ -72,6 +72,7 @@ tests/
 electron/node_modules/
 electron/dist/
 electron/cache/
+!electron/build/
 
 # Git worktrees (project-local, isolated dev branches)
 .worktrees/

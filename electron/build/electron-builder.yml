@@ -1,0 +1,60 @@
+appId: com.vurucutim.app
+productName: VurucuTim
+copyright: © 2026 VurucuTim
+asar: true
+
+directories:
+  output: dist
+  buildResources: build
+
+files:
+  - main.js
+  - preload.js
+  - src/**/*
+  - wizard/**/*
+  - assets/icon.png
+  - "!test/**/*"
+  - "!scripts/**/*"
+  - "!cache/**/*"
+
+extraResources:
+  - from: ../src
+    to: short-bot/src
+  - from: ../templates
+    to: short-bot/templates
+  - from: ../config/settings.yaml.example
+    to: short-bot/config/settings.yaml.example
+  - from: ../assets/music
+    to: short-bot/assets/music
+  - from: ../pyproject.toml
+    to: short-bot/pyproject.toml
+  - from: cache/python-embed
+    to: python
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: assets/icon.ico
+  artifactName: VurucuTim-Setup-${version}.${ext}
+  requestedExecutionLevel: asInvoker
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: VurucuTim
+  installerIcon: assets/icon.ico
+  uninstallerIcon: assets/icon.ico
+  installerHeaderIcon: assets/icon.ico
+  runAfterFinish: true
+  deleteAppDataOnUninstall: false
+  include: build/installer.nsh
+
+publish:
+  provider: github
+  owner: hikmettop86-cmyk
+  repo: vurucutim
+  releaseType: release
