@@ -89,6 +89,8 @@ async function start() {
   child.stdout.pipe(stdoutLog);
   child.stderr.pipe(stderrLog);
   child.on('exit', (code, signal) => {
+    try { stdoutLog.end(); } catch (_) {}
+    try { stderrLog.end(); } catch (_) {}
     log.warn(`python-runner: child exit code=${code} signal=${signal}`);
     child = null;
   });
