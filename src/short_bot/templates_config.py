@@ -85,4 +85,13 @@ ARCHETYPE_OVERFLOW_FIELDS: dict[str, list[OverflowField]] = {
         # is unused by meme.
         OverflowField("header_bottom",  ".body",                2),
     ],
+    # politika: 64px Source Serif 4 .top (gold, uppercase) → 2 lines for 25-char inputs;
+    # 92px serif .bot → 2 lines; 28px italic .source overlay → 2 lines; 44px body clamped
+    # at 9 lines CSS (-webkit-line-clamp: 9). Budget = clamp so any cut triggers retry.
+    "politika": [
+        OverflowField("header_top",     ".header .top",      2),
+        OverflowField("header_bottom",  ".header .bot",      2),
+        OverflowField("photo_overlay",  ".photo .source",    2),
+        OverflowField("body_paragraph", ".body",             9),
+    ],
 }
