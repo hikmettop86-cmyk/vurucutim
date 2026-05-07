@@ -19,12 +19,29 @@ class DnaPalette(BaseModel):
     body_bg: list[str] = Field(min_length=2, max_length=2)
     text_main: str = "#ffffff"
     text_muted: str = "#cccccc"
+    # Optional explicit overrides for the headline. Empty string = inherit from
+    # template (top → accent, bot → text_main). Non-empty must be #RRGGBB.
+    header_top_color: str = ""
+    header_bottom_color: str = ""
 
     @field_validator("primary", "accent", "text_main", "text_muted")
     @classmethod
     def _validate_hex(cls, v: str) -> str:
         if not (v.startswith("#") and len(v) == 7):
             raise ValueError(f"Invalid hex color: {v!r} (expected #RRGGBB)")
+        try:
+            int(v[1:], 16)
+        except ValueError as e:
+            raise ValueError(f"Invalid hex color: {v!r}") from e
+        return v.lower()
+
+    @field_validator("header_top_color", "header_bottom_color")
+    @classmethod
+    def _validate_optional_hex(cls, v: str) -> str:
+        if v == "":
+            return v
+        if not (v.startswith("#") and len(v) == 7):
+            raise ValueError(f"Invalid hex color: {v!r} (expected #RRGGBB or empty)")
         try:
             int(v[1:], 16)
         except ValueError as e:
@@ -60,6 +77,7 @@ class DnaSpec(BaseModel):
     search_query_template: str = "{header_top} {header_bottom} {category}"
     persona_summary: str = Field(max_length=400)
     custom_css: str = Field(default="", max_length=8000)
+    ui_badge: str = Field(default="", max_length=24)
 
 
 def build_dna_prompt(
@@ -94,7 +112,7 @@ ARCHETYPE SEÇİMİ (1 tane seç):
 DİL UYUMU:
 - voice/style/forbidden alanlarını {lang_name} dilinde yaz
 - headline_style_hint da o dilde
-- persona_summary tamamen o dilde
+- persona_summary tamamen o dilde, MAX 400 karakter (1-2 kısa cümle)
 
 PALETTE KARARLARI (archetype'a uygun ama kanala özgü override yapabilirsin):
 - newscast: kırmızı/lacivert/altın
@@ -130,6 +148,19 @@ BANNER/HIGHLIGHT/CHIP:
 CATEGORY_ICON:
 - 1 emoji veya kısa unicode (örn. 💼 / 🎬 / ⚽ / 💻)
 
+UI_BADGE (sahnenin tepesindeki kısa rozet metni — max 24 karakter):
+- Kanalın temasına UYGUN kısa, çağrıştırıcı bir rozet yaz
+- HABER kanalı DEĞİLSE "SON DAKİKA" / "BREAKING" yazma — anlamsız olur
+- Örnekler:
+  * Aşk/sevgi → "❀ AŞK SÖZLERİ ❀" / "GÜNÜN SÖZÜ"
+  * Motivasyon → "GÜNÜN İLHAMI" / "▲ MOTİVASYON ▲"
+  * Spor → "MAÇ HABERİ" / "⚽ SPOR ⚽"
+  * Teknoloji → "TECH" / "▣ HABER ▣"
+  * Tarih → "TARİHTE BUGÜN"
+  * Mizah → "GÜNÜN MEMESİ"
+  * Resmi haber → kanal dilindeki "SON DAKİKA" karşılığı
+- Boş bırakma; en uygun olanı seç. Dil: {lang_name}
+
 SEARCH_QUERY_TEMPLATE:
 - DDG image search format string
 - Default: "{{header_top}} {{header_bottom}} {{category}}"
@@ -140,12 +171,29 @@ SEARCH_QUERY_TEMPLATE:
 Yapısal alanları (palette, fonts, banner_shape, vb.) yukarıda doldurduktan sonra,
 kanala özel görsel zenginlik için ek bir CSS bloğu yaz.
 
+⚠️ OKUNABILIRLIK ZORUNLU KURALLARI (KESİNLİKLE UYULACAK — istisna yok):
+1. BAŞLIK (.header .top, .header .bot) text rengi SOLİD olmalı:
+   - YASAK: -webkit-text-fill-color: transparent + background-clip: text kombinasyonu
+     (yani "gradient text" — harfler içi boş, koyu zeminde okunmaz)
+   - YASAK: -webkit-text-stroke .header .top ve .header .bot selector'larında
+     (stroke + transparent fill = bulanık başlık)
+   - İZİNLİ: solid color + MAKS 1 adet basit text-shadow (örn. 0 2px 8px rgba(0,0,0,0.6))
+2. BACKGROUND katmanı MAKS 2 (1 ana gradient + 1 dekoratif overlay).
+   Birden fazla radial + repeating-linear + ::before + ::after kombinasyonu YASAK
+   (görsel gürültü).
+3. box-shadow per-element MAKS 2 katman (virgülle ayrılmış 2'yi geçmesin).
+4. RENK PALETİ: custom_css içinde palette'de OLMAYAN yeni renk tanıtma. Sadece
+   primary, accent, text_main, text_muted, body_bg ve bunların alpha varyasyonları.
+5. .body arkaplanı solid veya ≥90% opaque (rgba(...,0.9) veya üstü) olmalı —
+   yarı saydam zeminde gövde metni okunmuyor.
+
 ✓ İZİNLİ:
-- background-image / repeating gradient / pattern (body, .stage, ::before, ::after)
+- background-image / pattern (body, .stage) — MAKS 1 katman, kuraldaki limitlere uy
 - ::before / ::after dekoratif elementler (HER selector için)
-- text-shadow, -webkit-text-stroke, gradient text (.header .top, .header .bot, .body)
-- filter / mix-blend-mode / box-shadow / border-radius
-- photo treatment (.photo border, mask, filter)
+- gradient text — YALNIZCA dekoratif elementlerde (.body::first-letter, ::before
+  içeriği gibi). Başlık/gövde ana metninde ASLA.
+- filter / mix-blend-mode / border-radius
+- photo treatment (.photo border, mask, filter, MAKS 1 box-shadow)
 - chip dekorasyonu (.persistent ::before/::after, decorative borders)
 - Custom @keyframes (sadece YENİ dekoratif elementler için)
 
@@ -176,8 +224,9 @@ kanala özel görsel zenginlik için ek bir CSS bloğu yaz.
   "chip_style": "...",
   "category_icon": "...",
   "search_query_template": "...",
-  "persona_summary": "...",
-  "custom_css": "<1500-3000 karakter ham CSS>"
+  "persona_summary": "<1-2 cümle, max 400 karakter>",
+  "custom_css": "<1500-3000 karakter ham CSS>",
+  "ui_badge": "<kısa rozet metni, max 24 char>"
 }}
 """
 
@@ -296,4 +345,24 @@ html, body, .body, .handle, .stage {{ font-family: '{dna.fonts.body}', sans-seri
 """
     if dna.custom_css.strip():
         css += f"\n/* Channel custom_css (Opus-generated) */\n{dna.custom_css}\n"
+    # Readability safety net — appended LAST so it overrides any custom_css
+    # gradient-text or stroke trick on the headline. We let custom_css decorate
+    # backgrounds, photos, chips freely, but force the headline to render with
+    # solid fill + no stroke (the two patterns that destroy legibility on
+    # dynamic backgrounds).
+    css += (
+        "\n/* === Readability safety net === */\n"
+        ".header .top, .header .bot {\n"
+        "  -webkit-text-fill-color: currentColor !important;\n"
+        "  -webkit-background-clip: initial !important;\n"
+        "  background-clip: initial !important;\n"
+        "  -webkit-text-stroke: initial !important;\n"
+        "}\n"
+    )
+    # Optional headline color overrides — empty string falls back to template
+    # default (top → accent inheritance, bot → text_main).
+    if p.header_top_color:
+        css += f".header .top {{ color: {p.header_top_color} !important; }}\n"
+    if p.header_bottom_color:
+        css += f".header .bot {{ color: {p.header_bottom_color} !important; }}\n"
     return css

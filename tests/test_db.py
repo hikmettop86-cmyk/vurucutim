@@ -3,7 +3,7 @@ from pathlib import Path
 
 from short_bot.db import (
     init_db, mark_processed, is_processed, similar_title_exists,
-    record_rss_item, record_short, start_run, finish_run,
+    record_rss_item, record_short, start_run, finish_run, cleanup_zombie_runs,
 )
 
 
@@ -97,3 +97,79 @@ def test_similar_title_skips_outside_lookback(tmp_path):
     # With explicit 90-day lookback, it should match
     assert similar_title_exists(eng, "Faiz indirimi 250 baz puan", "ch",
                                   threshold=0.5, lookback_days=90)
+
+
+def _row_status(eng, run_id):
+    from sqlalchemy import text
+    with eng.connect() as conn:
+        return conn.execute(
+            text("SELECT status, error FROM runs WHERE id=:i"), {"i": run_id}
+        ).fetchone()
+
+
+def test_cleanup_zombie_runs_marks_stale_running_as_failed(tmp_path):
+    eng = init_db(tmp_path / "x.sqlite")
+    from sqlalchemy import text
+    old = datetime.now(timezone.utc) - timedelta(hours=2)
+    with eng.begin() as conn:
+        conn.execute(text(
+            "INSERT INTO runs (channel, trigger, status, started_at, log_path) "
+            "VALUES ('ch', 'cron', 'running', :ts, 'l')"
+        ), {"ts": old})
+    fresh_id = start_run(eng, "ch", trigger="manual", log_path="l")
+
+    n = cleanup_zombie_runs(eng, lock_dir=None, age_minutes=60)
+    assert n == 1
+
+    rows = list(eng.connect().execute(text(
+        "SELECT id, status, error, ended_at FROM runs ORDER BY id"
+    )))
+    old_row = rows[0]
+    assert old_row.status == "failed"
+    assert "zombie" in (old_row.error or "")
+    assert old_row.ended_at is not None
+    assert _row_status(eng, fresh_id).status == "running"
+
+
+def test_cleanup_zombie_runs_no_op_when_clean(tmp_path):
+    eng = init_db(tmp_path / "x.sqlite")
+    start_run(eng, "ch", trigger="cli", log_path="l")
+    assert cleanup_zombie_runs(eng, lock_dir=None, age_minutes=60) == 0
+
+
+def test_cleanup_zombie_runs_removes_lock_files(tmp_path):
+    eng = init_db(tmp_path / "x.sqlite")
+    lock_dir = tmp_path / "locks"
+    lock_dir.mkdir()
+    (lock_dir / "ch.lock").write_text("")
+    (lock_dir / "other.lock").write_text("")
+
+    from sqlalchemy import text
+    old = datetime.now(timezone.utc) - timedelta(hours=2)
+    with eng.begin() as conn:
+        conn.execute(text(
+            "INSERT INTO runs (channel, trigger, status, started_at, log_path) "
+            "VALUES ('ch', 'cron', 'running', :ts, 'l')"
+        ), {"ts": old})
+
+    cleanup_zombie_runs(eng, lock_dir=lock_dir, age_minutes=60)
+    assert not (lock_dir / "ch.lock").exists()
+    assert (lock_dir / "other.lock").exists()
+
+
+def test_cleanup_zombie_runs_handles_missing_lock_gracefully(tmp_path):
+    eng = init_db(tmp_path / "x.sqlite")
+    lock_dir = tmp_path / "locks"
+    lock_dir.mkdir()
+
+    from sqlalchemy import text
+    old = datetime.now(timezone.utc) - timedelta(hours=2)
+    with eng.begin() as conn:
+        conn.execute(text(
+            "INSERT INTO runs (channel, trigger, status, started_at, log_path) "
+            "VALUES ('ch', 'cron', 'running', :ts, 'l')"
+        ), {"ts": old})
+
+    n = cleanup_zombie_runs(eng, lock_dir=lock_dir, age_minutes=60)
+    assert n == 1
+

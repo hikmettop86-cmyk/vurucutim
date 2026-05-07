@@ -46,9 +46,38 @@ _MOOD_FALLBACK = {"breaking": ["breaking", "neutral"],
                   "upbeat": ["upbeat", "neutral"]}
 
 
-def pick_music(music_root: Path, mood: str) -> Path:
+def pick_music(music_root: Path, mood: str,
+               channel_slug: str | None = None) -> Path:
+    """Pick a random mp3 for the given mood.
+
+    Lookup order:
+      1. ``music_root/<channel_slug>/<mood>/*.mp3``   (per-channel + mood)
+      2. ``music_root/<channel_slug>/*.mp3``          (per-channel, flat — drop any mp3 here)
+      3. ``music_root/<mood>/*.mp3``                  (default per-mood)
+      4. ``music_root/<fallback_mood>/*.mp3``         (e.g. breaking → neutral)
+
+    A user opting in to per-channel music just creates ``assets/music/<slug>/``
+    and drops mp3 files in. No subfolders required. Empty folder → default.
+    """
     music_root = Path(music_root)
-    for try_mood in _MOOD_FALLBACK.get(mood, [mood, "neutral"]):
+    fallback_moods = _MOOD_FALLBACK.get(mood, [mood, "neutral"])
+
+    # 1 & 2: per-channel
+    if channel_slug:
+        ch_dir = music_root / channel_slug
+        if ch_dir.is_dir():
+            for try_mood in fallback_moods:
+                d = ch_dir / try_mood
+                if d.is_dir():
+                    files = sorted(p for p in d.glob("*.mp3") if p.is_file())
+                    if files:
+                        return random.choice(files)
+            flat = sorted(p for p in ch_dir.glob("*.mp3") if p.is_file())
+            if flat:
+                return random.choice(flat)
+
+    # 3 & 4: default mood folders
+    for try_mood in fallback_moods:
         d = music_root / try_mood
         if not d.is_dir():
             continue

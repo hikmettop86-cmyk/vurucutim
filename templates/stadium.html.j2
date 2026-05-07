@@ -21,7 +21,8 @@
   html, body { width: 1080px; height: 1920px; overflow: hidden;
     background: linear-gradient(180deg, var(--body-bg-1), var(--body-bg-2));
     font-family: var(--font-body); color: var(--text-main); }
-  .stage { position: relative; width: 1080px; height: 1920px; }
+  .stage { position: relative; width: 1080px; height: 1920px;
+    display: flex; flex-direction: column; }
 
   .stage-badge {
     position: absolute; top: 16px; right: 16px;
@@ -88,7 +89,10 @@
   }
 
   .body {
-    padding: 40px 50px 220px;
+    flex: 1;
+    min-height: 0;
+    margin-bottom: 240px;
+    padding: 40px 50px 30px;
     font-size: 42px;
     line-height: 1.4;
     font-weight: 600;
@@ -97,6 +101,8 @@
     -webkit-line-clamp: 7;
     -webkit-box-orient: vertical;
     overflow: hidden;
+    -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 86%, transparent 100%);
+            mask-image: linear-gradient(180deg, #000 0%, #000 86%, transparent 100%);
   }
   .body .hl-r {
     background: var(--accent);

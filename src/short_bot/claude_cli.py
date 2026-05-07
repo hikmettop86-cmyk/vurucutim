@@ -57,14 +57,20 @@ def run_json(
                         or immediately if claude binary is not found
     """
     last_error: Exception | None = None
+    retry_feedback: str = ""
 
     for attempt in range(1, retries + 1):
+        current_prompt = prompt + retry_feedback if retry_feedback else prompt
         try:
-            cmd = [claude_path, "-p", prompt, "--output-format", "text"]
+            # Pass prompt via stdin (not argv) — Windows argv encoding mangles
+            # non-ASCII characters silently, causing Sonnet to receive a
+            # corrupted prompt and return empty output.
+            cmd = [claude_path, "-p", "--output-format", "text"]
             if model != "default":
                 cmd += ["--model", model]
             proc = subprocess.run(
                 cmd,
+                input=current_prompt,
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
@@ -79,12 +85,14 @@ def run_json(
             ) from e
         except subprocess.TimeoutExpired as e:
             last_error = e
+            retry_feedback = ""
             if attempt < retries:
                 time.sleep(2 ** attempt)
             continue
 
         if proc.returncode != 0:
             last_error = ClaudeCliError(f"claude exit {proc.returncode}: {proc.stderr[:500]}")
+            retry_feedback = ""
             if attempt < retries:
                 time.sleep(2 ** attempt)
             continue
@@ -95,6 +103,11 @@ def run_json(
             return schema.model_validate(data)
         except (ValueError, json.JSONDecodeError, ValidationError) as e:
             last_error = e
+            retry_feedback = (
+                "\n\n---\nPREVIOUS ATTEMPT WAS REJECTED WITH ERROR:\n"
+                f"{e}\n"
+                "Please fix this error and return ONLY valid JSON, no other text."
+            )
             if attempt < retries:
                 time.sleep(2 ** attempt)
             continue

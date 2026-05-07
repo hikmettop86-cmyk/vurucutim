@@ -1,8 +1,11 @@
 """Threaded pipeline runner — launches pipeline.run_pipeline in a daemon thread."""
+import logging
 import threading
 from pathlib import Path
 
 from short_bot.pipeline import run_pipeline
+
+_log = logging.getLogger("short_bot.web.runs")
 
 
 def launch_pipeline(*, channel, settings, db_path: Path,
@@ -20,8 +23,10 @@ def launch_pipeline(*, channel, settings, db_path: Path,
                 logs_dir=logs_dir, trigger=trigger,
             )
         except Exception:
-            # Already logged inside pipeline. Swallow to keep daemon thread alive.
-            pass
+            # Pipeline already records its own DB row + per-run log on internal
+            # failures. Anything reaching here is a top-level surprise (lock
+            # dir missing, init_db failure). Log to console so it isn't lost.
+            _log.exception("launch_pipeline thread crashed for %s", channel.slug)
 
     thread = threading.Thread(target=_runner, daemon=True)
     thread.start()

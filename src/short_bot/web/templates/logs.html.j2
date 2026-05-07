@@ -1,11 +1,20 @@
 {% extends "base.html.j2" %}
-{% block title %}short-bot — Loglar{% endblock %}
+{% block title %}Vurucu TİM — Loglar{% endblock %}
 {% block content %}
 <div class="flex justify-between items-center mb-6">
   <h1 class="font-serif text-3xl font-bold">Loglar</h1>
-  <a href="/logs/download" class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm">
-    ↓ Son log indir
-  </a>
+  <div class="flex gap-2">
+    <a href="/logs/download" class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm">
+      ↓ Son log indir
+    </a>
+    <button type="button"
+            hx-post="/logs/clear"
+            hx-confirm="Tüm log dosyaları silinecek. Emin misin?"
+            hx-on::after-request="if(event.detail.successful) window.location.reload()"
+            class="bg-claude-surface hover:bg-red-900/40 border border-claude-border hover:border-red-700 px-3 py-2 rounded-lg text-sm text-red-400 hover:text-red-200">
+      🗑 Tümünü sil
+    </button>
+  </div>
 </div>
 
 <div class="flex gap-3 mb-4 items-center">

@@ -50,3 +50,25 @@ def test_dashboard_shows_failed_runs_count(app):
     resp = client.get("/")
     body = resp.data.decode("utf-8")
     assert "1" in body  # 1 failed run
+
+
+def test_dashboard_shows_last_hour_card(app):
+    client = app.test_client()
+    body = client.get("/").data.decode("utf-8")
+    assert "Son 1 saat" in body
+    assert 'href="/shorts?since=1h"' in body
+
+
+def test_dashboard_shows_youtube_card(app):
+    client = app.test_client()
+    body = client.get("/").data.decode("utf-8")
+    assert "YouTube" in body
+    assert 'href="/shorts?youtube=yes"' in body
+
+
+def test_dashboard_shows_quick_filter_chips(app):
+    client = app.test_client()
+    body = client.get("/").data.decode("utf-8")
+    assert "Hızlı filtre" in body
+    assert 'href="/shorts?since=today"' in body
+    assert 'href="/shorts?youtube=no"' in body

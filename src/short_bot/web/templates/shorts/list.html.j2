@@ -1,24 +1,50 @@
 {% extends "base.html.j2" %}
-{% block title %}short-bot — Shorts{% endblock %}
+{% block title %}Vurucu TİM — Shorts{% endblock %}
 {% block content %}
 <div class="flex justify-between items-center mb-6">
   <h1 class="font-serif text-3xl font-bold">Shorts</h1>
 </div>
 
-<div class="flex gap-3 mb-6 items-center">
+<div class="flex gap-3 mb-3 items-center">
   <input type="text" name="q" value="{{ q }}" placeholder="Başlık ara..."
          class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg text-sm flex-1 text-claude-text placeholder:text-claude-muted"
          hx-get="/shorts/grid" hx-target="#grid" hx-trigger="keyup changed delay:300ms"
-         hx-include="[name='channel']">
+         hx-include="[name='channel'], [name='since'], [name='youtube']">
   <select name="channel" class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg text-sm text-claude-text"
           hx-get="/shorts/grid" hx-target="#grid" hx-trigger="change"
-          hx-include="[name='q']">
+          hx-include="[name='q'], [name='since'], [name='youtube']">
     <option value="">Tüm kanallar</option>
     {% for c in all_channels %}
       <option value="{{ c.slug }}" {% if channel == c.slug %}selected{% endif %}>{{ c.slug }}</option>
     {% endfor %}
   </select>
+  <select name="since" class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg text-sm text-claude-text"
+          hx-get="/shorts/grid" hx-target="#grid" hx-trigger="change"
+          hx-include="[name='q'], [name='channel'], [name='youtube']">
+    <option value="">Tüm zaman</option>
+    <option value="1h" {% if since == '1h' %}selected{% endif %}>Son 1 saat</option>
+    <option value="today" {% if since == 'today' %}selected{% endif %}>Bugün</option>
+    <option value="week" {% if since == 'week' %}selected{% endif %}>Son 7 gün</option>
+  </select>
+  <select name="youtube" class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg text-sm text-claude-text"
+          hx-get="/shorts/grid" hx-target="#grid" hx-trigger="change"
+          hx-include="[name='q'], [name='channel'], [name='since']">
+    <option value="">YT: hepsi</option>
+    <option value="yes" {% if youtube == 'yes' %}selected{% endif %}>YT yüklü</option>
+    <option value="no" {% if youtube == 'no' %}selected{% endif %}>YT yüklenmedi</option>
+  </select>
 </div>
+
+{% if channel or q or since or youtube %}
+<div class="flex flex-wrap gap-2 mb-4 items-center text-xs">
+  <span class="text-claude-muted">Aktif filtre:</span>
+  {% if channel %}<span class="bg-claude-surface border border-claude-border px-2 py-0.5 rounded">kanal={{ channel }}</span>{% endif %}
+  {% if q %}<span class="bg-claude-surface border border-claude-border px-2 py-0.5 rounded">arama="{{ q }}"</span>{% endif %}
+  {% if since %}<span class="bg-claude-surface border border-claude-border px-2 py-0.5 rounded">{{ {'1h':'son 1 saat','today':'bugün','week':'son 7 gün'}[since] }}</span>{% endif %}
+  {% if youtube %}<span class="bg-claude-surface border border-claude-border px-2 py-0.5 rounded">YT {{ 'yüklü' if youtube == 'yes' else 'yüklenmedi' }}</span>{% endif %}
+  <a href="/shorts" class="text-claude-muted hover:text-claude-text underline ml-1">temizle</a>
+</div>
+{% endif %}
 
 <div id="grid">
   {% include "_partials/shorts_grid.html.j2" %}

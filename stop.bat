@@ -1,9 +1,9 @@
 @echo off
 cd /d "%~dp0"
-title short-bot stopper
+title vurucu-tim-stopper
 
 echo.
-echo === short-bot panel kapaniyor ===
+echo === Vurucu TIM panel kapaniyor ===
 echo.
 
 set FOUND=0
@@ -13,7 +13,9 @@ for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":5005" ^| findstr "LISTENING
     taskkill /F /PID %%a >nul 2>&1
 )
 
-taskkill /F /FI "WINDOWTITLE eq short-bot*" >nul 2>&1
+rem No window-title filter here — start.bat uses cmd /c so the panel cmd
+rem closes automatically when python exits. A wildcard title filter would
+rem also kill unrelated terminal windows the user has open.
 
 if %FOUND%==0 (
     echo Panel zaten calismiyor.

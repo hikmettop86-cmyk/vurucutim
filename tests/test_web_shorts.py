@@ -64,3 +64,40 @@ def test_short_detail_404_when_missing(app):
     client = app.test_client()
     resp = client.get("/shorts/9999")
     assert resp.status_code == 404
+
+
+def test_shorts_filter_since_today_includes_recent(app):
+    """Both seeded shorts use _utcnow() default → should appear under since=today."""
+    client = app.test_client()
+    body = client.get("/shorts/grid?since=today").data.decode("utf-8")
+    assert "Alpha" in body
+    assert "Beta" in body
+
+
+def test_shorts_filter_since_1h_includes_recent(app):
+    client = app.test_client()
+    body = client.get("/shorts/grid?since=1h").data.decode("utf-8")
+    assert "Alpha" in body
+
+
+def test_shorts_filter_youtube_no_when_none_uploaded(app):
+    """No YT uploads seeded → youtube=no should still return all shorts."""
+    client = app.test_client()
+    body = client.get("/shorts/grid?youtube=no").data.decode("utf-8")
+    assert "Alpha" in body
+    assert "Beta" in body
+
+
+def test_shorts_filter_youtube_yes_when_none_uploaded(app):
+    """No YT uploads seeded → youtube=yes returns nothing."""
+    client = app.test_client()
+    body = client.get("/shorts/grid?youtube=yes").data.decode("utf-8")
+    assert "Alpha" not in body
+    assert "Beta" not in body
+
+
+def test_shorts_list_shows_active_filter_pill(app):
+    client = app.test_client()
+    body = client.get("/shorts?since=today").data.decode("utf-8")
+    assert "Aktif filtre" in body
+    assert "bugün" in body

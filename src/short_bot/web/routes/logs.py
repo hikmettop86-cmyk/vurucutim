@@ -80,6 +80,18 @@ def tail_partial():
     return render_template("_partials/log_tail.html.j2", lines=lines)
 
 
+@bp.route("/logs/clear", methods=["POST"])
+def clear():
+    """Delete all *.log files in the logs directory. Skips files held open by the OS."""
+    logs_dir: Path = current_app.config["SHORTBOT_LOGS_DIR"]
+    for fp in logs_dir.glob("*.log"):
+        try:
+            fp.unlink()
+        except OSError:
+            continue
+    return ("", 204)
+
+
 @bp.route("/logs/download")
 def download():
     """Download the most recent log file (or by ?file=<stem>)."""

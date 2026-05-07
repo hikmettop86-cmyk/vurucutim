@@ -35,3 +35,21 @@ def test_logs_tail_returns_recent_lines(app):
     assert resp.status_code == 200
     body = resp.data.decode("utf-8")
     assert "line A" in body or "line B" in body or "line C" in body
+
+
+def test_logs_clear_removes_all_log_files(app, tmp_path):
+    logs_dir = tmp_path / "logs" / "runs"
+    (logs_dir / "20260505_150000_other.log").write_text("xx\n", encoding="utf-8")
+    assert len(list(logs_dir.glob("*.log"))) == 2
+
+    resp = app.test_client().post("/logs/clear")
+    assert resp.status_code == 204
+    assert list(logs_dir.glob("*.log")) == []
+
+
+def test_logs_clear_is_idempotent_when_empty(app, tmp_path):
+    logs_dir = tmp_path / "logs" / "runs"
+    for fp in logs_dir.glob("*.log"):
+        fp.unlink()
+    resp = app.test_client().post("/logs/clear")
+    assert resp.status_code == 204

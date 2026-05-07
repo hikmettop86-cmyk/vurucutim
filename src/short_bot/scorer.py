@@ -28,22 +28,41 @@ def build_scoring_prompt(items: list[NewsItem]) -> str:
     )
 
 
+_BATCH_SIZE = 30   # tighter batches keep Haiku responses fast and well within
+                   # context. Tested at 30 items the model returns in 5-15s;
+                   # 100+ items sometimes time out or return truncated JSON.
+
+
 def score_items(
     items: list[NewsItem],
     *,
     claude_path: str = "claude",
+    model: str = "default",
+    batch_size: int = _BATCH_SIZE,
 ) -> list[ScoredItem]:
     if not items:
         return []
-    prompt = build_scoring_prompt(items)
-    response = run_json(prompt, _ScoreResponse, claude_path=claude_path)
     by_guid = {i.guid: i for i in items}
     out: list[ScoredItem] = []
-    for s in response.scores:
-        item = by_guid.get(s.guid)
-        if item is None:
+    # Batch to avoid timeouts on large feeds. Each batch is an independent
+    # claude call — failures in one batch shouldn't kill the whole run.
+    for start in range(0, len(items), batch_size):
+        batch = items[start:start + batch_size]
+        prompt = build_scoring_prompt(batch)
+        try:
+            response = run_json(
+                prompt, _ScoreResponse,
+                claude_path=claude_path, model=model,
+            )
+        except Exception:
+            # Batch failure: skip this batch, score the rest. Better to lose
+            # some candidates than to fail the entire run.
             continue
-        out.append(ScoredItem(item=item, score=s.score, reasoning=s.reasoning))
+        for s in response.scores:
+            item = by_guid.get(s.guid)
+            if item is None:
+                continue
+            out.append(ScoredItem(item=item, score=s.score, reasoning=s.reasoning))
     return out
 
 

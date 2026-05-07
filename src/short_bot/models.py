@@ -4,7 +4,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+from short_bot.text_normalize import strip_non_turkish_diacritics
 
 
 @dataclass(frozen=True)
@@ -29,15 +31,26 @@ class Highlight(BaseModel):
     text: str = Field(min_length=1, max_length=200)
     color: Literal["red", "yellow"]
 
+    @field_validator("text", mode="before")
+    @classmethod
+    def _normalize_text(cls, v):
+        return strip_non_turkish_diacritics(v) if isinstance(v, str) else v
+
 
 class Script(BaseModel):
-    header_top: str = Field(min_length=1, max_length=40)
-    header_bottom: str = Field(min_length=1, max_length=40)
+    header_top: str = Field(min_length=1, max_length=25)
+    header_bottom: str = Field(min_length=1, max_length=35)
     photo_overlay: str = Field(min_length=1, max_length=60)
     body_paragraph: str = Field(min_length=20, max_length=800)
     highlights: list[Highlight] = Field(default_factory=list, max_length=8)
     category: str = Field(min_length=1, max_length=30)
     mood: Literal["breaking", "neutral", "upbeat"]
+
+    @field_validator("header_top", "header_bottom", "photo_overlay",
+                      "body_paragraph", "category", mode="before")
+    @classmethod
+    def _normalize_text(cls, v):
+        return strip_non_turkish_diacritics(v) if isinstance(v, str) else v
 
     @model_validator(mode="after")
     def highlights_must_be_substrings(self) -> "Script":

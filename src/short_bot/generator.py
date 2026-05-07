@@ -1,9 +1,10 @@
 """Content generator: Sonnet-driven short content with 3-layer dedup."""
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from short_bot.models import Script
+from short_bot.text_normalize import strip_non_turkish_diacritics
 
 
 class GeneratorRetryExhausted(RuntimeError):
@@ -19,6 +20,11 @@ class GeneratorResult(BaseModel):
     )
     script: Script
     image_keywords: list[str] = Field(min_length=2, max_length=8)
+
+    @field_validator("text", mode="before")
+    @classmethod
+    def _normalize_text(cls, v):
+        return strip_non_turkish_diacritics(v) if isinstance(v, str) else v
 
 
 from short_bot.config import ChannelConfig

@@ -90,6 +90,26 @@ def test_run_json_passes_model_flag():
     assert "opus" in captured["cmd"]
 
 
+def test_run_json_retry_includes_validation_error_feedback():
+    """When validation fails, the retry prompt must include the error so Claude can fix it."""
+    bad = json.dumps({"score": "not_a_number", "why": "x"})
+    good = json.dumps({"score": 6.0, "why": "x"})
+    captured_inputs: list[str] = []
+
+    def fake_run(cmd, **kwargs):
+        captured_inputs.append(kwargs.get("input", ""))
+        return _fake_proc(bad if len(captured_inputs) == 1 else good)
+
+    with patch("short_bot.claude_cli.subprocess.run", side_effect=fake_run), \
+         patch("short_bot.claude_cli.time.sleep"):
+        r = run_json("ORIGINAL_PROMPT", _Out, claude_path="claude", retries=2)
+    assert r.score == 6.0
+    assert captured_inputs[0] == "ORIGINAL_PROMPT"
+    assert "ORIGINAL_PROMPT" in captured_inputs[1]
+    assert "PREVIOUS ATTEMPT WAS REJECTED" in captured_inputs[1]
+    assert "score" in captured_inputs[1]
+
+
 def test_run_json_default_model_omits_flag():
     captured = {}
 

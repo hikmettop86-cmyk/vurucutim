@@ -293,6 +293,103 @@ def test_build_css_omits_custom_css_section_when_empty():
     assert "Channel custom_css" not in css
 
 
+def test_build_css_appends_readability_safety_net_after_custom_css():
+    """Even if Opus injects gradient-text trick into custom_css, the safety net
+    appended LAST forces .header .top/.bot back to solid fill."""
+    nasty_css = (
+        ".header .top { -webkit-text-fill-color: transparent; "
+        "background-clip: text; -webkit-text-stroke: 2px black; }"
+    )
+    dna = _sample_dna(custom_css=nasty_css)
+    css = build_css_override(dna)
+    # safety net exists
+    assert "Readability safety net" in css
+    assert "-webkit-text-fill-color: currentColor !important" in css
+    # and is positioned AFTER the custom_css block
+    assert css.index("Channel custom_css") < css.index("Readability safety net")
+
+
+def test_palette_header_color_overrides_default_empty():
+    p = DnaPalette(primary="#c81e1e", accent="#ffea3b",
+                    bg_gradient=["#000000", "#111111"], body_bg=["#000000", "#111111"])
+    assert p.header_top_color == ""
+    assert p.header_bottom_color == ""
+
+
+def test_palette_header_color_overrides_accept_hex():
+    p = DnaPalette(primary="#c81e1e", accent="#ffea3b",
+                    bg_gradient=["#000000", "#111111"], body_bg=["#000000", "#111111"],
+                    header_top_color="#ff00aa", header_bottom_color="#00ffff")
+    assert p.header_top_color == "#ff00aa"
+    assert p.header_bottom_color == "#00ffff"
+
+
+def test_palette_header_color_rejects_invalid_hex():
+    with pytest.raises(ValidationError):
+        DnaPalette(primary="#c81e1e", accent="#ffea3b",
+                    bg_gradient=["#000000", "#111111"], body_bg=["#000000", "#111111"],
+                    header_top_color="red")
+
+
+def test_build_css_omits_header_color_when_empty():
+    dna = _sample_dna()
+    css = build_css_override(dna)
+    assert ".header .top { color:" not in css
+    assert ".header .bot { color:" not in css
+
+
+def test_build_css_emits_header_color_when_set():
+    dna = _sample_dna()
+    dna.palette.header_top_color = "#ff00aa"
+    dna.palette.header_bottom_color = "#00ffff"
+    css = build_css_override(dna)
+    assert ".header .top { color: #ff00aa !important; }" in css
+    assert ".header .bot { color: #00ffff !important; }" in css
+
+
+def test_build_dna_prompt_includes_readability_rules():
+    p = build_dna_prompt(name="Test", keywords=["x"], language="tr")
+    assert "OKUNABILIRLIK" in p
+    # explicit ban on gradient text trick
+    assert "-webkit-text-fill-color: transparent" in p
+    # element shadow limit
+    assert "MAKS 2" in p
+
+
+def test_dna_ui_badge_default_empty():
+    dna = DnaSpec(
+        archetype="newscast",
+        palette=DnaPalette(primary="#c81e1e", accent="#ffea3b",
+                           bg_gradient=["#1a3b6b","#0a1a3b"],
+                           body_bg=["#1a1a2a","#0a0a1a"]),
+        fonts=DnaFonts(),
+        tone=DnaTone(voice="x", style="y"),
+        persona_summary="x",
+    )
+    assert dna.ui_badge == ""
+
+
+def test_dna_ui_badge_max_length_enforced():
+    with pytest.raises(ValidationError):
+        DnaSpec(
+            archetype="newscast",
+            palette=DnaPalette(primary="#c81e1e", accent="#ffea3b",
+                               bg_gradient=["#1a3b6b","#0a1a3b"],
+                               body_bg=["#1a1a2a","#0a0a1a"]),
+            fonts=DnaFonts(),
+            tone=DnaTone(voice="x", style="y"),
+            persona_summary="x",
+            ui_badge="x" * 25,
+        )
+
+
+def test_build_dna_prompt_includes_ui_badge_section():
+    p = build_dna_prompt(name="Test", keywords=["x"], language="tr")
+    assert "UI_BADGE" in p
+    assert '"ui_badge"' in p
+    assert "SON DAKİKA" in p   # explicit warning against haber default for non-haber channels
+
+
 def test_build_css_omits_custom_css_section_when_whitespace_only():
     dna = _sample_dna(custom_css="   \n\n  ")
     css = build_css_override(dna)

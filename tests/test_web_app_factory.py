@@ -48,4 +48,4 @@ def test_root_route_returns_200(tmp_path):
     client = app.test_client()
     resp = client.get("/")
     assert resp.status_code == 200
-    assert b"short-bot" in resp.data.lower()
+    assert b"vurucu" in resp.data.lower()

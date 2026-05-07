@@ -43,3 +43,37 @@ def test_nav_has_activity_link(app):
     body = app.test_client().get("/").data.decode("utf-8")
     assert 'href="/activity"' in body
     assert "Akış" in body
+
+
+def test_activity_page_shows_summary_cards(app):
+    body = app.test_client().get("/activity").data.decode("utf-8")
+    # Cards labels (Turkish)
+    assert "Run" in body
+    assert "Short" in body
+    assert "YouTube" in body or "YT" in body
+    assert "Hata" in body
+
+
+def test_activity_page_shows_live_runs_section(app):
+    body = app.test_client().get("/activity").data.decode("utf-8")
+    # The seeded data has no running run, so we expect the empty-state copy
+    assert "Şu an çalışan" in body or "Çalışan" in body
+
+
+def test_activity_page_shows_filter_controls(app):
+    body = app.test_client().get("/activity").data.decode("utf-8")
+    assert 'name="channel"' in body
+    assert 'name="type"' in body
+    assert 'name="since"' in body
+
+
+def test_activity_errors_card_pulses_when_failed_runs_present(app, tmp_path):
+    """When errors_24h > 0, the errors card has animate-pulse class."""
+    from short_bot.db import init_db, start_run, finish_run
+    db_path = app.config["SHORTBOT_DB_PATH"]
+    eng = init_db(db_path)
+    rid = start_run(eng, "chF", trigger="manual", log_path="f.log")
+    finish_run(eng, rid, status="failed", short_id=None, error="x")
+
+    body = app.test_client().get("/activity").data.decode("utf-8")
+    assert "animate-pulse" in body

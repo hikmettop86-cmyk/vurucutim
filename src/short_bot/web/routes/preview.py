@@ -69,6 +69,15 @@ def preview(slug):
             body1 or dna.palette.body_bg[0],
             body2 or dna.palette.body_bg[1],
         ]
+    if request.args.get("text_main"):
+        palette_update["text_main"] = request.args["text_main"]
+    if request.args.get("text_muted"):
+        palette_update["text_muted"] = request.args["text_muted"]
+    # Optional headline overrides ("" means "use template default")
+    if "header_top_color" in request.args:
+        palette_update["header_top_color"] = request.args["header_top_color"]
+    if "header_bottom_color" in request.args:
+        palette_update["header_bottom_color"] = request.args["header_bottom_color"]
     if palette_update:
         dna = dna.model_copy(update={"palette": dna.palette.model_copy(update=palette_update)})
 

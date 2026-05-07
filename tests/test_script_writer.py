@@ -93,3 +93,41 @@ def test_build_script_prompt_no_tone_block_when_no_dna():
     p = build_script_prompt_for_channel(_item(), "body", _channel(dna=None))
     # No tone-block heading should be present
     assert "TONE OF VOICE" not in p
+
+
+def test_build_script_prompt_states_header_char_limits():
+    """Channel-aware prompt must declare hard char limits matching Pydantic max_length."""
+    p = build_script_prompt_for_channel(_item(), "body", _channel())
+    assert "header_top: MAX 25" in p
+    assert "header_bottom: MAX 35" in p
+
+
+def test_build_script_prompt_tr_states_header_char_limits():
+    """Legacy Turkish prompt must declare the same hard char limits."""
+    p = build_script_prompt(_item(), "body")
+    assert "MAX 25 karakter" in p
+    assert "MAX 35 karakter" in p
+
+
+def test_script_header_top_max_25():
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        Script(
+            header_top="X" * 26,
+            header_bottom="Y",
+            photo_overlay="Z",
+            body_paragraph="Yeterince uzun bir paragraf metni icin asgari kosul.",
+            highlights=[], category="X", mood="neutral",
+        )
+
+
+def test_script_header_bottom_max_35():
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        Script(
+            header_top="X",
+            header_bottom="Y" * 36,
+            photo_overlay="Z",
+            body_paragraph="Yeterince uzun bir paragraf metni icin asgari kosul.",
+            highlights=[], category="X", mood="neutral",
+        )

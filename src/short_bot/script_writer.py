@@ -112,6 +112,8 @@ Rules:
 - All text in {lang_name}, with proper diacritics
 - highlights[i].text must appear verbatim in body_paragraph
 - Stay within tone constraints if specified above
+- header_top: MAX 25 characters (hard limit, will be rejected otherwise)
+- header_bottom: MAX 35 characters (hard limit, will be rejected otherwise)
 """
 
 
@@ -140,8 +142,9 @@ Görev: Bu haberi 3-katmanlı bir Short videoya dönüştür. SADECE aşağıdak
 Kurallar:
 - highlights[i].text MUTLAKA body_paragraph içinde birebir (kelimesi kelimesine) geçmelidir
 - 1-4 highlight ekle: önemli sayı/oran/karar = yellow; uyarı/tehlike/şok = red
+- header_top: MAX 25 karakter (sert sınır, aşılırsa reddedilir)
+- header_bottom: MAX 35 karakter (sert sınır, aşılırsa reddedilir)
 - header_top + header_bottom toplam 4-6 kelimeyi geçmesin
-- header_top + header_bottom toplam ≤6 kelime VE her satır ≤14 harf (uzun tek kelime taşar)
 - Yazım Türkçe, diakritikler tam (ç, ğ, ı, ö, ş, ü)
 """
 

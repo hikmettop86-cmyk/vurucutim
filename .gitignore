@@ -53,3 +53,13 @@ backfill_*.py
 # WAL / SHM sidecar files from SQLite
 data/*.sqlite-shm
 data/*.sqlite-wal
+
+# Internal planning artifacts (not for public repo)
+docs/superpowers/
+
+# Misc temp/debug
+*.html
+test_output.log
+
+# YouTube credentials — NEVER commit (token.json, client_secrets.json contain secrets)
+data/youtube_credentials/

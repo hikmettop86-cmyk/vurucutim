@@ -1,9 +1,9 @@
 @echo off
 cd /d "%~dp0"
-title short-bot starter
+title vurucu-tim-launcher
 
 echo.
-echo === short-bot panel basliyor ===
+echo === Vurucu TIM panel basliyor (arka planda) ===
 echo.
 
 netstat -ano | findstr ":5005" | findstr "LISTENING" >nul
@@ -14,16 +14,17 @@ if %errorlevel%==0 (
     exit /b 0
 )
 
-start "short-bot" /MIN cmd /k "cd /d %~dp0 && python -m short_bot web"
+rem Hidden launch via VBS — no cmd window appears, logs go to panel_*.log
+wscript "%~dp0start_silent.vbs"
 
-echo Sunucu basliyor...
+echo Sunucu arka planda baslatildi (gizli).
+echo Loglar: panel_stdout.log / panel_stderr.log
+echo.
+
 timeout /t 4 /nobreak >nul
 
-echo Tarayici aciliyor: http://127.0.0.1:5005
 start "" "http://127.0.0.1:5005"
-
-echo.
-echo Panel acildi. Sunucu penceresi minimize.
+echo Tarayici aciliyor: http://127.0.0.1:5005
 echo Kapatmak icin: stop.bat
 echo.
 timeout /t 3 /nobreak >nul

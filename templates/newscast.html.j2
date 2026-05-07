@@ -10,7 +10,8 @@
   html, body { width: 1080px; height: 1920px; overflow: hidden; background: #000;
     font-family: 'Inter', -apple-system, sans-serif; color: #fff; }
 
-  .stage { position: relative; width: 1080px; height: 1920px; }
+  .stage { position: relative; width: 1080px; height: 1920px;
+    display: flex; flex-direction: column; }
 
   /* STAGE-LEVEL BADGE (top-right corner) */
   .stage-badge {
@@ -70,16 +71,22 @@
   /* BODY paragraph */
   .body {
     background: linear-gradient(180deg, #1a1a2a, #0a0a1a);
-    padding: 50px 60px 260px;
+    /* Flex grows to fill remaining stage height; margin-bottom reserves 240px
+       for the persistent chip / progress / handle row. */
+    flex: 1;
+    min-height: 0;
+    margin-bottom: 240px;
+    padding: 50px 60px 30px;
     font-size: 48px;
     line-height: 1.42;
     font-weight: 600;
     color: #fff;
-    /* Prevent overflow: clamp to ~9 lines (fits in available vertical space) */
     display: -webkit-box;
     -webkit-line-clamp: 9;
     -webkit-box-orient: vertical;
     overflow: hidden;
+    -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 86%, transparent 100%);
+            mask-image: linear-gradient(180deg, #000 0%, #000 86%, transparent 100%);
   }
   .body .hl-r { background: {{ colors.primary }}; color: #fff;
     padding: 2px 14px; border-radius: 6px; font-weight: 700; }
