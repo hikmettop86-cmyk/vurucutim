@@ -162,3 +162,81 @@ def test_build_activity_events_youtube_failed_emits_error_event(eng):
                  if e.type == "error" and "YouTube" in e.title]
     assert len(yt_errors) == 1
     assert "quota" in yt_errors[0].detail
+
+
+def test_build_activity_events_filters_by_channel(eng):
+    rid1 = start_run(eng, "ch1", trigger="manual", log_path="x.log")
+    finish_run(eng, rid1, status="success", short_id=None, error=None)
+    rid2 = start_run(eng, "ch2", trigger="manual", log_path="y.log")
+    finish_run(eng, rid2, status="success", short_id=None, error=None)
+
+    from short_bot.web.activity import build_activity_events
+    from datetime import datetime, timedelta, timezone
+    events = build_activity_events(
+        eng, since=datetime.now(timezone.utc) - timedelta(hours=1),
+        channel="ch1",
+    )
+    assert len(events) == 1
+    assert events[0].channel == "ch1"
+
+
+def test_build_activity_events_filters_by_type(eng):
+    rid = start_run(eng, "ch1", trigger="manual", log_path="x.log")
+    finish_run(eng, rid, status="success", short_id=None, error=None)
+    record_short(eng, channel="ch1", rss_item_guid="g1", title="t",
+                  file_path="output/ch1/a.mp4", duration_s=6,
+                  script_json="{}", render_ms=1)
+
+    from short_bot.web.activity import build_activity_events
+    from datetime import datetime, timedelta, timezone
+    events = build_activity_events(
+        eng, since=datetime.now(timezone.utc) - timedelta(hours=1),
+        types=("run",),
+    )
+    assert all(e.type == "run" for e in events)
+    assert len(events) == 1
+
+
+def test_build_activity_events_filters_by_status(eng):
+    rid_ok = start_run(eng, "ch1", trigger="manual", log_path="ok.log")
+    finish_run(eng, rid_ok, status="success", short_id=None, error=None)
+    rid_bad = start_run(eng, "ch1", trigger="manual", log_path="bad.log")
+    finish_run(eng, rid_bad, status="failed", short_id=None, error="boom")
+
+    from short_bot.web.activity import build_activity_events
+    from datetime import datetime, timedelta, timezone
+    events = build_activity_events(
+        eng, since=datetime.now(timezone.utc) - timedelta(hours=1),
+        status="failed",
+    )
+    assert len(events) == 1
+    assert events[0].status == "failed"
+
+
+def test_build_activity_events_filter_combinations(eng):
+    """All filters AND together. channel=ch1 + type=run + status=success
+    excludes a ch1 short (wrong type) and a ch1 failed run (wrong status)."""
+    # ch1 success run → INCLUDED
+    rid = start_run(eng, "ch1", trigger="manual", log_path="x.log")
+    finish_run(eng, rid, status="success", short_id=None, error=None)
+    # ch1 short → wrong type, excluded
+    record_short(eng, channel="ch1", rss_item_guid="g1", title="t",
+                  file_path="output/ch1/a.mp4", duration_s=6,
+                  script_json="{}", render_ms=1)
+    # ch1 failed run → wrong status, excluded
+    rid2 = start_run(eng, "ch1", trigger="manual", log_path="y.log")
+    finish_run(eng, rid2, status="failed", short_id=None, error="x")
+    # ch2 success run → wrong channel, excluded
+    rid3 = start_run(eng, "ch2", trigger="manual", log_path="z.log")
+    finish_run(eng, rid3, status="success", short_id=None, error=None)
+
+    from short_bot.web.activity import build_activity_events
+    from datetime import datetime, timedelta, timezone
+    events = build_activity_events(
+        eng, since=datetime.now(timezone.utc) - timedelta(hours=1),
+        channel="ch1", types=("run",), status="success",
+    )
+    assert len(events) == 1
+    assert events[0].channel == "ch1"
+    assert events[0].type == "run"
+    assert events[0].status == "success"

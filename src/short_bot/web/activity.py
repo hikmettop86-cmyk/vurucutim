@@ -19,6 +19,8 @@ from short_bot.db import runs, shorts as shorts_table, youtube_uploads
 EventType = Literal["run", "short", "youtube", "error"]
 EventStatus = Literal["success", "failed", "no_candidates", "running"]
 
+ALL_TYPES: tuple[EventType, ...] = ("run", "short", "youtube", "error")
+
 
 @dataclass(frozen=True)
 class ActivityEvent:
@@ -149,12 +151,32 @@ def _build_youtube_events(eng: Engine, *, since: datetime) -> list[ActivityEvent
     return out
 
 
-def build_activity_events(eng: Engine, *, since: datetime) -> list[ActivityEvent]:
-    """Return time-sorted (DESC) list. Sources: runs, shorts, youtube_uploads."""
+def build_activity_events(
+    eng: Engine,
+    *,
+    since: datetime,
+    channel: str | None = None,
+    types: tuple[EventType, ...] = ALL_TYPES,
+    status: EventStatus | None = None,
+) -> list[ActivityEvent]:
+    """Time-sorted (DESC) feed of events from since onwards. Filters apply AND.
+
+    types: which event types to include. Defaults to all 4. Note that 'error'
+        events come from BOTH runs (failed) and youtube_uploads (failed).
+    status: narrow to a specific status (success/failed/no_candidates).
+    channel: narrow to a single channel slug.
+    """
     events = (
         _build_run_events(eng, since=since)
         + _build_short_events(eng, since=since)
         + _build_youtube_events(eng, since=since)
     )
+    if channel:
+        events = [e for e in events if e.channel == channel]
+    if types != ALL_TYPES:
+        wanted = set(types)
+        events = [e for e in events if e.type in wanted]
+    if status:
+        events = [e for e in events if e.status == status]
     events.sort(key=lambda e: e.timestamp, reverse=True)
     return events
