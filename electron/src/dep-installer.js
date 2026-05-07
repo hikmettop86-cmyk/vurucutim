@@ -151,6 +151,7 @@ async function installFfmpeg({ onProgress } = {}) {
   let lastErr = null;
   for (const url of FFMPEG_MIRRORS) {
     try {
+      await fsp.unlink(zipPath).catch(() => {});   // clean prior partial
       onProgress?.(`ffmpeg indiriliyor: ${url}`);
       await downloadFile(url, zipPath, { onProgress });
       downloaded = true;
@@ -171,9 +172,10 @@ async function installFfmpeg({ onProgress } = {}) {
   await fsp.rm(extractDir, { recursive: true, force: true });
 
   // Use PowerShell Expand-Archive (built into Windows)
+  const psEscape = (s) => s.replace(/"/g, '""');
   await runStream('powershell', [
     '-NoProfile', '-NonInteractive',
-    '-Command', `Expand-Archive -Path '${zipPath}' -DestinationPath '${extractDir}' -Force`,
+    '-Command', `Expand-Archive -Path "${psEscape(zipPath)}" -DestinationPath "${psEscape(extractDir)}" -Force`,
   ], { onProgress });
 
   // The ZIP contains a top-level folder like ffmpeg-6.0-essentials_build/
