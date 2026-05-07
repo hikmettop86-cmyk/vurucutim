@@ -6,6 +6,7 @@ const runner = require('./src/python-runner');
 const detector = require('./src/dep-detector');
 const installer = require('./src/dep-installer');
 const prefs = require('./src/preferences');
+const tray = require('./src/tray');
 
 // Force Local AppData (not Roaming) and capitalized app name
 // Reason: Roaming AppData may sync via OneDrive/AD policies, causing SQLite lock corruption.
@@ -142,6 +143,40 @@ if (!gotLock) {
     }
 
     await bootFlaskAndOpenPanel();
+
+    tray.init({
+      runner,
+      showMain: () => {
+        if (!mainWindow) {
+          const port = runner.port();
+          if (port) createMainWindow(`http://127.0.0.1:${port}`);
+          return;
+        }
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.show();
+        mainWindow.focus();
+      },
+      openWizard: async () => {
+        await createWizardWindow();
+        tray.refreshMenu();
+      },
+      checkUpdates: () => {
+        // Faz 6 will wire updater
+        log.info('check-updates: not yet wired (Faz 6)');
+      },
+      setAutostart: (enabled) => {
+        // Faz 5 Task 15 will wire autostart properly
+        const p = require('./src/preferences');
+        p.update({ autostart: enabled });
+        tray.refreshMenu();
+      },
+      quitApp: async () => {
+        app.isQuitting = true;
+        try { await runner.stop(); } catch (_) {}
+        tray.destroy();
+        app.exit(0);
+      },
+    });
   });
 }
 
