@@ -104,4 +104,15 @@ ARCHETYPE_OVERFLOW_FIELDS: dict[str, list[OverflowField]] = {
         OverflowField("photo_overlay",  ".photo .ticker-num", 2),
         OverflowField("body_paragraph", ".body",              9),
     ],
+    # spor-haber: headline INSIDE .photo via .header-overlay (NOT .header) — overlay
+    # positioned bottom 90px of 1080px-tall photo. 50px Oswald .top → 2 lines; 78px
+    # Oswald .bot → 2 lines; 28px Inter .stats chip → 2 lines; 42px Inter body clamped
+    # at 7 lines CSS (-webkit-line-clamp: 7). Budget = clamp so any cut triggers retry.
+    "spor-haber": [
+        # Spor-haber renders headline INSIDE the photo (.header-overlay), not in .header
+        OverflowField("header_top",     ".header-overlay .top",  2),
+        OverflowField("header_bottom",  ".header-overlay .bot",  2),
+        OverflowField("photo_overlay",  ".photo .stats",         2),
+        OverflowField("body_paragraph", ".body",                 7),
+    ],
 }
