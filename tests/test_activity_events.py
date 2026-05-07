@@ -113,3 +113,52 @@ def test_build_activity_events_excludes_deleted_shorts(eng):
         eng, since=datetime.now(timezone.utc) - timedelta(hours=1),
     )
     assert all(e.type != "short" for e in events)
+
+
+def test_build_activity_events_youtube_success_emits_youtube_event(eng):
+    """A successful upload emits a 'youtube' event with the video URL."""
+    sid = record_short(eng, channel="ch1", rss_item_guid="g1", title="t",
+                       file_path="output/ch1/a.mp4", duration_s=6,
+                       script_json="{}", render_ms=1)
+    from short_bot.db import youtube_uploads
+    from datetime import datetime, timezone
+    with eng.begin() as conn:
+        conn.execute(youtube_uploads.insert().values(
+            short_id=sid, video_id="vid123", video_url="https://yt/v?id=vid123",
+            status="success", error=None,
+            uploaded_at=datetime.now(timezone.utc),
+        ))
+
+    from short_bot.web.activity import build_activity_events
+    from datetime import timedelta
+    events = build_activity_events(
+        eng, since=datetime.now(timezone.utc) - timedelta(hours=1),
+    )
+    yt = [e for e in events if e.type == "youtube"]
+    assert len(yt) == 1
+    assert yt[0].channel == "ch1"
+    assert "vid123" in yt[0].detail or "vid123" in yt[0].link
+
+
+def test_build_activity_events_youtube_failed_emits_error_event(eng):
+    sid = record_short(eng, channel="ch1", rss_item_guid="g1", title="t",
+                       file_path="output/ch1/a.mp4", duration_s=6,
+                       script_json="{}", render_ms=1)
+    from short_bot.db import youtube_uploads
+    from datetime import datetime, timezone
+    with eng.begin() as conn:
+        conn.execute(youtube_uploads.insert().values(
+            short_id=sid, video_id=None, video_url=None,
+            status="failed", error="quota exceeded",
+            uploaded_at=datetime.now(timezone.utc),
+        ))
+
+    from short_bot.web.activity import build_activity_events
+    from datetime import timedelta
+    events = build_activity_events(
+        eng, since=datetime.now(timezone.utc) - timedelta(hours=1),
+    )
+    yt_errors = [e for e in events
+                 if e.type == "error" and "YouTube" in e.title]
+    assert len(yt_errors) == 1
+    assert "quota" in yt_errors[0].detail

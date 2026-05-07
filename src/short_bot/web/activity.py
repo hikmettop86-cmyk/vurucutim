@@ -13,7 +13,7 @@ from typing import Literal
 from sqlalchemy import select
 from sqlalchemy.engine import Engine
 
-from short_bot.db import runs, shorts as shorts_table
+from short_bot.db import runs, shorts as shorts_table, youtube_uploads
 
 
 EventType = Literal["run", "short", "youtube", "error"]
@@ -35,6 +35,7 @@ class ActivityEvent:
 _RUN_ICON = "🔍"
 _ERROR_ICON = "⚠"
 _SHORT_ICON = "✓"
+_YOUTUBE_ICON = "▶"
 
 
 def _aware(dt: datetime) -> datetime:
@@ -102,10 +103,58 @@ def _build_short_events(eng: Engine, *, since: datetime) -> list[ActivityEvent]:
     return out
 
 
+def _build_youtube_events(eng: Engine, *, since: datetime) -> list[ActivityEvent]:
+    """One event per youtube_uploads row. status=success → 'youtube'; failed → 'error'."""
+    out: list[ActivityEvent] = []
+    with eng.connect() as conn:
+        rows = conn.execute(
+            select(
+                youtube_uploads.c.short_id,
+                youtube_uploads.c.video_id,
+                youtube_uploads.c.video_url,
+                youtube_uploads.c.status,
+                youtube_uploads.c.error,
+                youtube_uploads.c.uploaded_at,
+                shorts_table.c.channel,
+                shorts_table.c.title,
+            )
+            .select_from(
+                youtube_uploads.join(
+                    shorts_table, youtube_uploads.c.short_id == shorts_table.c.id,
+                )
+            )
+            .where(youtube_uploads.c.uploaded_at >= since)
+            .order_by(youtube_uploads.c.uploaded_at.desc())
+        ).fetchall()
+    for r in rows:
+        ts = _aware(r.uploaded_at)
+        if r.status == "success":
+            out.append(ActivityEvent(
+                timestamp=ts, type="youtube", channel=r.channel,
+                title=f"YouTube · {r.channel}",
+                detail=f"{(r.title or '')[:60]} · {r.video_id or ''}",
+                status="success",
+                link=r.video_url or f"/shorts/{r.short_id}",
+                icon=_YOUTUBE_ICON,
+            ))
+        else:
+            out.append(ActivityEvent(
+                timestamp=ts, type="error", channel=r.channel,
+                title=f"YouTube hata · {r.channel}",
+                detail=(r.error or "")[:120],
+                status="failed",
+                link=f"/shorts/{r.short_id}",
+                icon=_ERROR_ICON,
+            ))
+    return out
+
+
 def build_activity_events(eng: Engine, *, since: datetime) -> list[ActivityEvent]:
-    """Return a time-sorted (DESC) list of events from since onwards.
-    Sources: finished runs (success/failed/no_candidates) and produced shorts.
-    Later tasks add youtube_uploads."""
-    events = _build_run_events(eng, since=since) + _build_short_events(eng, since=since)
+    """Return time-sorted (DESC) list. Sources: runs, shorts, youtube_uploads."""
+    events = (
+        _build_run_events(eng, since=since)
+        + _build_short_events(eng, since=since)
+        + _build_youtube_events(eng, since=since)
+    )
     events.sort(key=lambda e: e.timestamp, reverse=True)
     return events
