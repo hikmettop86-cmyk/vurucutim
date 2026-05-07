@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('vt', {
   finishWizard: (opts) => ipcRenderer.invoke('vt:finish-wizard', opts),
   getPreferences: () => ipcRenderer.invoke('vt:get-preferences'),
   setPreferences: (partial) => ipcRenderer.invoke('vt:set-preferences', partial),
+  // Renderer MUST invoke the returned function to unsubscribe, or listeners leak across re-runs.
   onProgress: (cb) => {
     const listener = (_e, payload) => cb(payload);
     ipcRenderer.on('vt:install-progress', listener);
