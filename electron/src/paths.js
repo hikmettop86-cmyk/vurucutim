@@ -31,6 +31,13 @@ function musicRoot() {
   return path.join(userData(), 'assets', 'music');
 }
 
+function templatesDir() {
+  // Writable templates dir under userData. Original (read-only) templates live under
+  // shortBotRoot/templates and are copied here at first boot. CSS files for new channels
+  // are generated into templates/css/ at runtime.
+  return path.join(userData(), 'templates');
+}
+
 function sitePackagesDir() {
   // Flat pip --target dir (replaces traditional venv — embedded Python lacks venv module)
   return path.join(userData(), 'python-site-packages');
@@ -98,13 +105,17 @@ function bundledMusic() {
   return path.join(shortBotRoot(), 'assets', 'music');
 }
 
+function bundledTemplates() {
+  return path.join(shortBotRoot(), 'templates');
+}
+
 module.exports = {
   APP_NAME,
   userData, configDir, settingsYaml,
-  dataDir, logsDir, outputDir, musicRoot,
+  dataDir, logsDir, outputDir, musicRoot, templatesDir,
   sitePackagesDir, venvDir, venvPython, venvPip,
   depsDir, ffmpegBin,
   preferencesFile, initializedFlag,
   resourcesDir, embeddedPython,
-  shortBotRoot, shortBotSrc, settingsExample, bundledMusic,
+  shortBotRoot, shortBotSrc, settingsExample, bundledMusic, bundledTemplates,
 };

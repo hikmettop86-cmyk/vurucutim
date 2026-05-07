@@ -75,13 +75,13 @@ async function start() {
 
   const py = pythonExe();
   // Pass ALL paths as CLI args (don't rely on cwd-relative defaults — cwd is read-only when packaged).
-  const templatesDir = path.join(paths.shortBotRoot(), 'templates');
+  // templatesDir() points to the writable user-data copy (channel_new writes generated CSS there).
   const args = [
     '-m', 'short_bot', 'web',
     '--port', String(chosenPort),
     '--config-dir', paths.configDir(),
     '--data-dir', paths.dataDir(),
-    '--templates-dir', templatesDir,
+    '--templates-dir', paths.templatesDir(),
     '--music-root', paths.musicRoot(),
     '--logs-dir', paths.logsDir(),
     '--output-root', paths.outputDir(),

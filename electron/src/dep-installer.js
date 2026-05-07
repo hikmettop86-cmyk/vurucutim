@@ -264,6 +264,37 @@ async function copyExampleSettings({ onProgress } = {}) {
   onProgress?.(`settings.yaml oluşturuldu: ${paths.settingsYaml()}`);
 }
 
+async function copyTemplates({ onProgress } = {}) {
+  // Copy bundled templates/ to user-data templates/ — the channel_new route writes
+  // generated CSS files there, so it must be writable. Idempotent: existing user
+  // files are preserved (only missing files copied) so user-customised templates aren't overwritten.
+  const src = paths.bundledTemplates();
+  const dst = paths.templatesDir();
+  if (!fs.existsSync(src)) {
+    onProgress?.('UYARI: bundled templates bulunamadı');
+    return;
+  }
+  fs.mkdirSync(dst, { recursive: true });
+  await copyDirIfMissing(src, dst, onProgress);
+  onProgress?.(`templates hazır: ${dst}`);
+}
+
+async function copyDirIfMissing(srcDir, dstDir, onProgress) {
+  const entries = await fsp.readdir(srcDir, { withFileTypes: true });
+  for (const e of entries) {
+    const s = path.join(srcDir, e.name);
+    const d = path.join(dstDir, e.name);
+    if (e.isDirectory()) {
+      fs.mkdirSync(d, { recursive: true });
+      await copyDirIfMissing(s, d, onProgress);
+    } else {
+      if (!fs.existsSync(d)) {
+        await fsp.copyFile(s, d);
+      }
+    }
+  }
+}
+
 async function copyBundledMusic({ onProgress } = {}) {
   if (!fs.existsSync(paths.bundledMusic())) return;
   for (const mood of ['breaking', 'neutral', 'upbeat']) {
@@ -312,6 +343,9 @@ async function installAll(deps, onProgress) {
   onProgress?.({ phase: 'config', text: 'settings.yaml hazırlanıyor…' });
   await copyExampleSettings({ onProgress: (l) => onProgress?.({ phase: 'config', text: l }) });
 
+  onProgress?.({ phase: 'config', text: 'Templates hazırlanıyor…' });
+  await copyTemplates({ onProgress: (l) => onProgress?.({ phase: 'config', text: l }) });
+
   onProgress?.({ phase: 'music', text: 'Bundled müzik kopyalanıyor…' });
   await copyBundledMusic({ onProgress: (l) => onProgress?.({ phase: 'music', text: l }) });
 
@@ -321,6 +355,6 @@ async function installAll(deps, onProgress) {
 
 module.exports = {
   installVenv, installPipPackages, installPlaywrightChromium,
-  installFfmpeg, copyExampleSettings, copyBundledMusic, initDb,
+  installFfmpeg, copyExampleSettings, copyTemplates, copyBundledMusic, initDb,
   installAll, downloadFile,
 };

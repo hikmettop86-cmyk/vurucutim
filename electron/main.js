@@ -180,11 +180,16 @@ if (!gotLock) {
     autostart.syncFromPrefs(prefs);
 
     // Minimum bootstrap: settings.yaml MUST exist for Flask to boot.
-    // copyExampleSettings is idempotent (skips if file exists).
+    // copyExampleSettings + copyTemplates are idempotent (skip if files exist).
     try {
       await installer.copyExampleSettings({ onProgress: (l) => log.info('bootstrap:', l) });
     } catch (err) {
       log.warn('bootstrap copyExampleSettings failed (non-fatal, may already exist):', err.message);
+    }
+    try {
+      await installer.copyTemplates({ onProgress: (l) => log.info('bootstrap:', l) });
+    } catch (err) {
+      log.warn('bootstrap copyTemplates failed (non-fatal, may already exist):', err.message);
     }
 
     // Version migration — re-run pip + playwright if version changed since last successful boot.
