@@ -29,3 +29,27 @@ tmp/
 
 # Secrets (Pexels API key, etc.) — never commit
 data/secrets.yaml
+
+# User settings (template is config/settings.yaml.example)
+config/settings.yaml
+
+# Per-user channel configs (kullanici kendi yapsin; example.yaml tracked)
+config/channels/*.yaml
+!config/channels/example.yaml
+
+# Panel logs (root)
+panel_stdout.log
+panel_stderr.log
+
+# Generated CSS
+templates/css/*.css
+!templates/css/.gitkeep
+
+# Debug / one-off scripts
+debug_*.py
+test_secrets.json
+backfill_*.py
+
+# WAL / SHM sidecar files from SQLite
+data/*.sqlite-shm
+data/*.sqlite-wal

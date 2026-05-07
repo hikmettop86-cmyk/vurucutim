@@ -1,0 +1,34 @@
+# Vurucu TIM — Ayar Dosyasi Sablonu
+# Kopyala: copy config\settings.yaml.example config\settings.yaml
+# Sonra ffmpeg/claude path'lerini duzenle (Windows icin tam yol gir).
+#
+# Ornek tam yollar (PATH'e eklenmemisse):
+#   ffmpeg_path: C:\ffmpeg\bin\ffmpeg.exe
+#   claude_cli_path: C:\Users\KULLANICI\AppData\Roaming\npm\claude.cmd
+
+# ffmpeg calistirilebilir dosyasinin yolu.
+# "ffmpeg" PATH'deyse bu sekilde birak; degilse tam yolu gir.
+ffmpeg_path: ffmpeg
+
+# Claude Code CLI calistirilebilir dosyasinin yolu.
+# "claude" PATH'deyse bu sekilde birak; degilse tam yolu gir.
+claude_cli_path: claude
+
+# Playwright tarayicisi (chromium onerilir, degistirme)
+playwright_browser: chromium
+
+# Web panel ayarlari
+web:
+  host: 127.0.0.1
+  port: 5005
+
+# Benzer/tekrar icerikleri filtrelemek icin esik degeri (0.0-1.0)
+fuzzy_dedup_threshold: 0.85
+
+# Log seviyesi: DEBUG, INFO, WARNING, ERROR
+log_level: INFO
+
+# Claude model secimi (degistirme gerek yok)
+claude_models:
+  dna: opus      # Kanal DNA olusturma — Opus kullanir (~30-60s)
+  default: haiku # Geri kalan tum islemler — Haiku kullanir (hizli + ucuz)
