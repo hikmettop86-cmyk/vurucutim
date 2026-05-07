@@ -156,4 +156,15 @@ ARCHETYPE_OVERFLOW_FIELDS: dict[str, list[OverflowField]] = {
         # No photo_overlay — gundem has only the slim photo strip with no overlay text
         OverflowField("body_paragraph", ".list-container",    8),  # ~4 items × ~2 lines each
     ],
+    # dosya: LIGHT sepia/aged-paper investigative dossier. 48px Source Serif 4 .top
+    # (rust-red, uppercase) → 2 lines; 80px Source Serif 4 .bot (ink-black) → 2 lines;
+    # 36px .dossier-stamp slanted stamp top-right of 540px photo → 1 line (stamp label);
+    # 38px Lora body clamped at 8 lines CSS (-webkit-line-clamp: 8). Budget = clamp so
+    # any cut triggers retry. Folder-edge: inset 4px border on .stage.
+    "dosya": [
+        OverflowField("header_top",     ".header .top",          2),
+        OverflowField("header_bottom",  ".header .bot",          2),
+        OverflowField("photo_overlay",  ".photo .dossier-stamp", 1),  # 1-line stamp
+        OverflowField("body_paragraph", ".body",                 8),
+    ],
 }
