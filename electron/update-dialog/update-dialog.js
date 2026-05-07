@@ -25,3 +25,8 @@ btnInstall.addEventListener('click', () => {
 btnPostpone.addEventListener('click', () => {
   window.vt.updatePostpone();
 });
+
+// ESC = postpone (graceful exit if anything goes wrong)
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') window.vt.updatePostpone();
+});
