@@ -240,3 +240,50 @@ def test_build_activity_events_filter_combinations(eng):
     assert events[0].channel == "ch1"
     assert events[0].type == "run"
     assert events[0].status == "success"
+
+
+def test_build_activity_events_respects_limit(eng):
+    for i in range(5):
+        rid = start_run(eng, f"ch{i}", trigger="manual", log_path=f"x{i}.log")
+        finish_run(eng, rid, status="success", short_id=None, error=None)
+
+    from short_bot.web.activity import build_activity_events
+    from datetime import datetime, timedelta, timezone
+    events = build_activity_events(
+        eng, since=datetime.now(timezone.utc) - timedelta(hours=1),
+        limit=3,
+    )
+    assert len(events) == 3
+
+
+def test_build_activity_events_cursor_returns_strictly_older(eng):
+    """Cursor = timestamp; only events strictly OLDER than cursor are returned.
+    Combined with sort DESC, this gives stable 'load more' pagination."""
+    import time
+    for i in range(3):
+        rid = start_run(eng, f"ch{i}", trigger="manual", log_path=f"x{i}.log")
+        finish_run(eng, rid, status="success", short_id=None, error=None)
+        time.sleep(0.01)  # ensure distinct timestamps
+
+    from short_bot.web.activity import build_activity_events
+    from datetime import datetime, timedelta, timezone
+    all_events = build_activity_events(
+        eng, since=datetime.now(timezone.utc) - timedelta(hours=1),
+    )
+    assert len(all_events) == 3
+    # First page: limit 2
+    page1 = build_activity_events(
+        eng, since=datetime.now(timezone.utc) - timedelta(hours=1),
+        limit=2,
+    )
+    assert len(page1) == 2
+    # Cursor = timestamp of LAST item in page1
+    cursor = page1[-1].timestamp
+    page2 = build_activity_events(
+        eng, since=datetime.now(timezone.utc) - timedelta(hours=1),
+        limit=2, cursor=cursor,
+    )
+    assert len(page2) == 1
+    # No overlap: page2 events are older than cursor
+    for e in page2:
+        assert e.timestamp < cursor

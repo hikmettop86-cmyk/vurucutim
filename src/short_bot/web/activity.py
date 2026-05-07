@@ -158,13 +158,13 @@ def build_activity_events(
     channel: str | None = None,
     types: tuple[EventType, ...] = ALL_TYPES,
     status: EventStatus | None = None,
+    limit: int = 200,
+    cursor: datetime | None = None,
 ) -> list[ActivityEvent]:
-    """Time-sorted (DESC) feed of events from since onwards. Filters apply AND.
+    """Time-sorted (DESC) feed of events from `since` onwards. AND filters.
 
-    types: which event types to include. Defaults to all 4. Note that 'error'
-        events come from BOTH runs (failed) and youtube_uploads (failed).
-    status: narrow to a specific status (success/failed/no_candidates).
-    channel: narrow to a single channel slug.
+    Pagination: cursor = timestamp; only events with timestamp < cursor are
+    returned, so 'load more' is stable as new events arrive at the head.
     """
     events = (
         _build_run_events(eng, since=since)
@@ -178,5 +178,8 @@ def build_activity_events(
         events = [e for e in events if e.type in wanted]
     if status:
         events = [e for e in events if e.status == status]
+    if cursor is not None:
+        cursor_aware = _aware(cursor)
+        events = [e for e in events if e.timestamp < cursor_aware]
     events.sort(key=lambda e: e.timestamp, reverse=True)
-    return events
+    return events[:limit]
