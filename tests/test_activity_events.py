@@ -287,3 +287,63 @@ def test_build_activity_events_cursor_returns_strictly_older(eng):
     # No overlap: page2 events are older than cursor
     for e in page2:
         assert e.timestamp < cursor
+
+
+def test_compute_summary_24h_counts_all_buckets(eng):
+    # 1 success run, 1 failed run, 1 short, 1 successful YT, 1 failed YT
+    r1 = start_run(eng, "ch1", trigger="manual", log_path="a.log")
+    finish_run(eng, r1, status="success", short_id=None, error=None)
+    r2 = start_run(eng, "ch1", trigger="manual", log_path="b.log")
+    finish_run(eng, r2, status="failed", short_id=None, error="x")
+    sid = record_short(eng, channel="ch1", rss_item_guid="g", title="t",
+                       file_path="output/ch1/a.mp4", duration_s=6,
+                       script_json="{}", render_ms=1)
+    from short_bot.db import youtube_uploads
+    from datetime import datetime, timezone
+    with eng.begin() as conn:
+        conn.execute(youtube_uploads.insert().values(
+            short_id=sid, video_id="v", video_url="u",
+            status="success", error=None,
+            uploaded_at=datetime.now(timezone.utc),
+        ))
+        conn.execute(youtube_uploads.insert().values(
+            short_id=sid, video_id=None, video_url=None,
+            status="failed", error="quota",
+            uploaded_at=datetime.now(timezone.utc),
+        ))
+
+    from short_bot.web.activity import compute_summary_24h
+    s = compute_summary_24h(eng)
+    assert s.runs_24h == 2
+    assert s.runs_success_24h == 1
+    assert s.runs_failed_24h == 1
+    assert s.shorts_24h == 1
+    assert s.youtube_success_24h == 1
+    # errors = failed runs + failed YT = 2
+    assert s.errors_24h == 2
+
+
+def test_list_running_runs_returns_only_unfinished(eng):
+    # Finished run
+    r1 = start_run(eng, "ch1", trigger="manual", log_path="a.log")
+    finish_run(eng, r1, status="success", short_id=None, error=None)
+    # Running run
+    r2 = start_run(eng, "ch2", trigger="manual", log_path="b.log")
+
+    from short_bot.web.activity import list_running_runs
+    rows = list_running_runs(eng)
+    assert len(rows) == 1
+    assert rows[0].channel == "ch2"
+
+
+def test_list_running_runs_orders_by_started_at_desc(eng):
+    import time
+    r1 = start_run(eng, "ch_old", trigger="manual", log_path="a.log")
+    time.sleep(0.01)
+    r2 = start_run(eng, "ch_new", trigger="manual", log_path="b.log")
+
+    from short_bot.web.activity import list_running_runs
+    rows = list_running_runs(eng)
+    assert len(rows) == 2
+    assert rows[0].channel == "ch_new"
+    assert rows[1].channel == "ch_old"

@@ -7,10 +7,10 @@ operator's /activity page. No Flask dependencies — testable in isolation.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Literal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.engine import Engine
 
 from short_bot.db import runs, shorts as shorts_table, youtube_uploads
@@ -183,3 +183,84 @@ def build_activity_events(
         events = [e for e in events if e.timestamp < cursor_aware]
     events.sort(key=lambda e: e.timestamp, reverse=True)
     return events[:limit]
+
+
+@dataclass(frozen=True)
+class ActivitySummary:
+    runs_24h: int
+    runs_success_24h: int
+    runs_failed_24h: int
+    shorts_24h: int
+    youtube_success_24h: int
+    errors_24h: int
+
+
+def compute_summary_24h(eng: Engine) -> ActivitySummary:
+    """Aggregate counts from runs, shorts, youtube_uploads over the last 24h."""
+    since = datetime.now(timezone.utc) - timedelta(hours=24)
+    with eng.connect() as conn:
+        runs_total = conn.execute(
+            select(func.count()).select_from(runs)
+            .where(runs.c.ended_at.is_not(None))
+            .where(runs.c.ended_at >= since)
+        ).scalar() or 0
+        runs_success = conn.execute(
+            select(func.count()).select_from(runs)
+            .where(runs.c.status == "success")
+            .where(runs.c.ended_at >= since)
+        ).scalar() or 0
+        runs_failed = conn.execute(
+            select(func.count()).select_from(runs)
+            .where(runs.c.status == "failed")
+            .where(runs.c.ended_at >= since)
+        ).scalar() or 0
+        shorts_count = conn.execute(
+            select(func.count()).select_from(shorts_table)
+            .where(shorts_table.c.deleted_at.is_(None))
+            .where(shorts_table.c.created_at >= since)
+        ).scalar() or 0
+        yt_success = conn.execute(
+            select(func.count()).select_from(youtube_uploads)
+            .where(youtube_uploads.c.status == "success")
+            .where(youtube_uploads.c.uploaded_at >= since)
+        ).scalar() or 0
+        yt_failed = conn.execute(
+            select(func.count()).select_from(youtube_uploads)
+            .where(youtube_uploads.c.status == "failed")
+            .where(youtube_uploads.c.uploaded_at >= since)
+        ).scalar() or 0
+    return ActivitySummary(
+        runs_24h=int(runs_total),
+        runs_success_24h=int(runs_success),
+        runs_failed_24h=int(runs_failed),
+        shorts_24h=int(shorts_count),
+        youtube_success_24h=int(yt_success),
+        errors_24h=int(runs_failed) + int(yt_failed),
+    )
+
+
+@dataclass(frozen=True)
+class RunningRun:
+    id: int
+    channel: str
+    trigger: str
+    started_at: datetime  # always tz-aware
+
+
+def list_running_runs(eng: Engine) -> list[RunningRun]:
+    """Runs with ended_at IS NULL ordered by started_at DESC."""
+    with eng.connect() as conn:
+        rows = conn.execute(
+            select(runs.c.id, runs.c.channel, runs.c.trigger, runs.c.started_at)
+            .where(runs.c.ended_at.is_(None))
+            .order_by(runs.c.started_at.desc())
+        ).fetchall()
+    return [
+        RunningRun(
+            id=int(r.id),
+            channel=r.channel,
+            trigger=r.trigger,
+            started_at=_aware(r.started_at),
+        )
+        for r in rows
+    ]
