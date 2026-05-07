@@ -96,7 +96,9 @@ async function start() {
 
   child = spawn(py, args, {
     env,
-    cwd: paths.shortBotRoot(),
+    // CWD = userData so any code that uses relative paths (e.g. channel.output_dir
+    // = "output/<slug>") resolves under writable user storage, not Program Files.
+    cwd: paths.userData(),
     windowsHide: true,
   });
   child.stdout.pipe(stdoutLog);
