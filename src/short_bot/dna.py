@@ -9,7 +9,11 @@ from short_bot.claude_cli import run_json
 from short_bot.locale import LANGUAGE_NAMES
 
 
-ARCHETYPES = ["newscast", "tabloid", "magazine", "kinetic", "dark-tech", "stadium", "meme"]
+ARCHETYPES = [
+    "newscast", "tabloid", "magazine", "kinetic", "dark-tech", "stadium", "meme",
+    "politika", "ekonomi", "spor-haber", "tech-haber",
+    "hava-durumu", "yerel", "gundem", "dosya",
+]
 
 
 class DnaPalette(BaseModel):
@@ -66,7 +70,11 @@ class DnaTone(BaseModel):
 
 
 class DnaSpec(BaseModel):
-    archetype: Literal["newscast", "tabloid", "magazine", "kinetic", "dark-tech", "stadium", "meme"]
+    archetype: Literal[
+        "newscast", "tabloid", "magazine", "kinetic", "dark-tech", "stadium", "meme",
+        "politika", "ekonomi", "spor-haber", "tech-haber",
+        "hava-durumu", "yerel", "gundem", "dosya",
+    ]
     palette: DnaPalette
     fonts: DnaFonts
     tone: DnaTone
@@ -108,6 +116,14 @@ ARCHETYPE SEÇİMİ (1 tane seç):
 - dark-tech → teknoloji, AI, oyun, hacker, fütürist, cyber
 - stadium → spor (futbol/basketbol/F1/...), heyecan, dinamik
 - meme → mizah, komedi, troll, viral video, gençlik
+- politika → resmi siyaset, parlamento, hükümet açıklamaları (formal/oturmuş)
+- ekonomi → borsa, döviz, zam, ekonomik göstergeler (sayısal callout)
+- spor-haber → transfer/sakatlık/fikstür/taktik (jurnalistik, stadium'dan farklı)
+- tech-haber → Apple/Google/AI/bilim haberleri (clean Apple-keynote, dark-tech'ten farklı)
+- hava-durumu → günlük hava raporu (sıcaklık+emoji ön planda)
+- yerel → şehir/mahalle haberleri (sıcak, küçük-ölçekli)
+- gundem → günün top 3-4 haberi liste halinde
+- dosya → soruşturma/araştırmacı gazetecilik (sepia eski-belge estetik)
 
 DİL UYUMU:
 - voice/style/forbidden alanlarını {lang_name} dilinde yaz
@@ -122,11 +138,21 @@ PALETTE KARARLARI (archetype'a uygun ama kanala özgü override yapabilirsin):
 - dark-tech: cyan/magenta/yeşil neon + koyu mor/siyah
 - stadium: takım/spor renkleri (yeşil/sarı, kırmızı/lacivert vb.)
 - meme: parlak mavi/sarı/pembe, Impact-vibe
+- politika: lacivert (#0a1c4a) + altın (#d4a937), formal
+- ekonomi: koyu mavi-yeşil + market yeşili (#00c853) + market kırmızı (#d50000) + altın
+- spor-haber: charcoal + soft-red (#e63946) + cool-gray (stadium'dan daha yumuşak)
+- tech-haber: BEYAZ arkaplan + electric blue (#0066cc) + Apple charcoal (#1d1d1f)
+- hava-durumu: gökyüzü mavi gradient (#3a7bd5 → #00d2ff) + güneş sarısı
+- yerel: krem (#fef3e2) + terracotta (#c9663b) + zeytin (#6b7d3a)
+- gundem: deep purple (#1e1645) + bright yellow (#ffeb3b)
+- dosya: sepia paper (#f4ecd8) + rust red (#a52a2a) + ink black
 
 FONT KARARLARI:
 - headline: archetype'a uygun (newscast→Inter, tabloid→Bebas Neue,
   magazine→Playfair Display, kinetic→Anton, dark-tech→JetBrains Mono,
-  stadium→Oswald, meme→Impact)
+  stadium→Oswald, meme→Impact, politika→Source Serif 4, ekonomi→Inter,
+  spor-haber→Oswald, tech-haber→Inter, hava-durumu→Inter Display,
+  yerel→Playfair Display, gundem→Anton, dosya→Source Serif 4)
 - body: okunabilir genelci (Inter veya Roboto)
 - google_imports: Google Fonts URL fragment formatında ("Inter:wght@400;700;900",
   "Bebas+Neue", "Playfair+Display:ital@1")
@@ -139,6 +165,14 @@ TONE KARARLARI:
 - paragraph_sentences: [min, max], magazine için (5,7), tabloid için (2,3) gibi
 - body_max_chars: 50 (kinetic) — 600 (magazine) arası
 - headline_style_hint: bu kanalın tipik başlık formatı (1 cümle açıklama)
+
+ARCHETYPE-SPESİFİK FORMAT KURALLARI:
+- gundem: body_paragraph'ı şu formatta yaz: "1. <başlık>\n2. <başlık>\n3. <başlık>"
+  (3-4 madde, her madde 8-15 kelime). \n karakteri gerçek satırbaşı (Python'da yeni
+  satır), markup değil.
+- hava-durumu: header_top = sıcaklık (örn. "23°"), header_bottom = hava emojisi
+  veya kısa açıklama (örn. "GÜNEŞLİ"), photo_overlay = şehir adı (örn. "İSTANBUL"),
+  body_paragraph = kısa hava özeti (50-100 karakter).
 
 BANNER/HIGHLIGHT/CHIP:
 - banner_shape: flat | ribbon | slanted | sharp
