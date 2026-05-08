@@ -79,6 +79,29 @@
         <a href="/logs" class="nav-link hover:text-claude-text {% if p.startswith('/logs') %}active{% endif %}">Loglar</a>
       </div>
       <span class="ml-auto flex items-center gap-2 text-xs">
+        {# Cron health badge #}
+        <span x-data="cronHealthBadge()" x-init="poll()">
+          <template x-if="loading">
+            <span class="px-2.5 py-1 rounded-full bg-claude-surface ring-1 ring-claude-border text-claude-muted">
+              &#x23F1; ...
+            </span>
+          </template>
+          <template x-if="!loading && error">
+            <span class="px-2.5 py-1 rounded-full bg-red-50 ring-1 ring-red-200 text-red-700"
+                  :title="error">&#x23F1; Cron sorun</span>
+          </template>
+          <template x-if="!loading && !error && jobCount === 0">
+            <span class="px-2.5 py-1 rounded-full bg-yellow-50 ring-1 ring-yellow-200 text-yellow-700"
+                  title="Hicbir kanal cron'u kayitli degil">&#x23F1; Cron bos</span>
+          </template>
+          <template x-if="!loading && !error && jobCount > 0">
+            <span class="px-2.5 py-1 rounded-full bg-claude-accent-soft ring-1 ring-claude-border text-claude-accent"
+                  :title="`${jobCount} kanal · sonraki: ${nextRunHuman}`">
+              &#x23F1; <span x-text="jobCount"></span> cron &middot; <span x-text="nextCountdown"></span>
+            </span>
+          </template>
+        </span>
+
         {% if system_running_count and system_running_count > 0 %}
           <span class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-yellow-50 ring-1 ring-yellow-200 text-yellow-700">
             <span class="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse"></span>
@@ -132,6 +155,58 @@
   <main class="container mx-auto px-6 py-10 max-w-6xl flex-1 w-full">
     {% block content %}{% endblock %}
   </main>
+
+  <script>
+  function cronHealthBadge() {
+    return {
+      loading: true, error: null, jobCount: 0,
+      nextRunISO: null, nextRunHuman: '',
+      nextCountdown: '...',
+      _intv: null,
+      async poll() {
+        try {
+          const r = await fetch('/system/scheduler');
+          const j = await r.json();
+          if (!j.running) { this.error = 'Scheduler durdu'; this.loading = false; return; }
+          // Filter out _reload_jobs internal
+          const userJobs = (j.jobs || []).filter(x => x.id !== '_reload_jobs');
+          this.jobCount = userJobs.length;
+          if (userJobs.length > 0) {
+            const next = userJobs
+              .filter(x => x.next_run_time)
+              .map(x => new Date(x.next_run_time))
+              .sort((a, b) => a - b)[0];
+            if (next) {
+              this.nextRunISO = next.toISOString();
+              this.nextRunHuman = next.toLocaleString('tr-TR');
+              this._tick();
+            }
+          }
+          this.loading = false;
+          setTimeout(() => this.poll(), 30000);
+        } catch (e) {
+          this.error = String(e);
+          this.loading = false;
+          setTimeout(() => this.poll(), 30000);
+        }
+      },
+      _tick() {
+        const update = () => {
+          if (!this.nextRunISO) return;
+          const ms = new Date(this.nextRunISO) - new Date();
+          if (ms <= 0) { this.nextCountdown = 'simdi'; return; }
+          const totalMin = Math.floor(ms / 60000);
+          const h = Math.floor(totalMin / 60);
+          const m = totalMin % 60;
+          this.nextCountdown = h > 0 ? `${h}s ${m}dk` : `${m}dk`;
+        };
+        update();
+        if (this._intv) clearInterval(this._intv);
+        this._intv = setInterval(update, 60000);
+      }
+    };
+  }
+  </script>
 
   <footer class="border-t border-claude-border py-5 mt-auto">
     <div class="container mx-auto max-w-6xl px-6 flex items-center justify-between text-xs text-claude-subtle">
