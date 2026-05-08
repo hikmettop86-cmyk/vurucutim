@@ -127,33 +127,78 @@ def test_load_channel_proxy_url_empty_value(tmp_path):
     assert load_channel_proxy_url("galatasaray", p) is None
 
 
-def test_build_proxied_http_none_returns_plain():
+def test_build_proxied_http_none_returns_plain_httplib2():
+    """No proxy → still httplib2.Http (preserves direct path)."""
     import httplib2
     from short_bot.youtube.proxy import build_proxied_http
     http = build_proxied_http(None)
     assert isinstance(http, httplib2.Http)
-    assert http.proxy_info is None or http.proxy_info() is None
 
 
-def test_build_proxied_http_http_proxy_with_credentials():
-    import httplib2
-    import socks
-    from short_bot.youtube.proxy import build_proxied_http
+def test_build_proxied_http_with_proxy_returns_requests_backed():
+    """With proxy → RequestsBackedHttp adapter (PySocks bypass)."""
+    from short_bot.youtube.proxy import build_proxied_http, RequestsBackedHttp
     http = build_proxied_http("http://alice:s3cret@h.example.com:8080")
-    pi = http.proxy_info("https") if callable(http.proxy_info) else http.proxy_info
-    assert pi.proxy_type == socks.PROXY_TYPE_HTTP
-    assert pi.proxy_host == "h.example.com"
-    assert pi.proxy_port == 8080
-    assert pi.proxy_user == "alice"
-    assert pi.proxy_pass == "s3cret"
+    assert isinstance(http, RequestsBackedHttp)
+    # Verify session has proxies configured
+    assert http._session.proxies == {
+        "http": "http://alice:s3cret@h.example.com:8080",
+        "https": "http://alice:s3cret@h.example.com:8080",
+    }
 
 
-def test_build_proxied_http_socks5():
-    import socks
-    from short_bot.youtube.proxy import build_proxied_http
+def test_build_proxied_http_socks5_returns_requests_backed():
+    from short_bot.youtube.proxy import build_proxied_http, RequestsBackedHttp
     http = build_proxied_http("socks5://h:1080")
-    pi = http.proxy_info("https") if callable(http.proxy_info) else http.proxy_info
-    assert pi.proxy_type == socks.PROXY_TYPE_SOCKS5
+    assert isinstance(http, RequestsBackedHttp)
+
+
+def test_requests_backed_http_request_returns_tuple():
+    """request() returns (httplib2.Response-like, bytes)."""
+    from unittest.mock import MagicMock
+    from short_bot.youtube.proxy import RequestsBackedHttp
+    fake_session = MagicMock()
+    fake_resp = MagicMock(status_code=200, content=b"hello", headers={"X-Foo": "bar"})
+    fake_session.request.return_value = fake_resp
+
+    http = RequestsBackedHttp(fake_session)
+    resp, content = http.request("https://example.com", method="GET")
+
+    assert resp.status == 200
+    assert content == b"hello"
+    assert resp["x-foo"] == "bar"   # httplib2 lowercases keys
+    assert resp["status"] == "200"
+
+
+def test_requests_backed_http_passes_body_and_headers():
+    from unittest.mock import MagicMock
+    from short_bot.youtube.proxy import RequestsBackedHttp
+    fake_session = MagicMock()
+    fake_resp = MagicMock(status_code=204, content=b"", headers={})
+    fake_session.request.return_value = fake_resp
+
+    http = RequestsBackedHttp(fake_session)
+    http.request("https://example.com", method="POST",
+                 body=b"data", headers={"Content-Type": "video/mp4"})
+
+    args, kwargs = fake_session.request.call_args
+    assert kwargs["method"] == "POST"
+    assert kwargs["url"] == "https://example.com"
+    assert kwargs["data"] == b"data"
+    assert kwargs["headers"]["Content-Type"] == "video/mp4"
+
+
+def test_requests_backed_http_real_https_no_proxy():
+    """Sanity: adapter actually does HTTP via real requests session."""
+    import requests
+    from short_bot.youtube.proxy import RequestsBackedHttp
+    s = requests.Session()
+    http = RequestsBackedHttp(s, timeout=10)
+    resp, content = http.request(
+        "https://api.ipify.org?format=json", method="GET",
+    )
+    assert resp.status == 200
+    assert b"ip" in content
 
 
 def test_build_proxied_session_none_no_proxies():
