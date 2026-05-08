@@ -14,6 +14,7 @@ from pathlib import Path
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
+from google_auth_httplib2 import AuthorizedHttp
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 
@@ -92,9 +93,18 @@ def build_flow(root: Path, slug: str, *, redirect_uri: str) -> Flow:
     )
 
 
-def fetch_and_save_channel_info(root: Path, slug: str, creds: Credentials) -> dict:
-    """Call channels().list(mine=True), persist response as channel_info.json."""
-    youtube = build("youtube", "v3", credentials=creds)
+def fetch_and_save_channel_info(
+    root: Path, slug: str, creds: Credentials, *, http=None,
+) -> dict:
+    """Call channels().list(mine=True), persist response as channel_info.json.
+
+    http: optional proxied httplib2.Http. When given, wrapped in AuthorizedHttp
+    and passed to build(http=...). When None, credentials= is passed (no proxy).
+    """
+    if http is not None:
+        youtube = build("youtube", "v3", http=AuthorizedHttp(creds, http=http))
+    else:
+        youtube = build("youtube", "v3", credentials=creds)
     resp = youtube.channels().list(
         part="snippet,statistics", mine=True,
     ).execute()
