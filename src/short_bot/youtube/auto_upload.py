@@ -6,7 +6,9 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import requests
 from sqlalchemy import select
+from google.auth.transport.requests import Request
 
 
 @dataclass(frozen=True)
@@ -48,6 +50,18 @@ def should_auto_upload(*, channel, picked_score: float | None,
 from short_bot.db import get_rss_item_for_short, record_youtube_upload, shorts as _shorts_table  # noqa: E402
 from short_bot.youtube.metadata_writer import generate_youtube_metadata  # noqa: E402
 from short_bot.youtube.uploader import build_snippet, build_status, upload_video  # noqa: E402
+from short_bot.youtube.proxy import (  # noqa: E402
+    load_channel_proxy_url, build_proxied_http,
+    build_proxied_requests_session, _redact_err,
+)
+
+
+class UploadAbortError(RuntimeError):
+    """Upload aborted because proxy/network setup failed.
+
+    Distinct from ResumableUploadError so callers can distinguish
+    'API said no' from 'we never reached the API'.
+    """
 
 
 @dataclass(frozen=True)
@@ -56,26 +70,57 @@ class AutoUploadResult:
     video_url: str
 
 
-def run_auto_upload(*, eng, short_id: int, channel, credentials,
-                    claude_path: str = "claude",
-                    model: str = "sonnet") -> AutoUploadResult:
-    """Build metadata via Sonnet (best-effort) + upload + record DB row.
-
-    Re-raises on upload failure after recording status='failed'. Sonnet failure
-    silently falls back to bare snippet (upload still proceeds).
-    """
+def _load_short_for_upload(eng, short_id: int):
+    """Return (row, rss_source, rss_link) tuple for a short."""
     with eng.connect() as conn:
         row = conn.execute(
             select(_shorts_table).where(_shorts_table.c.id == short_id)
         ).first()
     if row is None:
         raise RuntimeError(f"short {short_id} not found")
+    rss = get_rss_item_for_short(eng, short_id=short_id)
+    return row, (rss.source if rss else None), (rss.link if rss else None)
+
+
+def run_auto_upload(*, eng, short_id: int, channel, credentials,
+                    claude_path: str = "claude",
+                    model: str = "sonnet",
+                    secrets_path: Path | None = None) -> AutoUploadResult:
+    """Build metadata via Sonnet (best-effort) + upload + record DB row.
+
+    secrets_path: data/secrets.yaml path. If None, no proxy lookup is attempted.
+
+    Behavior:
+      - If channel has a configured proxy: route token refresh + upload through it.
+        Proxy failures raise UploadAbortError, recorded with status='proxy_failed'.
+      - Otherwise: existing direct path.
+    """
+    row, rss_source, rss_link = _load_short_for_upload(eng, short_id)
     script = _json.loads(row.script_json or "{}")
 
-    rss = get_rss_item_for_short(eng, short_id=short_id)
-    rss_source = rss.source if rss else None
-    rss_link = rss.link if rss else None
+    # Resolve proxy (if any) before any network I/O
+    proxy_url = (
+        load_channel_proxy_url(channel.slug, secrets_path)
+        if secrets_path else None
+    )
+    http = build_proxied_http(proxy_url) if proxy_url else None
+    session = build_proxied_requests_session(proxy_url) if proxy_url else None
 
+    # Token refresh through proxy (only if expired) — surfaces proxy failure early
+    if proxy_url and credentials.expired and credentials.refresh_token:
+        try:
+            credentials.refresh(Request(session=session))
+        except (requests.exceptions.ProxyError,
+                requests.exceptions.ConnectionError,
+                requests.exceptions.Timeout) as e:
+            err = f"proxy fail (token refresh, {channel.slug}): {_redact_err(e)}"
+            record_youtube_upload(
+                eng, short_id=short_id, video_id=None,
+                status="proxy_failed", error=err[:1000], video_url=None,
+            )
+            raise UploadAbortError(err) from e
+
+    # Best-effort metadata generation
     generated = None
     try:
         meta = generate_youtube_metadata(
@@ -85,7 +130,7 @@ def run_auto_upload(*, eng, short_id: int, channel, credentials,
         )
         generated = {"title": meta.title, "description": meta.description, "tags": meta.tags}
     except Exception:
-        pass  # fall back to bare snippet
+        pass
 
     yt = channel.youtube
     snippet = build_snippet(
@@ -101,7 +146,7 @@ def run_auto_upload(*, eng, short_id: int, channel, credentials,
     try:
         video_id = upload_video(
             credentials=credentials, file_path=Path(row.file_path),
-            snippet=snippet, status=status,
+            snippet=snippet, status=status, http=http,
         )
         url = f"https://youtu.be/{video_id}"
         record_youtube_upload(
@@ -110,8 +155,19 @@ def run_auto_upload(*, eng, short_id: int, channel, credentials,
         )
         return AutoUploadResult(video_id=video_id, video_url=url)
     except Exception as e:
-        record_youtube_upload(
-            eng, short_id=short_id, video_id=None, status="failed",
-            error=str(e)[:1000], video_url=None,
+        # If we have a proxy and the error looks like a transport failure,
+        # categorize it as proxy_failed (for UI distinction).
+        is_proxy_fail = proxy_url is not None and isinstance(
+            e, (requests.exceptions.ProxyError,
+                requests.exceptions.ConnectionError,
+                requests.exceptions.Timeout,
+                ConnectionError, OSError),
         )
+        status_str = "proxy_failed" if is_proxy_fail else "failed"
+        record_youtube_upload(
+            eng, short_id=short_id, video_id=None, status=status_str,
+            error=_redact_err(e)[:1000], video_url=None,
+        )
+        if is_proxy_fail:
+            raise UploadAbortError(f"proxy fail (upload, {channel.slug}): {_redact_err(e)}") from e
         raise
