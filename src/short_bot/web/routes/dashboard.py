@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from flask import Blueprint, current_app, render_template
 
@@ -43,6 +43,16 @@ def index():
               .order_by(Short.created_at.desc())
               .limit(4).all())
 
+    # Last 5 failed runs in last 24h for error panel
+    since_utc = datetime.now(timezone.utc) - timedelta(hours=24)
+    # Support both tz-aware and tz-naive started_at columns
+    since_naive = datetime.utcnow() - timedelta(hours=24)
+    recent_errors = (Run.query
+                     .filter(Run.status == "failed",
+                             Run.started_at >= since_naive)
+                     .order_by(Run.started_at.desc())
+                     .limit(5).all())
+
     return render_template(
         "dashboard.html.j2",
         total_shorts=total_shorts,
@@ -54,4 +64,5 @@ def index():
         channel_count=len(channels),
         channels=channels,
         recent=recent,
+        recent_errors=recent_errors,
     )

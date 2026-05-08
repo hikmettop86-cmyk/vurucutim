@@ -36,6 +36,42 @@
   </a>
 </div>
 
+{% if recent_errors %}
+<div class="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+  <h2 class="font-serif font-semibold text-red-900 mb-3 flex items-center gap-2">
+    &#x26A0; Son 24 saat &mdash; {{ recent_errors|length }} hata
+    <a href="/logs?level=ERROR" class="text-xs font-normal text-red-600 hover:underline ml-auto">
+      Tum hatalar &rarr;
+    </a>
+  </h2>
+  <div class="space-y-2">
+    {% for err in recent_errors %}
+    <div class="bg-white border border-red-200 rounded p-3 text-sm">
+      <div class="flex items-start gap-3">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 text-xs text-claude-muted mb-1">
+            <span class="font-mono font-semibold text-claude-text">{{ err.channel }}</span>
+            <span>&middot;</span>
+            <span>{{ err.started_at.strftime('%H:%M') }}</span>
+            {% if err.trigger %}
+            <span>&middot;</span>
+            <span class="text-red-600">{{ err.trigger }}</span>
+            {% endif %}
+          </div>
+          <div class="text-red-700 font-mono text-xs truncate" title="{{ err.error|e if err.error else '' }}">
+            {{ (err.error or 'bilinmeyen hata')[:160] }}
+          </div>
+        </div>
+        <a href="/logs?run_id={{ err.id }}" class="text-xs text-red-600 hover:underline whitespace-nowrap">
+          Detay &rarr;
+        </a>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
 <div class="flex flex-wrap items-center gap-2 mb-4">
   <span class="text-xs text-claude-muted uppercase tracking-wider mr-1">Hızlı filtre:</span>
   <a href="/shorts" class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border px-3 py-1.5 rounded-full text-xs">Tümü</a>
