@@ -106,9 +106,9 @@ def preview(slug):
     if fonts_update:
         dna = dna.model_copy(update={"fonts": dna.fonts.model_copy(update=fonts_update)})
 
-    # Top-level Literal fields
-    valid_archetypes = {"newscast", "tabloid", "magazine", "kinetic",
-                        "dark-tech", "stadium", "meme"}
+    # Top-level Literal fields — use the canonical ARCHETYPES list (single source of truth)
+    from short_bot.dna import ARCHETYPES
+    valid_archetypes = set(ARCHETYPES)
     top_update = {}
     if request.args.get("archetype") in valid_archetypes:
         top_update["archetype"] = request.args["archetype"]
