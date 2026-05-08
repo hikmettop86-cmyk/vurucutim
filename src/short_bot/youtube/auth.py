@@ -40,15 +40,23 @@ def save_credentials(root: Path, slug: str, creds: Credentials) -> Path:
     return token_path
 
 
-def load_credentials(root: Path, slug: str) -> Credentials | None:
-    """Load + auto-refresh credentials for the channel. Returns None if missing."""
+def load_credentials(
+    root: Path, slug: str, *, proxy_session=None,
+) -> Credentials | None:
+    """Load + auto-refresh credentials for the channel. Returns None if missing.
+
+    proxy_session: optional requests.Session (from build_proxied_requests_session)
+    used when token refresh hits Google's OAuth endpoint. Lets us route the
+    refresh through the same proxy as the upload.
+    """
     token_path = credentials_dir(root, slug) / "token.json"
     if not token_path.is_file():
         return None
     info = json.loads(token_path.read_text(encoding="utf-8"))
     creds = Credentials.from_authorized_user_info(info, scopes=info.get("scopes", SCOPES))
     if creds.expired and creds.refresh_token:
-        creds.refresh(Request())
+        request = Request(session=proxy_session) if proxy_session else Request()
+        creds.refresh(request)
         save_credentials(root, slug, creds)
     return creds
 
