@@ -157,94 +157,100 @@ def _run_image_search(
     claude_path: str,
     max_candidates: int,
 ) -> Path | None:
-    """Internal: shared DDG -> Wikimedia fallback -> download -> Claude verify loop."""
+    """Source-by-source iteration: each source gets its own batch of candidates,
+    Claude-verified until one is accepted. If all candidates from a source are
+    rejected, the next source is tried (instead of giving up).
+
+    Source order: DDG (orig) → DDG (ASCII normalize) → DDG (header_bottom only)
+                  → Wikimedia (orig) → Wikimedia (normalize) → Pexels.
+    """
     cache_dir = Path(cache_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
 
-    logger.info(f"image search (DDG): {query!r}")
-    candidates = search_images(query, max_results=max_candidates)
+    normalized = _normalize_query(query)
+    short_q = _normalize_query(script.header_bottom) if script.header_bottom else ""
 
-    # If original query (Türkçe diakritik + apostrof) returns 0 results,
-    # retry with ASCII-folded version — DDG often handles plain ASCII better.
-    if not candidates:
-        normalized = _normalize_query(query)
-        if normalized and normalized != query:
-            logger.info(f"DDG 0 sonuc; ASCII normalize ile retry: {normalized!r}")
-            candidates = search_images(normalized, max_results=max_candidates)
-
-    # Still nothing? Try just the most-distinctive part (header_bottom only)
-    if not candidates and script.header_bottom:
-        short_q = _normalize_query(script.header_bottom)
-        if short_q and short_q != query:
-            logger.info(f"DDG hala 0; sadece header_bottom ile retry: {short_q!r}")
-            candidates = search_images(short_q, max_results=max_candidates)
-
-    if not candidates:
-        logger.warning("DDG returned 0 candidates; trying Wikimedia Commons")
-        from short_bot.wikimedia_search import search_images_commons
-        candidates = search_images_commons(query, max_results=max_candidates)
-        if not candidates:
-            normalized = _normalize_query(query)
-            if normalized and normalized != query:
-                candidates = search_images_commons(normalized, max_results=max_candidates)
-        if candidates:
-            logger.warning(f"Wikimedia returned {len(candidates)} candidates")
-
-    # Final fallback: Pexels photo API (if pexels_api_key configured).
-    # Pexels Türkçe sorgular için zayıf — normalize edilmiş İngilizce-vari
-    # query daha iyi sonuç verir.
-    if not candidates:
+    def _from_pexels() -> list[ImageCandidate]:
         try:
             from short_bot.pexels import (
                 search_photos as _pexels_photos,
                 resolve_pexels_api_key as _pexels_key,
                 load_secrets as _pexels_secrets,
             )
-            from flask import current_app
             try:
+                from flask import current_app
                 secrets_path = current_app.config.get("SHORTBOT_SECRETS_PATH")
-            except RuntimeError:
-                # Outside Flask context (e.g. CLI run) — fall back to default
+            except (ImportError, RuntimeError):
                 secrets_path = None
             if secrets_path is None:
-                from pathlib import Path as _P
-                secrets_path = _P("data") / "secrets.yaml"
+                secrets_path = Path("data") / "secrets.yaml"
             api_key = _pexels_key(_pexels_secrets(secrets_path))
-            if api_key:
-                pexels_q = _normalize_query(query)
-                logger.warning(f"Pexels photo fallback: {pexels_q!r}")
-                pexels_results = _pexels_photos(pexels_q, api_key, max_results=max_candidates)
-                if pexels_results:
-                    logger.warning(f"Pexels returned {len(pexels_results)} photo candidates")
-                    candidates = [
-                        ImageCandidate(url=p.url, thumbnail=p.url,
-                                       title=f"Pexels #{p.id}",
-                                       source_domain="pexels.com",
-                                       width=p.width, height=p.height)
-                        for p in pexels_results
-                    ]
-            else:
-                logger.info("Pexels fallback skipped: pexels_api_key not configured")
+            if not api_key:
+                return []
+            pexels_q = normalized or query
+            results = _pexels_photos(pexels_q, api_key, max_results=max_candidates)
+            return [
+                ImageCandidate(url=p.url, thumbnail=p.url,
+                               title=f"Pexels #{p.id}",
+                               source_domain="pexels.com",
+                               width=p.width, height=p.height)
+                for p in results
+            ]
         except Exception as e:
-            logger.warning(f"Pexels fallback failed: {e}")
+            logger.warning(f"Pexels source failed: {e}")
+            return []
 
-    if not candidates:
-        logger.warning("no image candidates from any source")
-        return None
+    def _from_wikimedia(q: str) -> list[ImageCandidate]:
+        try:
+            from short_bot.wikimedia_search import search_images_commons
+            return search_images_commons(q, max_results=max_candidates)
+        except Exception as e:
+            logger.warning(f"Wikimedia source failed: {e}")
+            return []
 
-    for i, cand in enumerate(candidates):
-        key = hashlib.sha1(cand.url.encode("utf-8")).hexdigest()[:16]
-        path = cache_dir / f"{key}.jpg"
-        if not path.exists():
-            if not _download(cand.url, path):
-                continue
-        verdict = _verify_with_claude(path, script, claude_path)
-        if verdict is None:
-            logger.warning(f"  cand {i}: verification CLI failed -> skip")
+    sources: list[tuple[str, callable]] = [
+        ("DDG (orig)",         lambda: search_images(query, max_results=max_candidates)),
+    ]
+    if normalized and normalized != query:
+        sources.append(
+            ("DDG (ASCII)",    lambda: search_images(normalized, max_results=max_candidates))
+        )
+    if short_q and short_q != query and short_q != normalized:
+        sources.append(
+            ("DDG (header)",   lambda: search_images(short_q, max_results=max_candidates))
+        )
+    sources.append(("Wikimedia (orig)", lambda: _from_wikimedia(query)))
+    if normalized and normalized != query:
+        sources.append(("Wikimedia (ASCII)", lambda: _from_wikimedia(normalized)))
+    sources.append(("Pexels", _from_pexels))
+
+    for source_name, fetch in sources:
+        try:
+            candidates = fetch()
+        except Exception as e:
+            logger.warning(f"{source_name}: search failed: {e}")
             continue
-        if verdict.appropriate:
-            logger.warning(f"  cand {i} ACCEPTED: {verdict.reason}")
-            return path
-        logger.warning(f"  cand {i} rejected: {verdict.reason}")
-    logger.info("no candidate passed verification")
+        if not candidates:
+            logger.info(f"{source_name}: 0 sonuc, sonraki kaynak deneniyor")
+            continue
+        logger.info(f"{source_name}: {len(candidates)} aday, Claude verify ediliyor")
+
+        for i, cand in enumerate(candidates):
+            key = hashlib.sha1(cand.url.encode("utf-8")).hexdigest()[:16]
+            path = cache_dir / f"{key}.jpg"
+            if not path.exists():
+                if not _download(cand.url, path):
+                    continue
+            verdict = _verify_with_claude(path, script, claude_path)
+            if verdict is None:
+                logger.warning(f"  {source_name} cand {i}: verification CLI failed -> skip")
+                continue
+            if verdict.appropriate:
+                logger.warning(f"  {source_name} cand {i} ACCEPTED: {verdict.reason}")
+                return path
+            logger.warning(f"  {source_name} cand {i} rejected: {verdict.reason}")
+
+        logger.info(f"{source_name}: tum adaylar reddedildi, sonraki kaynak")
+
+    logger.warning("no image accepted from any source after all fallbacks")
     return None
