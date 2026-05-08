@@ -217,7 +217,8 @@ def _run_image_search(
                 if pexels_results:
                     logger.warning(f"Pexels returned {len(pexels_results)} photo candidates")
                     candidates = [
-                        ImageCandidate(url=p.url, title=f"Pexels #{p.id}",
+                        ImageCandidate(url=p.url, thumbnail=p.url,
+                                       title=f"Pexels #{p.id}",
                                        source_domain="pexels.com",
                                        width=p.width, height=p.height)
                         for p in pexels_results
