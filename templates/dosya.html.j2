@@ -2,7 +2,7 @@
 <html lang="{{ language }}">
 <head>
 <meta charset="utf-8">
-<title>Short — Dosya</title>
+<title>Short â€” Dosya</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@400;700;900&family=Lora:wght@400;500;700&family=Courier+Prime:wght@400;700&display=swap');
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -32,7 +32,7 @@ html, body {
   box-shadow: inset 0 0 0 4px var(--accent);
 }
 
-/* STAGE BADGE — rounded chip, rust-red on sepia, top-right */
+/* STAGE BADGE â€” rounded chip, rust-red on sepia, top-right */
 .stage-badge {
   position: absolute; top: 24px; right: 24px;
   background: var(--primary); color: var(--bg-grad-1);
@@ -63,7 +63,7 @@ html, body {
   line-height: 1.1;
 }
 
-/* PHOTO — sepia desaturated, thin black border */
+/* PHOTO â€” sepia desaturated, thin black border */
 .photo {
   margin: 24px 60px;
   height: 540px;
@@ -80,7 +80,7 @@ html, body {
   filter: sepia(0.6) contrast(1.1) brightness(0.95);
 }
 
-/* DOSSIER STAMP — slanted red stamp top-right of photo */
+/* DOSSIER STAMP â€” slanted red stamp top-right of photo */
 .photo .dossier-stamp {
   position: absolute;
   top: 18px; right: 18px;
@@ -96,7 +96,7 @@ html, body {
   z-index: 5;
 }
 
-/* BODY — Lora serif, dark ink on sepia */
+/* BODY â€” Lora serif, dark ink on sepia */
 .body {
   flex: 1; min-height: 0; margin-bottom: 240px;
   padding: 30px 60px;
@@ -115,7 +115,7 @@ html, body {
 .body .hl-r { background: var(--primary); color: #fff; padding: 2px 14px; border-radius: 0; font-weight: 700; }
 .body .hl-y { color: var(--primary); text-decoration: underline; text-decoration-thickness: 4px; font-weight: 700; }
 
-/* PROGRESS bar — dark track for sepia bg */
+/* PROGRESS bar â€” dark track for sepia bg */
 .progress {
   position: absolute; left: 0; right: 0; bottom: 84px; height: 8px;
   background: rgba(0,0,0,.2);
@@ -127,7 +127,7 @@ html, body {
 }
 @keyframes fill { from { width: 0; } to { width: 100%; } }
 
-/* HANDLE — dark text for visibility on sepia bg */
+/* HANDLE â€” dark text for visibility on sepia bg */
 .handle {
   position: absolute; left: 0; right: 0; bottom: 30px;
   text-align: center; color: var(--text-main); opacity: 0.7;
@@ -218,7 +218,7 @@ html, body {
 }
 .cta .sub-btn .bell { font-size: 96px; }
 
-/* Pointer hand below button — bouncing */
+/* Pointer hand below button â€” bouncing */
 .cta .pointer {
   font-size: 100px;
   margin-bottom: 50px;
@@ -236,7 +236,7 @@ html, body {
   50% { transform: translateY(-15px); }
 }
 
-/* Three icons row at bottom — stagger pop-in */
+/* Three icons row at bottom â€” stagger pop-in */
 .cta .icons-row {
   display: flex;
   align-items: center;
@@ -272,7 +272,7 @@ html, body {
 @keyframes dim { to { opacity: 0.05; } }
 {% endif %}
 
-/* Persistent corner chips — visible THROUGHOUT video (YouTube-red works on sepia) */
+/* Persistent corner chips â€” visible THROUGHOUT video (YouTube-red works on sepia) */
 .persistent {
   position: absolute;
   display: flex;
@@ -290,7 +290,7 @@ html, body {
 }
 .persistent .ic { font-size: 44px; }
 
-/* BEĞEN — bottom-left, dark chip with red accent */
+/* BEÄEN â€” bottom-left, dark chip with red accent */
 .persistent.like {
   bottom: 112px; left: 24px;
   background: linear-gradient(135deg, rgba(0,0,0,.88), rgba(40,0,0,.92));
@@ -304,7 +304,7 @@ html, body {
   60% { transform: scale(1.08); }
 }
 
-/* ABONE OL — bottom-right, red gradient chip */
+/* ABONE OL â€” bottom-right, red gradient chip */
 .persistent.sub {
   bottom: 112px; right: 24px;
   background: linear-gradient(135deg, #ff2d2d, #c81e1e);
@@ -343,7 +343,7 @@ html, body {
     font-family: inherit;
   }
 
-  /* DNA OVERRIDE — runtime palette/font from channel DNA */
+  /* DNA OVERRIDE â€” runtime palette/font from channel DNA */
   {{ dna_css|safe }}
 </style>
 </head>
@@ -366,18 +366,18 @@ html, body {
   <div class="handle">{{ handle }}</div>
 
   <!-- Persistent corner chips (visible throughout video, fade out only when end CTA opens) -->
-  <div class="persistent like"><span class="ic">❤️</span><span>{{ ui_like }}</span></div>
-  <div class="persistent sub"><span class="ic">🔔</span><span>{{ ui_subscribe }}</span></div>
+  <div class="persistent like"><span class="ic">â¤ï¸</span><span>{{ ui_like }}</span></div>
+  <div class="persistent sub"><span class="ic">ğŸ””</span><span>{{ ui_subscribe }}</span></div>
 
   {% if cta.enabled %}
   <div class="preflash"></div>
   <div class="cta">
     {% if cta.show_handle %}<div class="handle-line">{{ handle }}</div>{% endif %}
     <div class="sub-btn">
-      <span class="bell">🔔</span>
+      <span class="bell">ğŸ””</span>
       <span>{{ ui_subscribe }}</span>
     </div>
-    <div class="pointer">👆</div>
+    <div class="pointer">ğŸ‘†</div>
     <div class="icons-row">
       {% set icon_labels = [ui_like, ui_subscribe, ui_share] %}
       {% for icon in cta.icons %}
@@ -391,7 +391,7 @@ html, body {
   {% endif %}
 
   {% if rss_source %}
-  <div class="source-credit">Kaynak: {{ rss_source }}</div>
+  <div class="source-credit">{{ ui_source }}: {{ rss_source }}</div>
   {% endif %}
 </div>
 </body>

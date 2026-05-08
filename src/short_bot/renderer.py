@@ -86,6 +86,7 @@ def build_html(
         ui_like=labels["like"],
         ui_subscribe=labels["subscribe"],
         ui_share=labels["share"],
+        ui_source=labels.get("source", "Source"),
         dna_css=dna_css,
         cta={
             "enabled": job.cta_enabled,

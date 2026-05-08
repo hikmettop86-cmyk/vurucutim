@@ -2,7 +2,7 @@
 <html lang="{{ language }}">
 <head>
 <meta charset="utf-8">
-<title>Short — Gündem</title>
+<title>Short â€” GÃ¼ndem</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;600;700&display=swap');
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -28,7 +28,7 @@ html, body {
   display: flex; flex-direction: column;
 }
 
-/* STAGE BADGE — sharp rectangle, yellow on purple */
+/* STAGE BADGE â€” sharp rectangle, yellow on purple */
 .stage-badge {
   position: absolute; top: 24px; right: 24px;
   background: var(--accent); color: var(--primary);
@@ -60,7 +60,7 @@ html, body {
   line-height: 1.2;
 }
 
-/* PHOTO — slim 240px strip, no overlay */
+/* PHOTO â€” slim 240px strip, no overlay */
 .photo {
   height: 240px;
   margin: 0 50px;
@@ -75,7 +75,7 @@ html, body {
   {% if not bg_image_url %}display: none;{% endif %}
 }
 
-/* LIST CONTAINER — replaces .body */
+/* LIST CONTAINER â€” replaces .body */
 .list-container {
   flex: 1;
   min-height: 0;
@@ -214,7 +214,7 @@ html, body {
 }
 .cta .sub-btn .bell { font-size: 96px; }
 
-/* Pointer hand below button — bouncing */
+/* Pointer hand below button â€” bouncing */
 .cta .pointer {
   font-size: 100px;
   margin-bottom: 50px;
@@ -232,7 +232,7 @@ html, body {
   50% { transform: translateY(-15px); }
 }
 
-/* Three icons row at bottom — stagger pop-in */
+/* Three icons row at bottom â€” stagger pop-in */
 .cta .icons-row {
   display: flex;
   align-items: center;
@@ -268,7 +268,7 @@ html, body {
 @keyframes dim { to { opacity: 0.05; } }
 {% endif %}
 
-/* Persistent corner chips — visible THROUGHOUT video */
+/* Persistent corner chips â€” visible THROUGHOUT video */
 .persistent {
   position: absolute;
   display: flex;
@@ -286,7 +286,7 @@ html, body {
 }
 .persistent .ic { font-size: 44px; }
 
-/* BEĞEN — bottom-left, dark chip with red accent */
+/* BEÄEN â€” bottom-left, dark chip with red accent */
 .persistent.like {
   bottom: 112px; left: 24px;
   background: linear-gradient(135deg, rgba(0,0,0,.88), rgba(40,0,0,.92));
@@ -300,7 +300,7 @@ html, body {
   60% { transform: scale(1.08); }
 }
 
-/* ABONE OL — bottom-right, red gradient chip */
+/* ABONE OL â€” bottom-right, red gradient chip */
 .persistent.sub {
   bottom: 112px; right: 24px;
   background: linear-gradient(135deg, #ff2d2d, #c81e1e);
@@ -339,7 +339,7 @@ html, body {
     font-family: inherit;
   }
 
-  /* DNA OVERRIDE — runtime palette/font from channel DNA */
+  /* DNA OVERRIDE â€” runtime palette/font from channel DNA */
   {{ dna_css|safe }}
 </style>
 </head>
@@ -359,7 +359,7 @@ html, body {
     {% for raw in script.body_paragraph.split('\n') %}
       {% set stripped = raw.strip() %}
       {% if stripped %}
-        {# Strip leading "N. " prefix manually — split on first '.' #}
+        {# Strip leading "N. " prefix manually â€” split on first '.' #}
         {% set parts = stripped.split('.', 1) %}
         {% set text = (parts[1] if parts|length == 2 else parts[0])|trim %}
         <div class="list-item">
@@ -374,18 +374,18 @@ html, body {
   <div class="handle">{{ handle }}</div>
 
   <!-- Persistent corner chips (visible throughout video, fade out only when end CTA opens) -->
-  <div class="persistent like"><span class="ic">❤️</span><span>{{ ui_like }}</span></div>
-  <div class="persistent sub"><span class="ic">🔔</span><span>{{ ui_subscribe }}</span></div>
+  <div class="persistent like"><span class="ic">â¤ï¸</span><span>{{ ui_like }}</span></div>
+  <div class="persistent sub"><span class="ic">ğŸ””</span><span>{{ ui_subscribe }}</span></div>
 
   {% if cta.enabled %}
   <div class="preflash"></div>
   <div class="cta">
     {% if cta.show_handle %}<div class="handle-line">{{ handle }}</div>{% endif %}
     <div class="sub-btn">
-      <span class="bell">🔔</span>
+      <span class="bell">ğŸ””</span>
       <span>{{ ui_subscribe }}</span>
     </div>
-    <div class="pointer">👆</div>
+    <div class="pointer">ğŸ‘†</div>
     <div class="icons-row">
       {% set icon_labels = [ui_like, ui_subscribe, ui_share] %}
       {% for icon in cta.icons %}
@@ -399,7 +399,7 @@ html, body {
   {% endif %}
 
   {% if rss_source %}
-  <div class="source-credit">Kaynak: {{ rss_source }}</div>
+  <div class="source-credit">{{ ui_source }}: {{ rss_source }}</div>
   {% endif %}
 </div>
 </body>

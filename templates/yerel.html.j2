@@ -2,7 +2,7 @@
 <html lang="{{ language }}">
 <head>
 <meta charset="utf-8">
-<title>Short — Yerel</title>
+<title>Short â€” Yerel</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Lora:wght@400;500;600;700&display=swap');
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -29,7 +29,7 @@ html, body {
   display: flex; flex-direction: column;
 }
 
-/* STAGE BADGE — rounded chip, terracotta on cream, top-right */
+/* STAGE BADGE â€” rounded chip, terracotta on cream, top-right */
 .stage-badge {
   position: absolute; top: 24px; right: 24px;
   background: var(--primary); color: #fff;
@@ -61,7 +61,7 @@ html, body {
   line-height: 1.1;
 }
 
-/* PHOTO — rounded corners, warm placeholder, subtle shadow */
+/* PHOTO â€” rounded corners, warm placeholder, subtle shadow */
 .photo {
   margin: 24px 50px;
   height: 560px;
@@ -78,7 +78,7 @@ html, body {
   {% if not bg_image_url %}display: none;{% endif %}
 }
 
-/* LOCALE PIN — OUTSIDE .photo, in document flow below the photo */
+/* LOCALE PIN â€” OUTSIDE .photo, in document flow below the photo */
 .locale-pin {
   display: block;
   padding: 12px 50px 8px;
@@ -89,7 +89,7 @@ html, body {
   font-family: var(--font-body);
 }
 
-/* BODY — Lora serif for book-page warmth, dark text on cream */
+/* BODY â€” Lora serif for book-page warmth, dark text on cream */
 .body {
   flex: 1; min-height: 0; margin-bottom: 240px;
   padding: 24px 60px 30px;
@@ -108,7 +108,7 @@ html, body {
 .body .hl-r { background: var(--primary); color: #fff; padding: 2px 14px; border-radius: 6px; font-weight: 600; }
 .body .hl-y { background: var(--accent); color: #fff; padding: 2px 14px; border-radius: 6px; font-weight: 600; }
 
-/* PROGRESS bar — darker track for cream bg (NOT default rgba white) */
+/* PROGRESS bar â€” darker track for cream bg (NOT default rgba white) */
 .progress {
   position: absolute; left: 0; right: 0; bottom: 84px; height: 8px;
   background: rgba(0,0,0,.12);
@@ -120,7 +120,7 @@ html, body {
 }
 @keyframes fill { from { width: 0; } to { width: 100%; } }
 
-/* HANDLE — dark text for visibility on cream bg (NOT white — invisible on cream) */
+/* HANDLE â€” dark text for visibility on cream bg (NOT white â€” invisible on cream) */
 .handle {
   position: absolute; left: 0; right: 0; bottom: 30px;
   text-align: center; color: var(--text-main); opacity: 0.8;
@@ -129,7 +129,7 @@ html, body {
   font-style: italic;
 }
 
-/* CTA overlay (last cta_duration_s seconds) — intentionally dark for emphasis */
+/* CTA overlay (last cta_duration_s seconds) â€” intentionally dark for emphasis */
 {% if cta.enabled %}
 /* Pre-flash: full-screen white flash 150ms before CTA */
 .preflash {
@@ -146,7 +146,7 @@ html, body {
   100% { opacity: 0; }
 }
 
-/* CTA wrapper — dark overlay even on light archetypes, for visual focus */
+/* CTA wrapper â€” dark overlay even on light archetypes, for visual focus */
 .cta {
   position: absolute; left: 0; right: 0; bottom: 0; top: 0;
   background: radial-gradient(ellipse at center, rgba(20,20,20,.92), rgba(0,0,0,.98));
@@ -212,7 +212,7 @@ html, body {
 }
 .cta .sub-btn .bell { font-size: 96px; }
 
-/* Pointer hand below button — bouncing */
+/* Pointer hand below button â€” bouncing */
 .cta .pointer {
   font-size: 100px;
   margin-bottom: 50px;
@@ -230,7 +230,7 @@ html, body {
   50% { transform: translateY(-15px); }
 }
 
-/* Three icons row at bottom — stagger pop-in */
+/* Three icons row at bottom â€” stagger pop-in */
 .cta .icons-row {
   display: flex;
   align-items: center;
@@ -266,7 +266,7 @@ html, body {
 @keyframes dim { to { opacity: 0.05; } }
 {% endif %}
 
-/* Persistent corner chips — visible THROUGHOUT video */
+/* Persistent corner chips â€” visible THROUGHOUT video */
 .persistent {
   position: absolute;
   display: flex;
@@ -284,7 +284,7 @@ html, body {
 }
 .persistent .ic { font-size: 44px; }
 
-/* BEĞEN — bottom-left, dark chip with red accent (YouTube-red works on light) */
+/* BEÄEN â€” bottom-left, dark chip with red accent (YouTube-red works on light) */
 .persistent.like {
   bottom: 112px; left: 24px;
   background: linear-gradient(135deg, rgba(0,0,0,.88), rgba(40,0,0,.92));
@@ -298,7 +298,7 @@ html, body {
   60% { transform: scale(1.08); }
 }
 
-/* ABONE OL — bottom-right, red gradient chip (YouTube-red works on light) */
+/* ABONE OL â€” bottom-right, red gradient chip (YouTube-red works on light) */
 .persistent.sub {
   bottom: 112px; right: 24px;
   background: linear-gradient(135deg, #ff2d2d, #c81e1e);
@@ -337,7 +337,7 @@ html, body {
     font-family: inherit;
   }
 
-  /* DNA OVERRIDE — runtime palette/font from channel DNA */
+  /* DNA OVERRIDE â€” runtime palette/font from channel DNA */
   {{ dna_css|safe }}
 </style>
 </head>
@@ -353,7 +353,7 @@ html, body {
     <div class="bg-img"></div>
   </div>
 
-  <div class="locale-pin">📍 {{ script.photo_overlay }}</div>
+  <div class="locale-pin">ğŸ“ {{ script.photo_overlay }}</div>
 
   <div class="body">{{ body_html|safe }}</div>
 
@@ -361,18 +361,18 @@ html, body {
   <div class="handle">{{ handle }}</div>
 
   <!-- Persistent corner chips (visible throughout video, fade out only when end CTA opens) -->
-  <div class="persistent like"><span class="ic">❤️</span><span>{{ ui_like }}</span></div>
-  <div class="persistent sub"><span class="ic">🔔</span><span>{{ ui_subscribe }}</span></div>
+  <div class="persistent like"><span class="ic">â¤ï¸</span><span>{{ ui_like }}</span></div>
+  <div class="persistent sub"><span class="ic">ğŸ””</span><span>{{ ui_subscribe }}</span></div>
 
   {% if cta.enabled %}
   <div class="preflash"></div>
   <div class="cta">
     {% if cta.show_handle %}<div class="handle-line">{{ handle }}</div>{% endif %}
     <div class="sub-btn">
-      <span class="bell">🔔</span>
+      <span class="bell">ğŸ””</span>
       <span>{{ ui_subscribe }}</span>
     </div>
-    <div class="pointer">👆</div>
+    <div class="pointer">ğŸ‘†</div>
     <div class="icons-row">
       {% set icon_labels = [ui_like, ui_subscribe, ui_share] %}
       {% for icon in cta.icons %}
@@ -386,7 +386,7 @@ html, body {
   {% endif %}
 
   {% if rss_source %}
-  <div class="source-credit">Kaynak: {{ rss_source }}</div>
+  <div class="source-credit">{{ ui_source }}: {{ rss_source }}</div>
   {% endif %}
 </div>
 </body>

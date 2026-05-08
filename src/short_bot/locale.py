@@ -29,11 +29,11 @@ LANGUAGE_NAMES: dict[str, str] = {
 
 
 UI_LABELS: dict[str, dict[str, str]] = {
-    "tr": {"like": "BEĞEN",       "subscribe": "ABONE OL",   "share": "PAYLAŞ",   "breaking": "SON DAKİKA"},
-    "en": {"like": "LIKE",        "subscribe": "SUBSCRIBE",  "share": "SHARE",    "breaking": "BREAKING"},
-    "de": {"like": "GEFÄLLT MIR", "subscribe": "ABONNIEREN", "share": "TEILEN",   "breaking": "EILMELDUNG"},
-    "es": {"like": "ME GUSTA",    "subscribe": "SUSCRIBIRSE","share": "COMPARTIR","breaking": "ÚLTIMA HORA"},
-    "fr": {"like": "J'AIME",      "subscribe": "S'ABONNER",  "share": "PARTAGER", "breaking": "DERNIÈRE MINUTE"},
+    "tr": {"like": "BEĞEN",       "subscribe": "ABONE OL",   "share": "PAYLAŞ",   "breaking": "SON DAKİKA",     "source": "Kaynak"},
+    "en": {"like": "LIKE",        "subscribe": "SUBSCRIBE",  "share": "SHARE",    "breaking": "BREAKING",        "source": "Source"},
+    "de": {"like": "GEFÄLLT MIR", "subscribe": "ABONNIEREN", "share": "TEILEN",   "breaking": "EILMELDUNG",      "source": "Quelle"},
+    "es": {"like": "ME GUSTA",    "subscribe": "SUSCRIBIRSE","share": "COMPARTIR","breaking": "ÚLTIMA HORA",     "source": "Fuente"},
+    "fr": {"like": "J'AIME",      "subscribe": "S'ABONNER",  "share": "PARTAGER", "breaking": "DERNIÈRE MINUTE", "source": "Source"},
 }
 
 
