@@ -1,8 +1,9 @@
 import json as _json
+import json as _json_m
 from pathlib import Path
 import requests
 from flask import (Blueprint, abort, current_app, flash, jsonify, redirect,
-                   request, send_from_directory, url_for)
+                   render_template, request, send_from_directory, url_for)
 
 from short_bot.config import load_channel
 from short_bot.db import init_db, record_youtube_upload, get_rss_item_for_short
@@ -29,6 +30,37 @@ def _redirect_uri() -> str:
     return f"http://{host}:{port}/oauth/callback"
 
 
+def _oauth_pending_dir():
+    """Server-side storage for in-flight OAuth code_verifier values.
+
+    Used instead of Flask session so that the callback (which may come
+    from a DIFFERENT browser than the one that started /connect) can still
+    retrieve the verifier.
+    """
+    d = current_app.config["SHORTBOT_DB_PATH"].parent / "oauth_pending"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _save_oauth_verifier(slug: str, code_verifier: str) -> None:
+    p = _oauth_pending_dir() / f"{slug}.json"
+    p.write_text(_json_m.dumps({"code_verifier": code_verifier}), encoding="utf-8")
+
+
+def _pop_oauth_verifier(slug: str) -> str | None:
+    p = _oauth_pending_dir() / f"{slug}.json"
+    if not p.exists():
+        return None
+    try:
+        data = _json_m.loads(p.read_text(encoding="utf-8"))
+        return data.get("code_verifier")
+    finally:
+        try:
+            p.unlink()
+        except OSError:
+            pass
+
+
 @bp.route("/youtube-avatars/<slug>")
 def avatar(slug):
     """Serve cached channel avatar. Returns 404 if not yet downloaded."""
@@ -40,9 +72,8 @@ def avatar(slug):
                                  mimetype="image/jpeg")
 
 
-@bp.route("/channels/<slug>/youtube/connect", methods=["POST"])
+@bp.route("/channels/<slug>/youtube/connect", methods=["POST", "GET"])
 def connect(slug):
-    from flask import session
     cfg_path = current_app.config["SHORTBOT_CONFIG_DIR"] / "channels" / f"{slug}.yaml"
     if not cfg_path.exists():
         abort(404)
@@ -52,23 +83,17 @@ def connect(slug):
         flash(f"client_secrets.json eksik. Yere bırak: data/youtube_credentials/{slug}/client_secrets.json",
               "error")
         return redirect(url_for("channel_edit.edit", slug=slug))
-    # prompt="select_account consent": Google'in hesap secim ekranini her zaman
-    # goster (browser'da onceden giris yapilmis Gmail olsa bile) + consent.
-    # Sebep: bir browser'dan birden cok kanal/Gmail ile baglanirken yanlis
-    # hesabin yetkilendirilmesini onler.
     auth_url, _state = flow.authorization_url(
         state=slug, access_type="offline", prompt="select_account consent",
     )
-    # Persist PKCE code_verifier across the OAuth roundtrip — google-auth-oauthlib auto-generates
-    # one at authorization_url() time and Google will require it back in fetch_token().
-    session[f"yt_oauth_verifier:{slug}"] = flow.code_verifier
-    session.permanent = True
-    return redirect(auth_url)
+    # Save PKCE code_verifier server-side so callback can retrieve it
+    # even if it arrives from a DIFFERENT browser (multi-Gmail use case).
+    _save_oauth_verifier(slug, flow.code_verifier)
+    return render_template("youtube/connect.html.j2", slug=slug, auth_url=auth_url)
 
 
 @bp.route("/oauth/callback")
 def callback():
-    from flask import session
     state = request.args.get("state", "")
     code = request.args.get("code", "")
     if not state or not code:
@@ -78,17 +103,40 @@ def callback():
         abort(404)
     try:
         flow = yt_auth.build_flow(_yt_root(), state, redirect_uri=_redirect_uri())
-        # Restore the PKCE code_verifier saved during /connect.
-        flow.code_verifier = session.pop(f"yt_oauth_verifier:{state}", None)
+        # Retrieve PKCE code_verifier from server-side file (NOT Flask session)
+        flow.code_verifier = _pop_oauth_verifier(state)
+        if flow.code_verifier is None:
+            raise RuntimeError(
+                "OAuth code_verifier bulunamadı — /connect tekrar başlat"
+            )
         flow.fetch_token(code=code)
         creds = flow.credentials
         yt_auth.save_credentials(_yt_root(), state, creds)
         info = yt_auth.fetch_and_save_channel_info(_yt_root(), state, creds)
         title = info.get("snippet", {}).get("title", state)
-        flash(f"YouTube kanalı bağlandı: {title}", "success")
+        return f"""
+        <html><body style="font-family: system-ui; padding: 40px; text-align: center;">
+        <h1>&#10003; YouTube kanalı bağlandı: {title}</h1>
+        <p style="color: #666;">Bu pencereyi kapatabilirsiniz. VurucuTim otomatik güncellendi.</p>
+        <p style="margin-top: 24px;"><small>Eğer VurucuTim hala "bekleniyor" gösteriyorsa pencereyi yenileyin.</small></p>
+        </body></html>
+        """
     except Exception as e:
-        flash(f"YouTube bağlantı başarısız: {e}", "error")
-    return redirect(url_for("channel_edit.edit", slug=state))
+        return f"""
+        <html><body style="font-family: system-ui; padding: 40px;">
+        <h1>&#10007; YouTube bağlantı başarısız</h1>
+        <pre>{e}</pre>
+        </body></html>
+        """, 400
+
+
+@bp.route("/channels/<slug>/youtube/status", methods=["GET"])
+def status(slug):
+    """Poll endpoint for connect.html.j2 — returns connected:bool."""
+    yt_root = _yt_root()
+    if yt_root is None:
+        return jsonify(connected=False)
+    return jsonify(connected=yt_auth.has_credentials(yt_root, slug))
 
 
 @bp.route("/channels/<slug>/youtube/disconnect", methods=["POST"])
