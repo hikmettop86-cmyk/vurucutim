@@ -128,6 +128,27 @@ def pick_image_for_generator(
     )
 
 
+def _normalize_query(q: str) -> str:
+    """ASCII-fold + punctuation strip for DDG image search.
+    Türkçe diakritik karakterler ve apostrof DDG sorgularında 0 sonuç riskini
+    artırıyor. Bu fonksiyon agresif bir simplified fallback üretir."""
+    import unicodedata, re
+    # NFKD decompose + drop combining chars → ASCII
+    nfkd = unicodedata.normalize('NFKD', q)
+    ascii_q = ''.join(c for c in nfkd if not unicodedata.combining(c))
+    # Türkçe-spesifik karakterler için manuel map (NFKD bazılarını kaçırır)
+    tr_map = str.maketrans({
+        'ı': 'i', 'İ': 'I', 'ğ': 'g', 'Ğ': 'G',
+        'ş': 's', 'Ş': 'S', 'ç': 'c', 'Ç': 'C',
+        'ö': 'o', 'Ö': 'O', 'ü': 'u', 'Ü': 'U',
+    })
+    ascii_q = ascii_q.translate(tr_map)
+    # Strip apostrof + tek tırnak + redundant whitespace
+    ascii_q = re.sub(r"['’‘\"`]", '', ascii_q)
+    ascii_q = re.sub(r'\s+', ' ', ascii_q).strip()
+    return ascii_q
+
+
 def _run_image_search(
     query: str,
     script: Script,
@@ -142,10 +163,31 @@ def _run_image_search(
 
     logger.info(f"image search (DDG): {query!r}")
     candidates = search_images(query, max_results=max_candidates)
+
+    # If original query (Türkçe diakritik + apostrof) returns 0 results,
+    # retry with ASCII-folded version — DDG often handles plain ASCII better.
+    if not candidates:
+        normalized = _normalize_query(query)
+        if normalized and normalized != query:
+            logger.info(f"DDG 0 sonuc; ASCII normalize ile retry: {normalized!r}")
+            candidates = search_images(normalized, max_results=max_candidates)
+
+    # Still nothing? Try just the most-distinctive part (header_bottom only)
+    if not candidates and script.header_bottom:
+        short_q = _normalize_query(script.header_bottom)
+        if short_q and short_q != query:
+            logger.info(f"DDG hala 0; sadece header_bottom ile retry: {short_q!r}")
+            candidates = search_images(short_q, max_results=max_candidates)
+
     if not candidates:
         logger.warning("DDG returned 0 candidates; trying Wikimedia Commons")
         from short_bot.wikimedia_search import search_images_commons
         candidates = search_images_commons(query, max_results=max_candidates)
+        if not candidates:
+            # Wikimedia da boşsa normalized ile dene
+            normalized = _normalize_query(query)
+            if normalized and normalized != query:
+                candidates = search_images_commons(normalized, max_results=max_candidates)
         if candidates:
             logger.warning(f"Wikimedia returned {len(candidates)} candidates")
     if not candidates:
