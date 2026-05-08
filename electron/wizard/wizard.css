@@ -48,6 +48,7 @@ pre#log { max-height: 220px; overflow: auto; background: #111; padding: 12px; bo
 
 .error { margin-top: 16px; padding: 16px; background: #3b1f1f; border-radius: 6px; border: 1px solid #7f1d1d; }
 .error h2 { margin: 0 0 8px; color: #fca5a5; font-size: 16px; }
+#error-msg { white-space: pre-wrap; line-height: 1.45; font-size: 13px; color: #fed7d7; margin: 0 0 12px; font-family: 'Segoe UI', system-ui, sans-serif; }
 
 footer {
   margin-top: auto;

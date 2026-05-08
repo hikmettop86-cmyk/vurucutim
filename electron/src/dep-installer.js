@@ -350,25 +350,85 @@ async function initDb({ onProgress } = {}) {
   });
 }
 
+// Per-step user-facing labels and troubleshooting hints, surfaced when an
+// installer step throws. Helps the user identify the failing phase + what to
+// try next without diving into log files.
+const STEP_HINTS = {
+  venv: {
+    label: 'pip bootstrap (get-pip)',
+    hint: 'İnternet bağlantısı veya antivirüs https://bootstrap.pypa.io adresini engelliyor olabilir.',
+  },
+  pip: {
+    label: 'Python paketleri (pyproject deps)',
+    hint: 'Microsoft Defender pip download/derleme adımlarını blokluyor olabilir. Antivirüs istisnası ekleyin: %LOCALAPPDATA%\\VurucuTim\\python-site-packages',
+  },
+  chromium: {
+    label: 'Playwright Chromium (~150MB)',
+    hint: 'Chromium CDN engellenmiş veya disk dolu olabilir. cdn.playwright.dev erişimini kontrol edin.',
+  },
+  ffmpeg: {
+    label: 'ffmpeg (~80MB)',
+    hint: 'gyan.dev veya github.com/BtbN/FFmpeg-Builds engelleniyor olabilir.',
+  },
+  config: {
+    label: 'Ayarlar (settings.yaml + templates)',
+    hint: 'Klasör izinleri: %LOCALAPPDATA%\\VurucuTim\\ klasörüne yazma izni gerek.',
+  },
+  music: {
+    label: 'Bundled müzik kopyası',
+    hint: 'Klasör izinleri sorunu olabilir.',
+  },
+  db: {
+    label: 'Veritabanı başlatma (SQLite)',
+    hint: 'short_bot Python paketi düzgün yüklenmemiş olabilir; pip adımı başarılı oldu mu kontrol edin.',
+  },
+};
+
+function _wrapStepError(stepId, originalError) {
+  const meta = STEP_HINTS[stepId] || { label: stepId, hint: '' };
+  const orig = (originalError && originalError.message) || String(originalError);
+  const trimmed = orig.length > 200 ? orig.slice(0, 200) + '…' : orig;
+  const e = new Error(`[${meta.label}] başarısız: ${trimmed}\n\nİpucu: ${meta.hint}`);
+  e.stepId = stepId;
+  e.originalError = orig;
+  return e;
+}
+
+async function _runStep(deps, onProgress, stepId, label, fn) {
+  if (!deps) {
+    // Mandatory step (config/music/db) — always run
+  } else {
+    const has = deps.some((d) => d.id === stepId && d.status !== 'ok');
+    if (!has) return;
+  }
+  onProgress?.({ phase: stepId, text: `${label} başlıyor…` });
+  try {
+    await fn();
+  } catch (err) {
+    throw _wrapStepError(stepId, err);
+  }
+}
+
 async function installAll(deps, onProgress) {
-  const has = (id) => deps.some((d) => d.id === id && d.status !== 'ok');
-  // Order matters
-  if (has('venv'))     { onProgress?.({ phase: 'venv', text: 'venv hazırlanıyor…' }); await installVenv({ onProgress: (l) => onProgress?.({ phase: 'venv', text: l }) }); }
-  if (has('pip'))      { onProgress?.({ phase: 'pip', text: 'Python paketleri…' }); await installPipPackages({ onProgress: (l) => onProgress?.({ phase: 'pip', text: l }) }); }
-  if (has('chromium')) { onProgress?.({ phase: 'chromium', text: 'Chromium indiriliyor…' }); await installPlaywrightChromium({ onProgress: (l) => onProgress?.({ phase: 'chromium', text: l }) }); }
-  if (has('ffmpeg'))   { onProgress?.({ phase: 'ffmpeg', text: 'ffmpeg indiriliyor…' }); await installFfmpeg({ onProgress: (l) => onProgress?.({ phase: 'ffmpeg', text: l }) }); }
+  // Each step is wrapped so a failure surfaces the exact phase + hint to the user.
+  await _runStep(deps, onProgress, 'venv', 'pip bootstrap',
+    () => installVenv({ onProgress: (l) => onProgress?.({ phase: 'venv', text: l }) }));
+  await _runStep(deps, onProgress, 'pip', 'Python paketleri',
+    () => installPipPackages({ onProgress: (l) => onProgress?.({ phase: 'pip', text: l }) }));
+  await _runStep(deps, onProgress, 'chromium', 'Chromium',
+    () => installPlaywrightChromium({ onProgress: (l) => onProgress?.({ phase: 'chromium', text: l }) }));
+  await _runStep(deps, onProgress, 'ffmpeg', 'ffmpeg',
+    () => installFfmpeg({ onProgress: (l) => onProgress?.({ phase: 'ffmpeg', text: l }) }));
 
-  onProgress?.({ phase: 'config', text: 'settings.yaml hazırlanıyor…' });
-  await copyExampleSettings({ onProgress: (l) => onProgress?.({ phase: 'config', text: l }) });
-
-  onProgress?.({ phase: 'config', text: 'Templates hazırlanıyor…' });
-  await copyTemplates({ onProgress: (l) => onProgress?.({ phase: 'config', text: l }) });
-
-  onProgress?.({ phase: 'music', text: 'Bundled müzik kopyalanıyor…' });
-  await copyBundledMusic({ onProgress: (l) => onProgress?.({ phase: 'music', text: l }) });
-
-  onProgress?.({ phase: 'db', text: 'DB başlatılıyor…' });
-  await initDb({ onProgress: (l) => onProgress?.({ phase: 'db', text: l }) });
+  // Mandatory bootstrap steps (always run, no `deps` filter)
+  await _runStep(null, onProgress, 'config', 'settings.yaml',
+    () => copyExampleSettings({ onProgress: (l) => onProgress?.({ phase: 'config', text: l }) }));
+  await _runStep(null, onProgress, 'config', 'Templates',
+    () => copyTemplates({ onProgress: (l) => onProgress?.({ phase: 'config', text: l }) }));
+  await _runStep(null, onProgress, 'music', 'Bundled müzik',
+    () => copyBundledMusic({ onProgress: (l) => onProgress?.({ phase: 'music', text: l }) }));
+  await _runStep(null, onProgress, 'db', 'Veritabanı',
+    () => initDb({ onProgress: (l) => onProgress?.({ phase: 'db', text: l }) }));
 }
 
 module.exports = {
