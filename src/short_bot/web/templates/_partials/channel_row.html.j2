@@ -10,7 +10,11 @@
   <td class="p-3">{{ c.name }}</td>
   <td class="p-3">{{ c.language }}</td>
   <td class="p-3 text-claude-muted">{{ c.template }}</td>
-  <td class="p-3 font-mono text-xs">{{ c.schedule_cron }}</td>
+  <td class="p-3">
+    <span class="font-mono text-xs text-claude-muted" title="{{ c.schedule_cron }}">
+      {{ c.schedule_cron|cron_human }}
+    </span>
+  </td>
   <td class="p-3">
     {% if c.dna %}
       <span class="bg-claude-success text-white px-2 py-0.5 rounded-lg text-xs">DNA</span>
@@ -30,7 +34,7 @@
   <td class="p-3 whitespace-nowrap">
     <button hx-post="/shorts/run-now"
             hx-vals='{"slug": "{{ c.slug }}"}'
-            hx-swap="none"
+            hx-on::after-request="if (event.detail.successful) window.location.href='/activity?channel={{ c.slug }}'"
             class="text-claude-accent hover:underline mr-2" title="Şimdi üret">▶</button>
     <a href="/channels/{{ c.slug }}/edit" class="text-claude-accent hover:underline mr-2">Düzenle</a>
     <button hx-post="/channels/{{ c.slug }}/clone"
