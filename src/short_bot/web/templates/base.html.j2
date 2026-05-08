@@ -76,6 +76,7 @@
         <a href="/rss" class="nav-link hover:text-claude-text {% if p.startswith('/rss') %}active{% endif %}">RSS</a>
         <a href="/channels" class="nav-link hover:text-claude-text {% if p.startswith('/channels') %}active{% endif %}">Kanallar</a>
         <a href="/youtube" class="nav-link hover:text-claude-text {% if p.startswith('/youtube') %}active{% endif %}">YouTube</a>
+        <a href="/scheduler/timeline" class="nav-link hover:text-claude-text {% if p.startswith('/scheduler') %}active{% endif %}">Cron</a>
         <a href="/logs" class="nav-link hover:text-claude-text {% if p.startswith('/logs') %}active{% endif %}">Loglar</a>
       </div>
       <span class="ml-auto flex items-center gap-2 text-xs">
@@ -95,10 +96,11 @@
                   title="Hicbir kanal cron'u kayitli degil">&#x23F1; Cron bos</span>
           </template>
           <template x-if="!loading && !error && jobCount > 0">
-            <span class="px-2.5 py-1 rounded-full bg-claude-accent-soft ring-1 ring-claude-border text-claude-accent"
-                  :title="`${jobCount} kanal · sonraki: ${nextRunHuman}`">
+            <a href="/scheduler/timeline"
+               class="px-2.5 py-1 rounded-full bg-claude-accent-soft ring-1 ring-claude-border text-claude-accent hover:bg-claude-accent hover:text-white transition-colors"
+               :title="`${jobCount} kanal · sonraki: ${nextRunHuman}`">
               &#x23F1; <span x-text="jobCount"></span> cron &middot; <span x-text="nextCountdown"></span>
-            </span>
+            </a>
           </template>
         </span>
 

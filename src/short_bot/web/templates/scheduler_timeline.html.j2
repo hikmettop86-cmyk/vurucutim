@@ -1,0 +1,63 @@
+{% extends "base.html.j2" %}
+{% block title %}Vurucu TİM — Cron Zaman Çizelgesi{% endblock %}
+{% block content %}
+<h1 class="font-serif text-3xl font-bold mb-2">Cron Zaman Çizelgesi</h1>
+<p class="text-claude-muted mb-6 text-sm">
+  Bugün ve sonraki 48 saatte hangi kanal ne zaman tetiklenecek.
+  <a href="/system/scheduler" class="text-claude-accent hover:underline ml-2">JSON detay →</a>
+</p>
+
+{% if not fires %}
+<div class="bg-claude-surface border border-claude-border rounded-lg p-8 text-center text-claude-muted">
+  Hiç planlanmış cron bulunamadı.
+  <div class="mt-2 text-xs">Kanal eklemek için <a href="/channels/new" class="text-claude-accent hover:underline">yeni kanal</a>.</div>
+</div>
+{% else %}
+
+{# Group fires by date #}
+{% set ns = namespace(current_date=None) %}
+<div class="space-y-6">
+  {% for f in fires %}
+    {% set fire_date = f.time.strftime('%Y-%m-%d') %}
+    {% if fire_date != ns.current_date %}
+      {% if ns.current_date %}</div></div>{% endif %}
+      {% set ns.current_date = fire_date %}
+      <div>
+        <h2 class="font-serif text-lg font-semibold mb-3 flex items-center gap-2">
+          <span>📅</span>
+          {{ f.time.strftime('%d %B %A') }}
+          {% if fire_date == generated_at.strftime('%Y-%m-%d') %}
+            <span class="text-xs bg-claude-accent text-white px-2 py-0.5 rounded-full">Bugün</span>
+          {% endif %}
+        </h2>
+        <div class="space-y-2">
+    {% endif %}
+    <div class="bg-white border border-claude-border rounded-lg px-4 py-3 flex items-center gap-4 hover:bg-claude-surface/30 transition-colors">
+      <span class="font-mono text-lg font-semibold w-20 text-claude-text">{{ f.time.strftime('%H:%M') }}</span>
+      <span class="text-xs text-claude-muted w-20">
+        {% set delta_min = ((f.time - generated_at).total_seconds() / 60) | int %}
+        {% if delta_min < 0 %}geçti
+        {% elif delta_min < 60 %}{{ delta_min }} dk
+        {% elif delta_min < 1440 %}{{ (delta_min / 60) | int }} sa
+        {% else %}{{ (delta_min / 1440) | int }} gün{% endif %}
+      </span>
+      <a href="/channels/{{ f.slug }}/edit" class="font-semibold text-claude-text hover:text-claude-accent flex-1">
+        {{ f.slug }}
+      </a>
+      <button hx-post="/shorts/run-now"
+              hx-vals='{"slug": "{{ f.slug }}"}'
+              hx-on::after-request="if (event.detail.successful) window.location.href='/activity?channel={{ f.slug }}'"
+              class="text-xs text-claude-accent hover:underline">
+        ▶ Şimdi
+      </button>
+    </div>
+  {% endfor %}
+        </div>
+      </div>
+</div>
+{% endif %}
+
+<div class="mt-8 text-xs text-claude-subtle text-center">
+  Üretildi: {{ generated_at.strftime('%H:%M:%S') }} · Sayfayı yenileyerek güncelleyin.
+</div>
+{% endblock %}

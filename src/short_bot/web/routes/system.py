@@ -84,6 +84,38 @@ def scheduler_status():
     })
 
 
+@bp.route("/scheduler/timeline")
+def scheduler_timeline():
+    """Bugün ve yarın için hangi kanalın ne zaman tetikleneceğini görselleştirir."""
+    from datetime import datetime, timedelta, timezone
+    from flask import current_app, render_template
+
+    sched = getattr(current_app, "scheduler", None)
+    fires = []  # list of dicts: {slug, time}
+
+    if sched is not None and sched.running:
+        now = datetime.now(timezone.utc)
+        end = now + timedelta(hours=48)
+        for j in sched.get_jobs():
+            if j.id == "_reload_jobs":
+                continue
+            try:
+                trigger = j.trigger
+                t = j.next_run_time
+                count = 0
+                while t and t < end and count < 100:
+                    fires.append({"slug": j.id, "time": t.astimezone()})
+                    t = trigger.get_next_fire_time(t, t + timedelta(seconds=1))
+                    count += 1
+            except Exception:
+                continue
+
+    fires.sort(key=lambda x: x["time"])
+    return render_template("scheduler_timeline.html.j2",
+                           fires=fires,
+                           generated_at=datetime.now().astimezone())
+
+
 def _project_root() -> Path:
     # web/routes/system.py → web/routes → web → short_bot → src → repo root
     return Path(__file__).resolve().parents[4]
