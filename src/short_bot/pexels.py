@@ -75,15 +75,26 @@ def search_videos(
     max_results: int = 5,
     orientation: Literal["portrait", "landscape", "square"] = "portrait",
     timeout_s: int = 15,
+    page: int | None = None,
 ) -> list[PexelsCandidate]:
-    """Search Pexels Videos. Returns [] on any error or empty result."""
+    """Search Pexels Videos. Returns [] on any error or empty result.
+
+    page: 1-indexed page number. If None, picks a random page in [1, 5] so
+    the same query returns different videos across runs (avoid "always the
+    same bg video" UX). Pexels caps results to 80 per page.
+    """
     if not api_key:
         return []
+    if page is None:
+        page = random.randint(1, 5)
     try:
         r = requests.get(
             _PEXELS_SEARCH_URL,
             headers={"Authorization": api_key},
-            params={"query": query, "orientation": orientation, "per_page": max_results},
+            params={
+                "query": query, "orientation": orientation,
+                "per_page": max_results, "page": page,
+            },
             timeout=timeout_s,
         )
     except requests.RequestException as e:

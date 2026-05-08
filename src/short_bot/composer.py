@@ -148,15 +148,19 @@ def _build_bg_video_cmd(
     for s in sfx_overlays:
         cmd += ["-i", str(s.path)]
 
-    # Brightness expression: dim=0 → black (-1), dim=1 → unchanged (0)
+    # Brightness expression: dim=0 → black (-1), dim=1 → unchanged (0).
+    # Saturation kept near full so the BG remains colorful even when dimmed —
+    # otherwise the result looks like a black-and-grey video and users
+    # complain "hep siyah video". 0.85 default keeps colors vivid.
     brightness = -(1.0 - bg_dim)
+    saturation = max(0.85, bg_dim)
 
     # Video filter graph
     bg_chain = (
         f"[0:v]gblur=sigma={bg_blur_px},"
         f"scale=1080:1920:force_original_aspect_ratio=increase,"
         f"crop=1080:1920,"
-        f"eq=brightness={brightness:.2f}:saturation={bg_dim:.2f}[bg]"
+        f"eq=brightness={brightness:.2f}:saturation={saturation:.2f}[bg]"
     )
     fg_chain = f"[1:v]scale=iw*{fg_scale}:ih*{fg_scale},format=rgba[fg]"
     overlay_chain = "[bg][fg]overlay=(W-w)/2:(H-h)/2:shortest=1:format=auto[outv]"

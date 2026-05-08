@@ -46,7 +46,10 @@ class BgVideoConfig(BaseModel):
     enabled: bool = False
     scale: Literal[0.88, 0.80] = 0.88
     blur_px: int = Field(ge=0, le=80, default=30)
-    dim: float = Field(ge=0.0, le=1.0, default=0.4)
+    # dim=1.0 → orijinal parlaklik, dim=0.0 → tam siyah.
+    # Default 0.7 = subtle dim, BG video gorunur kalir ama on plana
+    # yer acar. (0.4 default'u "hep siyah video" sikayetine yol aciyordu.)
+    dim: float = Field(ge=0.0, le=1.0, default=0.7)
 
 
 @dataclass(frozen=True)

@@ -227,10 +227,15 @@ def _resolve_pexels_bg(*, channel, cache_dir, secrets_path, log) -> Path | None:
                  else channel.template)
     query = pick_query_for_archetype(archetype)
     log.info(f"  pexels search: query={query!r}")
-    candidates = _pexels_mod.search_videos(query, api_key, max_results=3)
+    candidates = _pexels_mod.search_videos(query, api_key, max_results=8)
     if not candidates:
         log.warning("  pexels: no candidates returned → fallback")
         return None
+    # Shuffle candidates so successive runs don't always pick the FIRST
+    # (most popular) result. Combined with random page in search_videos this
+    # gives reasonable variety across renders for the same channel.
+    import random as _rand
+    _rand.shuffle(candidates)
     bg_cache = Path(cache_dir) / "pexels_videos"
     for cand in candidates:
         path = _pexels_mod.download_video(cand.url, bg_cache)
