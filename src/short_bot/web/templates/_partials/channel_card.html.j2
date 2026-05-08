@@ -1,0 +1,67 @@
+<div class="bg-white border border-claude-border rounded-xl shadow-soft p-5 hover:shadow-card transition-shadow"
+     id="channel-card-{{ c.slug }}"
+     x-show="!search || '{{ c.slug }}'.toLowerCase().includes(search.toLowerCase()) || '{{ c.name|e }}'.toLowerCase().includes(search.toLowerCase())">
+  <div class="flex items-start justify-between mb-3">
+    <div class="min-w-0 flex-1">
+      <a href="/channels/{{ c.slug }}/edit" class="block group">
+        <h3 class="font-serif font-bold text-lg text-claude-text group-hover:text-claude-accent truncate">
+          {{ c.name }}
+        </h3>
+        <p class="font-mono text-xs text-claude-muted truncate">{{ c.slug }}</p>
+      </a>
+    </div>
+    <div class="flex flex-col items-end gap-1 ml-2 flex-shrink-0">
+      {% if c.dna %}
+        <span class="bg-claude-success text-white px-2 py-0.5 rounded text-xs">DNA</span>
+      {% endif %}
+      {% if c.content_source == 'generator' %}
+        <span class="text-claude-accent text-xs">✨ Generator</span>
+      {% else %}
+        <span class="text-claude-muted text-xs">📰 RSS</span>
+      {% endif %}
+    </div>
+  </div>
+
+  {# Color swatches if DNA present #}
+  {% if c.dna and c.dna.palette %}
+  <div class="flex gap-1 mb-3" title="DNA paleti">
+    <span class="w-6 h-6 rounded" style="background: {{ c.dna.palette.primary }}"></span>
+    <span class="w-6 h-6 rounded" style="background: {{ c.dna.palette.accent }}"></span>
+    <span class="w-6 h-6 rounded" style="background: {{ c.dna.palette.bg_gradient[0] }}"></span>
+    <span class="w-6 h-6 rounded" style="background: {{ c.dna.palette.bg_gradient[1] }}"></span>
+  </div>
+  {% endif %}
+
+  {# Meta line #}
+  <div class="space-y-1 text-xs text-claude-muted mb-4">
+    <div class="flex items-center gap-2">
+      <span class="text-base">🌐</span>
+      <span class="uppercase font-semibold">{{ c.language }}</span>
+      <span>·</span>
+      <span>{{ c.template }}</span>
+    </div>
+    <div class="flex items-center gap-2">
+      <span class="text-base">⏱</span>
+      <span title="{{ c.schedule_cron }}">{{ c.schedule_cron|cron_human }}</span>
+    </div>
+  </div>
+
+  {# Actions #}
+  <div class="flex items-center gap-2 pt-3 border-t border-claude-border">
+    <button hx-post="/channels/{{ c.slug }}/toggle"
+            hx-target="#channel-card-{{ c.slug }}"
+            hx-swap="outerHTML"
+            class="flex-1 px-2 py-1 rounded text-xs
+                   {% if c.enabled %}bg-claude-success text-white hover:opacity-90{% else %}bg-claude-surface-alt text-claude-muted hover:text-claude-text{% endif %}">
+      {{ '● Açık' if c.enabled else '○ Kapalı' }}
+    </button>
+    <button hx-post="/shorts/run-now"
+            hx-vals='{"slug": "{{ c.slug }}"}'
+            hx-on::after-request="if (event.detail.successful) window.location.href='/activity?channel={{ c.slug }}'"
+            class="px-2 py-1 text-claude-accent hover:bg-claude-accent-soft rounded text-xs"
+            title="Şimdi üret">▶</button>
+    <a href="/channels/{{ c.slug }}/edit" class="px-2 py-1 text-claude-text hover:bg-claude-surface-alt rounded text-xs">
+      Düzenle
+    </a>
+  </div>
+</div>

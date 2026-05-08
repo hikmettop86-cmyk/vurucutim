@@ -1,4 +1,5 @@
-<tr class="border-b border-claude-border hover:bg-claude-surface-alt" id="channel-{{ c.slug }}">
+<tr class="border-b border-claude-border hover:bg-claude-surface-alt" id="channel-{{ c.slug }}"
+    x-show="!search || '{{ c.slug }}'.toLowerCase().includes(search.toLowerCase()) || '{{ c.name|e }}'.toLowerCase().includes(search.toLowerCase())">
   <td class="p-3 font-mono text-xs">
     {{ c.slug }}
     {% if c.content_source == 'generator' %}

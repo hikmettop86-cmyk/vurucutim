@@ -1,32 +1,68 @@
 {% extends "base.html.j2" %}
 {% block title %}Vurucu TİM — Kanallar{% endblock %}
 {% block content %}
-<div class="flex justify-between items-center mb-6">
-  <h1 class="font-serif text-3xl font-bold">Kanallar</h1>
-  <a href="/channels/new" class="bg-claude-accent hover:bg-claude-accent-hover text-white px-4 py-2 rounded-lg font-semibold text-sm">
-    + Yeni Kanal
-  </a>
-</div>
+<div x-data="{ view: localStorage.getItem('channels_view') || 'table', search: '' }"
+     x-init="$watch('view', v => localStorage.setItem('channels_view', v))">
+  <div class="flex justify-between items-center mb-6">
+    <h1 class="font-serif text-3xl font-bold">Kanallar</h1>
+    <div class="flex items-center gap-3">
+      {# View toggle #}
+      <div class="flex items-center bg-claude-surface border border-claude-border rounded-lg p-0.5">
+        <button @click="view = 'table'"
+                :class="view === 'table' ? 'bg-white shadow-soft text-claude-text' : 'text-claude-muted'"
+                class="px-3 py-1 rounded text-xs transition-colors" title="Tablo görünümü">
+          ☰ Tablo
+        </button>
+        <button @click="view = 'card'"
+                :class="view === 'card' ? 'bg-white shadow-soft text-claude-text' : 'text-claude-muted'"
+                class="px-3 py-1 rounded text-xs transition-colors" title="Kart görünümü">
+          ▦ Kart
+        </button>
+      </div>
+      {# Search #}
+      <input type="text" x-model="search"
+             placeholder="Kanal ara..."
+             class="bg-claude-surface border border-claude-border px-3 py-1.5 rounded-lg text-sm w-48">
+      <a href="/channels/new" class="bg-claude-accent hover:bg-claude-accent-hover text-white px-4 py-2 rounded-lg font-semibold text-sm">
+        + Yeni Kanal
+      </a>
+    </div>
+  </div>
 
-<table class="w-full text-sm border border-claude-border rounded-lg overflow-hidden">
-  <thead class="bg-claude-surface">
-    <tr class="text-left">
-      <th class="p-3">Slug</th>
-      <th class="p-3">İsim</th>
-      <th class="p-3">Dil</th>
-      <th class="p-3">Archetype</th>
-      <th class="p-3">Cron</th>
-      <th class="p-3">DNA</th>
-      <th class="p-3">Durum</th>
-      <th class="p-3">Aksiyon</th>
-    </tr>
-  </thead>
-  <tbody>
+  {# Table view #}
+  <div x-show="view === 'table'">
+    <table class="w-full text-sm border border-claude-border rounded-lg overflow-hidden">
+      <thead class="bg-claude-surface">
+        <tr class="text-left">
+          <th class="p-3">Slug</th>
+          <th class="p-3">İsim</th>
+          <th class="p-3">Dil</th>
+          <th class="p-3">Archetype</th>
+          <th class="p-3">Cron</th>
+          <th class="p-3">DNA</th>
+          <th class="p-3">Durum</th>
+          <th class="p-3">Aksiyon</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in channels %}
+          {% include "_partials/channel_row.html.j2" %}
+        {% else %}
+        <tr><td colspan="8" class="p-8 text-center text-claude-muted">Henüz kanal yok.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {# Card view #}
+  <div x-show="view === 'card'" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
     {% for c in channels %}
-      {% include "_partials/channel_row.html.j2" %}
+      {% include "_partials/channel_card.html.j2" %}
     {% else %}
-    <tr><td colspan="8" class="p-8 text-center text-claude-muted">Henüz kanal yok.</td></tr>
+    <div class="col-span-3 bg-claude-surface border border-claude-border rounded-lg p-8 text-center text-claude-muted">
+      Henüz kanal yok.
+    </div>
     {% endfor %}
-  </tbody>
-</table>
+  </div>
+</div>
 {% endblock %}
