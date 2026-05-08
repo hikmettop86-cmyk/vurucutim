@@ -1,14 +1,31 @@
 {% if running %}
-  <ul class="space-y-2">
+  <ul class="space-y-3">
     {% for r in running %}
-    <li class="flex items-center gap-3 text-sm" x-data="{ start: {{ r.started_at.timestamp() }}, now: Date.now() / 1000 }" x-init="setInterval(() => now = Date.now() / 1000, 1000)">
-      <span class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></span>
-      <span class="font-medium">{{ r.channel }}</span>
-      <span class="text-claude-muted text-xs">{{ r.trigger }}</span>
-      <span class="text-claude-muted text-xs">başladı {{ r.started_at.strftime('%H:%M:%S') }}</span>
-      <span class="ml-auto font-mono text-xs text-claude-muted">
-        <span x-text="String(Math.floor((now - start) / 60)).padStart(2, '0') + ':' + String(Math.floor((now - start) % 60)).padStart(2, '0')"></span> geçti
-      </span>
+    {% set stages = ['Fetch RSS', 'Skor', 'Script', 'Asset', 'Render', 'Compose', 'DB', 'Upload'] %}
+    {% set current_idx = r.stage_idx if r.stage_idx is defined else 3 %}
+    <li class="bg-white border border-claude-border rounded-lg p-4"
+        x-data="{ start: {{ r.started_at.timestamp() }}, now: Date.now() / 1000 }"
+        x-init="setInterval(() => now = Date.now() / 1000, 1000)">
+      <div class="flex items-center gap-3 mb-3">
+        <span class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse flex-shrink-0"></span>
+        <span class="font-medium">{{ r.channel }}</span>
+        <span class="text-claude-muted text-xs">{{ r.trigger }}</span>
+        <span class="text-claude-muted text-xs">başladı {{ r.started_at.strftime('%H:%M:%S') }}</span>
+        <span class="ml-auto font-mono text-xs text-claude-muted">
+          <span x-text="String(Math.floor((now - start) / 60)).padStart(2, '0') + ':' + String(Math.floor((now - start) % 60)).padStart(2, '0')"></span> geçti
+        </span>
+      </div>
+
+      {# 8-stage pipeline visualizer #}
+      <div class="flex items-center gap-1 mt-1">
+        {% for i in range(8) %}
+          <div class="flex-1 h-2 rounded-sm {% if i < current_idx %}bg-claude-success{% elif i == current_idx %}bg-claude-accent animate-pulse{% else %}bg-claude-border{% endif %}"
+               title="{{ stages[i] }}{% if i == current_idx %} (calisiyor){% endif %}"></div>
+        {% endfor %}
+      </div>
+      <div class="text-xs text-claude-muted mt-1">
+        Asama {{ current_idx + 1 }}/8: <span class="text-claude-text font-medium">{{ stages[current_idx] }}</span>
+      </div>
     </li>
     {% endfor %}
   </ul>
