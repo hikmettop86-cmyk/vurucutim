@@ -5,6 +5,7 @@ import time
 from pathlib import Path
 
 from google.oauth2.credentials import Credentials
+from google_auth_httplib2 import AuthorizedHttp
 from googleapiclient.discovery import build
 from googleapiclient.errors import ResumableUploadError
 from googleapiclient.http import MediaFileUpload
@@ -52,10 +53,18 @@ def build_status(*, privacy_status: str, ai_content: bool) -> dict:
 
 
 def upload_video(*, credentials: Credentials, file_path: Path,
-                 snippet: dict, status: dict, max_retries: int = 5) -> str:
+                 snippet: dict, status: dict, max_retries: int = 5,
+                 http=None) -> str:
     """Upload mp4 with retry. Re-creates the request on each retry because
-    a partial resumable session can't be safely resumed across exceptions."""
-    youtube = build("youtube", "v3", credentials=credentials)
+    a partial resumable session can't be safely resumed across exceptions.
+
+    http: optional proxied httplib2.Http. When given wrapped via AuthorizedHttp
+    so the entire upload (including resumable chunks) goes through proxy.
+    """
+    if http is not None:
+        youtube = build("youtube", "v3", http=AuthorizedHttp(credentials, http=http))
+    else:
+        youtube = build("youtube", "v3", credentials=credentials)
     last_error: Exception | None = None
     for attempt in range(1, max_retries + 1):
         media = MediaFileUpload(
