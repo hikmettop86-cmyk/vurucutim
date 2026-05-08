@@ -95,6 +95,62 @@ def _redact_err(exc: BaseException) -> str:
     return _CRED_RE.sub("://***:***@", str(exc))
 
 
+class _HttpResponse(dict):
+    """httplib2.Response-like dict — has `.status` attribute and dict access for headers."""
+    def __init__(self, status: int, headers: dict):
+        super().__init__({k.lower(): v for k, v in headers.items()})
+        self.status = int(status)
+        self.reason = ""
+        self["status"] = str(int(status))
+
+
+class RequestsBackedHttp:
+    """Minimal httplib2.Http-compatible adapter backed by requests.Session.
+
+    Implements just enough of the `Http.request()` API contract for
+    google-api-python-client and google-auth-httplib2 to work, while
+    routing all I/O through requests (which uses urllib3 — proxy auth works
+    correctly, unlike httplib2+PySocks PROXY_TYPE_HTTP).
+
+    Why: httplib2 + PySocks PROXY_TYPE_HTTP does not send Proxy-Authorization
+    header correctly during HTTPS CONNECT, causing 407 errors on authenticated
+    HTTP proxies. requests/urllib3 handles this correctly.
+
+    Caveats:
+    - Not a full Http drop-in. Only `request()` method implemented.
+    - cache, timeout, follow_redirects defaults are reasonable but minimal.
+    """
+
+    def __init__(self, session: requests.Session, *, timeout: float = 60):
+        self._session = session
+        self._timeout = timeout
+        # Public attribute mirroring httplib2.Http for API compat (some
+        # libraries inspect this — return None to indicate no proxy_info
+        # since we route via session.proxies instead).
+        self.proxy_info = None
+        self.connections = {}   # httplib2 callers sometimes inspect this
+        self.timeout = timeout
+
+    def request(self, uri, method="GET", body=None, headers=None,
+                redirections=5, connection_type=None):
+        """Send HTTP request via requests.Session. Returns (Response-like, bytes)."""
+        h = dict(headers or {})
+        try:
+            r = self._session.request(
+                method=method, url=uri,
+                data=body if body is not None else None,
+                headers=h,
+                timeout=self._timeout,
+                allow_redirects=(redirections > 0),
+            )
+        except requests.exceptions.RequestException as e:
+            # Surface as the same kind of error httplib2 would so callers
+            # using broad except clauses keep working.
+            raise
+        resp = _HttpResponse(r.status_code, dict(r.headers))
+        return resp, r.content
+
+
 def load_channel_proxy_url(slug: str, secrets_path: Path) -> str | None:
     """Read data/secrets.yaml -> channel_proxies[slug].
 
@@ -113,21 +169,19 @@ def load_channel_proxy_url(slug: str, secrets_path: Path) -> str | None:
     return url or None
 
 
-def build_proxied_http(proxy_url: str | None, *, timeout: int = 60) -> httplib2.Http:
-    """Build an httplib2.Http with proxy configured (or plain if None).
+def build_proxied_http(proxy_url: str | None, *, timeout: int = 60):
+    """Build an HTTP transport configured for the given proxy.
 
-    Used as `http=` argument to googleapiclient.discovery.build(...) (wrapped
-    by AuthorizedHttp at the call site).
+    Returns a RequestsBackedHttp instance (when proxy_url given) or a plain
+    httplib2.Http (no proxy). The RequestsBackedHttp adapter exists because
+    httplib2 + PySocks PROXY_TYPE_HTTP fails CONNECT auth on authenticated
+    HTTP proxies (407). requests/urllib3 handles auth correctly.
     """
     if not proxy_url:
-        return httplib2.Http(timeout=timeout)
-    proxy_type, host, port, user, password = parse_proxy_url(proxy_url)
-    proxy_info = httplib2.ProxyInfo(
-        proxy_type=proxy_type, proxy_host=host, proxy_port=port,
-        proxy_user=user, proxy_pass=password,
-    )
-    logger.info(f"using proxy {_redact(proxy_url)}")
-    return httplib2.Http(timeout=timeout, proxy_info=proxy_info)
+        return httplib2.Http(timeout=timeout, proxy_info=None)
+    session = build_proxied_requests_session(proxy_url)
+    logger.info(f"using proxy {_redact(proxy_url)} (RequestsBackedHttp)")
+    return RequestsBackedHttp(session, timeout=timeout)
 
 
 def build_proxied_requests_session(proxy_url: str | None) -> requests.Session:
