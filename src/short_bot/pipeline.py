@@ -67,11 +67,23 @@ def _resolve_ui_labels(channel: ChannelConfig) -> dict[str, str]:
 
 def _maybe_auto_upload(*, eng, short_id: int, channel, picked_score: float | None,
                        log, yt_creds_root: Path, claude_path: str,
-                       model: str, cooldown_minutes: int = 5) -> None:
+                       model: str, cooldown_minutes: int = 5,
+                       secrets_path: Path | None = None) -> None:
     """Post-render hook: if channel opts in, evaluate gates + run upload."""
     if channel.youtube is None or not channel.youtube.auto_upload:
         return
-    creds = _yt_auth.load_credentials(yt_creds_root, channel.slug)
+    # Token refresh için proxy session hazır olsun (varsa)
+    proxy_session = None
+    if secrets_path:
+        from short_bot.youtube.proxy import (
+            load_channel_proxy_url, build_proxied_requests_session,
+        )
+        proxy_url = load_channel_proxy_url(channel.slug, secrets_path)
+        if proxy_url:
+            proxy_session = build_proxied_requests_session(proxy_url)
+    creds = _yt_auth.load_credentials(
+        yt_creds_root, channel.slug, proxy_session=proxy_session,
+    )
     if creds is None:
         log.info("[YT] auto-upload atlandı — kanal bağlanmamış (token.json yok)")
         return
@@ -88,6 +100,7 @@ def _maybe_auto_upload(*, eng, short_id: int, channel, picked_score: float | Non
         result = run_auto_upload(
             eng=eng, short_id=short_id, channel=channel,
             credentials=creds, claude_path=claude_path, model=model,
+            secrets_path=secrets_path,
         )
         log.info(f"[YT] auto-upload başarılı: {result.video_url}")
     except Exception as e:
@@ -516,12 +529,15 @@ def _run_rss(*, channel, run_id, log, eng, settings,
     finish_run(eng, run_id, status="success", short_id=short_id, error=None)
     yt_creds_root = (Path(eng.url.database).parent / "youtube_credentials").resolve() \
         if eng.url.database else Path("data/youtube_credentials").resolve()
+    secrets_path = (Path(eng.url.database).parent / "secrets.yaml").resolve() \
+        if eng.url.database else Path("data/secrets.yaml").resolve()
     _maybe_auto_upload(
         eng=eng, short_id=short_id, channel=channel,
         picked_score=picked.score, log=log,
         yt_creds_root=yt_creds_root,
         claude_path=settings.claude_cli_path,
         model=settings.claude_models.get("default", "haiku"),
+        secrets_path=secrets_path,
     )
     log.info(f"=== success short_id={short_id} ===")
     return RunResult(run_id=run_id, status="success", short_path=out_path, error=None)
@@ -660,12 +676,15 @@ def _run_generator(*, channel, run_id, log, eng, settings,
     finish_run(eng, run_id, status="success", short_id=short_id, error=None)
     yt_creds_root = (Path(eng.url.database).parent / "youtube_credentials").resolve() \
         if eng.url.database else Path("data/youtube_credentials").resolve()
+    secrets_path = (Path(eng.url.database).parent / "secrets.yaml").resolve() \
+        if eng.url.database else Path("data/secrets.yaml").resolve()
     _maybe_auto_upload(
         eng=eng, short_id=short_id, channel=channel,
         picked_score=None, log=log,
         yt_creds_root=yt_creds_root,
         claude_path=settings.claude_cli_path,
         model=settings.claude_models.get("default", "haiku"),
+        secrets_path=secrets_path,
     )
     log.info(f"=== success short_id={short_id} ===")
     return RunResult(run_id=run_id, status="success",
