@@ -450,23 +450,22 @@ _GOOGLE_FONT_PARAM: dict[str, str] = {
 
 
 def _sanitize_custom_css_colors(css: str, palette: DnaPalette) -> str:
-    """Replace hardcoded hex colors in custom_css that match palette values
-    with var(--xxx) references, so live palette pickers actually take effect.
+    """Replace hardcoded hex/rgba colors in custom_css that match palette values
+    with var(--xxx) references (rgba alpha preserved via color-mix), so live
+    palette pickers actually take effect.
 
-    Priority order matters when multiple palette fields share the same hex:
-    text-main > text-muted > primary > accent > bg-grad > body-bg. Reasoning:
-    text colors are the most user-visible target for `color:` rules; bg colors
-    are destination backgrounds, so a hardcoded `color: #ffffff` should map to
-    text-main (not body-bg-1) even if both happen to be white in the palette.
+    Priority when multiple palette fields share the same hex:
+    text-main > text-muted > primary > accent > bg-grad > body-bg.
     """
     import re
+
     hex_to_var: dict[str, str] = {}
 
     def add(hex_value: str, var_name: str) -> None:
         if hex_value and hex_value.startswith('#') and len(hex_value) == 7:
             hex_to_var.setdefault(hex_value.lower(), f'var(--{var_name})')
 
-    # Highest priority first (setdefault keeps first match)
+    # Highest priority first
     add(palette.text_main, 'text-main')
     add(palette.text_muted, 'text-muted')
     add(palette.primary, 'primary')
@@ -479,10 +478,38 @@ def _sanitize_custom_css_colors(css: str, palette: DnaPalette) -> str:
     if not hex_to_var:
         return css
 
-    def replacer(m):
+    def replace_hex(m):
         return hex_to_var.get(m.group(0).lower(), m.group(0))
 
-    return re.sub(r'#[0-9a-fA-F]{6}\b', replacer, css)
+    css = re.sub(r'#[0-9a-fA-F]{6}\b', replace_hex, css)
+
+    # rgba(R, G, B[, A]) → if RGB matches a palette hex, replace with var()
+    # (preserve alpha via color-mix when alpha < 1).
+    def replace_rgba(m):
+        r, g, b = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        if not (0 <= r <= 255 and 0 <= g <= 255 and 0 <= b <= 255):
+            return m.group(0)
+        hex_value = f'#{r:02x}{g:02x}{b:02x}'
+        var_ref = hex_to_var.get(hex_value)
+        if not var_ref:
+            return m.group(0)
+        alpha_str = m.group(4)
+        if alpha_str is None:
+            return var_ref
+        try:
+            alpha = float(alpha_str)
+        except ValueError:
+            return m.group(0)
+        if alpha >= 0.999:
+            return var_ref
+        # color-mix is supported in Chromium 111+ which Playwright bundles.
+        return f'color-mix(in srgb, {var_ref} {alpha * 100:.1f}%, transparent)'
+
+    css = re.sub(
+        r'rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([\d.]+))?\s*\)',
+        replace_rgba, css,
+    )
+    return css
 
 
 def build_css_override(dna: DnaSpec) -> str:
