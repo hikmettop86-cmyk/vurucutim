@@ -184,12 +184,49 @@ def _run_image_search(
         from short_bot.wikimedia_search import search_images_commons
         candidates = search_images_commons(query, max_results=max_candidates)
         if not candidates:
-            # Wikimedia da boşsa normalized ile dene
             normalized = _normalize_query(query)
             if normalized and normalized != query:
                 candidates = search_images_commons(normalized, max_results=max_candidates)
         if candidates:
             logger.warning(f"Wikimedia returned {len(candidates)} candidates")
+
+    # Final fallback: Pexels photo API (if pexels_api_key configured).
+    # Pexels Türkçe sorgular için zayıf — normalize edilmiş İngilizce-vari
+    # query daha iyi sonuç verir.
+    if not candidates:
+        try:
+            from short_bot.pexels import (
+                search_photos as _pexels_photos,
+                resolve_pexels_api_key as _pexels_key,
+                load_secrets as _pexels_secrets,
+            )
+            from flask import current_app
+            try:
+                secrets_path = current_app.config.get("SHORTBOT_SECRETS_PATH")
+            except RuntimeError:
+                # Outside Flask context (e.g. CLI run) — fall back to default
+                secrets_path = None
+            if secrets_path is None:
+                from pathlib import Path as _P
+                secrets_path = _P("data") / "secrets.yaml"
+            api_key = _pexels_key(_pexels_secrets(secrets_path))
+            if api_key:
+                pexels_q = _normalize_query(query)
+                logger.warning(f"Pexels photo fallback: {pexels_q!r}")
+                pexels_results = _pexels_photos(pexels_q, api_key, max_results=max_candidates)
+                if pexels_results:
+                    logger.warning(f"Pexels returned {len(pexels_results)} photo candidates")
+                    candidates = [
+                        ImageCandidate(url=p.url, title=f"Pexels #{p.id}",
+                                       source_domain="pexels.com",
+                                       width=p.width, height=p.height)
+                        for p in pexels_results
+                    ]
+            else:
+                logger.info("Pexels fallback skipped: pexels_api_key not configured")
+        except Exception as e:
+            logger.warning(f"Pexels fallback failed: {e}")
+
     if not candidates:
         logger.warning("no image candidates from any source")
         return None

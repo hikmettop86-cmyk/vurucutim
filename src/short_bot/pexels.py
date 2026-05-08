@@ -129,3 +129,82 @@ def download_video(url: str, cache_dir: Path, *, timeout_s: int = 60) -> Path | 
             out.unlink(missing_ok=True)
         return None
     return out
+
+
+# ─── PHOTO API (image_picker fallback) ────────────────────────────────────
+class PexelsPhotoCandidate(BaseModel):
+    id: int
+    url: str        # large/portrait variant URL
+    width: int
+    height: int
+
+
+def search_photos(
+    query: str,
+    api_key: str,
+    *,
+    max_results: int = 5,
+    timeout_s: int = 15,
+) -> list[PexelsPhotoCandidate]:
+    """Pexels photo search. Returns up to max_results candidates (best-fit
+    portrait/large variant URLs). Empty list on error or no results."""
+    if not query.strip() or not api_key:
+        return []
+    url = "https://api.pexels.com/v1/search"
+    params = {"query": query, "per_page": max_results, "orientation": "portrait"}
+    try:
+        r = requests.get(url, params=params,
+                         headers={"Authorization": api_key},
+                         timeout=timeout_s)
+    except requests.RequestException as e:
+        logger.warning(f"pexels photo search request failed: {e}")
+        return []
+    if r.status_code != 200:
+        logger.warning(f"pexels photo search HTTP {r.status_code}: {r.text[:200]}")
+        return []
+    try:
+        data = r.json()
+    except ValueError:
+        return []
+    out: list[PexelsPhotoCandidate] = []
+    for p in data.get("photos", []):
+        try:
+            src = p.get("src", {})
+            # Prefer portrait, then large2x, then large, then original
+            best = (src.get("portrait") or src.get("large2x")
+                    or src.get("large") or src.get("original"))
+            if not best:
+                continue
+            out.append(PexelsPhotoCandidate(
+                id=int(p["id"]), url=best,
+                width=int(p.get("width", 0)),
+                height=int(p.get("height", 0)),
+            ))
+        except (KeyError, ValueError, TypeError):
+            continue
+    return out
+
+
+def download_photo(url: str, cache_dir: Path, *, timeout_s: int = 30) -> Path | None:
+    """Stream-download photo to cache_dir/<sha1>.jpg. Returns None on failure."""
+    cache_dir = Path(cache_dir)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    key = hashlib.sha1(url.encode("utf-8")).hexdigest()[:16]
+    out = cache_dir / f"{key}.jpg"
+    if out.exists() and out.stat().st_size > 0:
+        return out
+    try:
+        with requests.get(url, stream=True, timeout=timeout_s) as r:
+            if r.status_code != 200:
+                logger.warning(f"pexels photo download HTTP {r.status_code} for {url[:80]}")
+                return None
+            with open(out, "wb") as fh:
+                for chunk in r.iter_content(chunk_size=64 * 1024):
+                    if chunk:
+                        fh.write(chunk)
+    except requests.RequestException as e:
+        logger.warning(f"pexels photo download failed for {url[:80]}: {e}")
+        if out.exists():
+            out.unlink(missing_ok=True)
+        return None
+    return out
