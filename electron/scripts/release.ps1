@@ -70,9 +70,8 @@ Step 1 7 "electron/package.json versiyonu guncelle"
 $pkgPath = Join-Path $root "electron\package.json"
 $pkgContent = Get-Content $pkgPath -Raw
 $newContent = $pkgContent -replace '"version":\s*"[^"]+"', "`"version`": `"$NewVersion`""
-Set-Content -Path $pkgPath -Value $newContent -Encoding UTF8 -NoNewline
-# Restore trailing newline
-Add-Content -Path $pkgPath -Value "" -Encoding UTF8
+# Use .NET to write UTF-8 WITHOUT BOM (Set-Content -Encoding UTF8 in PS5.1 adds BOM, breaks JSON.parse)
+[System.IO.File]::WriteAllText($pkgPath, $newContent, (New-Object System.Text.UTF8Encoding $false))
 Write-Host "  -> $NewVersion"
 
 # ---------------------------------------------------------------------------
@@ -80,7 +79,7 @@ Write-Host "  -> $NewVersion"
 # ---------------------------------------------------------------------------
 Step 2 7 "pyproject.toml ile senkronize et"
 Push-Location (Join-Path $root "electron")
-npm run sync-version 2>&1 | Out-Host
+npm run sync-version | Out-Host
 if ($LASTEXITCODE -ne 0) { Pop-Location; Fail "sync-version basarisiz" }
 Pop-Location
 
@@ -89,7 +88,7 @@ Pop-Location
 # ---------------------------------------------------------------------------
 Step 3 7 "electron-builder ile setup uret (~2 dk)"
 Push-Location (Join-Path $root "electron")
-npm run build 2>&1 | Out-Host
+npm run build | Out-Host
 if ($LASTEXITCODE -ne 0) { Pop-Location; Fail "Build basarisiz" }
 Pop-Location
 
@@ -110,15 +109,15 @@ git add electron/package.json pyproject.toml | Out-Host
 $msg = if ($Notes) { "chore: release v$NewVersion ($Notes)" } else { "chore: release v$NewVersion" }
 git commit -m $msg | Out-Host
 if ($LASTEXITCODE -ne 0) { Fail "git commit basarisiz" }
-git push 2>&1 | Out-Host
+git push | Out-Host
 if ($LASTEXITCODE -ne 0) { Fail "git push basarisiz" }
 
 # ---------------------------------------------------------------------------
 # 5. Tag + push tag
 # ---------------------------------------------------------------------------
 Step 5 7 "git tag v$NewVersion + push"
-git tag -a "v$NewVersion" -m "v$NewVersion" 2>&1 | Out-Host
-git push origin "v$NewVersion" 2>&1 | Out-Host
+git tag -a "v$NewVersion" -m "v$NewVersion" | Out-Host
+git push origin "v$NewVersion" | Out-Host
 if ($LASTEXITCODE -ne 0) { Fail "tag push basarisiz" }
 
 # ---------------------------------------------------------------------------
@@ -139,7 +138,7 @@ Write-Host "  -> release id: $releaseId"
 # 7. Upload assets
 # ---------------------------------------------------------------------------
 Step 7 7 "asset'leri yukle ($exeSize MB)"
-gh release upload "v$NewVersion" $exe $blockmap $latestYml --repo $repo 2>&1 | Out-Host
+gh release upload "v$NewVersion" $exe $blockmap $latestYml --repo $repo | Out-Host
 if ($LASTEXITCODE -ne 0) { Fail "asset upload basarisiz" }
 
 # ---------------------------------------------------------------------------
