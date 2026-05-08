@@ -2,7 +2,7 @@
 <html lang="{{ language }}">
 <head>
 <meta charset="utf-8">
-<title>Short â€” Magazine</title>
+<title>Short Ã¢â‚¬â€ Magazine</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400;1,700&family=Inter:wght@400;600&display=swap');
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -171,8 +171,11 @@
   <div class="progress"></div>
   <div class="handle">{{ handle }}</div>
 
-  <div class="persistent like"><span class="ic">â¤ï¸</span><span>{{ ui_like }}</span></div>
-  <div class="persistent sub"><span class="ic">ğŸ””</span><span>{{ ui_subscribe }}</span></div>
+  {% if cta.enabled %}
+
+  <div class="persistent like"><span class="ic">Ã¢ÂÂ¤Ã¯Â¸Â</span><span>{{ ui_like }}</span></div>
+  <div class="persistent sub"><span class="ic">ÄŸÅ¸â€â€</span><span>{{ ui_subscribe }}</span></div>
+  {% endif %}
 
   {% if rss_source %}
   <div class="source-credit">{{ ui_source }}: {{ rss_source }}</div>

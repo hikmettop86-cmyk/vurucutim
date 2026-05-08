@@ -2,7 +2,7 @@
 <html lang="{{ language }}">
 <head>
 <meta charset="utf-8">
-<title>Short â€” Tech Haber</title>
+<title>Short Ã¢â‚¬â€ Tech Haber</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&display=swap');
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -29,7 +29,7 @@ html, body {
   display: flex; flex-direction: column;
 }
 
-/* STAGE BADGE â€” pastel-blue pill, top-right */
+/* STAGE BADGE Ã¢â‚¬â€ pastel-blue pill, top-right */
 .stage-badge {
   position: absolute; top: 24px; right: 24px;
   background: rgba(0,102,204,0.15);
@@ -60,7 +60,7 @@ html, body {
   line-height: 1.05;
 }
 
-/* PHOTO â€” rounded corners, subtle shadow */
+/* PHOTO Ã¢â‚¬â€ rounded corners, subtle shadow */
 .photo {
   margin: 24px 60px;
   height: 760px;
@@ -88,7 +88,7 @@ html, body {
   letter-spacing: 1px;
 }
 
-/* BODY â€” dark text on light bg */
+/* BODY Ã¢â‚¬â€ dark text on light bg */
 .body {
   flex: 1; min-height: 0; margin-bottom: 240px;
   padding: 36px 60px 30px;
@@ -106,7 +106,7 @@ html, body {
 .body .hl-r { background: var(--primary); color: #fff; padding: 2px 14px; border-radius: 6px; font-weight: 600; }
 .body .hl-y { background: #ffeb3b; color: var(--accent); padding: 2px 14px; border-radius: 6px; font-weight: 600; }
 
-/* PROGRESS bar â€” darker track for white bg */
+/* PROGRESS bar Ã¢â‚¬â€ darker track for white bg */
 .progress {
   position: absolute; left: 0; right: 0; bottom: 84px; height: 8px;
   background: rgba(0,0,0,.12);
@@ -118,14 +118,14 @@ html, body {
 }
 @keyframes fill { from { width: 0; } to { width: 100%; } }
 
-/* HANDLE â€” dark text for visibility on white bg */
+/* HANDLE Ã¢â‚¬â€ dark text for visibility on white bg */
 .handle {
   position: absolute; left: 0; right: 0; bottom: 30px;
   text-align: center; color: var(--text-muted); opacity: 0.9;
   font-size: 34px; font-weight: 600;
 }
 
-/* CTA overlay (last cta_duration_s seconds) â€” intentionally dark for emphasis */
+/* CTA overlay (last cta_duration_s seconds) Ã¢â‚¬â€ intentionally dark for emphasis */
 {% if cta.enabled %}
 /* Pre-flash: full-screen white flash 150ms before CTA */
 .preflash {
@@ -142,7 +142,7 @@ html, body {
   100% { opacity: 0; }
 }
 
-/* CTA wrapper â€” dark overlay even on light archetypes, for visual focus */
+/* CTA wrapper Ã¢â‚¬â€ dark overlay even on light archetypes, for visual focus */
 .cta {
   position: absolute; left: 0; right: 0; bottom: 0; top: 0;
   background: radial-gradient(ellipse at center, rgba(20,20,20,.92), rgba(0,0,0,.98));
@@ -208,7 +208,7 @@ html, body {
 }
 .cta .sub-btn .bell { font-size: 96px; }
 
-/* Pointer hand below button â€” bouncing */
+/* Pointer hand below button Ã¢â‚¬â€ bouncing */
 .cta .pointer {
   font-size: 100px;
   margin-bottom: 50px;
@@ -226,7 +226,7 @@ html, body {
   50% { transform: translateY(-15px); }
 }
 
-/* Three icons row at bottom â€” stagger pop-in */
+/* Three icons row at bottom Ã¢â‚¬â€ stagger pop-in */
 .cta .icons-row {
   display: flex;
   align-items: center;
@@ -262,7 +262,7 @@ html, body {
 @keyframes dim { to { opacity: 0.05; } }
 {% endif %}
 
-/* Persistent corner chips â€” visible THROUGHOUT video */
+/* Persistent corner chips Ã¢â‚¬â€ visible THROUGHOUT video */
 .persistent {
   position: absolute;
   display: flex;
@@ -280,7 +280,7 @@ html, body {
 }
 .persistent .ic { font-size: 44px; }
 
-/* BEÄEN â€” bottom-left, dark chip with red accent (YouTube-red works on white) */
+/* BEÃ„ÂEN Ã¢â‚¬â€ bottom-left, dark chip with red accent (YouTube-red works on white) */
 .persistent.like {
   bottom: 112px; left: 24px;
   background: linear-gradient(135deg, rgba(0,0,0,.88), rgba(40,0,0,.92));
@@ -294,7 +294,7 @@ html, body {
   60% { transform: scale(1.08); }
 }
 
-/* ABONE OL â€” bottom-right, red gradient chip (YouTube-red works on white) */
+/* ABONE OL Ã¢â‚¬â€ bottom-right, red gradient chip (YouTube-red works on white) */
 .persistent.sub {
   bottom: 112px; right: 24px;
   background: linear-gradient(135deg, #ff2d2d, #c81e1e);
@@ -333,7 +333,7 @@ html, body {
     font-family: inherit;
   }
 
-  /* DNA OVERRIDE â€” runtime palette/font from channel DNA */
+  /* DNA OVERRIDE Ã¢â‚¬â€ runtime palette/font from channel DNA */
   {{ dna_css|safe }}
 </style>
 </head>
@@ -356,18 +356,20 @@ html, body {
   <div class="handle">{{ handle }}</div>
 
   <!-- Persistent corner chips (visible throughout video, fade out only when end CTA opens) -->
-  <div class="persistent like"><span class="ic">â¤ï¸</span><span>{{ ui_like }}</span></div>
-  <div class="persistent sub"><span class="ic">ğŸ””</span><span>{{ ui_subscribe }}</span></div>
+  {% if cta.enabled %}
+  <div class="persistent like"><span class="ic">Ã¢ÂÂ¤Ã¯Â¸Â</span><span>{{ ui_like }}</span></div>
+  <div class="persistent sub"><span class="ic">ÄŸÅ¸â€â€</span><span>{{ ui_subscribe }}</span></div>
+  {% endif %}
 
   {% if cta.enabled %}
   <div class="preflash"></div>
   <div class="cta">
     {% if cta.show_handle %}<div class="handle-line">{{ handle }}</div>{% endif %}
     <div class="sub-btn">
-      <span class="bell">ğŸ””</span>
+      <span class="bell">ÄŸÅ¸â€â€</span>
       <span>{{ ui_subscribe }}</span>
     </div>
-    <div class="pointer">ğŸ‘†</div>
+    <div class="pointer">ÄŸÅ¸â€˜â€ </div>
     <div class="icons-row">
       {% set icon_labels = [ui_like, ui_subscribe, ui_share] %}
       {% for icon in cta.icons %}

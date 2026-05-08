@@ -195,7 +195,7 @@
   }
   .cta .sub-btn .bell { font-size: 96px; }
 
-  /* Pointer hand below button â€” bouncing */
+  /* Pointer hand below button Ã¢â‚¬â€ bouncing */
   .cta .pointer {
     font-size: 100px;
     margin-bottom: 50px;
@@ -213,7 +213,7 @@
     50% { transform: translateY(-15px); }
   }
 
-  /* Three icons row at bottom â€” stagger pop-in */
+  /* Three icons row at bottom Ã¢â‚¬â€ stagger pop-in */
   .cta .icons-row {
     display: flex;
     align-items: center;
@@ -249,7 +249,7 @@
   @keyframes dim { to { opacity: 0.05; } }
   {% endif %}
 
-  /* Persistent corner chips â€” visible THROUGHOUT video (always reminding to like/subscribe) */
+  /* Persistent corner chips Ã¢â‚¬â€ visible THROUGHOUT video (always reminding to like/subscribe) */
   .persistent {
     position: absolute;
     display: flex;
@@ -267,7 +267,7 @@
   }
   .persistent .ic { font-size: 44px; }
 
-  /* BEÄEN â€” bottom-left, dark chip with red accent */
+  /* BEÃ„ÂEN Ã¢â‚¬â€ bottom-left, dark chip with red accent */
   .persistent.like {
     bottom: 112px; left: 24px;
     background: linear-gradient(135deg, rgba(0,0,0,.88), rgba(40,0,0,.92));
@@ -281,7 +281,7 @@
     60% { transform: scale(1.08); }
   }
 
-  /* ABONE OL â€” bottom-right, red gradient chip */
+  /* ABONE OL Ã¢â‚¬â€ bottom-right, red gradient chip */
   .persistent.sub {
     bottom: 112px; right: 24px;
     background: linear-gradient(135deg, #ff2d2d, #c81e1e);
@@ -343,18 +343,20 @@
   <div class="handle">{{ handle }}</div>
 
   <!-- Persistent corner chips (visible throughout video, fade out only when end CTA opens) -->
-  <div class="persistent like"><span class="ic">â¤ï¸</span><span>{{ ui_like }}</span></div>
-  <div class="persistent sub"><span class="ic">ğŸ””</span><span>{{ ui_subscribe }}</span></div>
+  {% if cta.enabled %}
+  <div class="persistent like"><span class="ic">Ã¢ÂÂ¤Ã¯Â¸Â</span><span>{{ ui_like }}</span></div>
+  <div class="persistent sub"><span class="ic">ÄŸÅ¸â€â€</span><span>{{ ui_subscribe }}</span></div>
+  {% endif %}
 
   {% if cta.enabled %}
   <div class="preflash"></div>
   <div class="cta">
     {% if cta.show_handle %}<div class="handle-line">{{ handle }}</div>{% endif %}
     <div class="sub-btn">
-      <span class="bell">ğŸ””</span>
+      <span class="bell">ÄŸÅ¸â€â€</span>
       <span>{{ ui_subscribe }}</span>
     </div>
-    <div class="pointer">ğŸ‘†</div>
+    <div class="pointer">ÄŸÅ¸â€˜â€ </div>
     <div class="icons-row">
       {% set icon_labels = [ui_like, ui_subscribe, ui_share] %}
       {% for icon in cta.icons %}

@@ -2,7 +2,7 @@
 <html lang="{{ language }}">
 <head>
 <meta charset="utf-8">
-<title>Short â€” Ekonomi</title>
+<title>Short Ã¢â‚¬â€ Ekonomi</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&family=JetBrains+Mono:wght@400;700&display=swap');
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -31,7 +31,7 @@ html, body {
   display: flex; flex-direction: column;
 }
 
-/* TICKER BAR â€” decorative market data strip above everything */
+/* TICKER BAR Ã¢â‚¬â€ decorative market data strip above everything */
 .ticker {
   position: absolute;
   top: 0; left: 0; right: 0;
@@ -50,7 +50,7 @@ html, body {
 }
 .ticker .down { color: var(--secondary); }
 
-/* STAGE BADGE â€” sharp-corner, offset down to clear ticker */
+/* STAGE BADGE Ã¢â‚¬â€ sharp-corner, offset down to clear ticker */
 .stage-badge {
   position: absolute;
   top: 50px; right: 24px;
@@ -103,7 +103,7 @@ html, body {
   background: radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,.55) 100%);
 }
 
-/* Large numeric callout â€” bottom-center of photo */
+/* Large numeric callout Ã¢â‚¬â€ bottom-center of photo */
 .photo .ticker-num {
   position: absolute;
   bottom: 24px; left: 0; right: 0;
@@ -244,7 +244,7 @@ html, body {
 }
 .cta .sub-btn .bell { font-size: 96px; }
 
-/* Pointer hand below button â€” bouncing */
+/* Pointer hand below button Ã¢â‚¬â€ bouncing */
 .cta .pointer {
   font-size: 100px;
   margin-bottom: 50px;
@@ -262,7 +262,7 @@ html, body {
   50% { transform: translateY(-15px); }
 }
 
-/* Three icons row at bottom â€” stagger pop-in */
+/* Three icons row at bottom Ã¢â‚¬â€ stagger pop-in */
 .cta .icons-row {
   display: flex;
   align-items: center;
@@ -298,7 +298,7 @@ html, body {
 @keyframes dim { to { opacity: 0.05; } }
 {% endif %}
 
-/* Persistent corner chips â€” visible THROUGHOUT video */
+/* Persistent corner chips Ã¢â‚¬â€ visible THROUGHOUT video */
 .persistent {
   position: absolute;
   display: flex;
@@ -316,7 +316,7 @@ html, body {
 }
 .persistent .ic { font-size: 44px; }
 
-/* BEÄEN â€” bottom-left, dark chip with red accent */
+/* BEÃ„ÂEN Ã¢â‚¬â€ bottom-left, dark chip with red accent */
 .persistent.like {
   bottom: 112px; left: 24px;
   background: linear-gradient(135deg, rgba(0,0,0,.88), rgba(40,0,0,.92));
@@ -330,7 +330,7 @@ html, body {
   60% { transform: scale(1.08); }
 }
 
-/* ABONE OL â€” bottom-right, red gradient chip */
+/* ABONE OL Ã¢â‚¬â€ bottom-right, red gradient chip */
 .persistent.sub {
   bottom: 112px; right: 24px;
   background: linear-gradient(135deg, #ff2d2d, #c81e1e);
@@ -369,13 +369,13 @@ html, body {
     font-family: inherit;
   }
 
-  /* DNA OVERRIDE â€” runtime palette/font from channel DNA */
+  /* DNA OVERRIDE Ã¢â‚¬â€ runtime palette/font from channel DNA */
   {{ dna_css|safe }}
 </style>
 </head>
 <body>
 <div class="stage">
-  <div class="ticker">USD/TRY â–² %2.5 Â· BIST <span class="down">â–¼ %0.8</span> Â· EUR/TRY â–² %1.7 Â· ALTIN â–² %0.4</div>
+  <div class="ticker">USD/TRY Ã¢â€“Â² %2.5 Ã‚Â· BIST <span class="down">Ã¢â€“Â¼ %0.8</span> Ã‚Â· EUR/TRY Ã¢â€“Â² %1.7 Ã‚Â· ALTIN Ã¢â€“Â² %0.4</div>
   <div class="stage-badge">{{ ui_breaking }}</div>
   <div class="header">
     <span class="top">{{ script.header_top }}</span>
@@ -394,18 +394,20 @@ html, body {
   <div class="handle">{{ handle }}</div>
 
   <!-- Persistent corner chips (visible throughout video, fade out only when end CTA opens) -->
-  <div class="persistent like"><span class="ic">â¤ï¸</span><span>{{ ui_like }}</span></div>
-  <div class="persistent sub"><span class="ic">ğŸ””</span><span>{{ ui_subscribe }}</span></div>
+  {% if cta.enabled %}
+  <div class="persistent like"><span class="ic">Ã¢ÂÂ¤Ã¯Â¸Â</span><span>{{ ui_like }}</span></div>
+  <div class="persistent sub"><span class="ic">ÄŸÅ¸â€â€</span><span>{{ ui_subscribe }}</span></div>
+  {% endif %}
 
   {% if cta.enabled %}
   <div class="preflash"></div>
   <div class="cta">
     {% if cta.show_handle %}<div class="handle-line">{{ handle }}</div>{% endif %}
     <div class="sub-btn">
-      <span class="bell">ğŸ””</span>
+      <span class="bell">ÄŸÅ¸â€â€</span>
       <span>{{ ui_subscribe }}</span>
     </div>
-    <div class="pointer">ğŸ‘†</div>
+    <div class="pointer">ÄŸÅ¸â€˜â€ </div>
     <div class="icons-row">
       {% set icon_labels = [ui_like, ui_subscribe, ui_share] %}
       {% for icon in cta.icons %}
