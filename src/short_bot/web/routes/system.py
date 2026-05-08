@@ -29,6 +29,43 @@ def healthz():
     return {"status": "ok", "version": version}
 
 
+@bp.route("/system/scheduler")
+def scheduler_status():
+    """Diagnostic endpoint — durum kontrolu icin tarayicidan acilir.
+
+    Cron'larin gercekten registered ve next_run_time'lari ne olduklari gorulur.
+    'Cron'lar calismiyor' sikayetinin ilk hedefi. JSON dondurur.
+    """
+    from flask import current_app, jsonify
+    sched = getattr(current_app, "scheduler", None)
+    if sched is None:
+        return jsonify({
+            "running": False,
+            "error": "Scheduler hic baslatilmamis (init_scheduler cagrilmadi)",
+            "jobs": [],
+        }), 200
+    try:
+        running = bool(sched.running)
+    except Exception:
+        running = False
+    jobs_info = []
+    try:
+        for j in sched.get_jobs():
+            jobs_info.append({
+                "id": j.id,
+                "next_run_time": str(j.next_run_time) if j.next_run_time else None,
+                "trigger": str(j.trigger),
+                "max_instances": j.max_instances,
+            })
+    except Exception as e:
+        jobs_info = [{"error": str(e)}]
+    return jsonify({
+        "running": running,
+        "job_count": len(jobs_info),
+        "jobs": jobs_info,
+    })
+
+
 def _project_root() -> Path:
     # web/routes/system.py → web/routes → web → short_bot → src → repo root
     return Path(__file__).resolve().parents[4]
