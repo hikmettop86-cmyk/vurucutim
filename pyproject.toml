@@ -30,6 +30,7 @@ dependencies = [
     "google-auth>=2.20",
     "google-auth-oauthlib>=1.0",
     "google-auth-httplib2>=0.1.0",
+    "cryptography>=42.0",
 ]
 
 [project.optional-dependencies]

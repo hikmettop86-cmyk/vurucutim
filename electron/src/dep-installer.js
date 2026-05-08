@@ -193,8 +193,12 @@ async function _verifyAndRepair(env, onProgress, attempt = 1) {
   const critical = [
     'pydantic', 'pydantic_core', 'sqlalchemy', 'flask',
     'jinja2', 'requests', 'yaml', 'PIL',
+    'cryptography', 'google.auth', 'googleapiclient',
+    'feedparser', 'trafilatura', 'playwright', 'apscheduler',
   ];
-  const probe = `import sys\nfor m in ${JSON.stringify(critical)}:\n    try: __import__(m)\n    except Exception as e: print('MISSING:'+m+':'+type(e).__name__+':'+str(e)[:120])\n`;
+  // importlib.import_module submodule'leri (örn. google.auth) doğru yükler;
+  // __import__ sadece root'u getiriyor — submodule'deki ImportError'ları kaçırır.
+  const probe = `import importlib\nfor m in ${JSON.stringify(critical)}:\n    try: importlib.import_module(m)\n    except Exception as e: print('MISSING:'+m+':'+type(e).__name__+':'+str(e)[:120])\n`;
   const { execFile } = require('child_process');
   const result = await new Promise((resolve) => {
     execFile(paths.embeddedPython(), ['-c', probe], { env, timeout: 30000 },
@@ -232,6 +236,13 @@ async function _verifyAndRepair(env, onProgress, attempt = 1) {
     requests: 'requests',
     yaml: 'pyyaml',
     PIL: 'pillow',
+    cryptography: 'cryptography',
+    'google.auth': 'google-auth',
+    googleapiclient: 'google-api-python-client',
+    feedparser: 'feedparser',
+    trafilatura: 'trafilatura',
+    playwright: 'playwright',
+    apscheduler: 'apscheduler',
   };
   const packagesToRepair = [...new Set(missing.map((m) => moduleToPackage[m]).filter(Boolean))];
 
