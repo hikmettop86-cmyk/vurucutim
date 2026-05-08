@@ -12,6 +12,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import httplib2
+import requests
 import socks  # PySocks — provides PROXY_TYPE_* constants and connection layer
 import yaml
 
@@ -94,3 +95,17 @@ def build_proxied_http(proxy_url: str | None, *, timeout: int = 60) -> httplib2.
     )
     logger.info(f"using proxy {_redact(proxy_url)}")
     return httplib2.Http(timeout=timeout, proxy_info=proxy_info)
+
+
+def build_proxied_requests_session(proxy_url: str | None) -> requests.Session:
+    """Build a requests.Session with proxies configured (or plain if None).
+
+    Used by google.auth.transport.requests.Request(session=...) for token
+    refresh — that path uses requests, not httplib2.
+    """
+    s = requests.Session()
+    if not proxy_url:
+        return s
+    # requests proxies map is shared between http and https (server picks)
+    s.proxies = {"http": proxy_url, "https": proxy_url}
+    return s

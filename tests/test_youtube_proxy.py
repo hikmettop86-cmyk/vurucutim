@@ -154,3 +154,28 @@ def test_build_proxied_http_socks5():
     http = build_proxied_http("socks5://h:1080")
     pi = http.proxy_info("https") if callable(http.proxy_info) else http.proxy_info
     assert pi.proxy_type == socks.PROXY_TYPE_SOCKS5
+
+
+def test_build_proxied_session_none_no_proxies():
+    import requests
+    from short_bot.youtube.proxy import build_proxied_requests_session
+    s = build_proxied_requests_session(None)
+    assert isinstance(s, requests.Session)
+    assert s.proxies == {}
+
+
+def test_build_proxied_session_http():
+    from short_bot.youtube.proxy import build_proxied_requests_session
+    s = build_proxied_requests_session("http://u:p@h.example:8080")
+    assert s.proxies == {
+        "http":  "http://u:p@h.example:8080",
+        "https": "http://u:p@h.example:8080",
+    }
+
+
+def test_build_proxied_session_socks5():
+    from short_bot.youtube.proxy import build_proxied_requests_session
+    s = build_proxied_requests_session("socks5://h:1080")
+    # requests resmi olarak socks5h:// (DNS through proxy) çevirir
+    assert s.proxies["http"].startswith("socks5")
+    assert s.proxies["https"].startswith("socks5")
