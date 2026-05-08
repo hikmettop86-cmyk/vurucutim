@@ -65,13 +65,13 @@ ARCHETYPE_OVERFLOW_FIELDS: dict[str, list[OverflowField]] = {
         OverflowField("body_paragraph", ".body",             8),
     ],
     # stadium: 200px Oswald header → ~5 chars/line → 4 lines max for 25-char inputs;
-    # 64px .yellow overlay → 3-4 lines; body clamped at 7 lines CSS (-webkit-line-clamp: 7).
-    # Budget = clamp so any cut triggers retry.
+    # 64px .yellow overlay → 3-4 lines; body 36px font (~30 chars/line) clamped at
+    # 11 lines CSS (-webkit-line-clamp: 11). Body alanı margin-bottom 100px ile genişletildi.
     "stadium": [
         OverflowField("header_top",     ".header .top",      4),
         OverflowField("header_bottom",  ".header .bot",      2),
         OverflowField("photo_overlay",  ".photo .yellow",    4),
-        OverflowField("body_paragraph", ".body",             7),
+        OverflowField("body_paragraph", ".body",            11),
     ],
     # meme: 160px Impact header → ~7 chars/line → 4 lines for 25-char inputs; 26px
     # overlay-text (small, 2 lines OK); 110px Impact .body (renders header_bottom,
