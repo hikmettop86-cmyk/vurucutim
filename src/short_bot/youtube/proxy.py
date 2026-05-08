@@ -11,6 +11,7 @@ import re
 from pathlib import Path
 from urllib.parse import urlparse
 
+import httplib2
 import socks  # PySocks — provides PROXY_TYPE_* constants and connection layer
 import yaml
 
@@ -76,3 +77,20 @@ def load_channel_proxy_url(slug: str, secrets_path: Path) -> str | None:
     proxies = data.get("channel_proxies") or {}
     url = (proxies.get(slug) or "").strip()
     return url or None
+
+
+def build_proxied_http(proxy_url: str | None, *, timeout: int = 60) -> httplib2.Http:
+    """Build an httplib2.Http with proxy configured (or plain if None).
+
+    Used as `http=` argument to googleapiclient.discovery.build(...) (wrapped
+    by AuthorizedHttp at the call site).
+    """
+    if not proxy_url:
+        return httplib2.Http(timeout=timeout)
+    proxy_type, host, port, user, password = parse_proxy_url(proxy_url)
+    proxy_info = httplib2.ProxyInfo(
+        proxy_type=proxy_type, proxy_host=host, proxy_port=port,
+        proxy_user=user, proxy_pass=password,
+    )
+    logger.info(f"using proxy {_redact(proxy_url)}")
+    return httplib2.Http(timeout=timeout, proxy_info=proxy_info)

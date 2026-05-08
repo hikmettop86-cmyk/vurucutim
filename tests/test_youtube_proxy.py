@@ -125,3 +125,32 @@ def test_load_channel_proxy_url_empty_value(tmp_path):
     p = tmp_path / "secrets.yaml"
     p.write_text("channel_proxies:\n  galatasaray: ''\n", encoding="utf-8")
     assert load_channel_proxy_url("galatasaray", p) is None
+
+
+def test_build_proxied_http_none_returns_plain():
+    import httplib2
+    from short_bot.youtube.proxy import build_proxied_http
+    http = build_proxied_http(None)
+    assert isinstance(http, httplib2.Http)
+    assert http.proxy_info is None or http.proxy_info() is None
+
+
+def test_build_proxied_http_http_proxy_with_credentials():
+    import httplib2
+    import socks
+    from short_bot.youtube.proxy import build_proxied_http
+    http = build_proxied_http("http://alice:s3cret@h.example.com:8080")
+    pi = http.proxy_info("https") if callable(http.proxy_info) else http.proxy_info
+    assert pi.proxy_type == socks.PROXY_TYPE_HTTP
+    assert pi.proxy_host == "h.example.com"
+    assert pi.proxy_port == 8080
+    assert pi.proxy_user == "alice"
+    assert pi.proxy_pass == "s3cret"
+
+
+def test_build_proxied_http_socks5():
+    import socks
+    from short_bot.youtube.proxy import build_proxied_http
+    http = build_proxied_http("socks5://h:1080")
+    pi = http.proxy_info("https") if callable(http.proxy_info) else http.proxy_info
+    assert pi.proxy_type == socks.PROXY_TYPE_SOCKS5
