@@ -76,3 +76,4 @@ class RenderJob:
     cta_icons: list[str] = field(default_factory=lambda: ["❤️", "🔔", "↗️"])
     cta_duration_s: int = 4
     cta_show_handle: bool = True
+    rss_source: str | None = None   # shown as "Kaynak: <source>" overlay

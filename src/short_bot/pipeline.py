@@ -480,6 +480,7 @@ def _run_rss(*, channel, run_id, log, eng, settings,
         cta_icons=channel.cta_icons,
         cta_duration_s=channel.cta_duration_s,
         cta_show_handle=channel.cta_show_handle,
+        rss_source=picked.item.source if picked else None,
     )
 
     with tempfile.TemporaryDirectory() as tmpd:
@@ -628,6 +629,7 @@ def _run_generator(*, channel, run_id, log, eng, settings,
         cta_enabled=channel.cta_enabled, cta_text=channel.cta_text,
         cta_icons=channel.cta_icons, cta_duration_s=channel.cta_duration_s,
         cta_show_handle=channel.cta_show_handle,
+        rss_source=None,  # generator path — no RSS source
     )
 
     with tempfile.TemporaryDirectory() as tmpd:

@@ -94,6 +94,7 @@ def build_html(
             "duration_s": job.cta_duration_s,
             "show_handle": job.cta_show_handle,
         },
+        rss_source=job.rss_source,
     )
 
 
