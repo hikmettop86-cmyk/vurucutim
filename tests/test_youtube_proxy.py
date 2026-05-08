@@ -179,3 +179,74 @@ def test_build_proxied_session_socks5():
     # requests resmi olarak socks5h:// (DNS through proxy) çevirir
     assert s.proxies["http"].startswith("socks5")
     assert s.proxies["https"].startswith("socks5")
+
+
+# ---------------------------------------------------------------------------
+# normalize_proxy_url — alt format (host:port:user:pass) ve bare host:port
+# ---------------------------------------------------------------------------
+
+def test_normalize_residential_format():
+    """host:port:user:pass formati http://user:pass@host:port'a cevrilir."""
+    from short_bot.youtube.proxy import normalize_proxy_url
+    out = normalize_proxy_url("45.41.178.248:6469:ltzzjsoy:nreys25apf01")
+    assert out == "http://ltzzjsoy:nreys25apf01@45.41.178.248:6469"
+
+
+def test_normalize_bare_host_port():
+    """host:port (IP-whitelist) http://host:port'a cevrilir."""
+    from short_bot.youtube.proxy import normalize_proxy_url
+    out = normalize_proxy_url("1.2.3.4:3128")
+    assert out == "http://1.2.3.4:3128"
+
+
+def test_normalize_standard_url_passthrough():
+    from short_bot.youtube.proxy import normalize_proxy_url
+    assert normalize_proxy_url("http://u:p@h:1") == "http://u:p@h:1"
+    assert normalize_proxy_url("socks5://h:1080") == "socks5://h:1080"
+
+
+def test_normalize_strips_whitespace():
+    from short_bot.youtube.proxy import normalize_proxy_url
+    assert normalize_proxy_url("  http://h:1  ") == "http://h:1"
+
+
+def test_normalize_empty_raises():
+    import pytest
+    from short_bot.youtube.proxy import normalize_proxy_url
+    with pytest.raises(ValueError, match="bos"):
+        normalize_proxy_url("")
+    with pytest.raises(ValueError, match="bos"):
+        normalize_proxy_url("   ")
+
+
+def test_normalize_invalid_segments_raises():
+    import pytest
+    from short_bot.youtube.proxy import normalize_proxy_url
+    with pytest.raises(ValueError, match="Tanimsiz proxy formati"):
+        normalize_proxy_url("just-some-text")
+    with pytest.raises(ValueError, match="Tanimsiz proxy formati"):
+        normalize_proxy_url("a:b:c")        # 3 segment — geçersiz
+
+
+def test_parse_proxy_url_accepts_residential_format():
+    """parse_proxy_url normalize'i kullanir, residential format direkt parse eder."""
+    import socks
+    from short_bot.youtube.proxy import parse_proxy_url
+    proxy_type, host, port, user, password = parse_proxy_url(
+        "45.41.178.248:6469:ltzzjsoy:nreys25apf01"
+    )
+    assert proxy_type == socks.PROXY_TYPE_HTTP
+    assert host == "45.41.178.248"
+    assert port == 6469
+    assert user == "ltzzjsoy"
+    assert password == "nreys25apf01"
+
+
+def test_build_proxied_session_residential_format():
+    """build_proxied_requests_session also accepts residential format."""
+    from short_bot.youtube.proxy import build_proxied_requests_session
+    s = build_proxied_requests_session("1.2.3.4:8080:user:pass")
+    assert s.proxies == {
+        "http": "http://user:pass@1.2.3.4:8080",
+        "https": "http://user:pass@1.2.3.4:8080",
+    }
