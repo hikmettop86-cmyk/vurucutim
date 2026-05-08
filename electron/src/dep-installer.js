@@ -65,15 +65,7 @@ async function installVenv({ onProgress } = {}) {
   fs.mkdirSync(sitePackages, { recursive: true });
   const env = { ...process.env, PYTHONPATH: sitePackages };
 
-  // Bootstrap build_meta: pip + setuptools + wheel hep beraber lazim.
-  // Sdist (kaynak-kod) olarak gelen herhangi bir paket setuptools.build_meta
-  // ister; eksikse "BackendUnavailable: Cannot import 'setuptools.build_meta'"
-  // ile fail eder. Once mevcut bootstrap'i kontrol et.
   const pipPkg = path.join(sitePackages, 'pip');
-  const setuptoolsPkg = path.join(sitePackages, 'setuptools');
-  const wheelPkg = path.join(sitePackages, 'wheel');
-  const allPresent = fs.existsSync(pipPkg) && fs.existsSync(setuptoolsPkg) && fs.existsSync(wheelPkg);
-
   if (!fs.existsSync(pipPkg)) {
     onProgress?.('get-pip.py indiriliyor');
     const tmpDir = path.join(paths.userData(), 'tmp');
@@ -90,19 +82,42 @@ async function installVenv({ onProgress } = {}) {
     ], { env, onProgress });
   }
 
-  // setuptools + wheel'i her zaman ZORLA yenile — kalintida bozuk olabilir
-  // (v0.1.34 ve once: "Cannot import 'setuptools.build_meta'" bug'i bunun yuzunden).
-  if (!allPresent) {
-    onProgress?.('setuptools + wheel kuruluyor (build_meta için)');
-    await runStream(paths.embeddedPython(), [
-      '-m', 'pip', 'install',
-      `--target=${sitePackages}`,
-      '--upgrade', '--force-reinstall',
-      '--no-warn-script-location',
-      'setuptools', 'wheel',
-    ], { env, onProgress });
-  } else {
-    onProgress?.('pip + setuptools + wheel mevcut, bootstrap atlanıyor');
+  // setuptools.build_meta'yi gerçekten import edebiliyor muyuz? Klasör check
+  // yetersiz — kalıntıda bozuk dosya olabilir (v0.1.35 bunu yapıyordu). Probe
+  // ile doğrula; fail ise --force-reinstall ile zorla taze kur.
+  await _ensureBuildBackend(env, sitePackages, onProgress);
+}
+
+async function _ensureBuildBackend(env, sitePackages, onProgress) {
+  const { execFile } = require('child_process');
+  const probe = await new Promise((resolve) => {
+    execFile(paths.embeddedPython(), ['-c', 'import setuptools.build_meta, wheel'],
+      { env, timeout: 15000 },
+      (err, stdout, stderr) => resolve({ ok: !err, stderr: (stderr || '').slice(0, 300) }));
+  });
+  if (probe.ok) {
+    onProgress?.('setuptools.build_meta + wheel mevcut');
+    return;
+  }
+  onProgress?.(`setuptools/wheel import probe FAIL: ${probe.stderr.split('\n')[0]} — yeniden kuruluyor`);
+  await runStream(paths.embeddedPython(), [
+    '-m', 'pip', 'install',
+    `--target=${sitePackages}`,
+    '--upgrade', '--force-reinstall',
+    '--no-warn-script-location',
+    'setuptools', 'wheel',
+  ], { env, onProgress });
+  // Recheck — eğer hala fail ise hata fırlat (artık kullanıcının fark etmesi
+  // için step error'a çıkar)
+  const recheck = await new Promise((resolve) => {
+    execFile(paths.embeddedPython(), ['-c', 'import setuptools.build_meta, wheel'],
+      { env, timeout: 15000 },
+      (err, _, stderr) => resolve({ ok: !err, stderr: (stderr || '').slice(0, 300) }));
+  });
+  if (!recheck.ok) {
+    const e = new Error(`setuptools.build_meta import edilemedi (yeniden kurulduktan sonra bile): ${recheck.stderr}`);
+    e.tail = recheck.stderr;
+    throw e;
   }
 }
 
@@ -139,25 +154,23 @@ print(json.dumps(deps))
   }
   onProgress?.(`pyproject.toml: ${deps.length} bağımlılık tespit edildi`);
 
+  // --no-build-isolation: pip default'ta sdist build için kendi geçici venv
+  // kurar (network gerektirir). Bizim sitePackages'taki setuptools/wheel'i
+  // kullanması için isolation'ı kapatıyoruz. Bu sayede:
+  //   - Antivirus build env'i bloklasa bile build çalışır
+  //   - Network olmasa bile (pip cache'ten) sdist build edilebilir
+  //   - "Cannot import 'setuptools.build_meta'" hatası dolaylı olarak çözülür
   const baseArgs = [
     '-m', 'pip', 'install',
     `--target=${sitePackages}`,
     '--no-warn-script-location',
+    '--no-build-isolation',
   ];
   const env = { ...process.env, PYTHONPATH: sitePackages };
 
-  // Idempotent setuptools+wheel guarantee: deps install'a girmeden once kontrol
-  // et — kullanici venv step'ini skip edip direkt buradan retry tetiklemis
-  // olabilir, veya sitePackages bozulmus olabilir. Setuptools yoksa hemen kur.
-  const setuptoolsPkg = path.join(sitePackages, 'setuptools');
-  const wheelPkg = path.join(sitePackages, 'wheel');
-  if (!fs.existsSync(setuptoolsPkg) || !fs.existsSync(wheelPkg)) {
-    onProgress?.('setuptools+wheel eksik, kuruluyor (build_meta için)');
-    await runStream(paths.embeddedPython(), [
-      ...baseArgs, '--upgrade', '--force-reinstall',
-      'setuptools', 'wheel',
-    ], { env, onProgress });
-  }
+  // Idempotent guarantee: deps install'a girmeden once setuptools.build_meta
+  // import edilebiliyor mu? Klasör check yetersiz (v0.1.35 bug'ı). Probe yap.
+  await _ensureBuildBackend(env, sitePackages, onProgress);
 
   // Tier 1: --upgrade + --prefer-binary. Mevcut yarım install kalıntısı varsa
   // (örn. pydantic var ama pydantic_core yok) --upgrade onları taze indirip
