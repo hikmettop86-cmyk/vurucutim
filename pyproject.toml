@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "short-bot"
-version = "0.1.14"
+version = "0.1.15"
 description = "RSS → YouTube Shorts video generator"
 requires-python = ">=3.11"
 dependencies = [
