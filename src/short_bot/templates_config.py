@@ -142,7 +142,7 @@ ARCHETYPE_OVERFLOW_FIELDS: dict[str, list[OverflowField]] = {
     "yerel": [
         OverflowField("header_top",     ".header .top",   2),
         OverflowField("header_bottom",  ".header .bot",   2),
-        OverflowField("photo_overlay",  ".locale-pin",    1),  # single line below photo
+        OverflowField("photo_overlay",  ".locale-pin",    2),  # 1-2 lines; "📍 Kadıköy, İstanbul" wraps at 26px Lora italic
         OverflowField("body_paragraph", ".body",          8),
     ],
     # gundem: daily agenda list format. 100px Anton .top (yellow, uppercase) → 2 lines;
