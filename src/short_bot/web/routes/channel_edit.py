@@ -57,6 +57,9 @@ def edit(slug):
     eng = init_db(current_app.config["SHORTBOT_DB_PATH"])
     yt_history = get_channel_stats_history(eng, channel=slug, days=30)
     yt_quota_today = get_quota_used_today(eng, channel=slug)
+    # Mevcut proxy URL'i secrets.yaml'dan oku (UI'da göstermek için)
+    from short_bot.youtube.proxy import load_channel_proxy_url
+    proxy_url = load_channel_proxy_url(slug, secrets_path) if secrets_path else None
     return render_template("channels/edit.html.j2", c=cfg,
                            archetypes=ARCHETYPES,
                            cron_human=describe_cron(cfg.schedule_cron),
@@ -68,7 +71,8 @@ def edit(slug):
                            current_cron_preset=current_cron_preset,
                            pexels_key_set=pexels_key_set,
                            yt_history=yt_history,
-                           yt_quota_today=yt_quota_today)
+                           yt_quota_today=yt_quota_today,
+                           proxy_url=proxy_url or "")
 
 
 @bp.route("/channels/<slug>/music/init", methods=["POST"])
