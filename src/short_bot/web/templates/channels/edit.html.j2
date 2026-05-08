@@ -518,14 +518,18 @@
         <div class="grid grid-cols-2 gap-3">
           <label class="block">
             <span class="text-xs text-claude-muted uppercase">Primary</span>
-            <input type="color" name="dna_primary" x-model="primary"
-                   value="{{ c.dna.palette.primary }}"
+            <input type="color" name="dna_primary"
+                   :value="primary"
+                   @input="primary = $event.target.value"
+                   @change="primary = $event.target.value"
                    class="bg-claude-surface border border-claude-border rounded-lg w-full mt-1 h-9">
           </label>
           <label class="block">
             <span class="text-xs text-claude-muted uppercase">Accent</span>
-            <input type="color" name="dna_accent" x-model="accent"
-                   value="{{ c.dna.palette.accent }}"
+            <input type="color" name="dna_accent"
+                   :value="accent"
+                   @input="accent = $event.target.value"
+                   @change="accent = $event.target.value"
                    class="bg-claude-surface border border-claude-border rounded-lg w-full mt-1 h-9">
           </label>
         </div>
@@ -533,14 +537,18 @@
         <div class="grid grid-cols-2 gap-3">
           <label class="block">
             <span class="text-xs text-claude-muted uppercase">BG gradient 1</span>
-            <input type="color" name="dna_bg_grad_1" x-model="bgGrad1"
-                   value="{{ c.dna.palette.bg_gradient[0] }}"
+            <input type="color" name="dna_bg_grad_1"
+                   :value="bgGrad1"
+                   @input="bgGrad1 = $event.target.value"
+                   @change="bgGrad1 = $event.target.value"
                    class="bg-claude-surface border border-claude-border rounded-lg w-full mt-1 h-9">
           </label>
           <label class="block">
             <span class="text-xs text-claude-muted uppercase">BG gradient 2</span>
-            <input type="color" name="dna_bg_grad_2" x-model="bgGrad2"
-                   value="{{ c.dna.palette.bg_gradient[1] }}"
+            <input type="color" name="dna_bg_grad_2"
+                   :value="bgGrad2"
+                   @input="bgGrad2 = $event.target.value"
+                   @change="bgGrad2 = $event.target.value"
                    class="bg-claude-surface border border-claude-border rounded-lg w-full mt-1 h-9">
           </label>
         </div>
@@ -548,14 +556,18 @@
         <div class="grid grid-cols-2 gap-3">
           <label class="block">
             <span class="text-xs text-claude-muted uppercase">Body BG 1</span>
-            <input type="color" name="dna_body_bg_1" x-model="bodyBg1"
-                   value="{{ c.dna.palette.body_bg[0] }}"
+            <input type="color" name="dna_body_bg_1"
+                   :value="bodyBg1"
+                   @input="bodyBg1 = $event.target.value"
+                   @change="bodyBg1 = $event.target.value"
                    class="bg-claude-surface border border-claude-border rounded-lg w-full mt-1 h-9">
           </label>
           <label class="block">
             <span class="text-xs text-claude-muted uppercase">Body BG 2</span>
-            <input type="color" name="dna_body_bg_2" x-model="bodyBg2"
-                   value="{{ c.dna.palette.body_bg[1] }}"
+            <input type="color" name="dna_body_bg_2"
+                   :value="bodyBg2"
+                   @input="bodyBg2 = $event.target.value"
+                   @change="bodyBg2 = $event.target.value"
                    class="bg-claude-surface border border-claude-border rounded-lg w-full mt-1 h-9">
           </label>
         </div>
@@ -565,15 +577,19 @@
           <div class="grid grid-cols-2 gap-3">
             <label class="block">
               <span class="text-xs text-claude-muted uppercase">Ana metin (body)</span>
-              <input type="color" name="dna_text_main" x-model="textMain"
-                     value="{{ c.dna.palette.text_main }}"
+              <input type="color" name="dna_text_main"
+                     :value="textMain"
+                     @input="textMain = $event.target.value"
+                     @change="textMain = $event.target.value"
                      class="bg-claude-surface border border-claude-border rounded-lg w-full mt-1 h-9">
               <span class="text-[10px] text-claude-subtle">Gövde paragrafı, ana yazı</span>
             </label>
             <label class="block">
               <span class="text-xs text-claude-muted uppercase">Sönük metin</span>
-              <input type="color" name="dna_text_muted" x-model="textMuted"
-                     value="{{ c.dna.palette.text_muted }}"
+              <input type="color" name="dna_text_muted"
+                     :value="textMuted"
+                     @input="textMuted = $event.target.value"
+                     @change="textMuted = $event.target.value"
                      class="bg-claude-surface border border-claude-border rounded-lg w-full mt-1 h-9">
               <span class="text-[10px] text-claude-subtle">Handle, alt yazı, ikincil</span>
             </label>
@@ -585,7 +601,10 @@
             <label class="block">
               <span class="text-xs text-claude-muted uppercase">Başlık üst (özel)</span>
               <div class="flex gap-1 mt-1">
-                <input type="color" name="dna_header_top_color" x-model="headerTopColor"
+                <input type="color" name="dna_header_top_color"
+                       :value="headerTopColor"
+                       @input="headerTopColor = $event.target.value"
+                       @change="headerTopColor = $event.target.value"
                        :disabled="!headerTopColor"
                        class="bg-claude-surface border border-claude-border rounded-lg flex-1 h-9"
                        :class="!headerTopColor && 'opacity-40'">
@@ -600,7 +619,10 @@
             <label class="block">
               <span class="text-xs text-claude-muted uppercase">Başlık alt (özel)</span>
               <div class="flex gap-1 mt-1">
-                <input type="color" name="dna_header_bottom_color" x-model="headerBottomColor"
+                <input type="color" name="dna_header_bottom_color"
+                       :value="headerBottomColor"
+                       @input="headerBottomColor = $event.target.value"
+                       @change="headerBottomColor = $event.target.value"
                        :disabled="!headerBottomColor"
                        class="bg-claude-surface border border-claude-border rounded-lg flex-1 h-9"
                        :class="!headerBottomColor && 'opacity-40'">
