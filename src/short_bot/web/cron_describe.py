@@ -65,3 +65,43 @@ def describe_cron(cron: str) -> str:
             return cron
 
     return cron
+
+
+def cron_human(expr: str) -> str:
+    """Convert cron expression to short Turkish human description.
+
+    Examples:
+      "0 */4 * * *" -> "Her 4 saatte bir, dakika 00"
+      "0 9 * * *"   -> "Her gun saat 09:00"
+      "0 9 * * 1-5" -> "Hafta ici saat 09:00"
+      "*/15 * * * *" -> "15 dakikada bir"
+      "0 0 1 * *"   -> "Her ayin 1'i, saat 00:00"
+
+    Falls back to expr verbatim if pattern unrecognized.
+    """
+    if not expr or not expr.strip():
+        return ""
+    parts = expr.strip().split()
+    if len(parts) != 5:
+        return expr
+    minute, hour, day, month, dow = parts
+
+    # Common patterns
+    if minute == "0" and hour.startswith("*/"):
+        n = hour[2:]
+        return f"Her {n} saatte bir, dakika 00"
+    if minute.startswith("*/") and hour == "*":
+        n = minute[2:]
+        return f"{n} dakikada bir"
+    if minute.isdigit() and hour.isdigit() and day == "*" and month == "*":
+        if dow == "*":
+            return f"Her gun saat {int(hour):02d}:{int(minute):02d}"
+        if dow in ("1-5", "MON-FRI"):
+            return f"Hafta ici saat {int(hour):02d}:{int(minute):02d}"
+        if dow in ("0,6", "6,0", "SAT,SUN", "SUN,SAT"):
+            return f"Hafta sonu saat {int(hour):02d}:{int(minute):02d}"
+    if minute == "0" and hour == "0" and day.isdigit() and month == "*":
+        return f"Her ayin {day}'i, saat 00:00"
+    if hour == "*" and minute.isdigit():
+        return f"Her saat dakika {int(minute):02d}"
+    return expr  # fallback

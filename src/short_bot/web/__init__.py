@@ -91,6 +91,10 @@ def create_app(
 
     db.init_app(app)
 
+    # Register Jinja2 filters
+    from short_bot.web.cron_describe import cron_human
+    app.jinja_env.filters["cron_human"] = cron_human
+
     # Register blueprints
     from short_bot.web.routes import register_blueprints
     register_blueprints(app)
