@@ -61,3 +61,31 @@ def test_parse_missing_port_raises():
     from short_bot.youtube.proxy import parse_proxy_url
     with pytest.raises(ValueError, match="proxy URL.*port"):
         parse_proxy_url("http://host.example.com")
+
+
+def test_redact_url_with_credentials():
+    from short_bot.youtube.proxy import _redact
+    out = _redact("http://alice:s3cret@host.com:8080")
+    assert out == "http://***:***@host.com:8080"
+    assert "alice" not in out
+    assert "s3cret" not in out
+
+
+def test_redact_url_without_credentials():
+    from short_bot.youtube.proxy import _redact
+    out = _redact("https://1.2.3.4:3128")
+    assert out == "https://1.2.3.4:3128"
+
+
+def test_redact_err_with_url_in_message():
+    from short_bot.youtube.proxy import _redact_err
+    e = ValueError("connection failed for http://u:p@bad.host:1080/path")
+    out = _redact_err(e)
+    assert "u:p" not in out
+    assert "***:***" in out
+
+
+def test_redact_err_no_url_in_message():
+    from short_bot.youtube.proxy import _redact_err
+    e = TimeoutError("read timed out")
+    assert _redact_err(e) == "read timed out"

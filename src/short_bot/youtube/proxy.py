@@ -7,6 +7,7 @@ messages.
 from __future__ import annotations
 
 import logging
+import re
 from urllib.parse import urlparse
 
 import socks  # PySocks — provides PROXY_TYPE_* constants and connection layer
@@ -38,3 +39,20 @@ def parse_proxy_url(url: str) -> tuple[int, str, int, str | None, str | None]:
     if p.port is None:
         raise ValueError(f"proxy URL missing port: {url!r}")
     return _SCHEME_TO_TYPE[scheme], p.hostname, p.port, p.username, p.password
+
+
+_CRED_RE = re.compile(r"://[^:/\s]+:[^@/\s]+@")
+
+
+def _redact(url: str) -> str:
+    """Mask user:pass in a proxy URL."""
+    p = urlparse(url)
+    if p.username or p.password:
+        netloc = f"***:***@{p.hostname}:{p.port}"
+        return f"{p.scheme}://{netloc}"
+    return url
+
+
+def _redact_err(exc: BaseException) -> str:
+    """Mask any user:pass occurrence inside an exception message."""
+    return _CRED_RE.sub("://***:***@", str(exc))
