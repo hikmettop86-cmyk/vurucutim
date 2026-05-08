@@ -469,8 +469,10 @@ def _run_rss(*, channel, run_id, log, eng, settings,
         t0 = time.perf_counter()
         template_path = templates_dir / f"{channel.template}.html.j2"
         ui_labels = _resolve_ui_labels(channel)
-        dna_css_path = Path("templates") / "css" / f"{channel.slug}.css"
-        dna_css = dna_css_path.read_text(encoding="utf-8") if dna_css_path.exists() else ""
+        # Always rebuild CSS from current DNA (yaml-stored) — file may be stale.
+        # Bu sayede edit'te renk degisikligi + save sonrasi ilk render yeni CSS kullanir.
+        from short_bot.dna import build_css_override
+        dna_css = build_css_override(channel.dna) if channel.dna else ""
         render_frames(job, template_path, frames_dir,
                       fps=30, browser=settings.playwright_browser,
                       ui_labels=ui_labels, dna_css=dna_css)
@@ -612,8 +614,10 @@ def _run_generator(*, channel, run_id, log, eng, settings,
         t0 = time.perf_counter()
         template_path = templates_dir / f"{channel.template}.html.j2"
         ui_labels = _resolve_ui_labels(channel)
-        dna_css_path = Path("templates") / "css" / f"{channel.slug}.css"
-        dna_css = dna_css_path.read_text(encoding="utf-8") if dna_css_path.exists() else ""
+        # Always rebuild CSS from current DNA (yaml-stored) — file may be stale.
+        # Bu sayede edit'te renk degisikligi + save sonrasi ilk render yeni CSS kullanir.
+        from short_bot.dna import build_css_override
+        dna_css = build_css_override(channel.dna) if channel.dna else ""
         render_frames(job, template_path, frames_dir,
                       fps=30, browser=settings.playwright_browser,
                       ui_labels=ui_labels, dna_css=dna_css)
