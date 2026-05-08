@@ -102,6 +102,26 @@ $exeSize = [math]::Round((Get-Item $exe).Length / 1MB, 1)
 Write-Host "  -> $exe ($exeSize MB)"
 
 # ---------------------------------------------------------------------------
+# 3b. Temizle-Kur.bat helper'i template'ten uret
+# ---------------------------------------------------------------------------
+# Template'teki __VERSION__ placeholder'lari bu release'in versiyonuyla replace
+# edilir, dist/ altina yazilir, sonra release upload listesine eklenir. Boylece
+# her release'de URL'leri otomatik guncel olur (sekretere/kullanicilara
+# tek-tikla "kalintiyi temizle + son versiyonu kur" araci).
+$tplPath = Join-Path $root "electron\scripts\Temizle-Kur.template.bat"
+$batOut  = Join-Path $root "electron\dist\Temizle-Kur.bat"
+if (Test-Path $tplPath) {
+    $tpl = Get-Content $tplPath -Raw
+    $batContent = $tpl -replace '__VERSION__', $NewVersion
+    # UTF-8 NO BOM (cmd.exe BOM'lu dosyalari "??" gosterir)
+    [System.IO.File]::WriteAllText($batOut, $batContent, (New-Object System.Text.UTF8Encoding $false))
+    Write-Host "  -> $batOut (template uretildi)"
+} else {
+    Write-Host "  UYARI: $tplPath bulunamadi — Temizle-Kur.bat upload edilmeyecek" -ForegroundColor Yellow
+    $batOut = $null
+}
+
+# ---------------------------------------------------------------------------
 # 4. Commit + push
 # ---------------------------------------------------------------------------
 Step 4 7 "git commit + push"
@@ -138,7 +158,9 @@ Write-Host "  -> release id: $releaseId"
 # 7. Upload assets
 # ---------------------------------------------------------------------------
 Step 7 7 "asset'leri yukle ($exeSize MB)"
-gh release upload "v$NewVersion" $exe $blockmap $latestYml --repo $repo | Out-Host
+$uploadAssets = @($exe, $blockmap, $latestYml)
+if ($batOut -and (Test-Path $batOut)) { $uploadAssets += $batOut }
+gh release upload "v$NewVersion" @uploadAssets --repo $repo | Out-Host
 if ($LASTEXITCODE -ne 0) { Fail "asset upload basarisiz" }
 
 # ---------------------------------------------------------------------------
