@@ -89,3 +89,39 @@ def test_redact_err_no_url_in_message():
     from short_bot.youtube.proxy import _redact_err
     e = TimeoutError("read timed out")
     assert _redact_err(e) == "read timed out"
+
+
+def test_load_channel_proxy_url_present(tmp_path):
+    from short_bot.youtube.proxy import load_channel_proxy_url
+    p = tmp_path / "secrets.yaml"
+    p.write_text(
+        "pexels_api_key: x\nchannel_proxies:\n  galatasaray: http://u:p@h:1\n",
+        encoding="utf-8",
+    )
+    assert load_channel_proxy_url("galatasaray", p) == "http://u:p@h:1"
+
+
+def test_load_channel_proxy_url_slug_missing(tmp_path):
+    from short_bot.youtube.proxy import load_channel_proxy_url
+    p = tmp_path / "secrets.yaml"
+    p.write_text("channel_proxies:\n  fenerbahce: http://h:1\n", encoding="utf-8")
+    assert load_channel_proxy_url("galatasaray", p) is None
+
+
+def test_load_channel_proxy_url_no_section(tmp_path):
+    from short_bot.youtube.proxy import load_channel_proxy_url
+    p = tmp_path / "secrets.yaml"
+    p.write_text("pexels_api_key: x\n", encoding="utf-8")
+    assert load_channel_proxy_url("galatasaray", p) is None
+
+
+def test_load_channel_proxy_url_no_file(tmp_path):
+    from short_bot.youtube.proxy import load_channel_proxy_url
+    assert load_channel_proxy_url("galatasaray", tmp_path / "missing.yaml") is None
+
+
+def test_load_channel_proxy_url_empty_value(tmp_path):
+    from short_bot.youtube.proxy import load_channel_proxy_url
+    p = tmp_path / "secrets.yaml"
+    p.write_text("channel_proxies:\n  galatasaray: ''\n", encoding="utf-8")
+    assert load_channel_proxy_url("galatasaray", p) is None

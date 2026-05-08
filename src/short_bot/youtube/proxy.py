@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import logging
 import re
+from pathlib import Path
 from urllib.parse import urlparse
 
 import socks  # PySocks — provides PROXY_TYPE_* constants and connection layer
+import yaml
 
 logger = logging.getLogger(__name__)
 
@@ -56,3 +58,21 @@ def _redact(url: str) -> str:
 def _redact_err(exc: BaseException) -> str:
     """Mask any user:pass occurrence inside an exception message."""
     return _CRED_RE.sub("://***:***@", str(exc))
+
+
+def load_channel_proxy_url(slug: str, secrets_path: Path) -> str | None:
+    """Read data/secrets.yaml -> channel_proxies[slug].
+
+    Returns the URL string, or None if:
+      - secrets file missing
+      - channel_proxies section missing
+      - slug not present
+      - value is empty/whitespace
+    """
+    p = Path(secrets_path)
+    if not p.exists():
+        return None
+    data = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+    proxies = data.get("channel_proxies") or {}
+    url = (proxies.get(slug) or "").strip()
+    return url or None
