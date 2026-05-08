@@ -451,30 +451,36 @@ _GOOGLE_FONT_PARAM: dict[str, str] = {
 
 def _sanitize_custom_css_colors(css: str, palette: DnaPalette) -> str:
     """Replace hardcoded hex colors in custom_css that match palette values
-    with var(--xxx) references, so live palette pickers actually take effect."""
+    with var(--xxx) references, so live palette pickers actually take effect.
+
+    Priority order matters when multiple palette fields share the same hex:
+    text-main > text-muted > primary > accent > bg-grad > body-bg. Reasoning:
+    text colors are the most user-visible target for `color:` rules; bg colors
+    are destination backgrounds, so a hardcoded `color: #ffffff` should map to
+    text-main (not body-bg-1) even if both happen to be white in the palette.
+    """
     import re
     hex_to_var: dict[str, str] = {}
-    # Single-color fields
-    for var_name, value in [
-        ('primary', palette.primary),
-        ('accent', palette.accent),
-        ('text-main', palette.text_main),
-        ('text-muted', palette.text_muted),
-    ]:
-        if value and value.startswith('#'):
-            hex_to_var[value.lower()] = f'var(--{var_name})'
-    # Gradient pairs
-    for var_prefix, values in [('bg-grad', palette.bg_gradient), ('body-bg', palette.body_bg)]:
-        for i, v in enumerate(values, 1):
-            if v and v.startswith('#'):
-                hex_to_var.setdefault(v.lower(), f'var(--{var_prefix}-{i})')
+
+    def add(hex_value: str, var_name: str) -> None:
+        if hex_value and hex_value.startswith('#') and len(hex_value) == 7:
+            hex_to_var.setdefault(hex_value.lower(), f'var(--{var_name})')
+
+    # Highest priority first (setdefault keeps first match)
+    add(palette.text_main, 'text-main')
+    add(palette.text_muted, 'text-muted')
+    add(palette.primary, 'primary')
+    add(palette.accent, 'accent')
+    for i, v in enumerate(palette.bg_gradient, 1):
+        add(v, f'bg-grad-{i}')
+    for i, v in enumerate(palette.body_bg, 1):
+        add(v, f'body-bg-{i}')
 
     if not hex_to_var:
         return css
 
     def replacer(m):
-        h = m.group(0).lower()
-        return hex_to_var.get(h, m.group(0))
+        return hex_to_var.get(m.group(0).lower(), m.group(0))
 
     return re.sub(r'#[0-9a-fA-F]{6}\b', replacer, css)
 
