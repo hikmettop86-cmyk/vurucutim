@@ -1,6 +1,6 @@
 import json as _json
 from pathlib import Path
-from flask import (Blueprint, abort, current_app, flash, redirect,
+from flask import (Blueprint, abort, current_app, flash, jsonify, redirect,
                    request, send_from_directory, url_for)
 
 from short_bot.config import load_channel
@@ -8,6 +8,9 @@ from short_bot.db import init_db, record_youtube_upload, get_rss_item_for_short
 from short_bot.web.models import Short
 from short_bot.youtube import auth as yt_auth
 from short_bot.youtube.metadata_writer import generate_youtube_metadata
+from short_bot.youtube.proxy import (
+    _redact_err, build_proxied_requests_session,
+)
 from short_bot.youtube.uploader import build_snippet, build_status, upload_video
 
 bp = Blueprint("youtube", __name__)
@@ -201,3 +204,33 @@ def upload_secrets(slug):
     flash("client_secrets.json yüklendi. Şimdi 'YouTube Bağla' butonuna tıkla.",
           "success")
     return redirect(url_for("channel_edit.edit", slug=slug))
+
+
+@bp.post("/channels/<slug>/test-proxy")
+def test_proxy(slug):
+    """Test a proxy URL by fetching public IP via api.ipify.org.
+
+    Body: {"proxy_url": "..."}.
+    Response: {"ok": True, "ip": "...", "country": "..."} or
+              {"ok": False, "error": "..."} (redacted).
+    """
+    payload = request.get_json(silent=True) or {}
+    proxy_url = (payload.get("proxy_url") or "").strip()
+    if not proxy_url:
+        return jsonify(ok=False, error="proxy URL bos"), 400
+    try:
+        sess = build_proxied_requests_session(proxy_url)
+        r = sess.get("https://api.ipify.org?format=json", timeout=10)
+        ip = r.json().get("ip")
+        country = None
+        try:
+            r2 = sess.get(
+                f"https://ipapi.co/{ip}/country_name/", timeout=5,
+            )
+            if r2.status_code == 200:
+                country = r2.text.strip()
+        except Exception:
+            pass
+        return jsonify(ok=True, ip=ip, country=country)
+    except Exception as e:
+        return jsonify(ok=False, error=_redact_err(e)[:200])
