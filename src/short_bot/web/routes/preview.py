@@ -12,6 +12,23 @@ from short_bot.dna import build_css_override, DnaSpec, DnaPalette, DnaFonts, Dna
 bp = Blueprint("preview", __name__)
 
 
+@bp.route("/api/dna/defaults")
+def dna_defaults():
+    """Return the default palette + fonts for a given archetype.
+
+    Used by the channel-edit page to auto-fill DNA fields when the user picks
+    a different archetype from the dropdown.
+    """
+    from short_bot.dna import ARCHETYPE_DEFAULTS, ARCHETYPES
+    archetype = request.args.get("archetype", "").strip()
+    if archetype not in ARCHETYPES:
+        return {"error": f"unknown archetype: {archetype!r}"}, 400
+    defaults = ARCHETYPE_DEFAULTS.get(archetype)
+    if not defaults:
+        return {"error": f"no defaults defined for {archetype!r}"}, 404
+    return {"archetype": archetype, **defaults}
+
+
 def _load_sample_script(language: str) -> Script:
     samples = Path(__file__).resolve().parents[1] / "sample_scripts"
     sample_path = samples / f"sample_script_{language}.json"

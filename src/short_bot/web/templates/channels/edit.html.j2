@@ -49,6 +49,23 @@
 
 {# ── Main form — Alpine root state ──────────────────────────────────────── #}
 <form id="edit-save-form" method="POST" class="grid grid-cols-2 gap-8 mt-2"
+      x-init="$watch('archetype', async (val) => {
+        try {
+          const r = await fetch('/api/dna/defaults?archetype=' + encodeURIComponent(val));
+          if (!r.ok) return;
+          const d = await r.json();
+          primary = d.primary;
+          accent = d.accent;
+          bgGrad1 = d.bg_grad_1;
+          bgGrad2 = d.bg_grad_2;
+          bodyBg1 = d.body_bg_1;
+          bodyBg2 = d.body_bg_2;
+          textMain = d.text_main;
+          textMuted = d.text_muted;
+          fontHeadline = d.font_headline;
+          fontBody = d.font_body;
+        } catch (e) { console.warn('dna defaults fetch failed:', e); }
+      })"
       x-data='{
         primary: "{{ (c.dna.palette.primary if c.dna else c.colors.primary) }}",
         accent: "{{ (c.dna.palette.accent if c.dna else c.colors.accent) }}",

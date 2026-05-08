@@ -16,6 +16,119 @@ ARCHETYPES = [
 ]
 
 
+# Default visual palette + fonts per archetype.
+# Used by /api/dna/defaults when user changes archetype in the edit UI — palette
+# auto-snaps to the new archetype's signature look so live-preview reflects it.
+ARCHETYPE_DEFAULTS: dict[str, dict] = {
+    "newscast": {
+        "primary": "#bb1f1f", "accent": "#ffd54a",
+        "bg_grad_1": "#0a0a0a", "bg_grad_2": "#1a1a1a",
+        "body_bg_1": "#101010", "body_bg_2": "#1f1f1f",
+        "text_main": "#ffffff", "text_muted": "#cccccc",
+        "font_headline": "Inter", "font_body": "Inter",
+    },
+    "tabloid": {
+        "primary": "#e8141a", "accent": "#fff100",
+        "bg_grad_1": "#000000", "bg_grad_2": "#2a0000",
+        "body_bg_1": "#0a0000", "body_bg_2": "#220000",
+        "text_main": "#ffffff", "text_muted": "#ffd1d1",
+        "font_headline": "Bebas Neue", "font_body": "Inter",
+    },
+    "magazine": {
+        "primary": "#1a1a1a", "accent": "#c2185b",
+        "bg_grad_1": "#f7f3ee", "bg_grad_2": "#e8e0d4",
+        "body_bg_1": "#f7f3ee", "body_bg_2": "#ffffff",
+        "text_main": "#1a1a1a", "text_muted": "#5b5249",
+        "font_headline": "Playfair Display", "font_body": "Lora",
+    },
+    "kinetic": {
+        "primary": "#ff3366", "accent": "#00f0ff",
+        "bg_grad_1": "#1b1340", "bg_grad_2": "#0d0820",
+        "body_bg_1": "#1b1340", "body_bg_2": "#0d0820",
+        "text_main": "#ffffff", "text_muted": "#b8a8f0",
+        "font_headline": "Anton", "font_body": "Inter",
+    },
+    "dark-tech": {
+        "primary": "#00d4ff", "accent": "#7c4dff",
+        "bg_grad_1": "#0a0e1a", "bg_grad_2": "#141a2e",
+        "body_bg_1": "#0e1322", "body_bg_2": "#1a2138",
+        "text_main": "#e6f0ff", "text_muted": "#7a8bb0",
+        "font_headline": "JetBrains Mono", "font_body": "Inter",
+    },
+    "stadium": {
+        "primary": "#a30d2d", "accent": "#ffb81c",
+        "bg_grad_1": "#0a0a0a", "bg_grad_2": "#3d0712",
+        "body_bg_1": "#12060a", "body_bg_2": "#1f0810",
+        "text_main": "#fff8e7", "text_muted": "#e8c56a",
+        "font_headline": "Oswald", "font_body": "Inter",
+    },
+    "meme": {
+        "primary": "#ff4500", "accent": "#ffeb3b",
+        "bg_grad_1": "#1a1a1a", "bg_grad_2": "#0a0a0a",
+        "body_bg_1": "#ffffff", "body_bg_2": "#f0f0f0",
+        "text_main": "#000000", "text_muted": "#444444",
+        "font_headline": "Impact", "font_body": "Inter",
+    },
+    # ── New archetypes ──────────────────────────────────────────────────
+    "politika": {
+        "primary": "#0a1c4a", "accent": "#d4a937",
+        "bg_grad_1": "#0a1c4a", "bg_grad_2": "#05102a",
+        "body_bg_1": "#0a1c4a", "body_bg_2": "#0e2358",
+        "text_main": "#f5ecd6", "text_muted": "#c9a850",
+        "font_headline": "Source Serif 4", "font_body": "Source Serif 4",
+    },
+    "ekonomi": {
+        "primary": "#003b2a", "accent": "#00c853",
+        "bg_grad_1": "#001f17", "bg_grad_2": "#003b2a",
+        "body_bg_1": "#001f17", "body_bg_2": "#002c1f",
+        "text_main": "#ffffff", "text_muted": "#9ad9b5",
+        "font_headline": "Inter", "font_body": "JetBrains Mono",
+    },
+    "spor-haber": {
+        "primary": "#0a0a0a", "accent": "#39ff14",
+        "bg_grad_1": "#0a0a0a", "bg_grad_2": "#1a0a0a",
+        "body_bg_1": "#0a0a0a", "body_bg_2": "#141414",
+        "text_main": "#ffffff", "text_muted": "#a8ffa8",
+        "font_headline": "Oswald", "font_body": "Inter",
+    },
+    "tech-haber": {
+        "primary": "#1d1d1f", "accent": "#0066cc",
+        "bg_grad_1": "#fbfbfd", "bg_grad_2": "#f5f5f7",
+        "body_bg_1": "#ffffff", "body_bg_2": "#f5f5f7",
+        "text_main": "#1d1d1f", "text_muted": "#86868b",
+        "font_headline": "Inter", "font_body": "Inter",
+    },
+    "hava-durumu": {
+        "primary": "#3a7bd5", "accent": "#ffd23f",
+        "bg_grad_1": "#3a7bd5", "bg_grad_2": "#00d2ff",
+        "body_bg_1": "#3a7bd5", "body_bg_2": "#5dabec",
+        "text_main": "#ffffff", "text_muted": "#e6f4ff",
+        "font_headline": "Inter", "font_body": "Inter",
+    },
+    "yerel": {
+        "primary": "#8b4513", "accent": "#d2691e",
+        "bg_grad_1": "#faf0e0", "bg_grad_2": "#f0d9b5",
+        "body_bg_1": "#faf0e0", "body_bg_2": "#fff8eb",
+        "text_main": "#3a2810", "text_muted": "#7a5a35",
+        "font_headline": "Playfair Display", "font_body": "Lora",
+    },
+    "gundem": {
+        "primary": "#1e1645", "accent": "#ffeb3b",
+        "bg_grad_1": "#1e1645", "bg_grad_2": "#0e0a25",
+        "body_bg_1": "#1e1645", "body_bg_2": "#28194e",
+        "text_main": "#ffffff", "text_muted": "#ffeb3b",
+        "font_headline": "Anton", "font_body": "Inter",
+    },
+    "dosya": {
+        "primary": "#5a3a20", "accent": "#a52a2a",
+        "bg_grad_1": "#f4ecd8", "bg_grad_2": "#e8d8b0",
+        "body_bg_1": "#f4ecd8", "body_bg_2": "#fff7e0",
+        "text_main": "#2a1a08", "text_muted": "#6a4a25",
+        "font_headline": "Source Serif 4", "font_body": "Source Serif 4",
+    },
+}
+
+
 class DnaPalette(BaseModel):
     primary: str
     accent: str
