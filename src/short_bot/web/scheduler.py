@@ -6,7 +6,16 @@ from short_bot.config import list_channels, load_channel
 
 
 def init_scheduler(app):
-    scheduler = BackgroundScheduler()
+    # job_defaults:
+    # - misfire_grace_time=3600: Eger VurucuTim restart oldu (update vb.) ve fire
+    #   zamanini 1 saatten az gecirdiyse, fire'i hala tetikle. Default 1sn cok kati.
+    # - coalesce=True: Ust uste kacirilmis fire'lari TEK fire'a birlestir (10 saat
+    #   kapali kalmis ise 3 fire'i birden tetiklemez, 1 kez calisir).
+    # 'Cron'lar calismiyor' / 'gun boyu yuklememis' sikayetlerinin kok sebebi.
+    scheduler = BackgroundScheduler(job_defaults={
+        "misfire_grace_time": 3600,
+        "coalesce": True,
+    })
 
     def _run_for_channel(slug: str):
         from short_bot.web.runs import launch_pipeline

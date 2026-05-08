@@ -59,10 +59,28 @@ def scheduler_status():
             })
     except Exception as e:
         jobs_info = [{"error": str(e)}]
+    # Recent runs (last 10) for diagnosing 'cron'lar calismiyor' issues
+    recent_runs = []
+    try:
+        from short_bot.web.models import Run
+        rows = Run.query.order_by(Run.started_at.desc()).limit(10).all()
+        for r in rows:
+            recent_runs.append({
+                "id": r.id,
+                "channel": r.channel,
+                "started_at": str(r.started_at) if r.started_at else None,
+                "status": r.status,
+                "trigger": getattr(r, "trigger", None),
+                "error": (r.error[:200] if r.error else None),
+            })
+    except Exception as e:
+        recent_runs = [{"error": str(e)}]
+
     return jsonify({
         "running": running,
         "job_count": len(jobs_info),
         "jobs": jobs_info,
+        "recent_runs": recent_runs,
     })
 
 
