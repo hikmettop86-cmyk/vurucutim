@@ -61,3 +61,48 @@ def test_load_credentials_no_session_arg_uses_default_request(tmp_path):
         yt_auth.load_credentials(tmp_path, slug)
 
     mock_request.assert_called_once_with()   # session= argümanı YOK
+
+
+def test_fetch_and_save_channel_info_uses_authorized_http_when_http_given(tmp_path):
+    """When http= is given, build() must receive AuthorizedHttp(creds, http=http),
+    NOT credentials= directly. (proxy path)"""
+    from short_bot.youtube import auth as yt_auth
+    fake_http = MagicMock(name="proxied_http")
+    fake_creds = MagicMock(name="creds")
+    slug = "ch1"
+    (tmp_path / slug).mkdir()
+
+    with patch("short_bot.youtube.auth.build") as mock_build, \
+         patch("short_bot.youtube.auth.AuthorizedHttp") as mock_authed:
+        mock_authed.return_value = "AUTHED"
+        mock_yt = MagicMock()
+        mock_yt.channels.return_value.list.return_value.execute.return_value = {
+            "items": [{"id": "c1", "snippet": {}, "statistics": {}}],
+        }
+        mock_build.return_value = mock_yt
+        with patch("short_bot.youtube.avatar.fetch_and_cache_avatar"):
+            yt_auth.fetch_and_save_channel_info(tmp_path, slug, fake_creds, http=fake_http)
+
+    mock_authed.assert_called_once_with(fake_creds, http=fake_http)
+    mock_build.assert_called_once_with("youtube", "v3", http="AUTHED")
+
+
+def test_fetch_and_save_channel_info_no_http_uses_credentials_directly(tmp_path):
+    """Backward-compat: http= yoksa eski davranış (credentials= geçer)."""
+    from short_bot.youtube import auth as yt_auth
+    fake_creds = MagicMock(name="creds")
+    slug = "ch1"
+    (tmp_path / slug).mkdir()
+
+    with patch("short_bot.youtube.auth.build") as mock_build, \
+         patch("short_bot.youtube.auth.AuthorizedHttp") as mock_authed:
+        mock_yt = MagicMock()
+        mock_yt.channels.return_value.list.return_value.execute.return_value = {
+            "items": [{"id": "c1", "snippet": {}, "statistics": {}}],
+        }
+        mock_build.return_value = mock_yt
+        with patch("short_bot.youtube.avatar.fetch_and_cache_avatar"):
+            yt_auth.fetch_and_save_channel_info(tmp_path, slug, fake_creds)
+
+    mock_authed.assert_not_called()
+    mock_build.assert_called_once_with("youtube", "v3", credentials=fake_creds)
