@@ -1,8 +1,13 @@
 const { contextBridge, ipcRenderer } = require('electron');
-const pkg = require('./package.json');
+
+// App version via sync IPC. Main process uses app.getVersion() (asar-safe).
+// Wrapped in try/catch — if main hasn't registered the handler yet, fall back
+// to '?' so a missing version never breaks the bridge (regression v0.1.31).
+let _version = '?';
+try { _version = ipcRenderer.sendSync('vt:get-version'); } catch (_) {}
 
 contextBridge.exposeInMainWorld('vt', {
-  version: pkg.version,
+  version: _version,
   detectAll: () => ipcRenderer.invoke('vt:detect-all'),
   installMissing: () => ipcRenderer.invoke('vt:install-missing'),
   openExternal: (url) => ipcRenderer.invoke('vt:open-external', url),

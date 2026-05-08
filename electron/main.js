@@ -19,6 +19,14 @@ app.setName('VurucuTim');
 const _localAppData = process.env.LOCALAPPDATA || path.join(require('node:os').homedir(), 'AppData', 'Local');
 app.setPath('userData', path.join(_localAppData, 'VurucuTim'));
 
+// Sync IPC kayıtları whenReady'den ÖNCE olmalı — preload sendSync hemen çağırılıyor.
+// (regression v0.1.31: preload'da require('./package.json') asar/sandbox altında
+// fail ediyordu ve tüm bridge çöküyordu; bunun yerine app.getVersion() ile alıyoruz.)
+ipcMain.on('vt:get-version', (e) => {
+  try { e.returnValue = app.getVersion(); }
+  catch (_) { e.returnValue = '?'; }
+});
+
 const isHiddenStart = process.argv.includes('--hidden');
 
 let mainWindow = null;
