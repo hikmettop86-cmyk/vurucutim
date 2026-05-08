@@ -83,7 +83,8 @@
         highlightStyle: "{{ (c.dna.highlight_style if c.dna else "bg-flat") }}",
         chipStyle: "{{ (c.dna.chip_style if c.dna else "rounded") }}",
         categoryIcon: "{{ (c.dna.category_icon if c.dna else "") }}",
-        archetype: "{{ (c.dna.archetype if c.dna else c.template) }}"
+        archetype: "{{ (c.dna.archetype if c.dna else c.template) }}",
+        currentTab: window.location.hash.replace("#", "") || "genel"
       }'>
 
   {# ═══════════════════════════════════════════════════════════════════════
@@ -118,6 +119,28 @@
      RIGHT COLUMN — All editable cards
      ═══════════════════════════════════════════════════════════════════════ #}
   <div class="space-y-4">
+
+    {# ── Tab bar ─────────────────────────────────────────────────────── #}
+    <div class="bg-white border border-claude-border rounded-xl shadow-soft sticky top-[130px] z-30">
+      <div class="flex border-b border-claude-border overflow-x-auto">
+        <template x-for="tab in [
+          {id: 'genel', label: 'Genel'},
+          {id: 'icerik', label: 'Icerik'},
+          {id: 'dna', label: 'DNA'},
+          {id: 'youtube', label: 'YouTube'},
+          {id: 'sistem', label: 'Sistem'},
+        ]" :key="tab.id">
+          <button type="button"
+                  @click="currentTab = tab.id; window.location.hash = tab.id"
+                  :class="currentTab === tab.id ? 'border-b-2 border-claude-accent text-claude-accent font-semibold' : 'text-claude-muted hover:text-claude-text'"
+                  class="px-5 py-3 transition-colors text-sm whitespace-nowrap flex-shrink-0"
+                  x-text="tab.label"></button>
+        </template>
+      </div>
+    </div>
+
+    {# ── TAB: Genel ──────────────────────────────────────────────────── #}
+    <div x-show="currentTab === 'genel'">
 
     {# ── Card: Temel ─────────────────────────────────────────────────── #}
     <div x-data="{ open: true }" class="bg-white border border-claude-border rounded-xl shadow-soft mb-4">
@@ -289,6 +312,11 @@
         </div>
       </div>
     </div>
+
+    </div>{# end TAB: Genel (partial — Son calishmalar appended below) #}
+
+    {# ── TAB: YouTube ───────────────────────────────────────────────── #}
+    <div x-show="currentTab === 'youtube'">
 
     {# ── Card: YouTube bağlantısı (open by default) ───────────────────── #}
     <div x-data="{ open: true }" class="bg-white border border-claude-border rounded-xl shadow-soft mb-4">
@@ -510,6 +538,11 @@
       </div>
     </div>
 
+    </div>{# end TAB: YouTube #}
+
+    {# ── TAB: Sistem ─────────────────────────────────────────────────── #}
+    <div x-show="currentTab === 'sistem'">
+
     {# ── Card: CTA (open by default — siklikla acilip kapatilan ayar) ── #}
     <div x-data="{ open: true }" class="bg-white border border-claude-border rounded-xl shadow-soft mb-4">
       <button type="button" @click="open = !open"
@@ -548,7 +581,12 @@
       </div>
     </div>
 
+    </div>{# end TAB: Sistem #}
+
     {% if c.dna %}
+
+    {# ── TAB: DNA ────────────────────────────────────────────────────── #}
+    <div x-show="currentTab === 'dna'">
 
     {# ── Card: DNA — Renkler & Tipografi (open by default) ───────────── #}
     <div x-data="{ open: true }" class="bg-white border border-claude-border rounded-xl shadow-soft mb-4">
@@ -860,6 +898,8 @@
       </div>
     </div>
 
+    </div>{# end TAB: DNA #}
+
     {# ── Card: Generator Ayarları (closed by default, conditional) ────── #}
     {% if c.content_source == 'generator' %}
     <div x-data="{ open: false }" class="bg-white border border-claude-border rounded-xl shadow-soft mb-4">
@@ -906,6 +946,9 @@
 
     {% endif %}{# end if c.dna #}
 
+    {# ── TAB: Icerik ─────────────────────────────────────────────────── #}
+    <div x-show="currentTab === 'icerik'">
+
     {# ── Card: Arka plan videosu (Pexels) ───────────────────────────────── #}
     <div class="bg-claude-surface border border-claude-border rounded-lg p-4 mt-4">
       <div class="flex items-center justify-between mb-3">
@@ -946,9 +989,26 @@
       </div>
     </div>
 
+    {# ── Generator test result (conditional, shown in Icerik tab) ──────── #}
+    {% if c.content_source == 'generator' %}
+    <div class="bg-white border border-claude-border rounded-xl shadow-soft mb-4 p-5">
+      <h2 class="font-serif text-base font-semibold flex items-center gap-2 mb-3">
+        <span class="text-lg opacity-70">🧪</span> Test Sonucu
+      </h2>
+      <div id="generator-test-result" class="text-sm text-claude-muted">
+        "🧪 Test örnek üret" butonuna basıldığında burada görünür.
+      </div>
+    </div>
+    {% endif %}
+
+    </div>{# end TAB: Icerik #}
+
     <button type="submit" class="bg-claude-accent hover:bg-claude-accent-hover text-white px-4 py-2 rounded-lg font-semibold mt-2 w-full">
       Kaydet
     </button>
+
+    {# ── TAB: Genel (Son calishmalar section) ────────────────────────── #}
+    <div x-show="currentTab === 'genel'">
 
     {# ── Card: Son çalışmalar (closed by default) ─────────────────────── #}
     <div x-data="{ open: false }" class="bg-white border border-claude-border rounded-xl shadow-soft mb-4">
@@ -1012,17 +1072,7 @@
       </div>
     </div>
 
-    {# ── Generator test result (conditional) ──────────────────────────── #}
-    {% if c.content_source == 'generator' %}
-    <div class="bg-white border border-claude-border rounded-xl shadow-soft mb-4 p-5">
-      <h2 class="font-serif text-base font-semibold flex items-center gap-2 mb-3">
-        <span class="text-lg opacity-70">🧪</span> Test Sonucu
-      </h2>
-      <div id="generator-test-result" class="text-sm text-claude-muted">
-        "🧪 Test örnek üret" butonuna basıldığında burada görünür.
-      </div>
-    </div>
-    {% endif %}
+    </div>{# end TAB: Genel (Son calishmalar) #}
 
   </div>
 </form>
