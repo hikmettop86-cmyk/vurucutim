@@ -335,6 +335,24 @@ html, body {
 .persistent.sub  { animation: sub-glow  1.5s ease-in-out infinite, fade-out 0.3s ease-in {{ duration_s - cta.duration_s }}s forwards; }
 @keyframes fade-out { to { opacity: 0; } }
 {% endif %}
+  /* SOURCE CREDIT */
+  .source-credit {
+    position: absolute;
+    bottom: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.6);
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    padding: 3px 10px;
+    border-radius: 3px;
+    z-index: 50;
+    white-space: nowrap;
+    font-family: inherit;
+  }
+
   /* DNA OVERRIDE — runtime palette/font from channel DNA */
   {{ dna_css|safe }}
 </style>
@@ -381,6 +399,10 @@ html, body {
       {% endfor %}
     </div>
   </div>
+  {% endif %}
+
+  {% if rss_source %}
+  <div class="source-credit">Kaynak: {{ rss_source }}</div>
   {% endif %}
 </div>
 </body>

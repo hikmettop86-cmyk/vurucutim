@@ -130,6 +130,24 @@
   .persistent.like { bottom: 120px; left: 30px; }
   .persistent.sub  { bottom: 120px; right: 30px; background: var(--primary); color: var(--bg-grad-1); }
 
+  /* SOURCE CREDIT */
+  .source-credit {
+    position: absolute;
+    bottom: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.6);
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    padding: 3px 10px;
+    border-radius: 3px;
+    z-index: 50;
+    white-space: nowrap;
+    font-family: inherit;
+  }
+
   /* DNA OVERRIDE */
   {{ dna_css|safe }}
 </style>
@@ -155,6 +173,10 @@
 
   <div class="persistent like"><span class="ic">❤️</span><span>{{ ui_like }}</span></div>
   <div class="persistent sub"><span class="ic">🔔</span><span>{{ ui_subscribe }}</span></div>
+
+  {% if rss_source %}
+  <div class="source-credit">Kaynak: {{ rss_source }}</div>
+  {% endif %}
 </div>
 </body>
 </html>
