@@ -13,6 +13,7 @@ files:
   - src/**/*
   - wizard/**/*
   - update-dialog/**/*
+  - license-window/**/*
   - assets/icon.png
   - "!test/**/*"
   - "!scripts/**/*"

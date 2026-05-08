@@ -10,6 +10,7 @@ const tray = require('./src/tray');
 const autostart = require('./src/autostart');
 const updater = require('./src/updater');
 const migrations = require('./src/migrations');
+const license = require('./src/license');
 
 // Force Local AppData (not Roaming) and capitalized app name
 // Reason: Roaming AppData may sync via OneDrive/AD policies, causing SQLite lock corruption.
@@ -93,6 +94,54 @@ function markInitialized() {
   fs.writeFileSync(paths.initializedFlag(), new Date().toISOString(), 'utf-8');
 }
 
+let licenseWindow = null;
+let _licenseResolve = null;
+
+function createLicenseWindow() {
+  return new Promise((resolve) => {
+    _licenseResolve = resolve;
+    licenseWindow = new BrowserWindow({
+      width: 520, height: 480, resizable: false, minimizable: false, maximizable: false,
+      fullscreenable: false,
+      title: 'VurucuTim — Lisans', backgroundColor: '#1e1e1e', autoHideMenuBar: true,
+      webPreferences: {
+        preload: path.join(__dirname, 'preload.js'),
+        contextIsolation: true, nodeIntegration: false,
+      },
+    });
+    licenseWindow.loadFile(path.join(__dirname, 'license-window', 'index.html'));
+    licenseWindow.once('closed', () => {
+      licenseWindow = null;
+      if (_licenseResolve) {
+        const r = _licenseResolve;
+        _licenseResolve = null;
+        r({ accepted: false });
+      }
+    });
+  });
+}
+
+function registerLicenseIpc() {
+  ipcMain.handle('vt:get-machine-id', () => license.getMachineId());
+  ipcMain.handle('vt:activate-license', (_e, serial) => {
+    const ok = license.validateSerial(serial, license.getMachineId());
+    if (ok) license.saveLicense(serial);
+    return ok;
+  });
+  ipcMain.handle('vt:license-accepted', () => {
+    if (_licenseResolve) {
+      const r = _licenseResolve;
+      _licenseResolve = null;
+      r({ accepted: true });
+    }
+    if (licenseWindow) licenseWindow.close();
+  });
+  ipcMain.handle('vt:license-quit', () => {
+    app.isQuitting = true;
+    app.quit();
+  });
+}
+
 function registerIpc() {
   ipcMain.handle('vt:detect-all', () => detector.detectAll());
   ipcMain.handle('vt:install-missing', async (event) => {
@@ -169,6 +218,22 @@ if (!gotLock) {
     const log = require('./src/logger');
     log.info(`app ready, version: ${app.getVersion()}, firstRun: ${isFirstRun()}`);
     registerIpc();
+    registerLicenseIpc();
+
+    // License gate — must pass BEFORE wizard or panel boot.
+    if (!license.isLicensed()) {
+      log.info('license: not yet activated — opening license window');
+      const res = await createLicenseWindow();
+      if (!res.accepted || !license.isLicensed()) {
+        log.info('license: user closed window without activating — quitting');
+        app.isQuitting = true;
+        app.quit();
+        return;
+      }
+      log.info('license: activated successfully');
+    } else {
+      log.info('license: valid');
+    }
 
     if (isFirstRun()) {
       const res = await createWizardWindow();

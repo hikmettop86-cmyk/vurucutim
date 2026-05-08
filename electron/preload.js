@@ -17,4 +17,9 @@ contextBridge.exposeInMainWorld('vt', {
   getUpdateInfo: () => ipcRenderer.invoke('vt:get-update-info'),
   updateInstall: () => ipcRenderer.invoke('vt:update-install'),
   updatePostpone: () => ipcRenderer.invoke('vt:update-postpone'),
+  // License window
+  getMachineId: () => ipcRenderer.invoke('vt:get-machine-id'),
+  activateLicense: (serial) => ipcRenderer.invoke('vt:activate-license', serial),
+  licenseAccepted: () => ipcRenderer.invoke('vt:license-accepted'),
+  licenseQuit: () => ipcRenderer.invoke('vt:license-quit'),
 });
