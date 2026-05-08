@@ -128,50 +128,123 @@ print(json.dumps(deps))
   ];
   const env = { ...process.env, PYTHONPATH: sitePackages };
 
-  // Tier 1: ResolutionImpossible riskini azaltmak için --upgrade YOK,
-  // --prefer-binary açık. pip resolver eski-uyumlu wheels'leri seçer.
+  // Tier 1: --upgrade + --prefer-binary. Mevcut yarım install kalıntısı varsa
+  // (örn. pydantic var ama pydantic_core yok) --upgrade onları taze indirip
+  // transitive eksikleri çözer. v0.1.30→0.1.31'de --upgrade kaldırılmıştı,
+  // sonuçta kullanıcılar "ModuleNotFoundError: pydantic_core" alıyordu.
+  let tier1Err = null;
   try {
-    await runStream(paths.embeddedPython(), [...baseArgs, '--prefer-binary', ...deps], {
+    await runStream(paths.embeddedPython(), [...baseArgs, '--upgrade', '--prefer-binary', ...deps], {
       env, onProgress,
     });
-    return;
   } catch (e) {
+    tier1Err = e;
     const msg = (e.tail || e.message || '').slice(0, 4000);
     onProgress?.(`Tier 1 başarısız (${e.exitCode || '?'}): ${msg.split('\n').slice(-3).join(' | ')}`);
     if (!/ResolutionImpossible|conflict|incompatible/i.test(msg)) {
-      // Build/network error vb. — Tier 2: only-binary fallback (eski davranış)
+      // Build/network error — Tier 2: only-binary fallback
       onProgress?.('Tier 2: prebuilt-only deneniyor');
       try {
-        await runStream(paths.embeddedPython(), [...baseArgs, '--prefer-binary', '--only-binary=:all:', ...deps], {
+        await runStream(paths.embeddedPython(), [...baseArgs, '--upgrade', '--prefer-binary', '--only-binary=:all:', ...deps], {
           env, onProgress,
         });
-        return;
+        tier1Err = null;
       } catch (e2) {
         onProgress?.(`Tier 2 da başarısız: ${(e2.tail || e2.message || '').split('\n').slice(-3).join(' | ')}`);
       }
     }
   }
 
-  // Tier 3: per-package --no-deps. Resolver çakışmasını tamamen bypass et
-  // (her paket bağımsız kurulur, transitive deps zaten paket içine giriyor).
-  // Bu son çare; pip'in çözemediği hibrit graf'ı manuel sırayla parçala.
-  onProgress?.('Tier 3: paketler tek tek kuruluyor (--no-deps)');
-  const failed = [];
-  for (const dep of deps) {
-    try {
-      await runStream(paths.embeddedPython(), [
-        ...baseArgs, '--prefer-binary', '--no-deps', dep,
-      ], { env, onProgress });
-    } catch (e) {
-      failed.push(`${dep}: ${(e.tail || e.message || '').split('\n').slice(-2).join(' / ')}`);
+  // Tier 3: per-package --no-deps (resolver tamamen bypass). Sadece tier1+2 fail
+  // ettiğinde; başarılıysa atla.
+  if (tier1Err) {
+    onProgress?.('Tier 3: paketler tek tek kuruluyor (--no-deps)');
+    const failed = [];
+    for (const dep of deps) {
+      try {
+        await runStream(paths.embeddedPython(), [
+          ...baseArgs, '--upgrade', '--prefer-binary', '--no-deps', dep,
+        ], { env, onProgress });
+      } catch (e) {
+        failed.push(`${dep}: ${(e.tail || e.message || '').split('\n').slice(-2).join(' / ')}`);
+      }
+    }
+    if (failed.length > 0) {
+      const summary = failed.slice(0, 10).join('\n');
+      const err = new Error(`pip Tier 3 — ${failed.length} paket başarısız:\n${summary}`);
+      err.tail = summary;
+      throw err;
     }
   }
-  if (failed.length > 0) {
-    const summary = failed.slice(0, 10).join('\n');
-    const err = new Error(`pip Tier 3 — ${failed.length} paket başarısız:\n${summary}`);
-    err.tail = summary;
+
+  // SMOKE TEST + AUTO-REPAIR
+  // pip "Successfully installed" demesi yetmez — kısmi install kalıntısı
+  // (örn. v0.1.31'in yarım kurulumu) bazı submodule'leri eksik bırakabiliyor
+  // (en sık fail eden: pydantic_core). Kritik importları test et, fail ederse
+  // o paketleri --force-reinstall ile yeniden kur.
+  await _verifyAndRepair(env, onProgress);
+}
+
+async function _verifyAndRepair(env, onProgress, attempt = 1) {
+  const sitePackages = paths.sitePackagesDir();
+  // pyproject'ten import edilebilir-olması-gereken kritik modüller. Listede
+  // hem ana paket hem binary core (pydantic_core) hem framework var ki
+  // herhangi bir partial install izi yakalanabilsin.
+  const critical = [
+    'pydantic', 'pydantic_core', 'sqlalchemy', 'flask',
+    'jinja2', 'requests', 'yaml', 'PIL',
+  ];
+  const probe = `import sys\nfor m in ${JSON.stringify(critical)}:\n    try: __import__(m)\n    except Exception as e: print('MISSING:'+m+':'+type(e).__name__+':'+str(e)[:120])\n`;
+  const { execFile } = require('child_process');
+  const result = await new Promise((resolve) => {
+    execFile(paths.embeddedPython(), ['-c', probe], { env, timeout: 30000 },
+      (err, stdout, stderr) => resolve({ err, stdout: stdout || '', stderr: stderr || '' }));
+  });
+  const missing = (result.stdout + result.stderr)
+    .split(/\r?\n/)
+    .filter((l) => l.startsWith('MISSING:'))
+    .map((l) => l.split(':')[1]);
+
+  if (missing.length === 0) {
+    onProgress?.('Smoke test OK: kritik paketler import edilebiliyor');
+    return;
+  }
+
+  if (attempt > 2) {
+    const err = new Error(`Smoke test ${attempt} denemeden sonra hala fail: ${missing.join(', ')}\n${result.stdout}\n${result.stderr}`);
+    err.tail = err.message;
     throw err;
   }
+
+  // Repair: pydantic_core gibi binary deps için pydantic'i force-reinstall
+  // (transitive olarak pydantic_core'u getirir). pydantic_core'un doğrudan
+  // wheel'i Windows için pip cache'inden alınamayabiliyor, bu yüzden
+  // pydantic ile birlikte ZORLA yeniden indir.
+  onProgress?.(`Smoke test ${missing.length} eksik tespit etti: ${missing.join(', ')} — repair başlıyor`);
+
+  // Eksik modülün hangi paketten geldiğini map et
+  const moduleToPackage = {
+    pydantic: 'pydantic',
+    pydantic_core: 'pydantic',     // binary core, pydantic ile gelir
+    sqlalchemy: 'sqlalchemy',
+    flask: 'flask',
+    jinja2: 'jinja2',
+    requests: 'requests',
+    yaml: 'pyyaml',
+    PIL: 'pillow',
+  };
+  const packagesToRepair = [...new Set(missing.map((m) => moduleToPackage[m]).filter(Boolean))];
+
+  await runStream(paths.embeddedPython(), [
+    '-m', 'pip', 'install',
+    `--target=${sitePackages}`,
+    '--upgrade', '--force-reinstall', '--prefer-binary',
+    '--no-warn-script-location',
+    ...packagesToRepair,
+  ], { env, onProgress });
+
+  // Recurse — yeni denemede smoke test yine yapılır
+  return _verifyAndRepair(env, onProgress, attempt + 1);
 }
 
 async function installPlaywrightChromium({ onProgress } = {}) {
