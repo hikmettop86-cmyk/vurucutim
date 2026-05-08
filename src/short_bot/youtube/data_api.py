@@ -1,21 +1,27 @@
 """YouTube Data API v3 wrappers — videos.list and channels.list (cumulative stats)."""
 from __future__ import annotations
 
+from google_auth_httplib2 import AuthorizedHttp
 from googleapiclient.discovery import build
 
 
 _BATCH_SIZE = 50
 
 
-def fetch_video_stats_batch(credentials, video_ids: list[str]) -> dict[str, dict]:
+def fetch_video_stats_batch(credentials, video_ids: list[str], *, http=None) -> dict[str, dict]:
     """Return {video_id: {views, likes, comments}} for each id.
 
     Splits into 50-id batches (API cap). Missing videos (deleted, private)
     are absent from the result dict.
+
+    http: optional proxied httplib2.Http (Task 11 — proxy support).
     """
     if not video_ids:
         return {}
-    youtube = build("youtube", "v3", credentials=credentials)
+    if http is not None:
+        youtube = build("youtube", "v3", http=AuthorizedHttp(credentials, http=http))
+    else:
+        youtube = build("youtube", "v3", credentials=credentials)
     out: dict[str, dict] = {}
     for i in range(0, len(video_ids), _BATCH_SIZE):
         chunk = video_ids[i:i + _BATCH_SIZE]
@@ -32,9 +38,15 @@ def fetch_video_stats_batch(credentials, video_ids: list[str]) -> dict[str, dict
     return out
 
 
-def fetch_channel_stats(credentials) -> dict | None:
-    """channels.list(mine=True) — subscriber + total view count."""
-    youtube = build("youtube", "v3", credentials=credentials)
+def fetch_channel_stats(credentials, *, http=None) -> dict | None:
+    """channels.list(mine=True) — subscriber + total view count.
+
+    http: optional proxied httplib2.Http (Task 11 — proxy support).
+    """
+    if http is not None:
+        youtube = build("youtube", "v3", http=AuthorizedHttp(credentials, http=http))
+    else:
+        youtube = build("youtube", "v3", credentials=credentials)
     resp = youtube.channels().list(
         part="statistics,snippet", mine=True,
     ).execute()
