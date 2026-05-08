@@ -26,12 +26,45 @@ _SCHEME_TO_TYPE = {
 }
 
 
+def normalize_proxy_url(raw: str) -> str:
+    """Accept multiple proxy URL formats and return canonical scheme://[user:pass@]host:port.
+
+    Supports:
+      - Standard URL: ``http://user:pass@host:port``, ``socks5://host:port``, etc.
+        Returned as-is (just stripped).
+      - Residential format: ``host:port:user:pass`` (4 colon-separated segments,
+        no scheme). Auto-converted to ``http://user:pass@host:port``.
+      - Bare ``host:port`` (2 segments, no scheme). Auto-prefixed with ``http://``.
+
+    Raises ValueError for empty input.
+    """
+    s = (raw or "").strip()
+    if not s:
+        raise ValueError("proxy URL bos")
+    if "://" in s:
+        return s
+    parts = s.split(":")
+    if len(parts) == 4:
+        # host:port:user:pass — common residential proxy format
+        host, port, user, password = parts
+        return f"http://{user}:{password}@{host}:{port}"
+    if len(parts) == 2:
+        # host:port — IP-whitelist proxy
+        return f"http://{s}"
+    raise ValueError(
+        f"Tanimsiz proxy formati: {raw!r}. Kabul edilen formatlar: "
+        f"http://user:pass@host:port  veya  host:port:user:pass  veya  host:port"
+    )
+
+
 def parse_proxy_url(url: str) -> tuple[int, str, int, str | None, str | None]:
     """Parse a proxy URL into (proxy_type, host, port, user, password).
 
-    Supports schemes: http, https, socks4, socks5.
+    Accepts multiple formats via :func:`normalize_proxy_url` (standard URL,
+    residential ``host:port:user:pass``, bare ``host:port``).
     Raises ValueError for unsupported schemes or missing host/port.
     """
+    url = normalize_proxy_url(url)
     p = urlparse(url)
     scheme = (p.scheme or "").lower()
     if scheme not in _SCHEME_TO_TYPE:
@@ -102,10 +135,14 @@ def build_proxied_requests_session(proxy_url: str | None) -> requests.Session:
 
     Used by google.auth.transport.requests.Request(session=...) for token
     refresh — that path uses requests, not httplib2.
+
+    Normalizes alt-format inputs (host:port:user:pass, bare host:port) to
+    standard scheme://[user:pass@]host:port so requests can parse them.
     """
     s = requests.Session()
     if not proxy_url:
         return s
+    normalized = normalize_proxy_url(proxy_url)
     # requests proxies map is shared between http and https (server picks)
-    s.proxies = {"http": proxy_url, "https": proxy_url}
+    s.proxies = {"http": normalized, "https": normalized}
     return s
