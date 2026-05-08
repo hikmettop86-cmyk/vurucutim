@@ -63,29 +63,47 @@ async function installVenv({ onProgress } = {}) {
   // --target site-packages dir and use that for all subsequent installs.
   const sitePackages = paths.sitePackagesDir();
   fs.mkdirSync(sitePackages, { recursive: true });
+  const env = { ...process.env, PYTHONPATH: sitePackages };
 
+  // Bootstrap build_meta: pip + setuptools + wheel hep beraber lazim.
+  // Sdist (kaynak-kod) olarak gelen herhangi bir paket setuptools.build_meta
+  // ister; eksikse "BackendUnavailable: Cannot import 'setuptools.build_meta'"
+  // ile fail eder. Once mevcut bootstrap'i kontrol et.
   const pipPkg = path.join(sitePackages, 'pip');
-  if (fs.existsSync(pipPkg)) {
-    onProgress?.('pip zaten mevcut, atlanıyor');
-    return;
+  const setuptoolsPkg = path.join(sitePackages, 'setuptools');
+  const wheelPkg = path.join(sitePackages, 'wheel');
+  const allPresent = fs.existsSync(pipPkg) && fs.existsSync(setuptoolsPkg) && fs.existsSync(wheelPkg);
+
+  if (!fs.existsSync(pipPkg)) {
+    onProgress?.('get-pip.py indiriliyor');
+    const tmpDir = path.join(paths.userData(), 'tmp');
+    fs.mkdirSync(tmpDir, { recursive: true });
+    const getPip = path.join(tmpDir, 'get-pip.py');
+    await downloadFile('https://bootstrap.pypa.io/get-pip.py', getPip, { onProgress });
+
+    onProgress?.('pip kuruluyor (--target)');
+    await runStream(paths.embeddedPython(), [
+      getPip,
+      `--target=${sitePackages}`,
+      '--no-warn-script-location',
+      '--no-cache-dir',
+    ], { env, onProgress });
   }
 
-  onProgress?.('get-pip.py indiriliyor');
-  const tmpDir = path.join(paths.userData(), 'tmp');
-  fs.mkdirSync(tmpDir, { recursive: true });
-  const getPip = path.join(tmpDir, 'get-pip.py');
-  await downloadFile('https://bootstrap.pypa.io/get-pip.py', getPip, { onProgress });
-
-  onProgress?.('pip kuruluyor (--target)');
-  await runStream(paths.embeddedPython(), [
-    getPip,
-    `--target=${sitePackages}`,
-    '--no-warn-script-location',
-    '--no-cache-dir',
-  ], {
-    env: { ...process.env, PYTHONPATH: sitePackages },
-    onProgress,
-  });
+  // setuptools + wheel'i her zaman ZORLA yenile — kalintida bozuk olabilir
+  // (v0.1.34 ve once: "Cannot import 'setuptools.build_meta'" bug'i bunun yuzunden).
+  if (!allPresent) {
+    onProgress?.('setuptools + wheel kuruluyor (build_meta için)');
+    await runStream(paths.embeddedPython(), [
+      '-m', 'pip', 'install',
+      `--target=${sitePackages}`,
+      '--upgrade', '--force-reinstall',
+      '--no-warn-script-location',
+      'setuptools', 'wheel',
+    ], { env, onProgress });
+  } else {
+    onProgress?.('pip + setuptools + wheel mevcut, bootstrap atlanıyor');
+  }
 }
 
 async function installPipPackages({ onProgress } = {}) {
@@ -127,6 +145,19 @@ print(json.dumps(deps))
     '--no-warn-script-location',
   ];
   const env = { ...process.env, PYTHONPATH: sitePackages };
+
+  // Idempotent setuptools+wheel guarantee: deps install'a girmeden once kontrol
+  // et — kullanici venv step'ini skip edip direkt buradan retry tetiklemis
+  // olabilir, veya sitePackages bozulmus olabilir. Setuptools yoksa hemen kur.
+  const setuptoolsPkg = path.join(sitePackages, 'setuptools');
+  const wheelPkg = path.join(sitePackages, 'wheel');
+  if (!fs.existsSync(setuptoolsPkg) || !fs.existsSync(wheelPkg)) {
+    onProgress?.('setuptools+wheel eksik, kuruluyor (build_meta için)');
+    await runStream(paths.embeddedPython(), [
+      ...baseArgs, '--upgrade', '--force-reinstall',
+      'setuptools', 'wheel',
+    ], { env, onProgress });
+  }
 
   // Tier 1: --upgrade + --prefer-binary. Mevcut yarım install kalıntısı varsa
   // (örn. pydantic var ama pydantic_core yok) --upgrade onları taze indirip
