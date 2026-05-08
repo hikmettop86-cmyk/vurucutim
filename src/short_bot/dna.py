@@ -449,6 +449,36 @@ _GOOGLE_FONT_PARAM: dict[str, str] = {
 }
 
 
+def _sanitize_custom_css_colors(css: str, palette: DnaPalette) -> str:
+    """Replace hardcoded hex colors in custom_css that match palette values
+    with var(--xxx) references, so live palette pickers actually take effect."""
+    import re
+    hex_to_var: dict[str, str] = {}
+    # Single-color fields
+    for var_name, value in [
+        ('primary', palette.primary),
+        ('accent', palette.accent),
+        ('text-main', palette.text_main),
+        ('text-muted', palette.text_muted),
+    ]:
+        if value and value.startswith('#'):
+            hex_to_var[value.lower()] = f'var(--{var_name})'
+    # Gradient pairs
+    for var_prefix, values in [('bg-grad', palette.bg_gradient), ('body-bg', palette.body_bg)]:
+        for i, v in enumerate(values, 1):
+            if v and v.startswith('#'):
+                hex_to_var.setdefault(v.lower(), f'var(--{var_prefix}-{i})')
+
+    if not hex_to_var:
+        return css
+
+    def replacer(m):
+        h = m.group(0).lower()
+        return hex_to_var.get(h, m.group(0))
+
+    return re.sub(r'#[0-9a-fA-F]{6}\b', replacer, css)
+
+
 def build_css_override(dna: DnaSpec) -> str:
     """Generate templates/css/<slug>.css content from DNA. Pure Python, no LLM."""
     # Build Google Fonts @import — combine explicit google_imports with
@@ -491,7 +521,12 @@ html, body, .body, .handle, .stage {{ font-family: '{dna.fonts.body}', sans-seri
 .persistent.like, .persistent.sub {{ {_chip_css(dna.chip_style).replace(';', ' !important;')} }}
 """
     if dna.custom_css.strip():
-        css += f"\n/* Channel custom_css (Opus-generated) */\n{dna.custom_css}\n"
+        # Sanitize: replace hardcoded hex colors that match palette values with
+        # their var(--xxx) equivalents. Without this, Opus-generated custom_css
+        # writes literal hex like `color: #0d1b2a` which beats the live palette
+        # picker (DnaPalette overrides only flow through :root vars).
+        sanitized = _sanitize_custom_css_colors(dna.custom_css, dna.palette)
+        css += f"\n/* Channel custom_css (Opus-generated, color-sanitized) */\n{sanitized}\n"
     # Readability safety net — appended LAST so it overrides any custom_css
     # gradient-text or stroke trick on the headline. We let custom_css decorate
     # backgrounds, photos, chips freely, but force the headline to render with
