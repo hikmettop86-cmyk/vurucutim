@@ -5,7 +5,6 @@
 <title>Short — Hava Durumu</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&display=swap');
-{{ dna_css|safe }}
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
   --primary: #3a7bd5;
@@ -335,6 +334,8 @@ html, body {
 .persistent.sub  { animation: sub-glow  1.5s ease-in-out infinite, fade-out 0.3s ease-in {{ duration_s - cta.duration_s }}s forwards; }
 @keyframes fade-out { to { opacity: 0; } }
 {% endif %}
+  /* DNA OVERRIDE — runtime palette/font from channel DNA */
+  {{ dna_css|safe }}
 </style>
 </head>
 <body>

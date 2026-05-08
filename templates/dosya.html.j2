@@ -5,7 +5,6 @@
 <title>Short — Dosya</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@400;700;900&family=Lora:wght@400;500;700&family=Courier+Prime:wght@400;700&display=swap');
-{{ dna_css|safe }}
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
   --primary: #a52a2a;
@@ -326,6 +325,8 @@ html, body {
 .persistent.sub  { animation: sub-glow  1.5s ease-in-out infinite, fade-out 0.3s ease-in {{ duration_s - cta.duration_s }}s forwards; }
 @keyframes fade-out { to { opacity: 0; } }
 {% endif %}
+  /* DNA OVERRIDE — runtime palette/font from channel DNA */
+  {{ dna_css|safe }}
 </style>
 </head>
 <body>
