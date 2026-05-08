@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import shutil
 import subprocess
 import time
 from typing import TypeVar
@@ -18,6 +20,39 @@ class ClaudeCliError(RuntimeError):
 
 _CODE_FENCE_RE = re.compile(r"```(?:json)?\s*(\{.*?\}|\[.*?\])\s*```", re.DOTALL)
 _FIRST_OBJ_RE = re.compile(r"(\{.*\}|\[.*\])", re.DOTALL)
+
+
+def _resolve_claude_binary(claude_path: str) -> str:
+    """Resolve a bare 'claude' to an absolute path so subprocess.run on Windows
+    can find npm `.cmd` shims (CreateProcess in shell=False mode does NOT honor
+    PATHEXT for non-.exe shims unless given the full path).
+
+    Strategy:
+      1. If user already gave an absolute or qualified path → trust it as-is.
+      2. shutil.which('claude') → respects PATHEXT, finds claude.cmd / .exe.
+      3. Probe well-known npm-global / Anthropic install locations.
+      4. Give up and return original; subprocess will raise FileNotFoundError
+         which the caller turns into a ClaudeCliError with install hint.
+    """
+    if claude_path != "claude":
+        return claude_path
+
+    found = shutil.which("claude")
+    if found:
+        return found
+
+    candidates = [
+        os.path.join(os.environ.get("APPDATA", ""), "npm", "claude.cmd"),
+        os.path.join(os.environ.get("APPDATA", ""), "npm", "claude.exe"),
+        os.path.join(os.environ.get("USERPROFILE", ""), ".local", "bin", "claude.exe"),
+        os.path.join(os.environ.get("USERPROFILE", ""), ".local", "bin", "claude.cmd"),
+        os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "claude", "claude.exe"),
+    ]
+    for c in candidates:
+        if c and os.path.isfile(c):
+            return c
+
+    return claude_path
 
 
 def _extract_json(raw: str) -> str:
@@ -59,13 +94,15 @@ def run_json(
     last_error: Exception | None = None
     retry_feedback: str = ""
 
+    resolved_path = _resolve_claude_binary(claude_path)
+
     for attempt in range(1, retries + 1):
         current_prompt = prompt + retry_feedback if retry_feedback else prompt
         try:
             # Pass prompt via stdin (not argv) — Windows argv encoding mangles
             # non-ASCII characters silently, causing Sonnet to receive a
             # corrupted prompt and return empty output.
-            cmd = [claude_path, "-p", "--output-format", "text"]
+            cmd = [resolved_path, "-p", "--output-format", "text"]
             if model != "default":
                 cmd += ["--model", model]
             proc = subprocess.run(
@@ -80,7 +117,8 @@ def run_json(
         except FileNotFoundError as e:
             # Don't retry — sleeping won't make the binary appear
             raise ClaudeCliError(
-                f"claude binary not found at {claude_path!r}. "
+                f"claude binary not found at {claude_path!r} "
+                f"(resolved to {resolved_path!r}). "
                 f"Install Claude Code CLI or set claude_cli_path in config/settings.yaml."
             ) from e
         except subprocess.TimeoutExpired as e:

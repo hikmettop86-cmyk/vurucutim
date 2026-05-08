@@ -60,10 +60,39 @@ async function detectFfmpeg() {
   return { id: 'ffmpeg', label: 'ffmpeg', status: 'missing', detail: '~80MB' };
 }
 
+// Probe order matches Python _resolve_claude_binary so JS detection and
+// runtime resolution agree on the same binary.
+function _claudeCandidatePaths() {
+  const APPDATA = process.env.APPDATA || '';
+  const USERPROFILE = process.env.USERPROFILE || '';
+  const LOCALAPPDATA = process.env.LOCALAPPDATA || '';
+  return [
+    APPDATA && path.join(APPDATA, 'npm', 'claude.cmd'),
+    APPDATA && path.join(APPDATA, 'npm', 'claude.exe'),
+    USERPROFILE && path.join(USERPROFILE, '.local', 'bin', 'claude.exe'),
+    USERPROFILE && path.join(USERPROFILE, '.local', 'bin', 'claude.cmd'),
+    LOCALAPPDATA && path.join(LOCALAPPDATA, 'Programs', 'claude', 'claude.exe'),
+  ].filter(Boolean);
+}
+
 async function detectClaudeCli() {
-  const r = await execP('claude', ['--version']);
-  if (!r.err) {
-    return { id: 'claude-cli', label: 'Claude CLI', status: 'ok' };
+  // First try `where claude` (Windows PATH lookup, honors PATHEXT). stdout's
+  // first line is the absolute path; any non-zero exit means not on PATH.
+  const where = await execP('where', ['claude']);
+  let resolvedPath = null;
+  if (!where.err && where.stdout) {
+    resolvedPath = where.stdout.split(/\r?\n/).find((l) => l.trim());
+    if (resolvedPath) resolvedPath = resolvedPath.trim();
+  }
+  // Fallback: probe known install locations
+  if (!resolvedPath) {
+    for (const c of _claudeCandidatePaths()) {
+      if (fs.existsSync(c)) { resolvedPath = c; break; }
+    }
+  }
+
+  if (resolvedPath) {
+    return { id: 'claude-cli', label: 'Claude CLI', status: 'ok', path: resolvedPath };
   }
   return {
     id: 'claude-cli',
@@ -106,4 +135,5 @@ async function detectAll() {
 module.exports = {
   detectVenv, detectPipPackages, detectPlaywrightChromium,
   detectFfmpeg, detectClaudeCli, detectClaudeAuth, detectAll,
+  _claudeCandidatePaths,
 };

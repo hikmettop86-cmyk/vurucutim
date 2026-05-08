@@ -53,14 +53,33 @@ test('detectFfmpeg returns missing when neither available', async () => {
   assert.strictEqual(r.status, 'missing');
 });
 
-test('detectClaudeCli returns ok when claude --version succeeds', async () => {
-  mockExecResults = { 'claude --version': { err: null, stdout: '0.5.0' } };
+test('detectClaudeCli returns ok with absolute path from `where claude`', async () => {
+  mockExecResults = {
+    'where claude': { err: null, stdout: 'C:\\Users\\X\\AppData\\Roaming\\npm\\claude.cmd\r\n' },
+  };
+  mockFs = {};
   const r = await detector.detectClaudeCli();
   assert.strictEqual(r.status, 'ok');
+  assert.strictEqual(r.path, 'C:\\Users\\X\\AppData\\Roaming\\npm\\claude.cmd');
 });
 
-test('detectClaudeCli returns missing with action when not on PATH', async () => {
-  mockExecResults = { 'claude --version': { err: new Error('not found') } };
+test('detectClaudeCli falls back to known npm path when `where` fails', async () => {
+  mockExecResults = { 'where claude': { err: new Error('not found') } };
+  // Simulate %APPDATA%\npm\claude.cmd existing on disk
+  const candidates = detector._claudeCandidatePaths();
+  mockFs = {};
+  for (const c of candidates) mockFs[c] = false;
+  const npmCmd = candidates.find((c) => c.endsWith('npm\\claude.cmd'));
+  if (npmCmd) mockFs[npmCmd] = true;
+  const r = await detector.detectClaudeCli();
+  assert.strictEqual(r.status, 'ok');
+  assert.strictEqual(r.path, npmCmd);
+});
+
+test('detectClaudeCli returns missing with action when nothing resolves', async () => {
+  mockExecResults = { 'where claude': { err: new Error('not found') } };
+  mockFs = {};
+  for (const c of detector._claudeCandidatePaths()) mockFs[c] = false;
   const r = await detector.detectClaudeCli();
   assert.strictEqual(r.status, 'missing');
   assert.ok(r.action);
@@ -71,7 +90,7 @@ test('detectClaudeCli returns missing with action when not on PATH', async () =>
 test('detectAll returns array with status for each dep', async () => {
   mockExecResults = {
     'ffmpeg -version': { err: null, stdout: 'ffmpeg' },
-    'claude --version': { err: null, stdout: '0.5.0' },
+    'where claude': { err: null, stdout: 'C:\\Users\\X\\AppData\\Roaming\\npm\\claude.cmd\r\n' },
     'claude --print ping': { err: null, stdout: 'pong' },
   };
   mockFs = {

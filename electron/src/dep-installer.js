@@ -428,7 +428,7 @@ async function installFfmpeg({ onProgress } = {}) {
   onProgress?.(`ffmpeg kuruldu: ${paths.ffmpegBin()}`);
 }
 
-async function copyExampleSettings({ onProgress } = {}) {
+async function copyExampleSettings({ onProgress, claudeCliPath } = {}) {
   if (fs.existsSync(paths.settingsYaml())) {
     onProgress?.('settings.yaml zaten mevcut, atlanıyor');
     return;
@@ -443,6 +443,15 @@ async function copyExampleSettings({ onProgress } = {}) {
     content = content.replace(
       /^ffmpeg_path:.*$/m,
       `ffmpeg_path: "${paths.ffmpegBin().replace(/\\/g, '\\\\')}"`,
+    );
+  }
+  // Auto-fill claude_cli_path with absolute path so subprocess.run on Windows
+  // can find npm .cmd shims (CreateProcess won't honor PATHEXT for .cmd
+  // unless given the full path).
+  if (claudeCliPath && fs.existsSync(claudeCliPath)) {
+    content = content.replace(
+      /^claude_cli_path:.*$/m,
+      `claude_cli_path: "${claudeCliPath.replace(/\\/g, '\\\\')}"`,
     );
   }
   await fsp.writeFile(paths.settingsYaml(), content, 'utf-8');
@@ -624,8 +633,16 @@ async function installAll(deps, onProgress) {
     () => installFfmpeg({ onProgress: (l) => onProgress?.({ phase: 'ffmpeg', text: l }) }));
 
   // Mandatory bootstrap steps (always run, no `deps` filter)
+  // Pull resolved Claude CLI path from detect output so settings.yaml is
+  // written with an absolute path (PATH lookup at subprocess time is not
+  // reliable on Windows for .cmd shims).
+  const claudeDep = (deps || []).find((d) => d.id === 'claude-cli');
+  const claudeCliPath = claudeDep?.path || null;
   await _runStep(null, onProgress, 'config', 'settings.yaml',
-    () => copyExampleSettings({ onProgress: (l) => onProgress?.({ phase: 'config', text: l }) }));
+    () => copyExampleSettings({
+      onProgress: (l) => onProgress?.({ phase: 'config', text: l }),
+      claudeCliPath,
+    }));
   await _runStep(null, onProgress, 'config', 'Templates',
     () => copyTemplates({ onProgress: (l) => onProgress?.({ phase: 'config', text: l }) }));
   await _runStep(null, onProgress, 'music', 'Bundled müzik',
