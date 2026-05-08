@@ -1,5 +1,6 @@
 import json as _json
 from pathlib import Path
+import requests
 from flask import (Blueprint, abort, current_app, flash, jsonify, redirect,
                    request, send_from_directory, url_for)
 
@@ -9,7 +10,8 @@ from short_bot.web.models import Short
 from short_bot.youtube import auth as yt_auth
 from short_bot.youtube.metadata_writer import generate_youtube_metadata
 from short_bot.youtube.proxy import (
-    _redact_err, build_proxied_requests_session,
+    _redact_err, build_proxied_http, build_proxied_requests_session,
+    load_channel_proxy_url,
 )
 from short_bot.youtube.uploader import build_snippet, build_status, upload_video
 
@@ -103,7 +105,31 @@ def upload(short_id):
     cfg_dir = current_app.config["SHORTBOT_CONFIG_DIR"]
     cfg = load_channel(cfg_dir / "channels" / f"{s.channel}.yaml")
 
-    creds = yt_auth.load_credentials(_yt_root(), s.channel)
+    # Resolve proxy (if configured) — same as auto_upload.run_auto_upload pattern
+    secrets_path = current_app.config.get("SHORTBOT_SECRETS_PATH")
+    proxy_url = (
+        load_channel_proxy_url(s.channel, secrets_path)
+        if secrets_path else None
+    )
+    proxy_session = build_proxied_requests_session(proxy_url) if proxy_url else None
+    proxy_http = build_proxied_http(proxy_url) if proxy_url else None
+
+    try:
+        creds = yt_auth.load_credentials(
+            _yt_root(), s.channel, proxy_session=proxy_session,
+        )
+    except (requests.exceptions.ProxyError,
+            requests.exceptions.ConnectionError,
+            requests.exceptions.Timeout) as e:
+        eng = init_db(current_app.config["SHORTBOT_DB_PATH"])
+        err = f"proxy fail (token refresh, {s.channel}): {_redact_err(e)}"
+        record_youtube_upload(
+            eng, short_id=short_id, video_id=None,
+            status="proxy_failed", error=err[:1000], video_url=None,
+        )
+        flash(f"Yükleme başarısız: proxy bağlantısı kurulamadı. {_redact_err(e)}", "error")
+        return redirect(url_for("shorts.detail", short_id=short_id))
+
     if creds is None:
         flash("Önce YouTube bağla (kanal edit sayfasından).", "error")
         return redirect(url_for("shorts.detail", short_id=short_id))
@@ -151,6 +177,7 @@ def upload(short_id):
         video_id = upload_video(
             credentials=creds, file_path=Path(s.file_path),
             snippet=snippet, status=status,
+            http=proxy_http,
         )
         url = f"https://youtu.be/{video_id}"
         record_youtube_upload(
@@ -159,11 +186,22 @@ def upload(short_id):
         )
         flash(f"YouTube'a yüklendi: {url}", "success")
     except Exception as e:
-        record_youtube_upload(
-            eng, short_id=short_id, video_id=None, status="failed",
-            error=str(e)[:1000], video_url=None,
+        # Categorize: proxy transport fail vs API fail
+        is_proxy_fail = proxy_url is not None and isinstance(
+            e, (requests.exceptions.ProxyError,
+                requests.exceptions.ConnectionError,
+                requests.exceptions.Timeout,
+                ConnectionError, OSError),
         )
-        flash(f"Yükleme başarısız: {e}", "error")
+        status_str = "proxy_failed" if is_proxy_fail else "failed"
+        record_youtube_upload(
+            eng, short_id=short_id, video_id=None, status=status_str,
+            error=_redact_err(e)[:1000], video_url=None,
+        )
+        if is_proxy_fail:
+            flash(f"Yükleme başarısız: proxy bağlantısı kurulamadı. {_redact_err(e)}", "error")
+        else:
+            flash(f"Yükleme başarısız: {_redact_err(e)}", "error")
     return redirect(url_for("shorts.detail", short_id=short_id))
 
 
