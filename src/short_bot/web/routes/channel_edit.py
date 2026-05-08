@@ -229,6 +229,12 @@ def save(slug):
             cron_preset=(request.form.get("yt_cron_preset") or None),
         )
 
+    # Proxy URL — secrets.yaml'a yazilir (kanal yaml'a degil — credentials guvenligi)
+    yt_proxy_url = (request.form.get("yt_proxy_url") or "").strip() or None
+    from short_bot.secrets_io import update_channel_proxy
+    secrets_path = Path(current_app.config.get("SHORTBOT_SECRETS_PATH") or "data/secrets.yaml")
+    update_channel_proxy(secrets_path, cfg.slug, yt_proxy_url)
+
     bg_v_enabled = request.form.get("bg_video_enabled") == "on"
     if bg_v_enabled:
         from short_bot.config import BgVideoConfig
