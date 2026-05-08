@@ -140,7 +140,10 @@ def preview(slug):
         handle=cfg.handle, duration_s=cfg.duration_s,
         language=cfg.language, cta_enabled=False,
     )
-    dna_css = build_css_override(dna)
+    # sanitize_palette = yaml-original (custom_css o palette ile yazıldı);
+    # dna.palette = canlı override (renk picker'lar) — :root override'a girer.
+    original_palette = cfg.dna.palette if cfg.dna else dna.palette
+    dna_css = build_css_override(dna, sanitize_palette=original_palette)
     template_path = current_app.config["SHORTBOT_TEMPLATES_DIR"] / f"{template_name}.html.j2"
     html = build_html(job, template_path,
                       ui_labels=ui_labels_for(cfg.language),

@@ -512,8 +512,14 @@ def _sanitize_custom_css_colors(css: str, palette: DnaPalette) -> str:
     return css
 
 
-def build_css_override(dna: DnaSpec) -> str:
-    """Generate templates/css/<slug>.css content from DNA. Pure Python, no LLM."""
+def build_css_override(dna: DnaSpec, *, sanitize_palette: 'DnaPalette | None' = None) -> str:
+    """Generate templates/css/<slug>.css content from DNA. Pure Python, no LLM.
+
+    sanitize_palette: optional palette to use for custom_css hex sanitization
+    (defaults to dna.palette). Pass the YAML-original palette here when DNA has
+    been overridden via UI pickers — custom_css was authored against the
+    original colors, so sanitize must match against those, not the live overrides.
+    """
     # Build Google Fonts @import — combine explicit google_imports with
     # auto-added fonts from headline/body picks (so picker dropdowns just work).
     auto_imports = []
@@ -558,7 +564,10 @@ html, body, .body, .handle, .stage {{ font-family: '{dna.fonts.body}', sans-seri
         # their var(--xxx) equivalents. Without this, Opus-generated custom_css
         # writes literal hex like `color: #0d1b2a` which beats the live palette
         # picker (DnaPalette overrides only flow through :root vars).
-        sanitized = _sanitize_custom_css_colors(dna.custom_css, dna.palette)
+        sanitized = _sanitize_custom_css_colors(
+            dna.custom_css,
+            sanitize_palette if sanitize_palette is not None else dna.palette,
+        )
         css += f"\n/* Channel custom_css (Opus-generated, color-sanitized) */\n{sanitized}\n"
     # Readability safety net — appended LAST so it overrides any custom_css
     # gradient-text or stroke trick on the headline. We let custom_css decorate
