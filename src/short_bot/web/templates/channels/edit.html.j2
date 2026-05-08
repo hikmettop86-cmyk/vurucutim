@@ -510,8 +510,8 @@
       </div>
     </div>
 
-    {# ── Card: CTA (closed by default) ───────────────────────────────── #}
-    <div x-data="{ open: false }" class="bg-white border border-claude-border rounded-xl shadow-soft mb-4">
+    {# ── Card: CTA (open by default — siklikla acilip kapatilan ayar) ── #}
+    <div x-data="{ open: true }" class="bg-white border border-claude-border rounded-xl shadow-soft mb-4">
       <button type="button" @click="open = !open"
               class="w-full flex items-center justify-between px-5 py-3 hover:bg-claude-surface/40 transition-colors text-left">
         <h2 class="font-serif text-base font-semibold flex items-center gap-2">
