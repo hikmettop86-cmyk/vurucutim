@@ -12,6 +12,8 @@ const btnInstall = document.getElementById('btn-install');
 const btnSkip = document.getElementById('btn-skip');
 const btnRetry = document.getElementById('btn-retry');
 const btnSkipAfterError = document.getElementById('btn-skip-after-error');
+const btnCopyError = document.getElementById('btn-copy-error');
+const btnOpenLogs = document.getElementById('btn-open-logs');
 const optAutostart = document.getElementById('opt-autostart');
 
 let currentDeps = [];
@@ -127,7 +129,14 @@ async function startInstall() {
     await window.vt.finishWizard({ status: 'ok' });
   } catch (e) {
     errorEl.classList.remove('hidden');
-    errorMsg.textContent = e.message || String(e);
+    // Tüm log buffer'ından son ~50 satırı ekle — IPC error.message her zaman
+    // tail içermeyebilir (örn. JSON serialization), o yüzden renderer-side
+    // log'u da iliştir.
+    const logTail = (logEl.textContent || '').split('\n').filter(Boolean).slice(-50).join('\n');
+    const fullErr = (e.message || String(e))
+      + (logTail ? `\n\n──────── Son log satırları ────────\n${logTail}` : '');
+    errorMsg.textContent = fullErr;
+    errorMsg.scrollTop = errorMsg.scrollHeight;
     btnInstall.disabled = false;
     btnSkip.disabled = false;
   } finally {
@@ -144,6 +153,26 @@ btnRetry.addEventListener('click', startInstall);
 btnSkipAfterError.addEventListener('click', async () => {
   await window.vt.setPreferences({ autostart: optAutostart.checked });
   await window.vt.finishWizard({ status: 'partial' });
+});
+
+btnCopyError.addEventListener('click', async () => {
+  const text = errorMsg.textContent || '';
+  const meta = `VurucuTim Kurulum Hatası\nVersiyon: ${window.vt?.version || '?'}\nTarih: ${new Date().toISOString()}\n\n`;
+  const ok = await window.vt.copyToClipboard(meta + text);
+  btnCopyError.classList.add('copied');
+  btnCopyError.textContent = ok ? '✓ Kopyalandı' : '✗ Kopyalanamadı';
+  setTimeout(() => {
+    btnCopyError.classList.remove('copied');
+    btnCopyError.textContent = '📋 Hatayı Kopyala';
+  }, 2200);
+});
+
+btnOpenLogs.addEventListener('click', async () => {
+  const res = await window.vt.openLogsFolder();
+  if (!res?.ok) {
+    btnOpenLogs.textContent = `✗ Açılamadı: ${res?.path || ''}`;
+    setTimeout(() => { btnOpenLogs.textContent = '📂 Log Klasörünü Aç'; }, 3000);
+  }
 });
 
 (async () => {

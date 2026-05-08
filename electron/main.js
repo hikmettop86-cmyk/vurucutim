@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, shell, clipboard } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const paths = require('./src/paths');
@@ -152,6 +152,17 @@ function registerIpc() {
     return { ok: true };
   });
   ipcMain.handle('vt:open-external', (_e, url) => shell.openExternal(url));
+  ipcMain.handle('vt:copy-to-clipboard', (_e, text) => {
+    try { clipboard.writeText(String(text || '')); return true; }
+    catch (e) { return false; }
+  });
+  ipcMain.handle('vt:open-logs-folder', async () => {
+    const dir = paths.logsDir();
+    try { fs.mkdirSync(dir, { recursive: true }); } catch {}
+    const result = await shell.openPath(dir);
+    // shell.openPath returns '' on success, error string on failure
+    return result === '' ? { ok: true, path: dir } : { ok: false, error: result, path: dir };
+  });
   ipcMain.handle('vt:get-preferences', () => prefs.load());
   ipcMain.handle('vt:set-preferences', (_e, partial) => prefs.update(partial));
   ipcMain.handle('vt:finish-wizard', (_e, opts) => {

@@ -34,8 +34,15 @@
     <section id="error" class="error hidden">
       <h2>Hata</h2>
       <p id="error-msg"></p>
-      <button id="btn-retry">Tekrar Dene</button>
-      <button id="btn-skip-after-error">Yine de Devam Et</button>
+      <div class="err-actions">
+        <button id="btn-copy-error" class="secondary">📋 Hatayı Kopyala</button>
+        <button id="btn-open-logs" class="secondary">📂 Log Klasörünü Aç</button>
+      </div>
+      <p class="err-hint">Yukarıdaki hatayı kopyalayıp geliştiriciye gönderin — tam tanı için.</p>
+      <div class="err-actions" style="margin-top: 12px;">
+        <button id="btn-retry">Tekrar Dene</button>
+        <button id="btn-skip-after-error">Yine de Devam Et</button>
+      </div>
     </section>
 
     <footer>

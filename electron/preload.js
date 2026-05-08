@@ -1,9 +1,13 @@
 const { contextBridge, ipcRenderer } = require('electron');
+const pkg = require('./package.json');
 
 contextBridge.exposeInMainWorld('vt', {
+  version: pkg.version,
   detectAll: () => ipcRenderer.invoke('vt:detect-all'),
   installMissing: () => ipcRenderer.invoke('vt:install-missing'),
   openExternal: (url) => ipcRenderer.invoke('vt:open-external', url),
+  copyToClipboard: (text) => ipcRenderer.invoke('vt:copy-to-clipboard', text),
+  openLogsFolder: () => ipcRenderer.invoke('vt:open-logs-folder'),
   finishWizard: (opts) => ipcRenderer.invoke('vt:finish-wizard', opts),
   getPreferences: () => ipcRenderer.invoke('vt:get-preferences'),
   setPreferences: (partial) => ipcRenderer.invoke('vt:set-preferences', partial),

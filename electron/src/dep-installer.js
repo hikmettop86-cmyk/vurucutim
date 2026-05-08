@@ -10,12 +10,22 @@ const log = require('./logger');
 /**
  * Run a child process and stream lines to onProgress(line).
  * Resolves when exit code === 0, rejects otherwise.
+ *
+ * On non-zero exit, the rejected Error gets a `.tail` property containing the
+ * last N stdout/stderr lines (default 80) and `.exitCode`. Callers can attach
+ * the tail to user-facing error messages so the wizard shows the real failure
+ * (e.g. pip's ResolutionImpossible block) instead of just "exited with code 1".
  */
-function runStream(cmd, args, { cwd, env, onProgress } = {}) {
+function runStream(cmd, args, { cwd, env, onProgress, tailLines = 80 } = {}) {
   return new Promise((resolve, reject) => {
     log.info(`installer: ${cmd} ${args.join(' ')}`);
     const child = spawn(cmd, args, { cwd, env: env ?? process.env, windowsHide: true });
     let buf = '';
+    const tail = []; // ring buffer of recent lines
+    const pushTail = (line) => {
+      tail.push(line);
+      if (tail.length > tailLines) tail.shift();
+    };
     const flush = (chunk) => {
       buf += chunk.toString();
       const lines = buf.split(/\r?\n/);
@@ -23,6 +33,7 @@ function runStream(cmd, args, { cwd, env, onProgress } = {}) {
       for (const line of lines) {
         if (line.trim()) {
           log.debug('  >', line);
+          pushTail(line);
           onProgress?.(line);
         }
       }
@@ -30,9 +41,18 @@ function runStream(cmd, args, { cwd, env, onProgress } = {}) {
     child.stdout.on('data', flush);
     child.stderr.on('data', flush);
     child.on('exit', (code) => {
-      if (buf.trim()) onProgress?.(buf);
-      if (code === 0) resolve();
-      else reject(new Error(`${cmd} exited with code ${code}`));
+      if (buf.trim()) {
+        pushTail(buf);
+        onProgress?.(buf);
+      }
+      if (code === 0) {
+        resolve();
+      } else {
+        const err = new Error(`${cmd} exited with code ${code}`);
+        err.exitCode = code;
+        err.tail = tail.join('\n');
+        reject(err);
+      }
     });
     child.on('error', reject);
   });
@@ -101,19 +121,56 @@ print(json.dumps(deps))
   }
   onProgress?.(`pyproject.toml: ${deps.length} bağımlılık tespit edildi`);
 
-  const args = [
+  const baseArgs = [
     '-m', 'pip', 'install',
     `--target=${sitePackages}`,
-    '--upgrade',
     '--no-warn-script-location',
-    ...deps,
   ];
   const env = { ...process.env, PYTHONPATH: sitePackages };
+
+  // Tier 1: ResolutionImpossible riskini azaltmak için --upgrade YOK,
+  // --prefer-binary açık. pip resolver eski-uyumlu wheels'leri seçer.
   try {
-    await runStream(paths.embeddedPython(), args, { env, onProgress });
+    await runStream(paths.embeddedPython(), [...baseArgs, '--prefer-binary', ...deps], {
+      env, onProgress,
+    });
+    return;
   } catch (e) {
-    onProgress?.('Build hatası — prebuilt wheels deneniyor');
-    await runStream(paths.embeddedPython(), [...args, '--only-binary=:all:'], { env, onProgress });
+    const msg = (e.tail || e.message || '').slice(0, 4000);
+    onProgress?.(`Tier 1 başarısız (${e.exitCode || '?'}): ${msg.split('\n').slice(-3).join(' | ')}`);
+    if (!/ResolutionImpossible|conflict|incompatible/i.test(msg)) {
+      // Build/network error vb. — Tier 2: only-binary fallback (eski davranış)
+      onProgress?.('Tier 2: prebuilt-only deneniyor');
+      try {
+        await runStream(paths.embeddedPython(), [...baseArgs, '--prefer-binary', '--only-binary=:all:', ...deps], {
+          env, onProgress,
+        });
+        return;
+      } catch (e2) {
+        onProgress?.(`Tier 2 da başarısız: ${(e2.tail || e2.message || '').split('\n').slice(-3).join(' | ')}`);
+      }
+    }
+  }
+
+  // Tier 3: per-package --no-deps. Resolver çakışmasını tamamen bypass et
+  // (her paket bağımsız kurulur, transitive deps zaten paket içine giriyor).
+  // Bu son çare; pip'in çözemediği hibrit graf'ı manuel sırayla parçala.
+  onProgress?.('Tier 3: paketler tek tek kuruluyor (--no-deps)');
+  const failed = [];
+  for (const dep of deps) {
+    try {
+      await runStream(paths.embeddedPython(), [
+        ...baseArgs, '--prefer-binary', '--no-deps', dep,
+      ], { env, onProgress });
+    } catch (e) {
+      failed.push(`${dep}: ${(e.tail || e.message || '').split('\n').slice(-2).join(' / ')}`);
+    }
+  }
+  if (failed.length > 0) {
+    const summary = failed.slice(0, 10).join('\n');
+    const err = new Error(`pip Tier 3 — ${failed.length} paket başarısız:\n${summary}`);
+    err.tail = summary;
+    throw err;
   }
 }
 
@@ -386,11 +443,29 @@ const STEP_HINTS = {
 
 function _wrapStepError(stepId, originalError) {
   const meta = STEP_HINTS[stepId] || { label: stepId, hint: '' };
-  const orig = (originalError && originalError.message) || String(originalError);
-  const trimmed = orig.length > 200 ? orig.slice(0, 200) + '…' : orig;
-  const e = new Error(`[${meta.label}] başarısız: ${trimmed}\n\nİpucu: ${meta.hint}`);
+  const origMsg = (originalError && originalError.message) || String(originalError);
+  const tail = (originalError && originalError.tail) || '';
+  // Asıl hata genelde tail'in son ~30 satırında — onu öne koy. Dev mesajı
+  // ("python.exe exited with code 1") tek başına faydasız.
+  const tailTrim = tail.length > 1500
+    ? '…\n' + tail.slice(tail.length - 1500)
+    : tail;
+  const logPath = path.join(paths.logsDir(), 'electron-main.log');
+  const lines = [
+    `[${meta.label}] başarısız (exit ${originalError?.exitCode ?? '?'})`,
+    '',
+    'HATA ÇIKTISI (son satırlar):',
+    tailTrim || origMsg,
+    '',
+    `İpucu: ${meta.hint}`,
+    '',
+    `Tam log: ${logPath}`,
+  ];
+  const e = new Error(lines.join('\n'));
   e.stepId = stepId;
-  e.originalError = orig;
+  e.originalError = origMsg;
+  e.tail = tail;
+  e.logPath = logPath;
   return e;
 }
 

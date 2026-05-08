@@ -48,7 +48,24 @@ pre#log { max-height: 220px; overflow: auto; background: #111; padding: 12px; bo
 
 .error { margin-top: 16px; padding: 16px; background: #3b1f1f; border-radius: 6px; border: 1px solid #7f1d1d; }
 .error h2 { margin: 0 0 8px; color: #fca5a5; font-size: 16px; }
-#error-msg { white-space: pre-wrap; line-height: 1.45; font-size: 13px; color: #fed7d7; margin: 0 0 12px; font-family: 'Segoe UI', system-ui, sans-serif; }
+#error-msg {
+  white-space: pre-wrap;
+  line-height: 1.45;
+  font-size: 12px;
+  color: #fed7d7;
+  margin: 0 0 12px;
+  font-family: 'Cascadia Code', 'Consolas', 'Courier New', monospace;
+  max-height: 280px;
+  overflow-y: auto;
+  background: #2a1414;
+  padding: 10px 12px;
+  border-radius: 4px;
+  border: 1px solid #5b1a1a;
+  user-select: text;
+}
+.err-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.err-hint { margin: 8px 0 0; font-size: 12px; color: #fbb; opacity: 0.85; }
+#btn-copy-error.copied { background: #166534; color: #d1fae5; }
 
 footer {
   margin-top: auto;
