@@ -117,7 +117,7 @@ if (Test-Path $tplPath) {
     [System.IO.File]::WriteAllText($batOut, $batContent, (New-Object System.Text.UTF8Encoding $false))
     Write-Host "  -> $batOut (template uretildi)"
 } else {
-    Write-Host "  UYARI: $tplPath bulunamadi — Temizle-Kur.bat upload edilmeyecek" -ForegroundColor Yellow
+    Write-Host "  UYARI: $tplPath bulunamadi - Temizle-Kur.bat upload edilmeyecek" -ForegroundColor Yellow
     $batOut = $null
 }
 
