@@ -52,8 +52,12 @@ def connect(slug):
         flash(f"client_secrets.json eksik. Yere bırak: data/youtube_credentials/{slug}/client_secrets.json",
               "error")
         return redirect(url_for("channel_edit.edit", slug=slug))
+    # prompt="select_account consent": Google'in hesap secim ekranini her zaman
+    # goster (browser'da onceden giris yapilmis Gmail olsa bile) + consent.
+    # Sebep: bir browser'dan birden cok kanal/Gmail ile baglanirken yanlis
+    # hesabin yetkilendirilmesini onler.
     auth_url, _state = flow.authorization_url(
-        state=slug, access_type="offline", prompt="consent",
+        state=slug, access_type="offline", prompt="select_account consent",
     )
     # Persist PKCE code_verifier across the OAuth roundtrip — google-auth-oauthlib auto-generates
     # one at authorization_url() time and Google will require it back in fetch_token().
