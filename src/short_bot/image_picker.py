@@ -169,6 +169,10 @@ def _run_image_search(
 
     normalized = _normalize_query(query)
     short_q = _normalize_query(script.header_bottom) if script.header_bottom else ""
+    logger.info(
+        f"image_picker queries: orig={query!r} ascii={normalized!r} "
+        f"header={short_q!r}"
+    )
 
     def _from_pexels() -> list[ImageCandidate]:
         try:
