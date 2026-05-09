@@ -298,6 +298,27 @@ def test_build_css_appends_custom_css_when_present():
     assert css.index("--primary") < css.index("/* Channel custom_css")
 
 
+def test_per_video_prompt_includes_animation_guidance():
+    """build_dna_for_video_prompt must instruct Opus on animation_style choice."""
+    from short_bot.config import ChannelConfig
+    from short_bot.dna import build_dna_for_video_prompt
+    cfg = ChannelConfig(
+        slug="x", name="X", keywords=["a"], rss_locale="tr-TR",
+        schedule_cron="0 * * * *", duration_s=25, min_score=6.0,
+        max_candidates_per_run=3, template="newscast",
+        colors={"primary": "#fff"}, handle="@x", output_dir="out",
+        enabled=True, cta_enabled=True, cta_text="x", cta_icons=[],
+        cta_duration_s=4, cta_show_handle=True, language="tr",
+        max_age_hours=24, dynamic_dna=True,
+    )
+    prompt = build_dna_for_video_prompt(channel=cfg, headline="x", body="y")
+    assert "animation_style" in prompt
+    assert "stagger-reveal" in prompt
+    assert "fade-up" in prompt
+    assert "typewriter" in prompt
+    assert "zoom-in" in prompt
+
+
 def test_dnaspec_animation_style_default_none():
     """Existing DNA without animation_style must default to 'none'."""
     from short_bot.dna import DnaSpec

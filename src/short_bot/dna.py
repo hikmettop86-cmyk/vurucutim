@@ -448,6 +448,13 @@ seçimini sadece BU MAKALEYE göre yap):
   başarı/zafer → parlak/altın, sakin teknik → mavi+gri)
 - persona_summary kanal personaşına SADİK KAL (yukarıda verilen)
 - ui_badge bu makalenin temasına uygun kısa bir rozet
+- animation_style'ı makalenin tempo'suna göre seç:
+  * none: sakin, kurumsal duyuru
+  * fade-up: standart info shot, çoğu haber için iyi default
+  * slide-in: hızlı transfer, son dakika, akut olay
+  * stagger-reveal: liste/sayı haberi (gundem, top-5 list, fixtures)
+  * typewriter: alıntı/açıklama, derinlikli analiz
+  * zoom-in: heyecan, skor, zafer, viral moment
 """
     return base + article_block
 
