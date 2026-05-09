@@ -6,8 +6,13 @@
      - data-fit-pad  (default 16)  — bottom padding to leave free
    Strips line-clamp during measurement so scrollHeight reflects real text
    height, then restores it (mask gradient still graceful-cuts at MIN if
-   overflow). Synchronous on parse — runs before Playwright screenshots. */
-(function autoFit() {
+   overflow). Awaits document.fonts.ready so per-glyph widths are correct
+   (otherwise fallback font is used during parse, then real font replaces
+   it later and layout shifts past the chosen fontSize → overflow). */
+async function _autoFit() {
+  if (document.fonts && document.fonts.ready) {
+    try { await document.fonts.ready; } catch (_) {}
+  }
   /* List-container mode (gundem): every .list-item .text shares one font size,
      scales together so the list fits in container.clientHeight. */
   var list = document.querySelector('.list-container[data-fit-min]');
@@ -62,5 +67,6 @@
   text.style.webkitLineClamp = origClamp;
   text.style.display = origDisplay;
   void text.offsetHeight;
-})();
+}
+window.__autoFitDone = _autoFit().catch(function(){});
 </script>

@@ -120,6 +120,10 @@ def render_frames(
         page = browser_obj.new_page(viewport={"width": WIDTH, "height": HEIGHT},
                                      device_scale_factor=1)
         page.set_content(html, wait_until="networkidle")
+        # Wait for auto-fit script to finish — it awaits document.fonts.ready
+        # so we don't screenshot mid-resize. Templates without auto-fit set
+        # __autoFitDone to undefined; Promise.resolve() handles that case.
+        page.evaluate("() => window.__autoFitDone || Promise.resolve()")
         # Pause CSS animations so we can step them via clock
         page.add_init_script("document.getAnimations().forEach(a => a.pause());")
 
