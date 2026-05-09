@@ -47,12 +47,20 @@ from short_bot.generated_db import (
     update_generated_short_id,
 )
 from short_bot.image_picker import pick_image_for_generator
+import os
+import secrets as _secrets_mod  # avoid shadowing the local `secrets_path` var
 import short_bot.pexels as _pexels_mod
 from short_bot.pexels import (
     load_secrets as _load_secrets,
     pick_query_for_archetype,
     resolve_pexels_api_key,
+    resolve_openai_api_key,
 )
+from short_bot.dna import DnaSpec, build_css_override, generate_dna_for_video
+from short_bot.dna_cache import (
+    increment_hit_count, lookup_cached_dna, save_cached_dna,
+)
+from short_bot.embeddings import EmbeddingError, embed_text
 
 _GENERATOR_TOPIC_DIST_DAYS = 7   # window for topic_distribution Sonnet hint
 _IMAGE_RETRY_MAX = 3   # try this many top candidates before giving up on image
@@ -66,6 +74,82 @@ def _is_recent(pub_date: datetime | None, cutoff: datetime) -> bool:
         return False
     aware = pub_date if pub_date.tzinfo else pub_date.replace(tzinfo=timezone.utc)
     return aware >= cutoff
+
+
+def _resolve_dna_for_video(
+    *,
+    channel: ChannelConfig,
+    headline: str,
+    body: str,
+    log: logging.Logger,
+    claude_path: str,
+    secrets_path: Path,
+    templates_dir: Path,
+    eng,
+) -> tuple[DnaSpec, Path] | None:
+    """For dynamic_dna channels: lookup cache or generate per-video DNA.
+
+    Returns (dna, css_path) on success or None on any failure
+    (caller falls back to channel.dna or channel.template).
+    """
+    if not channel.dynamic_dna:
+        return None
+
+    topic_text = f"{headline}\n{body[:200]}"
+
+    # 1. Resolve key + embed
+    api_key = resolve_openai_api_key(_load_secrets(secrets_path))
+    if not api_key:
+        log.warning("  [dna] no openai_api_key configured → fallback to static")
+        return None
+    try:
+        emb = embed_text(topic_text, api_key=api_key)
+    except EmbeddingError as e:
+        log.warning(f"  [dna] embedding failed: {e} → fallback to static")
+        return None
+
+    css_dir = templates_dir / "css"
+
+    # 2. Cache lookup
+    hit = lookup_cached_dna(eng, channel.slug, emb, threshold=0.85)
+    if hit is not None:
+        css_path = css_dir / hit.css_filename
+        if css_path.exists():
+            log.info(
+                f"  [dna] cache HIT id={hit.id} archetype={hit.archetype} "
+                f"(cos={hit.score:.3f})"
+            )
+            increment_hit_count(eng, hit.id)
+            return hit.dna, css_path
+        # CSS missing on disk (manual cleanup, etc.) — treat as miss, fall through
+        log.warning(
+            f"  [dna] cache HIT id={hit.id} but {css_path.name} missing → regenerating"
+        )
+
+    # 3. Cache miss → generate
+    log.info("  [dna] cache MISS → generating (Opus)…")
+    try:
+        dna = generate_dna_for_video(
+            channel=channel, headline=headline, body=body,
+            claude_path=claude_path,
+        )
+    except Exception as e:  # broad: timeout, JSON parse, validation, etc.
+        log.warning(f"  [dna] generation failed: {e} → fallback to static")
+        return None
+
+    # 4. Save (DNA + CSS file + cache row)
+    try:
+        css_text = build_css_override(dna)
+        css_filename = f"dynamic-{channel.slug}-{_secrets_mod.token_hex(3)}.css"
+        css_path = css_dir / css_filename
+        css_dir.mkdir(parents=True, exist_ok=True)
+        css_path.write_text(css_text, encoding="utf-8")
+        save_cached_dna(eng, channel.slug, topic_text, emb, dna, css_filename)
+        log.info(f"  [dna] saved: archetype={dna.archetype} css={css_filename}")
+        return dna, css_path
+    except OSError as e:
+        log.warning(f"  [dna] save failed: {e} → fallback to static")
+        return None
 
 
 def _resolve_ui_labels(channel: ChannelConfig) -> dict[str, str]:
