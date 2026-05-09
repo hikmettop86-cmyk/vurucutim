@@ -121,6 +121,22 @@ youtube_quota = Table(
 Index("idx_yt_quota_chan_date",
       youtube_quota.c.channel, youtube_quota.c.date, unique=True)
 
+dna_cache = Table(
+    "dna_cache", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("channel_slug", String, nullable=False),
+    Column("topic_text", Text, nullable=False),
+    Column("embedding", Text, nullable=False),  # JSON array of floats; small enough
+    Column("dna_json", Text, nullable=False),
+    Column("css_filename", String, nullable=False),
+    Column("archetype", String, nullable=False),
+    Column("created_at", DateTime, default=_utcnow, nullable=False),
+    Column("last_used_at", DateTime),
+    Column("hit_count", Integer, default=0, nullable=False),
+)
+Index("idx_dna_cache_channel_created",
+      dna_cache.c.channel_slug, dna_cache.c.created_at)
+
 
 def init_db(db_path: Path | str) -> Engine:
     """Create engine, enable WAL + FK + busy_timeout, create schema if absent."""
