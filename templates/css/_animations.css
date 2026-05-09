@@ -1,0 +1,38 @@
+/* Shared animation keyframes for DnaSpec.animation_style.
+   Activated by the .stage root having class "dna-anim-<style>".
+   Inlined via build_css_override (relative stylesheet imports would not resolve
+   under Playwright set_content's about:blank origin). */
+
+@keyframes anim-fade-up {
+  from { opacity: 0; transform: translateY(40px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes anim-slide-in {
+  from { opacity: 0; transform: translateX(60px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes anim-zoom-in {
+  from { opacity: 0; transform: scale(0.85); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes anim-typewriter {
+  from { clip-path: inset(0 100% 0 0); }
+  to   { clip-path: inset(0 0 0 0); }
+}
+
+/* Single-element animations on body-text + first headline line */
+.dna-anim-fade-up    .body-text,
+.dna-anim-fade-up    .header .top  { animation: anim-fade-up 0.8s ease-out forwards; }
+.dna-anim-slide-in   .body-text,
+.dna-anim-slide-in   .header .top  { animation: anim-slide-in 0.7s ease-out forwards; }
+.dna-anim-zoom-in    .body-text,
+.dna-anim-zoom-in    .header .top  { animation: anim-zoom-in 0.7s ease-out forwards; }
+.dna-anim-typewriter .body-text    { display: inline-block;
+                                      animation: anim-typewriter 1.2s steps(40) forwards; }
+
+/* List-mode stagger (gundem) — uses --i index var per item */
+.dna-anim-stagger-reveal .list-item {
+  opacity: 0;
+  animation: anim-fade-up 0.6s ease-out forwards;
+  animation-delay: calc(var(--i, 0) * var(--stagger-delay, 1s));
+}

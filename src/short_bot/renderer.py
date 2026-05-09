@@ -47,6 +47,7 @@ def build_html(
     *,
     ui_labels: dict[str, str] | None = None,
     dna_css: str = "",
+    animation_style: str = "none",
 ) -> str:
     template_path = Path(template_path)
     env = Environment(
@@ -88,6 +89,7 @@ def build_html(
         ui_share=labels["share"],
         ui_source=labels.get("source", "Source"),
         dna_css=dna_css,
+        animation_style=animation_style,
         cta={
             "enabled": job.cta_enabled,
             "text": job.cta_text,
@@ -108,10 +110,12 @@ def render_frames(
     browser: str = "chromium",
     ui_labels: dict[str, str] | None = None,
     dna_css: str = "",
+    animation_style: str = "none",
 ) -> int:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    html = build_html(job, template_path, ui_labels=ui_labels, dna_css=dna_css)
+    html = build_html(job, template_path, ui_labels=ui_labels, dna_css=dna_css,
+                      animation_style=animation_style)
 
     total_frames = job.duration_s * fps
 

@@ -613,7 +613,9 @@ def _run_rss(*, channel, run_id, log, eng, settings,
         template_path = templates_dir / f"{archetype}.html.j2"
         render_frames(job, template_path, frames_dir,
                       fps=30, browser=settings.playwright_browser,
-                      ui_labels=ui_labels, dna_css=dna_css)
+                      ui_labels=ui_labels, dna_css=dna_css,
+                      animation_style=(effective_dna.animation_style
+                                        if effective_dna is not None else "none"))
 
         log.info("[8/8] compose_video")
         out_dir = Path(channel.output_dir)
@@ -777,7 +779,9 @@ def _run_generator(*, channel, run_id, log, eng, settings,
         template_path = templates_dir / f"{archetype}.html.j2"
         render_frames(job, template_path, frames_dir,
                       fps=30, browser=settings.playwright_browser,
-                      ui_labels=ui_labels, dna_css=dna_css)
+                      ui_labels=ui_labels, dna_css=dna_css,
+                      animation_style=(effective_dna.animation_style
+                                        if effective_dna is not None else "none"))
 
         log.info("[6/6] compose_video")
         out_dir = Path(channel.output_dir)

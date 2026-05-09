@@ -1,6 +1,7 @@
 """Channel DNA: Pydantic models for visual + content identity (archetype + palette + tone)."""
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
@@ -14,6 +15,8 @@ ARCHETYPES = [
     "politika", "ekonomi", "spor-haber", "tech-haber",
     "hava-durumu", "yerel", "gundem", "dosya",
 ]
+
+_ANIMATIONS_CSS_PATH = Path(__file__).resolve().parent.parent.parent / "templates" / "css" / "_animations.css"
 
 
 # Default visual palette + fonts per archetype.
@@ -614,7 +617,14 @@ def build_css_override(dna: DnaSpec, *, sanitize_palette: 'DnaPalette | None' = 
             + "&display=swap');\n"
         )
     p = dna.palette
-    css = f"""{google}:root {{
+    # Inline shared animation keyframes (relative @import would fail under
+    # Playwright set_content's about:blank origin)
+    try:
+        animations_css = _ANIMATIONS_CSS_PATH.read_text(encoding="utf-8")
+    except OSError:
+        animations_css = ""
+    css = f"""{google}{animations_css}
+:root {{
   --primary: {p.primary};
   --accent: {p.accent};
   --bg-grad-1: {p.bg_gradient[0]};

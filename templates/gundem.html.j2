@@ -344,7 +344,7 @@ html, body {
 </style>
 </head>
 <body>
-<div class="stage">
+<div class="stage dna-anim-{{ animation_style|default('none') }}">
   <div class="stage-badge">{{ ui_breaking }}</div>
   <div class="header">
     <span class="top">{{ script.header_top }}</span>
@@ -362,7 +362,7 @@ html, body {
         {# Strip leading "N. " prefix manually Ã¢â‚¬â€ split on first '.' #}
         {% set parts = stripped.split('.', 1) %}
         {% set text = (parts[1] if parts|length == 2 else parts[0])|trim %}
-        <div class="list-item">
+        <div class="list-item" style="--i: {{ loop.index0 }};">
           <div class="num">{{ loop.index }}</div>
           <div class="text">{{ text }}</div>
         </div>
