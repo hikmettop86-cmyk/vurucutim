@@ -530,3 +530,62 @@ def test_save_channel_omits_bg_video_when_disabled_default(tmp_path):
     save_channel(dst, c)
     raw = yaml.safe_load(dst.read_text(encoding="utf-8"))
     assert "bg_video" not in raw
+
+
+def test_channel_config_dynamic_dna_default_false(tmp_path):
+    """dynamic_dna defaults to False; YAML without the key loads cleanly."""
+    from short_bot.config import load_channel
+    yaml_text = """
+slug: test-ch
+name: Test
+keywords: [a]
+language: tr
+schedule_cron: "0 * * * *"
+duration_s: 25
+min_score: 6.0
+max_candidates_per_run: 3
+template: newscast
+colors: {primary: "#fff"}
+handle: "@test"
+output_dir: "out"
+"""
+    p = tmp_path / "ch.yaml"
+    p.write_text(yaml_text, encoding="utf-8")
+    cfg = load_channel(p)
+    assert cfg.dynamic_dna is False
+
+
+def test_channel_config_dynamic_dna_round_trip(tmp_path):
+    """dynamic_dna=True survives save → load."""
+    from short_bot.config import ChannelConfig, load_channel, save_channel
+    cfg = ChannelConfig(
+        slug="test-ch", name="Test", keywords=["a"], rss_locale="tr-TR",
+        schedule_cron="0 * * * *", duration_s=25, min_score=6.0,
+        max_candidates_per_run=3, template="newscast",
+        colors={"primary": "#fff"}, handle="@test", output_dir="out",
+        enabled=True, cta_enabled=True, cta_text="x", cta_icons=[],
+        cta_duration_s=4, cta_show_handle=True, language="tr",
+        max_age_hours=24, dynamic_dna=True,
+    )
+    p = tmp_path / "ch.yaml"
+    save_channel(p, cfg)
+    cfg2 = load_channel(p)
+    assert cfg2.dynamic_dna is True
+
+
+def test_channel_config_dynamic_dna_false_not_written(tmp_path):
+    """When dynamic_dna=False, the key is NOT written to YAML (keeps yamls clean)."""
+    from short_bot.config import ChannelConfig, save_channel
+    cfg = ChannelConfig(
+        slug="test-ch", name="Test", keywords=["a"], rss_locale="tr-TR",
+        schedule_cron="0 * * * *", duration_s=25, min_score=6.0,
+        max_candidates_per_run=3, template="newscast",
+        colors={"primary": "#fff"}, handle="@test", output_dir="out",
+        enabled=True, cta_enabled=True, cta_text="x", cta_icons=[],
+        cta_duration_s=4, cta_show_handle=True, language="tr",
+        max_age_hours=24, dynamic_dna=False,
+    )
+    p = tmp_path / "ch.yaml"
+    save_channel(p, cfg)
+    text = p.read_text(encoding="utf-8")
+    assert "dynamic_dna" not in text

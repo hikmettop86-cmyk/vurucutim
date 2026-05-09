@@ -77,6 +77,7 @@ class ChannelConfig:
     # (0 = no limit). Default 24h prevents stale articles from being turned
     # into shorts.
     max_age_hours: int = 24
+    dynamic_dna: bool = False
     dna: DnaSpec | None = None
     script_model: str | None = None
     content_source: Literal["rss", "generator"] = "rss"
@@ -177,6 +178,7 @@ def load_channel(path: Path) -> ChannelConfig:
         min_score=float(data["min_score"]),
         max_candidates_per_run=int(data["max_candidates_per_run"]),
         max_age_hours=int(data.get("max_age_hours", 24)),
+        dynamic_dna=bool(data.get("dynamic_dna", False)),
         template=template,
         colors=dict(data["colors"]),
         handle=data["handle"],
@@ -222,6 +224,8 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
             "show_handle": cfg.cta_show_handle,
         },
     }
+    if cfg.dynamic_dna:
+        data["dynamic_dna"] = True
     if cfg.script_model:
         data["script_model"] = cfg.script_model
     if cfg.content_source != "rss":
