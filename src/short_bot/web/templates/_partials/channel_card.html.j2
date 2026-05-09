@@ -4,8 +4,15 @@
   <div class="flex items-start justify-between mb-3">
     <div class="min-w-0 flex-1">
       <a href="/channels/{{ c.slug }}/edit" class="block group">
-        <h3 class="font-serif font-bold text-lg text-claude-text group-hover:text-claude-accent truncate">
+        <h3 class="font-serif font-bold text-lg text-claude-text group-hover:text-claude-accent truncate flex items-center flex-wrap gap-1">
           {{ c.name }}
+          {% if c.dynamic_dna and cache_stats is defined and c.slug in cache_stats %}
+            {% set st = cache_stats[c.slug] %}
+            <span class="text-[10px] bg-purple-900/40 text-purple-200 px-2 py-0.5 rounded-full"
+                  title="Dinamik DNA önbelleği: {{ st.rows }} benzersiz kayıt, {{ '%.0f' % (st.hit_rate * 100) }}% yeniden kullanım">
+              🧬 dyn ({{ st.rows }} önbellek, {{ '%.0f' % (st.hit_rate * 100) }}% hit)
+            </span>
+          {% endif %}
         </h3>
         <p class="font-mono text-xs text-claude-muted truncate">{{ c.slug }}</p>
       </a>

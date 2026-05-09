@@ -159,3 +159,33 @@ def cleanup_expired_dna_cache(
         except OSError as e:
             _LOG.warning(f"could not delete cache CSS {f}: {e}")
     return len(rows_to_delete)
+
+
+@dataclass(frozen=True)
+class CacheStats:
+    rows: int
+    total_hits: int
+
+    @property
+    def hit_rate(self) -> float:
+        """hits / (hits + rows). 0.0 if both are zero.
+
+        rows = unique cached DNAs (each counts as a 'miss' since LLM ran for it).
+        total_hits = times any of those rows was reused via embedding match.
+        Hit rate = reuses / (reuses + initial generations).
+        """
+        denom = self.total_hits + self.rows
+        return self.total_hits / denom if denom > 0 else 0.0
+
+
+def get_cache_stats(eng: Engine, channel_slug: str) -> CacheStats:
+    """Return (row_count, total_hit_count) for a channel's cache."""
+    from sqlalchemy import func
+    with eng.begin() as conn:
+        row = conn.execute(
+            select(
+                func.count(_dna_cache_table.c.id).label("rows"),
+                func.coalesce(func.sum(_dna_cache_table.c.hit_count), 0).label("hits"),
+            ).where(_dna_cache_table.c.channel_slug == channel_slug)
+        ).one()
+    return CacheStats(rows=int(row.rows), total_hits=int(row.hits))

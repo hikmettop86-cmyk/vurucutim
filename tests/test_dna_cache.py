@@ -11,7 +11,7 @@ from sqlalchemy import create_engine, insert, select
 from short_bot.db import dna_cache, init_db
 from short_bot.dna import DnaSpec
 from short_bot.dna_cache import (
-    CacheHit, cleanup_expired_dna_cache, increment_hit_count,
+    CacheHit, cleanup_expired_dna_cache, get_cache_stats, increment_hit_count,
     lookup_cached_dna, save_cached_dna,
 )
 
@@ -127,3 +127,23 @@ def test_cleanup_expired_deletes_old_rows_and_files(eng, tmp_path):
         rows = conn.execute(select(dna_cache)).fetchall()
     assert len(rows) == 1
     assert rows[0].topic_text == "new"
+
+
+def test_get_cache_stats(eng):
+    dna = _sample_dna()
+    save_cached_dna(eng, "ch1", "a", _vec(1.0), dna, "a.css")
+    save_cached_dna(eng, "ch1", "b", _vec(0.5), dna, "b.css")
+    save_cached_dna(eng, "ch2", "c", _vec(1.0), dna, "c.css")
+    # Bump hits on ch1's first row twice
+    hit = lookup_cached_dna(eng, "ch1", _vec(1.0), threshold=0.85)
+    increment_hit_count(eng, hit.id)
+    increment_hit_count(eng, hit.id)
+    stats = get_cache_stats(eng, "ch1")
+    assert stats.rows == 2
+    assert stats.total_hits == 2
+    # hits / (hits + rows) = 2 / 4 = 0.5
+    assert stats.hit_rate == 0.5
+    other = get_cache_stats(eng, "ch2")
+    assert other.rows == 1
+    assert other.total_hits == 0
+    assert other.hit_rate == 0.0

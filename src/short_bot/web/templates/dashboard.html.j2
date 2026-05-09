@@ -81,6 +81,15 @@
   <a href="/shorts?youtube=no" class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border px-3 py-1.5 rounded-full text-xs">○ YT yüklenmedi</a>
 </div>
 
+{% if channels %}
+<h2 class="font-serif text-xl font-bold mb-4">Kanallar</h2>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+  {% for c in channels %}
+    {% include "_partials/channel_card.html.j2" %}
+  {% endfor %}
+</div>
+{% endif %}
+
 <h2 class="font-serif text-xl font-bold mb-4">Son üretilenler</h2>
 <div class="grid grid-cols-4 gap-4">
   {% for s in recent %}

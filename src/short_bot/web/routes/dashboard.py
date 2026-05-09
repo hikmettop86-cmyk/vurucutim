@@ -3,6 +3,8 @@ from datetime import datetime, timedelta, timezone
 from flask import Blueprint, current_app, render_template
 
 from short_bot.config import list_channels
+from short_bot.db import init_db
+from short_bot.dna_cache import get_cache_stats
 from short_bot.web.extensions import db
 from short_bot.web.models import Run, Short, YoutubeUpload
 
@@ -53,6 +55,13 @@ def index():
                      .order_by(Run.started_at.desc())
                      .limit(5).all())
 
+    # Build per-channel cache stats for dynamic_dna channels only
+    eng = init_db(current_app.config["SHORTBOT_DB_PATH"])
+    cache_stats = {}
+    for ch in channels:
+        if ch.dynamic_dna:
+            cache_stats[ch.slug] = get_cache_stats(eng, ch.slug)
+
     return render_template(
         "dashboard.html.j2",
         total_shorts=total_shorts,
@@ -65,4 +74,5 @@ def index():
         channels=channels,
         recent=recent,
         recent_errors=recent_errors,
+        cache_stats=cache_stats,
     )
