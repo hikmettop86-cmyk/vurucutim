@@ -54,3 +54,24 @@ def update_channel_proxy(secrets_path: Path, slug: str, url: str | None) -> None
     else:
         data.pop("channel_proxies", None)
     _atomic_write_yaml(p, data)
+
+
+def update_openai_api_key(secrets_path: Path, key: str | None) -> None:
+    """Set or clear top-level openai_api_key in secrets.yaml.
+
+    - key=str  → upsert
+    - key=None → remove
+
+    File created if missing. Other top-level keys are preserved.
+    """
+    p = Path(secrets_path)
+    data: dict = {}
+    if p.exists():
+        loaded = yaml.safe_load(p.read_text(encoding="utf-8"))
+        if isinstance(loaded, dict):
+            data = loaded
+    if key is None:
+        data.pop("openai_api_key", None)
+    else:
+        data["openai_api_key"] = key
+    _atomic_write_yaml(p, data)
