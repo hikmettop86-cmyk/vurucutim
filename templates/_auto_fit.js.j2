@@ -1,0 +1,66 @@
+<script>
+/* Content-aware body font auto-fit.
+   Targets `.body-text` (stadium wrapper) or `.body` itself. Reads:
+     - data-fit-min  (default 36)  — minimum font-size px
+     - data-fit-max  (default 64)  — maximum font-size px
+     - data-fit-pad  (default 16)  — bottom padding to leave free
+   Strips line-clamp during measurement so scrollHeight reflects real text
+   height, then restores it (mask gradient still graceful-cuts at MIN if
+   overflow). Synchronous on parse — runs before Playwright screenshots. */
+(function autoFit() {
+  /* List-container mode (gundem): every .list-item .text shares one font size,
+     scales together so the list fits in container.clientHeight. */
+  var list = document.querySelector('.list-container[data-fit-min]');
+  if (list) {
+    var items = list.querySelectorAll('.list-item .text');
+    if (!items.length) return;
+    var lmin = parseFloat(list.getAttribute('data-fit-min') || '28');
+    var lmax = parseFloat(list.getAttribute('data-fit-max') || '50');
+    var lpad = parseFloat(list.getAttribute('data-fit-pad') || '14');
+    var lsize = lmax;
+    for (var i = 0; i < items.length; i++) items[i].style.fontSize = lsize + 'px';
+    void list.offsetHeight;
+    while (lsize > lmin && list.scrollHeight > list.clientHeight - lpad) {
+      lsize -= 2;
+      for (var j = 0; j < items.length; j++) items[j].style.fontSize = lsize + 'px';
+      void list.offsetHeight;
+    }
+    return;
+  }
+
+  var text = document.querySelector('.body-text') || document.querySelector('.body');
+  if (!text) return;
+  var container = text.classList.contains('body-text')
+    ? text.parentElement
+    : text;
+  if (!container) return;
+
+  var min = parseFloat(text.getAttribute('data-fit-min') || '36');
+  var max = parseFloat(text.getAttribute('data-fit-max') || '64');
+  var pad = parseFloat(text.getAttribute('data-fit-pad') || '16');
+
+  var origClamp = text.style.webkitLineClamp;
+  var origDisplay = text.style.display;
+  text.style.webkitLineClamp = 'unset';
+  text.style.display = 'block';
+
+  /* For non-wrapper templates (.body is the text), clientHeight is the
+     line-clamped/flex-allocated height. We want the flex-allocated height
+     (without clamp), which equals offsetParent constraint. Use clientHeight
+     after clamp is stripped — equals flex:1 allocation. */
+  var targetH = container.clientHeight - pad;
+  var size = max;
+  text.style.fontSize = size + 'px';
+  void text.offsetHeight;
+
+  while (size > min && text.scrollHeight > targetH) {
+    size -= 2;
+    text.style.fontSize = size + 'px';
+    void text.offsetHeight;
+  }
+
+  text.style.webkitLineClamp = origClamp;
+  text.style.display = origDisplay;
+  void text.offsetHeight;
+})();
+</script>

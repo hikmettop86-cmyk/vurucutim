@@ -388,7 +388,7 @@ html, body {
     <div class="ticker-num">{{ script.photo_overlay }}</div>
   </div>
 
-  <div class="body">{{ body_html|safe }}</div>
+  <div class="body" data-fit-min="32" data-fit-max="56" data-fit-pad="18">{{ body_html|safe }}</div>
 
   <div class="progress"></div>
   <div class="handle">{{ handle }}</div>
@@ -424,5 +424,6 @@ html, body {
   <div class="source-credit">{{ ui_source }}: {{ rss_source }}</div>
   {% endif %}
 </div>
+{% include "_auto_fit.js.j2" %}
 </body>
 </html>

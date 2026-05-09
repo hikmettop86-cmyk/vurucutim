@@ -337,7 +337,7 @@
     <div class="yellow">{{ script.photo_overlay }}</div>
   </div>
 
-  <div class="body">{{ body_html|safe }}</div>
+  <div class="body" data-fit-min="36" data-fit-max="60" data-fit-pad="20">{{ body_html|safe }}</div>
 
   <div class="progress"></div>
   <div class="handle">{{ handle }}</div>
@@ -373,5 +373,6 @@
   <div class="source-credit">{{ ui_source }}: {{ rss_source }}</div>
   {% endif %}
 </div>
+{% include "_auto_fit.js.j2" %}
 </body>
 </html>

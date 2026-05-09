@@ -164,7 +164,7 @@
     {% if script.photo_overlay %}<div class="overlay-text">{{ script.photo_overlay }}</div>{% endif %}
   </div>
 
-  <div class="body">{{ script.header_bottom }}</div>
+  <div class="body" data-fit-min="80" data-fit-max="130" data-fit-pad="24">{{ script.header_bottom }}</div>
 
   <div class="progress"></div>
   <div class="handle">{{ handle }}</div>
@@ -179,5 +179,6 @@
   <div class="source-credit">{{ ui_source }}: {{ rss_source }}</div>
   {% endif %}
 </div>
+{% include "_auto_fit.js.j2" %}
 </body>
 </html>

@@ -367,7 +367,7 @@ html, body {
     <span class="bot">{{ script.header_bottom }}</span>
   </div>
 
-  <div class="body">{{ body_html|safe }}</div>
+  <div class="body" data-fit-min="28" data-fit-max="48" data-fit-pad="14">{{ body_html|safe }}</div>
 
   <div class="forecast-strip">
     <div class="day"><div class="name">YARIN</div><div class="ic">Ã¢Ëœâ‚¬Ã¯Â¸Â</div><div class="temps">22Ã‚Â° / 14Ã‚Â°</div></div>
@@ -410,5 +410,6 @@ html, body {
   <div class="source-credit">{{ ui_source }}: {{ rss_source }}</div>
   {% endif %}
 </div>
+{% include "_auto_fit.js.j2" %}
 </body>
 </html>
