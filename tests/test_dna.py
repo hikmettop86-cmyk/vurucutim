@@ -405,3 +405,29 @@ def test_build_css_omits_custom_css_section_when_whitespace_only():
     dna = _sample_dna(custom_css="   \n\n  ")
     css = build_css_override(dna)
     assert "Channel custom_css" not in css
+
+
+def test_generate_dna_for_video_uses_article_context(monkeypatch):
+    """The per-video prompt must include headline + body excerpt."""
+    from short_bot.config import ChannelConfig
+    from short_bot.dna import build_dna_for_video_prompt
+
+    cfg = ChannelConfig(
+        slug="spor-haber", name="Spor", keywords=["futbol"], rss_locale="tr-TR",
+        schedule_cron="0 * * * *", duration_s=25, min_score=6.0,
+        max_candidates_per_run=3, template="newscast",
+        colors={"primary": "#fff"}, handle="@spor", output_dir="out",
+        enabled=True, cta_enabled=True, cta_text="x", cta_icons=[],
+        cta_duration_s=4, cta_show_handle=True, language="tr",
+        max_age_hours=24, dynamic_dna=True,
+    )
+    prompt = build_dna_for_video_prompt(
+        channel=cfg,
+        headline="Galatasaray Osimhen transferinde son aşamada",
+        body="Sarı kırmızılılar Napoli'den Osimhen için 75M Euro teklifte bulundu...",
+    )
+    assert "Osimhen" in prompt
+    assert "Galatasaray" in prompt
+    assert "Sarı kırmızılılar" in prompt
+    # Channel persona should be referenced when channel has DNA
+    assert "Spor" in prompt or "futbol" in prompt

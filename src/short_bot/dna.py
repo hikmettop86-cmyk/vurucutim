@@ -396,6 +396,79 @@ def generate_dna(
     )
 
 
+def build_dna_for_video_prompt(
+    *,
+    channel: 'ChannelConfig',
+    headline: str,
+    body: str,
+) -> str:
+    """Per-article DNA prompt — extends build_dna_prompt with article context.
+
+    Channel persona (from channel.dna.persona_summary if set, else channel.name +
+    keywords) anchors the brand; the article's headline + body steers archetype,
+    palette mood, and animation_style choice for this specific video.
+    """
+    lang_name = LANGUAGE_NAMES.get(channel.language, channel.language)
+    persona = (
+        channel.dna.persona_summary
+        if (channel.dna is not None and channel.dna.persona_summary)
+        else f"{channel.name} ({', '.join(channel.keywords)})"
+    )
+    base_voice = (
+        channel.dna.tone.voice if channel.dna is not None else "default"
+    )
+
+    base = build_dna_prompt(
+        name=channel.name,
+        keywords=channel.keywords,
+        language=channel.language,
+    )
+    article_block = f"""
+
+═══ BU VİDEO İÇİN MAKALE ═══
+KANAL PERSONA: {persona}
+KANAL TONU: {base_voice}
+DİL: {lang_name}
+
+MAKALE BAŞLİK: {headline}
+MAKALE BODY (ilk 500 char): {body[:500]}
+
+EK GÖREV (yukarıdaki kuralların hepsine sadık kal — palette/font/archetype
+seçimini sadece BU MAKALEYE göre yap):
+- archetype'ı makaleye göre seç (transfer haberi → spor-haber, ekonomi
+  açıklaması → ekonomi, magazin dedikodu → tabloid, vb.) — kanalın
+  varsayılanına bağlı değilsin
+- palette'i makalenin duygusuna göre ayarla (kriz/skandal → koyu+kırmızı,
+  başarı/zafer → parlak/altın, sakin teknik → mavi+gri)
+- persona_summary kanal personaşına SADİK KAL (yukarıda verilen)
+- ui_badge bu makalenin temasına uygun kısa bir rozet
+"""
+    return base + article_block
+
+
+def generate_dna_for_video(
+    *,
+    channel: 'ChannelConfig',
+    headline: str,
+    body: str,
+    claude_path: str = "claude",
+    model: str = "opus",
+) -> DnaSpec:
+    """Generate a fresh DnaSpec tuned to a specific article.
+
+    Raises on LLM failure; caller (pipeline._resolve_dna_for_video) catches
+    and falls back to channel.dna.
+    """
+    prompt = build_dna_for_video_prompt(
+        channel=channel, headline=headline, body=body,
+    )
+    return run_json(
+        prompt, DnaSpec,
+        claude_path=claude_path, model=model,
+        retries=2, timeout_s=180,
+    )
+
+
 def _banner_shape_css(shape: str) -> str:
     """Return CSS rule string for the given banner shape."""
     return {
