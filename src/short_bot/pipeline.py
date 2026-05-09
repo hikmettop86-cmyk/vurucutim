@@ -76,6 +76,19 @@ def _is_recent(pub_date: datetime | None, cutoff: datetime) -> bool:
     return aware >= cutoff
 
 
+def _filter_negative_keywords(items: list, negative_keywords: list[str]) -> list:
+    """Drop items whose title contains any negative keyword (case-insensitive substring)."""
+    if not negative_keywords:
+        return items
+    needles = [k.strip().lower() for k in negative_keywords if k.strip()]
+    if not needles:
+        return items
+    return [
+        i for i in items
+        if not any(n in i.title.lower() for n in needles)
+    ]
+
+
 def _resolve_dna_for_video(
     *,
     channel: ChannelConfig,
@@ -418,6 +431,12 @@ def _run_rss(*, channel, run_id, log, eng, settings,
         if before != len(items):
             log.info(f"  → {len(items)} after age filter "
                       f"(<= {channel.max_age_hours}h, dropped {before - len(items)})")
+    # NEW: negative keyword filter
+    if channel.negative_keywords:
+        before = len(items)
+        items = _filter_negative_keywords(items, channel.negative_keywords)
+        if before != len(items):
+            log.info(f"  → {len(items)} after negative keyword filter (dropped {before - len(items)})")
 
     log.info("[2/8] dedup")
     new_items = filter_new(eng, items, channel.slug,

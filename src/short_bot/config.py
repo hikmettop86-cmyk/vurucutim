@@ -1,5 +1,5 @@
 """YAML config loader for global settings and per-channel configs."""
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 import re
 from typing import Literal
@@ -78,6 +78,7 @@ class ChannelConfig:
     # into shorts.
     max_age_hours: int = 24
     dynamic_dna: bool = False
+    negative_keywords: list[str] = field(default_factory=list)
     dna: DnaSpec | None = None
     script_model: str | None = None
     content_source: Literal["rss", "generator"] = "rss"
@@ -179,6 +180,7 @@ def load_channel(path: Path) -> ChannelConfig:
         max_candidates_per_run=int(data["max_candidates_per_run"]),
         max_age_hours=int(data.get("max_age_hours", 24)),
         dynamic_dna=bool(data.get("dynamic_dna", False)),
+        negative_keywords=list(data.get("negative_keywords") or []),
         template=template,
         colors=dict(data["colors"]),
         handle=data["handle"],
@@ -226,6 +228,8 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
     }
     if cfg.dynamic_dna:
         data["dynamic_dna"] = True
+    if cfg.negative_keywords:
+        data["negative_keywords"] = list(cfg.negative_keywords)
     if cfg.script_model:
         data["script_model"] = cfg.script_model
     if cfg.content_source != "rss":

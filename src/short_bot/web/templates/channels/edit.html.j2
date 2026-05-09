@@ -165,6 +165,18 @@
         </label>
         {% endif %}
 
+        <label class="block">
+          <span class="text-xs text-claude-muted uppercase">Negatif anahtar kelimeler (virgülle)</span>
+          <input type="text" name="negative_keywords"
+                 value="{{ c.negative_keywords|join(', ') }}"
+                 placeholder="wwe, wrestling, mma"
+                 class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
+          <span class="text-[10px] text-claude-subtle block mt-1">
+            Bu kelimelerden HERHANGİ biri haber başlığında geçerse RSS aşamasında atılır.
+            NFL kanalında WWE/wrestling haberleri filtrelemek için kullanışlı.
+          </span>
+        </label>
+
         <label class="block"
                x-data='{
                   preset: "{{ current_cron_preset }}",

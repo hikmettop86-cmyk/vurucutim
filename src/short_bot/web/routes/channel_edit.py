@@ -272,6 +272,7 @@ def save(slug):
         max_candidates_per_run=_form_get_int("max_candidates_per_run", cfg.max_candidates_per_run),
         max_age_hours=_form_get_int("max_age_hours", cfg.max_age_hours),
         dynamic_dna=("dynamic_dna" in request.form),
+        negative_keywords=_form_get_list("negative_keywords"),
         template=new_template,
         colors={
             "primary": new_dna.palette.primary if new_dna else cfg.colors["primary"],

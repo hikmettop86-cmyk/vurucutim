@@ -589,3 +589,64 @@ def test_channel_config_dynamic_dna_false_not_written(tmp_path):
     save_channel(p, cfg)
     text = p.read_text(encoding="utf-8")
     assert "dynamic_dna" not in text
+
+
+def test_channel_config_negative_keywords_default_empty(tmp_path):
+    """negative_keywords defaults to []; YAML without the key loads cleanly."""
+    from short_bot.config import load_channel
+    yaml_text = """
+slug: test-ch
+name: Test
+keywords: [a]
+language: tr
+schedule_cron: "0 * * * *"
+duration_s: 25
+min_score: 6.0
+max_candidates_per_run: 3
+template: newscast
+colors: {primary: "#fff"}
+handle: "@test"
+output_dir: "out"
+"""
+    p = tmp_path / "ch.yaml"
+    p.write_text(yaml_text, encoding="utf-8")
+    cfg = load_channel(p)
+    assert cfg.negative_keywords == []
+
+
+def test_channel_config_negative_keywords_round_trip(tmp_path):
+    """negative_keywords list survives save → load."""
+    from short_bot.config import ChannelConfig, load_channel, save_channel
+    cfg = ChannelConfig(
+        slug="test-ch", name="Test", keywords=["a"], rss_locale="tr-TR",
+        schedule_cron="0 * * * *", duration_s=25, min_score=6.0,
+        max_candidates_per_run=3, template="newscast",
+        colors={"primary": "#fff"}, handle="@test", output_dir="out",
+        enabled=True, cta_enabled=True, cta_text="x", cta_icons=[],
+        cta_duration_s=4, cta_show_handle=True, language="tr",
+        max_age_hours=24, dynamic_dna=False,
+        negative_keywords=["wwe", "wrestling"],
+    )
+    p = tmp_path / "ch.yaml"
+    save_channel(p, cfg)
+    cfg2 = load_channel(p)
+    assert cfg2.negative_keywords == ["wwe", "wrestling"]
+
+
+def test_channel_config_negative_keywords_empty_not_written(tmp_path):
+    """When negative_keywords is empty, the key is NOT written to YAML."""
+    from short_bot.config import ChannelConfig, save_channel
+    cfg = ChannelConfig(
+        slug="test-ch", name="Test", keywords=["a"], rss_locale="tr-TR",
+        schedule_cron="0 * * * *", duration_s=25, min_score=6.0,
+        max_candidates_per_run=3, template="newscast",
+        colors={"primary": "#fff"}, handle="@test", output_dir="out",
+        enabled=True, cta_enabled=True, cta_text="x", cta_icons=[],
+        cta_duration_s=4, cta_show_handle=True, language="tr",
+        max_age_hours=24, dynamic_dna=False,
+        negative_keywords=[],
+    )
+    p = tmp_path / "ch.yaml"
+    save_channel(p, cfg)
+    text = p.read_text(encoding="utf-8")
+    assert "negative_keywords" not in text
