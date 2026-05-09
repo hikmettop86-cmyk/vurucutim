@@ -1,8 +1,15 @@
 """APScheduler wiring — registers cron jobs from channel YAMLs."""
+import logging
+from pathlib import Path
+
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from short_bot.config import list_channels, load_channel
+from short_bot.db import init_db
+from short_bot.dna_cache import cleanup_expired_dna_cache
+
+_LOG = logging.getLogger(__name__)
 
 
 def init_scheduler(app):
@@ -52,10 +59,28 @@ def init_scheduler(app):
                 max_instances=1, replace_existing=True,
             )
 
+    def _daily_dna_cache_cleanup():
+        """Daily cron: delete dna_cache rows older than 90 days + their CSS files."""
+        try:
+            eng = init_db(app.config["SHORTBOT_DB_PATH"])
+            css_dir = Path(app.config["SHORTBOT_TEMPLATES_DIR"]) / "css"
+            n = cleanup_expired_dna_cache(eng, css_dir, days=90)
+            if n > 0:
+                _LOG.info(f"[dna_cache] daily cleanup: deleted {n} expired entries")
+        except Exception as e:  # noqa: BLE001 — cron must not crash
+            _LOG.warning(f"[dna_cache] daily cleanup failed: {e}")
+
     # Initial register
     _reload_jobs()
     # Re-scan channel configs every 5 minutes
     scheduler.add_job(_reload_jobs, "interval", minutes=5, id="_reload_jobs")
+    # Daily DNA cache cleanup at 03:15
+    scheduler.add_job(
+        _daily_dna_cache_cleanup,
+        trigger=CronTrigger(hour=3, minute=15),
+        id="_dna_cache_cleanup",
+        replace_existing=True,
+    )
 
     scheduler.start()
     app.scheduler = scheduler
