@@ -589,12 +589,28 @@ def _run_rss(*, channel, run_id, log, eng, settings,
     with tempfile.TemporaryDirectory() as tmpd:
         frames_dir = Path(tmpd) / "frames"
         t0 = time.perf_counter()
-        template_path = templates_dir / f"{channel.template}.html.j2"
         ui_labels = _resolve_ui_labels(channel)
-        # Always rebuild CSS from current DNA (yaml-stored) — file may be stale.
-        # Bu sayede edit'te renk degisikligi + save sonrasi ilk render yeni CSS kullanir.
+        # Resolve effective DNA (per-video for dynamic_dna channels; else channel-level).
+        # Note: overflow check ran earlier against channel.template; if the dynamic DNA
+        # picks a different archetype the rendered video uses it but overflow was not
+        # re-checked. Acceptable risk — fallback is always channel.dna or template.
         from short_bot.dna import build_css_override
-        dna_css = build_css_override(channel.dna) if channel.dna else ""
+        effective_dna = channel.dna
+        secrets_path = current_app_secrets_path()
+        resolved = _resolve_dna_for_video(
+            channel=channel,
+            headline=f"{script.header_top} {script.header_bottom}",
+            body=script.body_paragraph,
+            log=log, claude_path=settings.claude_cli_path,
+            secrets_path=secrets_path, templates_dir=templates_dir, eng=eng,
+        )
+        if resolved is not None:
+            effective_dna, css_path = resolved
+            dna_css = css_path.read_text(encoding="utf-8")
+        else:
+            dna_css = build_css_override(channel.dna) if channel.dna else ""
+        archetype = effective_dna.archetype if effective_dna is not None else channel.template
+        template_path = templates_dir / f"{archetype}.html.j2"
         render_frames(job, template_path, frames_dir,
                       fps=30, browser=settings.playwright_browser,
                       ui_labels=ui_labels, dna_css=dna_css)
@@ -608,7 +624,6 @@ def _run_rss(*, channel, run_id, log, eng, settings,
         # Build SFX schedule for CTA window
         sfx_overlays = _build_cta_sfx(channel)
 
-        secrets_path = current_app_secrets_path()
         bg_video_path = _resolve_pexels_bg(
             channel=channel, cache_dir=cache_dir,
             secrets_path=secrets_path, log=log,
@@ -738,12 +753,28 @@ def _run_generator(*, channel, run_id, log, eng, settings,
     with tempfile.TemporaryDirectory() as tmpd:
         frames_dir = Path(tmpd) / "frames"
         t0 = time.perf_counter()
-        template_path = templates_dir / f"{channel.template}.html.j2"
         ui_labels = _resolve_ui_labels(channel)
-        # Always rebuild CSS from current DNA (yaml-stored) — file may be stale.
-        # Bu sayede edit'te renk degisikligi + save sonrasi ilk render yeni CSS kullanir.
+        # Resolve effective DNA (per-video for dynamic_dna channels; else channel-level).
+        # Note: overflow check ran earlier against channel.template; if the dynamic DNA
+        # picks a different archetype the rendered video uses it but overflow was not
+        # re-checked. Acceptable risk — fallback is always channel.dna or template.
         from short_bot.dna import build_css_override
-        dna_css = build_css_override(channel.dna) if channel.dna else ""
+        effective_dna = channel.dna
+        secrets_path = current_app_secrets_path()
+        resolved = _resolve_dna_for_video(
+            channel=channel,
+            headline=f"{chosen_result.script.header_top} {chosen_result.script.header_bottom}",
+            body=chosen_result.script.body_paragraph,
+            log=log, claude_path=settings.claude_cli_path,
+            secrets_path=secrets_path, templates_dir=templates_dir, eng=eng,
+        )
+        if resolved is not None:
+            effective_dna, css_path = resolved
+            dna_css = css_path.read_text(encoding="utf-8")
+        else:
+            dna_css = build_css_override(channel.dna) if channel.dna else ""
+        archetype = effective_dna.archetype if effective_dna is not None else channel.template
+        template_path = templates_dir / f"{archetype}.html.j2"
         render_frames(job, template_path, frames_dir,
                       fps=30, browser=settings.playwright_browser,
                       ui_labels=ui_labels, dna_css=dna_css)
@@ -755,7 +786,6 @@ def _run_generator(*, channel, run_id, log, eng, settings,
         out_path = out_dir / f"{datetime.now(timezone.utc):%Y-%m-%d}_{slug}.mp4"
         sfx_overlays = _build_cta_sfx(channel)
 
-        secrets_path = current_app_secrets_path()
         bg_video_path = _resolve_pexels_bg(
             channel=channel, cache_dir=cache_dir,
             secrets_path=secrets_path, log=log,
