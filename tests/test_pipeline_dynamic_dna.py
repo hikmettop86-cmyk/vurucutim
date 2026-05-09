@@ -161,3 +161,27 @@ def test_generation_failure_returns_none(eng, templates_dir, secrets_path):
             templates_dir=templates_dir, eng=eng,
         )
     assert result is None
+
+
+def test_run_rss_with_dynamic_dna_uses_per_video_archetype(
+    tmp_path, monkeypatch
+):
+    """E2E placeholder: a dynamic_dna channel with mocked embeddings + Opus call
+    yields a video rendered with the per-video archetype, not channel.template.
+
+    Manual smoke procedure (acceptance for F2):
+      1. Set OPENAI_API_KEY env var (or via Settings UI → OpenAI Key)
+      2. Pick or create a low-stakes channel; toggle dynamic_dna on (Edit page)
+      3. Trigger "Run Now" from dashboard
+      4. Inspect run log:
+           - cache MISS path: "[dna] cache MISS → generating (Opus)..." then
+             "[dna] saved: archetype=<X> css=dynamic-<slug>-<hex>.css"
+           - cache HIT path: "[dna] cache HIT id=<N> archetype=<X> (cos=0.9xx)"
+      5. Verify templates/css/dynamic-<slug>-*.css file exists
+      6. Inspect produced video: visual style reflects archetype chosen by Opus,
+         possibly different from channel.template
+      7. Re-trigger Run Now: cache HIT increments hit_count, no Opus call
+
+    A full Playwright integration test is a v2 nice-to-have.
+    """
+    pytest.skip("F2 acceptance is via manual smoke (see docstring)")
