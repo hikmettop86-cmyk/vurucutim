@@ -58,6 +58,16 @@ _GENERATOR_TOPIC_DIST_DAYS = 7   # window for topic_distribution Sonnet hint
 _IMAGE_RETRY_MAX = 3   # try this many top candidates before giving up on image
 
 
+def _is_recent(pub_date: datetime | None, cutoff: datetime) -> bool:
+    """True if pub_date is at or after cutoff. Items without pub_date are rejected
+    (Google News normally provides one — missing date most often means a re-syndicated
+    aggregator entry with no fresh signal)."""
+    if pub_date is None:
+        return False
+    aware = pub_date if pub_date.tzinfo else pub_date.replace(tzinfo=timezone.utc)
+    return aware >= cutoff
+
+
 def _resolve_ui_labels(channel: ChannelConfig) -> dict[str, str]:
     labels = dict(ui_labels_for(channel.language))
     if channel.dna and channel.dna.ui_badge.strip():
@@ -315,6 +325,15 @@ def _run_rss(*, channel, run_id, log, eng, settings,
     log.info("[1/8] fetch_rss")
     items = fetch_rss(channel.keywords, channel.rss_locale)
     log.info(f"  → {len(items)} items")
+
+    if channel.max_age_hours > 0:
+        from datetime import timedelta
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=channel.max_age_hours)
+        before = len(items)
+        items = [i for i in items if _is_recent(i.pub_date, cutoff)]
+        if before != len(items):
+            log.info(f"  → {len(items)} after age filter "
+                      f"(<= {channel.max_age_hours}h, dropped {before - len(items)})")
 
     log.info("[2/8] dedup")
     new_items = filter_new(eng, items, channel.slug,

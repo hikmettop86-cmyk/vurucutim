@@ -251,6 +251,13 @@
             <input type="number" name="max_candidates_per_run" value="{{ c.max_candidates_per_run }}"
                    class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
           </label>
+
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase">Max yaş (saat)</span>
+            <input type="number" min="0" name="max_age_hours" value="{{ c.max_age_hours }}"
+                   class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
+            <span class="text-[10px] text-claude-subtle block mt-1">RSS haberi bu kadar saatten eskiyse atlanır. 0 = sınır yok.</span>
+          </label>
           {% endif %}
         </div>
 

@@ -73,6 +73,10 @@ class ChannelConfig:
     cta_duration_s: int
     cta_show_handle: bool
     language: str = "tr"
+    # max_age_hours: pipeline drops RSS items older than this many hours
+    # (0 = no limit). Default 24h prevents stale articles from being turned
+    # into shorts.
+    max_age_hours: int = 24
     dna: DnaSpec | None = None
     script_model: str | None = None
     content_source: Literal["rss", "generator"] = "rss"
@@ -172,6 +176,7 @@ def load_channel(path: Path) -> ChannelConfig:
         duration_s=int(data["duration_s"]),
         min_score=float(data["min_score"]),
         max_candidates_per_run=int(data["max_candidates_per_run"]),
+        max_age_hours=int(data.get("max_age_hours", 24)),
         template=template,
         colors=dict(data["colors"]),
         handle=data["handle"],
@@ -203,6 +208,7 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
         "duration_s": cfg.duration_s,
         "min_score": cfg.min_score,
         "max_candidates_per_run": cfg.max_candidates_per_run,
+        "max_age_hours": cfg.max_age_hours,
         "template": cfg.template,
         "colors": dict(cfg.colors),
         "handle": cfg.handle,

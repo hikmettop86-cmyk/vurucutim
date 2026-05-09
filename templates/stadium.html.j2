@@ -91,14 +91,20 @@
   .body {
     flex: 1;
     min-height: 0;
-    margin-bottom: 100px;
+    margin-bottom: 60px;
     padding: 28px 44px 24px;
-    font-size: 36px;
-    line-height: 1.35;
-    font-weight: 600;
     color: var(--text-main);
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+  }
+  .body-text {
+    width: 100%;
+    font-size: 54px;
+    line-height: 1.32;
+    font-weight: 600;
     display: -webkit-box;
-    -webkit-line-clamp: 11;
+    -webkit-line-clamp: 9;
     -webkit-box-orient: vertical;
     overflow: hidden;
     -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 92%, transparent 100%);
@@ -184,7 +190,7 @@
     <div class="yellow">{{ script.photo_overlay }}</div>
   </div>
 
-  <div class="body">{{ body_html|safe }}</div>
+  <div class="body"><div class="body-text">{{ body_html|safe }}</div></div>
 
   <div class="progress"></div>
   <div class="handle">{{ handle }}</div>
