@@ -262,6 +262,20 @@
         </div>
 
         <label class="block">
+          <input type="checkbox" name="dynamic_dna" value="1"
+                 {% if c.dynamic_dna %}checked{% endif %}
+                 class="mr-2">
+          <span class="text-sm font-semibold text-claude-text">
+            🧬 Dinamik DNA — her video için stil yenilensin
+          </span>
+          <span class="text-[11px] text-claude-subtle block mt-1 ml-6">
+            Açıkken her video için Claude (Opus) konuya göre archetype + palette + animation seçer.
+            Benzer konular cache'ten gelir (90 gün saklanır). OpenAI API key gerekir
+            (Settings → OpenAI Key).
+          </span>
+        </label>
+
+        <label class="block">
           <span class="text-xs text-claude-muted uppercase">Handle</span>
           <input type="text" name="handle" value="{{ c.handle }}"
                  class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
