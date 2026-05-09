@@ -298,6 +298,76 @@ def test_build_css_appends_custom_css_when_present():
     assert css.index("--primary") < css.index("/* Channel custom_css")
 
 
+def test_dnaspec_animation_style_default_none():
+    """Existing DNA without animation_style must default to 'none'."""
+    from short_bot.dna import DnaSpec
+    spec = DnaSpec.model_validate({
+        "archetype": "newscast",
+        "palette": {
+            "primary": "#bb1f1f", "accent": "#ffd54a",
+            "bg_gradient": ["#0a0a0a", "#1a1a1a"],
+            "body_bg": ["#101010", "#1f1f1f"],
+            "text_main": "#ffffff", "text_muted": "#cccccc",
+        },
+        "fonts": {"headline": "Inter", "body": "Inter", "google_imports": []},
+        "tone": {
+            "voice": "x", "style": "x", "forbidden": [],
+            "sentence_max_words": 18, "paragraph_sentences": [3, 5],
+            "body_max_chars": 350, "headline_style_hint": "",
+        },
+        "persona_summary": "x", "custom_css": "", "ui_badge": "x",
+    })
+    assert spec.animation_style == "none"
+
+
+def test_dnaspec_animation_style_accepts_all_six_values():
+    from short_bot.dna import DnaSpec
+    base = {
+        "archetype": "newscast",
+        "palette": {
+            "primary": "#bb1f1f", "accent": "#ffd54a",
+            "bg_gradient": ["#0a0a0a", "#1a1a1a"],
+            "body_bg": ["#101010", "#1f1f1f"],
+            "text_main": "#ffffff", "text_muted": "#cccccc",
+        },
+        "fonts": {"headline": "Inter", "body": "Inter", "google_imports": []},
+        "tone": {
+            "voice": "x", "style": "x", "forbidden": [],
+            "sentence_max_words": 18, "paragraph_sentences": [3, 5],
+            "body_max_chars": 350, "headline_style_hint": "",
+        },
+        "persona_summary": "x", "custom_css": "", "ui_badge": "x",
+    }
+    for v in ["none", "fade-up", "slide-in", "stagger-reveal",
+              "typewriter", "zoom-in"]:
+        spec = DnaSpec.model_validate({**base, "animation_style": v})
+        assert spec.animation_style == v
+
+
+def test_dnaspec_animation_style_rejects_invalid():
+    import pytest
+    from short_bot.dna import DnaSpec
+    base = {
+        "archetype": "newscast",
+        "palette": {
+            "primary": "#bb1f1f", "accent": "#ffd54a",
+            "bg_gradient": ["#0a0a0a", "#1a1a1a"],
+            "body_bg": ["#101010", "#1f1f1f"],
+            "text_main": "#ffffff", "text_muted": "#cccccc",
+        },
+        "fonts": {"headline": "Inter", "body": "Inter", "google_imports": []},
+        "tone": {
+            "voice": "x", "style": "x", "forbidden": [],
+            "sentence_max_words": 18, "paragraph_sentences": [3, 5],
+            "body_max_chars": 350, "headline_style_hint": "",
+        },
+        "persona_summary": "x", "custom_css": "", "ui_badge": "x",
+        "animation_style": "rainbow-explosion",
+    }
+    with pytest.raises(Exception):  # pydantic ValidationError
+        DnaSpec.model_validate(base)
+
+
 def test_build_css_omits_custom_css_section_when_empty():
     dna = _sample_dna(custom_css="")
     css = build_css_override(dna)

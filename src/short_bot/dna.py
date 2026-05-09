@@ -199,6 +199,9 @@ class DnaSpec(BaseModel):
     persona_summary: str = Field(max_length=400)
     custom_css: str = Field(default="", max_length=8000)
     ui_badge: str = Field(default="", max_length=24)
+    animation_style: Literal[
+        "none", "fade-up", "slide-in", "stagger-reveal", "typewriter", "zoom-in",
+    ] = "none"
 
 
 def build_dna_prompt(
