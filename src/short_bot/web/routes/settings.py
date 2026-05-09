@@ -52,9 +52,12 @@ def view():
         "Secrets":    str(_secrets_path()),
     }
     pexels_key_masked = _mask_key(secrets.get("pexels_api_key", ""))
+    openai_key_masked = _mask_key(secrets.get("openai_api_key", ""))
     return render_template("settings.html.j2", data=data, paths=paths,
                             pexels_key_masked=pexels_key_masked,
-                            pexels_key_set=bool(secrets.get("pexels_api_key")))
+                            pexels_key_set=bool(secrets.get("pexels_api_key")),
+                            openai_key_masked=openai_key_masked,
+                            openai_key_set=bool(secrets.get("openai_api_key")))
 
 
 @bp.route("/settings", methods=["POST"])
@@ -100,6 +103,16 @@ def save():
         _save_secrets(secrets)
     elif clear:
         secrets.pop("pexels_api_key", None)
+        _save_secrets(secrets)
+
+    # OpenAI key — separate file (used by Dynamic DNA feature for embeddings)
+    new_openai_key = request.form.get("openai_api_key", "").strip()
+    clear_openai = request.form.get("openai_api_key_clear") == "1"
+    if new_openai_key:
+        secrets["openai_api_key"] = new_openai_key
+        _save_secrets(secrets)
+    elif clear_openai:
+        secrets.pop("openai_api_key", None)
         _save_secrets(secrets)
 
     flash("Ayarlar kaydedildi. Bazı değişiklikler için panel yeniden başlatılmalı.", "success")

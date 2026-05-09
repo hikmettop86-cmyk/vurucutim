@@ -109,6 +109,28 @@
       {% endif %}
     </div>
 
+    <h2 class="font-serif text-lg font-bold mt-6 border-t border-claude-border pt-4">OpenAI API Key</h2>
+    <div class="bg-claude-surface border border-claude-border rounded-lg p-4">
+      {% if openai_key_set %}
+        <div class="flex items-center gap-3">
+          <span class="font-mono text-sm">{{ openai_key_masked }}</span>
+          <label class="text-xs flex items-center gap-1 text-claude-muted">
+            <input type="checkbox" name="openai_api_key_clear" value="1"> Sil
+          </label>
+        </div>
+        <input type="password" name="openai_api_key" placeholder="Yeni key gir (değiştir)"
+               autocomplete="new-password"
+               class="bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm w-full mt-2 text-claude-text">
+      {% else %}
+        <input type="password" name="openai_api_key" value="" placeholder="sk-..."
+               autocomplete="new-password"
+               class="bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm w-full text-claude-text">
+        <div class="text-xs text-claude-muted mt-1">
+          Dinamik DNA özelliği için gereklidir (text-embedding-3-small). Boş bırak ve 'Sil' kutusunu işaretle → mevcut anahtarı sil.
+        </div>
+      {% endif %}
+    </div>
+
     <button type="submit" class="bg-claude-accent hover:bg-claude-accent-hover text-white px-4 py-2 rounded-lg font-semibold mt-6 w-full">
       Kaydet
     </button>
