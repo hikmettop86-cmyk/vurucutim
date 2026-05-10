@@ -82,17 +82,47 @@ def _verify_with_claude(image_path: Path, script: Script, claude_path: str) -> _
 
 
 def build_search_query_for_channel(script: Script, channel: ChannelConfig) -> str:
-    """Build DDG image search query using channel.dna.search_query_template if set."""
+    """Build DDG image search query using channel.dna.search_query_template if set.
+
+    Post-processing:
+      1. Dedupe consecutive/repeated words (case-insensitive). Opus often bakes
+         redundant terms like 'NFL {category} NFL football' which expand to
+         'NFL NFL NFL football' — DDG treats this as one weak signal.
+      2. Append up to 3 channel keywords whose words aren't already in the
+         query. Keeps queries channel-specific even when the template is
+         generic (e.g. 'football' → adds 'american football' for NFL channel).
+    """
     template = (
         channel.dna.search_query_template if channel.dna is not None
         else "{header_top} {header_bottom} {category}"
     )
-    return template.format(
+    base_query = template.format(
         header_top=script.header_top,
         header_bottom=script.header_bottom,
         category=script.category,
         photo_overlay=script.photo_overlay,
     ).strip()
+
+    # Dedupe (preserve first occurrence order)
+    seen: set[str] = set()
+    deduped_words: list[str] = []
+    for w in base_query.split():
+        wl = w.lower()
+        if wl and wl not in seen:
+            deduped_words.append(w)
+            seen.add(wl)
+
+    # Append channel keywords whose component words aren't already in seen
+    for kw in (channel.keywords or [])[:3]:
+        kw_words = [w.lower() for w in kw.split() if w]
+        if not kw_words:
+            continue
+        if all(w in seen for w in kw_words):
+            continue
+        deduped_words.append(kw)
+        seen.update(kw_words)
+
+    return " ".join(deduped_words)
 
 
 def pick_image_for_script(
