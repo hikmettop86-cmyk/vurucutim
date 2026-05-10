@@ -23,6 +23,10 @@ processed_items = Table(
     Column("title", Text, nullable=False),
     Column("channel", String, nullable=False),
     Column("processed_at", DateTime, default=_utcnow),
+    # OpenAI text-embedding-3-small vector (1536 dims) serialized as JSON
+    # array. NULL on legacy rows or when no API key is configured. Used by
+    # dedup.filter_new for topic-level similarity check beyond fuzzy title.
+    Column("embedding_json", Text),
 )
 Index("idx_processed_channel_ts",
       processed_items.c.channel, processed_items.c.processed_at)
@@ -155,16 +159,77 @@ def init_db(db_path: Path | str) -> Engine:
     # Also create generator-mode tables (separate MetaData object)
     from short_bot.generated_db import metadata as generator_metadata
     generator_metadata.create_all(eng)
+    # Idempotent column-level migrations for tables that pre-date a feature.
+    # create_all only creates missing tables, not missing columns.
+    _migrate_add_columns(eng)
     return eng
 
 
-def mark_processed(eng: Engine, guid: str, title: str, channel: str) -> None:
+def _migrate_add_columns(eng: Engine) -> None:
+    """Add columns introduced in later versions to pre-existing production DBs.
+
+    SQLite ALTER TABLE ADD COLUMN is non-locking and idempotent when guarded
+    by a PRAGMA table_info check, so re-running init_db is safe.
+    """
+    migrations: list[tuple[str, str, str]] = [
+        # (table, column, type)
+        ("processed_items", "embedding_json", "TEXT"),
+    ]
+    with eng.begin() as conn:
+        for table, col, coltype in migrations:
+            existing = conn.exec_driver_sql(
+                f"PRAGMA table_info({table})"
+            ).fetchall()
+            names = {row[1] for row in existing}
+            if col not in names:
+                conn.exec_driver_sql(
+                    f"ALTER TABLE {table} ADD COLUMN {col} {coltype}"
+                )
+
+
+def mark_processed(
+    eng: Engine, guid: str, title: str, channel: str,
+    *, embedding: list[float] | None = None,
+) -> None:
+    """Mark item as processed. embedding is optional; when provided it's
+    stored as JSON and used by future fetch_recent_embeddings calls for
+    topic-level dedup."""
+    import json as _json
     with eng.begin() as conn:
         conn.execute(
             processed_items.insert().prefix_with("OR IGNORE"),
             {"guid": guid, "title": title, "channel": channel,
-             "processed_at": _utcnow()},
+             "processed_at": _utcnow(),
+             "embedding_json": _json.dumps(embedding) if embedding else None},
         )
+
+
+def fetch_recent_embeddings(
+    eng: Engine, channel: str, *, lookback_days: int = 7,
+) -> list[list[float]]:
+    """Return all non-null embedding vectors for `channel` processed in the
+    last `lookback_days`. Rows with NULL embedding_json (pre-feature legacy
+    or no API key at the time) are silently skipped."""
+    import json as _json
+    cutoff = _utcnow() - timedelta(days=lookback_days)
+    with eng.connect() as conn:
+        rows = conn.execute(
+            select(processed_items.c.embedding_json)
+            .where(processed_items.c.channel == channel)
+            .where(processed_items.c.processed_at >= cutoff)
+            .where(processed_items.c.embedding_json.is_not(None))
+        ).fetchall()
+    out: list[list[float]] = []
+    for (raw,) in rows:
+        if not raw:
+            continue
+        try:
+            vec = _json.loads(raw)
+        except (ValueError, TypeError):
+            continue
+        if isinstance(vec, list) and vec:
+            out.append(vec)
+    return out
 
 
 def is_processed(eng: Engine, guid: str, channel: str) -> bool:

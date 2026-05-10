@@ -479,9 +479,27 @@ def _run_rss(*, channel, run_id, log, eng, settings,
             log.info(f"  → {len(items)} after negative keyword filter (dropped {before - len(items)})")
 
     log.info("[2/8] dedup")
-    new_items = filter_new(eng, items, channel.slug,
-                            fuzzy_threshold=settings.fuzzy_dedup_threshold)
-    log.info(f"  → {len(new_items)} new")
+    # Topic-level dedup via OpenAI embeddings (in addition to GUID + fuzzy
+    # title) — catches the multi-publisher-same-story case where two
+    # videos for the same Icardi/Osimhen news pass through because GUIDs
+    # and headlines differ. Graceful degradation if no API key configured.
+    secrets_path_for_dedup = (
+        (Path(eng.url.database).parent / "secrets.yaml").resolve()
+        if eng.url.database else Path("data/secrets.yaml").resolve()
+    )
+    try:
+        dedup_openai_key = resolve_openai_api_key(_load_secrets(secrets_path_for_dedup))
+    except Exception:
+        dedup_openai_key = ""
+    dedup_embeddings: dict[str, list[float]] = {}
+    new_items = filter_new(
+        eng, items, channel.slug,
+        fuzzy_threshold=settings.fuzzy_dedup_threshold,
+        openai_api_key=dedup_openai_key or None,
+        embeddings_out=dedup_embeddings,
+    )
+    log.info(f"  → {len(new_items)} new"
+             f"{' (embedding-dedup active)' if dedup_openai_key else ''}")
     # Record only fuzzy-similar dropped items (not GUID-exact duplicates,
     # which would bloat rss_items on every poll for the same headline)
     from short_bot.db import is_processed
@@ -722,7 +740,10 @@ def _run_rss(*, channel, run_id, log, eng, settings,
         render_ms = int((time.perf_counter() - t0) * 1000)
         log.info(f"  → {out_path.name} ({render_ms}ms)")
 
-    mark_processed(eng, picked.item.guid, picked.item.title, channel.slug)
+    mark_processed(
+        eng, picked.item.guid, picked.item.title, channel.slug,
+        embedding=dedup_embeddings.get(picked.item.guid),
+    )
     short_id = record_short(eng,
         channel=channel.slug, rss_item_guid=picked.item.guid,
         title=script.header_top + " " + script.header_bottom,
