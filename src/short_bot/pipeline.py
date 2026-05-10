@@ -468,6 +468,7 @@ def _run_rss(*, channel, run_id, log, eng, settings,
         candidates,
         claude_path=settings.claude_cli_path,
         model=settings.claude_models.get("default", "haiku"),
+        channel=channel,
     )
     top_n_candidates = select_top(scored, min_score=channel.min_score,
                                   n=_IMAGE_RETRY_MAX)
