@@ -26,7 +26,7 @@ from short_bot.models import RenderJob
 from short_bot.fetcher import fetch_rss
 from short_bot.dedup import filter_new
 from short_bot.scorer import score_items, select_top
-from short_bot.extractor import extract_article
+from short_bot.extractor import extract_article, extract_og_image_url
 from short_bot.script_writer import write_script
 from short_bot.assets import download_and_blur_thumb, pick_music
 from short_bot.renderer import render_frames, build_html
@@ -538,8 +538,18 @@ def _run_rss(*, channel, run_id, log, eng, settings,
 
         log.info("  assets/image")
         bg_try = None
-        if candidate.item.thumb_url:
+        # 1. og:image — publisher's actual hero photo (Google News thumb is
+        # often a generic logo; this gets the real article image).
+        og_url = extract_og_image_url(candidate.item.link)
+        if og_url:
+            log.info(f"  og:image: {og_url[:100]}")
+            bg_try = download_and_blur_thumb(og_url, cache_dir)
+            if bg_try:
+                log.info(f"  og:image accepted: {bg_try.name}")
+        # 2. RSS thumb fallback (Google News media:thumbnail).
+        if bg_try is None and candidate.item.thumb_url:
             bg_try = download_and_blur_thumb(candidate.item.thumb_url, cache_dir)
+        # 3. DDG/Wikimedia/Pexels search fallback.
         if bg_try is None:
             from short_bot.image_picker import pick_image_for_script
             images_cache = cache_dir / "images"
