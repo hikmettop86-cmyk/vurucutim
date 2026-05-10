@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from html.parser import HTMLParser
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 import requests
 import trafilatura
@@ -30,6 +30,16 @@ class _OGImageParser(HTMLParser):
             self.twitter_image = content
 
 
+def _is_google_news_url(article_url: str) -> bool:
+    """Google News rss/articles URLs serve a JS-redirect intermediate page;
+    requests.get can't follow that redirect, so the og:image we'd parse is
+    Google's own generic CDN preview (lh3.googleusercontent.com/...) — the
+    same one for every article on a given topic, so all videos end up with
+    identical hero images. Skip these hosts entirely."""
+    host = (urlparse(article_url).hostname or "").lower()
+    return host == "news.google.com" or host.endswith(".news.google.com")
+
+
 def extract_og_image_url(article_url: str, *, timeout: int = 15) -> str | None:
     """Fetch an article URL and return its og:image (or twitter:image fallback).
 
@@ -37,8 +47,12 @@ def extract_og_image_url(article_url: str, *, timeout: int = 15) -> str | None:
     so the same image keeps appearing across unrelated stories. The publisher's
     own og:image meta tag is the actual hero photo of the article.
 
-    Returns absolute URL, or None on missing meta / HTTP failure / network error.
+    Skips Google News intermediate pages (those don't expose the publisher's
+    image). Returns absolute URL, or None on missing meta / HTTP failure /
+    network error / Google News bypass.
     """
+    if _is_google_news_url(article_url):
+        return None
     try:
         r = requests.get(
             article_url, timeout=timeout,

@@ -264,6 +264,73 @@ def test_pipeline_prefers_og_image_over_rss_thumb(tmp_path):
     assert blur_calls[0] == "https://publisher.com/hero.jpg"
 
 
+def test_pipeline_skips_rss_thumb_for_google_news_articles(tmp_path):
+    """For Google News article URLs both og:image AND RSS thumb point to
+    Google's generic CDN preview (same image across unrelated stories).
+    Pipeline must skip both and go straight to DDG/Wikimedia/Pexels."""
+    item = NewsItem(
+        guid="g1", title="X",
+        link="https://news.google.com/rss/articles/CBMiabcdef",
+        source="S", pub_date=None,
+        thumb_url="https://news.google.com/api/attachments/generic-logo.jpg",
+        description="d",
+    )
+    settings = _settings()
+    channel = _channel(tmp_path)
+    db_path = tmp_path / "db.sqlite"
+    music_root = tmp_path / "music"
+    (music_root / "breaking").mkdir(parents=True)
+    src_music = Path(__file__).parent / "fixtures" / "music_sample.mp3"
+    (music_root / "breaking" / "a.mp3").write_bytes(src_music.read_bytes())
+
+    fake_img = tmp_path / "cache" / "images" / "fake.jpg"
+    fake_img.parent.mkdir(parents=True)
+    fake_img.write_bytes(b"fake jpg")
+
+    blur_calls: list[str] = []
+
+    def fake_blur(url, cache_dir, **kwargs):
+        blur_calls.append(url)
+        return None  # both og and rss-thumb should never even reach this
+
+    pick_calls = {"n": 0}
+
+    def fake_pick(*a, **kw):
+        pick_calls["n"] += 1
+        return fake_img
+
+    def fake_compose(frames_dir, music_path, out_path, **kwargs):
+        Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(out_path).write_bytes(b"fake mp4")
+        return Path(out_path)
+
+    with patch("short_bot.pipeline.fetch_rss", return_value=[item]), \
+         patch("short_bot.pipeline.score_items",
+               return_value=[ScoredItem(item=item, score=9.0, reasoning="ok")]), \
+         patch("short_bot.pipeline.extract_article", return_value="body"), \
+         patch("short_bot.pipeline.write_script", return_value=_script()), \
+         patch("short_bot.pipeline.download_and_blur_thumb", side_effect=fake_blur), \
+         patch("short_bot.image_picker.pick_image_for_script", side_effect=fake_pick), \
+         patch("short_bot.pipeline.render_frames", return_value=60), \
+         patch("short_bot.pipeline.compose_video", side_effect=fake_compose):
+        run_pipeline(
+            channel=channel, settings=settings,
+            db_path=db_path, music_root=music_root,
+            templates_dir=Path("templates"), cache_dir=tmp_path / "cache",
+            logs_dir=tmp_path / "logs", lock_dir=tmp_path / "locks",
+            trigger="cli",
+        )
+
+    # Neither og:image nor RSS thumb path should have been attempted —
+    # both produce Google's generic preview for this article.
+    assert blur_calls == [], (
+        f"download_and_blur_thumb was called with: {blur_calls} "
+        "— expected zero calls for Google News article URLs"
+    )
+    # DDG/Wikimedia/Pexels search must have been used as the fallback.
+    assert pick_calls["n"] == 1
+
+
 def test_pipeline_falls_back_to_rss_thumb_when_no_og_image(tmp_path):
     """When og:image is missing, RSS thumb is the next fallback before DDG."""
     item = NewsItem(

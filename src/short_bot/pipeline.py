@@ -27,7 +27,11 @@ from short_bot.models import RenderJob
 from short_bot.fetcher import fetch_rss
 from short_bot.dedup import filter_new
 from short_bot.scorer import score_items, select_top
-from short_bot.extractor import extract_article, extract_og_image_url
+from short_bot.extractor import (
+    extract_article,
+    extract_og_image_url,
+    _is_google_news_url,
+)
 from short_bot.script_writer import write_script
 from short_bot.assets import download_and_blur_thumb, pick_music
 from short_bot.renderer import render_frames, build_html
@@ -574,17 +578,24 @@ def _run_rss(*, channel, run_id, log, eng, settings,
 
         log.info("  assets/image")
         bg_try = None
-        # 1. og:image — publisher's actual hero photo (Google News thumb is
-        # often a generic logo; this gets the real article image).
-        og_url = extract_og_image_url(candidate.item.link)
-        if og_url:
-            log.info(f"  og:image: {og_url[:100]}")
-            bg_try = download_and_blur_thumb(og_url, cache_dir)
-            if bg_try:
-                log.info(f"  og:image accepted: {bg_try.name}")
-        # 2. RSS thumb fallback (Google News media:thumbnail).
-        if bg_try is None and candidate.item.thumb_url:
-            bg_try = download_and_blur_thumb(candidate.item.thumb_url, cache_dir)
+        is_gnews = _is_google_news_url(candidate.item.link)
+        # 1. og:image — publisher's actual hero photo. Google News article
+        # URLs serve a JS-redirect intermediate page whose og:image is
+        # always Google's generic CDN preview (same image for every story
+        # on a topic) → skip og:image AND RSS thumb for those.
+        if is_gnews:
+            log.info("  google news url → skipping og:image + rss thumb "
+                     "(both are generic CDN previews); going to image search")
+        else:
+            og_url = extract_og_image_url(candidate.item.link)
+            if og_url:
+                log.info(f"  og:image: {og_url[:100]}")
+                bg_try = download_and_blur_thumb(og_url, cache_dir)
+                if bg_try:
+                    log.info(f"  og:image accepted: {bg_try.name}")
+            # 2. RSS thumb fallback (publisher media:thumbnail).
+            if bg_try is None and candidate.item.thumb_url:
+                bg_try = download_and_blur_thumb(candidate.item.thumb_url, cache_dir)
         # 3. DDG/Wikimedia/Pexels search fallback.
         if bg_try is None:
             from short_bot.image_picker import pick_image_for_script

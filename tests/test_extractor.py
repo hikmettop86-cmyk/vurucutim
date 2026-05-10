@@ -132,3 +132,44 @@ def test_og_image_handles_attribute_order_variation():
     with patch("short_bot.extractor.requests.get", return_value=_resp(html)):
         url = extract_og_image_url("https://example.com/article")
     assert url == "https://example.com/hero.jpg"
+
+
+def test_og_image_skips_google_news_intermediate_pages():
+    """Google News rss/articles URLs serve a JS-redirect intermediate page;
+    requests.get can't follow that, so we'd parse Google's own og:image
+    (a generic CDN preview like lh3.googleusercontent.com/...). All GS
+    articles return the same preview → identical cached image across
+    different stories. Skip the fetch entirely for these hosts."""
+    # Even if the fetch would succeed, we should never call it.
+    mocked = MagicMock()
+    with patch("short_bot.extractor.requests.get") as m:
+        m.return_value = _resp(
+            '<html><head><meta property="og:image" '
+            'content="https://lh3.googleusercontent.com/abc"></head></html>'
+        )
+        url = extract_og_image_url(
+            "https://news.google.com/rss/articles/CBMiabcdef"
+        )
+        assert url is None
+        assert m.call_count == 0, "should not fetch Google News URL"
+
+
+def test_og_image_skips_news_google_subdomain_too():
+    with patch("short_bot.extractor.requests.get") as m:
+        url = extract_og_image_url(
+            "https://news.google.com/articles/x"
+        )
+        assert url is None
+        assert m.call_count == 0
+
+
+def test_og_image_still_works_for_direct_publisher_url():
+    """Regression guard: only Google News is bypassed; direct publisher
+    URLs continue through the og:image extraction path."""
+    html = (
+        '<html><head><meta property="og:image" '
+        'content="https://fanatik.com.tr/hero.jpg"></head></html>'
+    )
+    with patch("short_bot.extractor.requests.get", return_value=_resp(html)):
+        url = extract_og_image_url("https://www.fanatik.com.tr/article")
+    assert url == "https://fanatik.com.tr/hero.jpg"
