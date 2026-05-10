@@ -5,6 +5,7 @@ import logging
 import re
 import shutil
 import tempfile
+import threading
 import time
 import unicodedata
 from dataclasses import dataclass
@@ -280,6 +281,37 @@ _RUN_SUB_LOGGERS = (
 )
 
 
+# Thread-local active run path so concurrent pipeline runs (different
+# channels firing in parallel) keep their sub-logger output (image_picker,
+# scorer, etc.) inside their own log files. Without this, every run's
+# FileHandler is attached to the same shared sub-logger and they all
+# receive every log record — galatasaray's run log was getting NFL/Putin
+# query lines from other channels' concurrent runs.
+_active_run = threading.local()
+
+
+def _set_active_run_log_path(log_path: str) -> None:
+    _active_run.log_path = log_path
+
+
+def _clear_active_run_log_path() -> None:
+    if hasattr(_active_run, "log_path"):
+        del _active_run.log_path
+
+
+class _RunFileFilter(logging.Filter):
+    """Only let a record through if the calling thread's active run log
+    path matches the handler's log path."""
+
+    def __init__(self, log_path: str) -> None:
+        super().__init__()
+        self._log_path = log_path
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        active = getattr(_active_run, "log_path", None)
+        return active == self._log_path
+
+
 def _setup_logger(log_path: Path) -> logging.Logger:
     log_path.parent.mkdir(parents=True, exist_ok=True)
     logger = logging.getLogger(f"shortbot.run.{log_path.stem}")
@@ -294,11 +326,13 @@ def _setup_logger(log_path: Path) -> logging.Logger:
     # Forward asset-fase module logs to this run's file so failure reasons
     # (DDG empty, Claude vision reject, etc.) show up in the run log.
     sub_fmt = logging.Formatter("%(asctime)s [%(levelname)s] [%(name)s] %(message)s")
+    log_path_str = str(log_path)
     for name in _RUN_SUB_LOGGERS:
         sub = logging.getLogger(name)
         sub.setLevel(logging.INFO)
         sub_fh = logging.FileHandler(log_path, encoding="utf-8")
         sub_fh.setFormatter(sub_fmt)
+        sub_fh.addFilter(_RunFileFilter(log_path_str))
         sub_fh._shortbot_run = True
         sub.addHandler(sub_fh)
     return logger
@@ -378,6 +412,7 @@ def run_pipeline(
     log_path = logs_dir / f"{datetime.now(timezone.utc):%Y%m%d_%H%M%S}_{channel.slug}.log"
     log_rel = str(log_path)
     log = _setup_logger(log_path)
+    _set_active_run_log_path(str(log_path))
     run_id = start_run(eng, channel.slug, trigger=trigger, log_path=log_rel)
 
     lock_dir = Path(lock_dir) if lock_dir else Path("data/locks")
@@ -412,6 +447,7 @@ def run_pipeline(
             return RunResult(run_id=run_id, status="failed", short_path=None, error=str(e))
     finally:
         _teardown_logger(log)
+        _clear_active_run_log_path()
         # Dispose engine to release the SQLite connection pool (CLI use case)
         eng.dispose()
 

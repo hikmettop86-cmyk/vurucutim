@@ -60,6 +60,8 @@ _VIEWPORT = {"width": 1080, "height": 1920}
 #     scrollWidth > clientWidth (horizontal) → overflow.
 #   - current_chars = innerText.length (whitespace counted; LLM produces
 #     similar tokens so this is a fair proxy).
+# recommended_max_chars is computed in Python (_compute_recommended_chars)
+# so it can be unit-tested without spinning up Playwright.
 _MEASURE_JS = r"""
 (fields) => {
   const result = {};
@@ -114,25 +116,38 @@ _MEASURE_JS = r"""
     const text = (el.innerText || el.textContent || "").trim();
     const current_chars = text.length;
 
-    let recommended_max_chars = current_chars;
-    if (has_overflow && current_lines > 0) {
-      const target = Math.floor(
-        current_chars * (f.max_lines * 0.9) / current_lines
-      );
-      recommended_max_chars = Math.max(1, target);
-    }
-
     result[f.name] = {
       has_overflow,
       current_chars,
       current_lines,
       max_lines: f.max_lines,
-      recommended_max_chars,
     };
   }
   return result;
 }
 """
+
+
+def _compute_recommended_chars(
+    *, current_chars: int, current_lines: int,
+    max_lines: int, has_overflow: bool,
+) -> int:
+    """Target char count for the LLM's next attempt.
+
+    INVARIANT: when has_overflow is True, the recommendation is strictly
+    less than current_chars. Old JS computed
+    `current * max_lines * 0.9 / current_lines` which can exceed current
+    when overflow is purely horizontal (current_lines < max_lines but
+    width exceeded). LLM saw "max 36" with current=20 and didn't shorten
+    → infinite retry → truncate fallback. We now floor the target by
+    current_chars - 1 so each retry monotonically narrows the window.
+    """
+    if not has_overflow or current_lines == 0:
+        return current_chars
+    # Same proportional formula as before, integer division for stability.
+    target = (current_chars * max_lines * 9) // (current_lines * 10)
+    cap = max(1, current_chars - 1)
+    return max(1, min(target, cap))
 
 
 def check_overflow(
@@ -171,13 +186,22 @@ def check_overflow(
         if m is None:
             # Selector not in DOM — skip. (e.g. kinetic has no photo_overlay.)
             continue
+        has_overflow = bool(m["has_overflow"])
+        current_chars = int(m["current_chars"])
+        current_lines = int(m["current_lines"])
+        max_lines = int(m["max_lines"])
         out[f.name] = FieldOverflow(
             name=f.name,
-            has_overflow=bool(m["has_overflow"]),
-            current_chars=int(m["current_chars"]),
-            current_lines=int(m["current_lines"]),
-            max_lines=int(m["max_lines"]),
-            recommended_max_chars=int(m["recommended_max_chars"]),
+            has_overflow=has_overflow,
+            current_chars=current_chars,
+            current_lines=current_lines,
+            max_lines=max_lines,
+            recommended_max_chars=_compute_recommended_chars(
+                current_chars=current_chars,
+                current_lines=current_lines,
+                max_lines=max_lines,
+                has_overflow=has_overflow,
+            ),
         )
     return OverflowReport(archetype=archetype, fields=out)
 
