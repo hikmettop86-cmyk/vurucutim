@@ -29,6 +29,13 @@ logger = logging.getLogger(__name__)
 class _Verdict(BaseModel):
     appropriate: bool
     reason: str
+    # Dual-axis verdict: appropriate is the strict "real fit?" check; is_safe
+    # is the lenient "not unsafe and at least minimally usable?" check. When
+    # every source rejects on appropriate, the first is_safe candidate is
+    # used as a last-resort fallback — better than producing no video.
+    # Default False so older prompt outputs (which omit the field) don't
+    # accidentally make every reject eligible for fallback.
+    is_safe: bool = False
 
 
 def build_search_query(script: Script) -> str:
@@ -57,22 +64,44 @@ def _download(url: str, dest: Path, *, timeout: int = 15) -> bool:
 
 
 def _verify_with_claude(image_path: Path, script: Script, claude_path: str) -> _Verdict | None:
-    """Ask Claude (vision) whether the image is appropriate. Returns None on CLI failure."""
+    """Ask Claude (vision) whether the image is appropriate. Returns None on CLI failure.
+
+    Asks for two separate booleans:
+      - appropriate: STRICT fit (image directly represents the news topic)
+      - is_safe: LOOSE/thematic fit (no inappropriate content, at least
+        plausible for the news category — used as last-resort fallback
+        when every source rejects on appropriate=true)
+    Loose phrasing in the prompt prevents over-rejection on stories like
+    'Putin announces ceasefire' where the search returns thematic images
+    (Kremlin, Russian flag, soldiers) rather than a direct headshot.
+    """
     summary = script.body_paragraph[:200]
     prompt = (
         f"@{image_path.absolute().as_posix()}\n\n"
-        f"Bu görselin bir Türkçe haber kanalının YouTube Shorts'unda kapak görseli olarak kullanılmasının "
-        f"uygun olup olmadığını değerlendir.\n\n"
-        f"HABER BAŞLIĞI: {script.header_top} {script.header_bottom}\n"
+        f"Bu görseli haber kanalı YouTube Shorts kapağı olarak değerlendir. "
+        f"GEVŞEK ol — haberin TEMASIYLA ilişkili olması yeterli, "
+        f"kişinin yüzü/birebir yer şart değil.\n\n"
+        f"HABER: {script.header_top} {script.header_bottom}\n"
         f"KATEGORİ: {script.category}\n"
         f"ÖZET: {summary}\n\n"
-        f"Değerlendirme kriterleri:\n"
-        f"- Görsel haberin konusuyla doğrudan ya da yakından ilgili olmalı\n"
-        f"- Yanlış kişi/yer/marka göstermemeli (ör. başka bir ülkenin bayrağı vs.)\n"
-        f"- Reklam/banner/watermark bariz biçimde dolu olmamalı\n"
-        f"- Şiddet, çıplaklık vs. uygunsuz içerik olmamalı\n\n"
-        f"SADECE JSON formatında yanıt ver:\n"
-        f'{{"appropriate": true|false, "reason": "<kısa Türkçe açıklama, 1 cümle>"}}'
+        f"İKİ AYRI KARAR VER:\n\n"
+        f"1) appropriate (sıkı kriter): görsel haberin konusunu/temasını "
+        f"yansıtıyor mu?\n"
+        f"   - TRUE örnekler: Putin haberi → Putin/Kremlin/Rus bayrağı; "
+        f"GS haberi → futbolcu/stadyum/GS logosu; ekonomi → para/grafik\n"
+        f"   - FALSE örnekler: tamamen ilgisiz (savaş haberinde tatil, "
+        f"futbol haberinde kedi resmi)\n\n"
+        f"2) is_safe (gevşek minimum eşik): görsel uygunsuz içerik "
+        f"İÇERMİYOR ve haber kategorisi için en azından kullanılabilir mi?\n"
+        f"   - TRUE: şiddet/çıplaklık/müstehcen YOK, watermark/reklam ön "
+        f"planda değil, kategoriyle uyumlu stok/jenerik görsel\n"
+        f"   - FALSE: müstehcen/şiddet, kalın watermark, çocuk kitabı "
+        f"kapağı, kategoriyle hiç uyuşmayan absürt görsel\n\n"
+        f"appropriate her zaman is_safe'in alt kümesi olmalı "
+        f"(appropriate=true ise is_safe=true).\n\n"
+        f"SADECE JSON:\n"
+        f'{{"appropriate": true|false, "is_safe": true|false, '
+        f'"reason": "<kısa Türkçe açıklama, 1 cümle>"}}'
     )
     try:
         return run_json(prompt, _Verdict, claude_path=claude_path, retries=1, timeout_s=60)
@@ -258,6 +287,14 @@ def _run_image_search(
         sources.append(("Wikimedia (ASCII)", lambda: _from_wikimedia(normalized)))
     sources.append(("Pexels", _from_pexels))
 
+    # Track the first is_safe-but-not-appropriate candidate as a last-resort
+    # fallback. Used only when every source rejects on `appropriate`. This
+    # prevents the "5 sources searched, 10 candidates all rejected, no video"
+    # outcome on stories where the search returns thematic but not exact
+    # matches (e.g. Russian flag for a Putin announcement story).
+    last_resort_safe: Path | None = None
+    last_resort_reason: str = ""
+
     for source_name, fetch in sources:
         try:
             candidates = fetch()
@@ -282,9 +319,22 @@ def _run_image_search(
             if verdict.appropriate:
                 logger.warning(f"  {source_name} cand {i} ACCEPTED: {verdict.reason}")
                 return path
+            if last_resort_safe is None and verdict.is_safe:
+                last_resort_safe = path
+                last_resort_reason = verdict.reason
+                logger.info(
+                    f"  {source_name} cand {i} safe (not appropriate): "
+                    f"saved as last-resort fallback — {verdict.reason}"
+                )
             logger.warning(f"  {source_name} cand {i} rejected: {verdict.reason}")
 
         logger.info(f"{source_name}: tum adaylar reddedildi, sonraki kaynak")
 
+    if last_resort_safe is not None:
+        logger.warning(
+            f"no source returned an appropriate image — using last-resort "
+            f"safe candidate {last_resort_safe.name} ({last_resort_reason})"
+        )
+        return last_resort_safe
     logger.warning("no image accepted from any source after all fallbacks")
     return None

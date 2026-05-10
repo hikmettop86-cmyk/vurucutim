@@ -66,7 +66,8 @@ def test_pick_returns_none_when_all_rejected(tmp_path):
 
 def test_pick_returns_none_on_no_candidates(tmp_path):
     with patch("short_bot.image_picker.search_images", return_value=[]), \
-         patch("short_bot.wikimedia_search.search_images_commons", return_value=[]):
+         patch("short_bot.wikimedia_search.search_images_commons", return_value=[]), \
+         patch("short_bot.pexels.search_photos", return_value=[]):
         result = pick_image_for_script(_script(), tmp_path / "img", claude_path="claude")
     assert result is None
 
@@ -250,3 +251,101 @@ def test_build_search_query_max_3_keywords_appended():
     assert "three" in q.lower()
     assert "four" not in q.lower()
     assert "five" not in q.lower()
+
+
+# ---- Verdict.is_safe + last-resort fallback ----
+
+def test_verdict_defaults_is_safe_to_false():
+    """When Claude's response omits is_safe (older prompt format), default
+    to False so last-resort fallback only accepts images Claude explicitly
+    declared safe."""
+    v = _Verdict(appropriate=False, reason="x")
+    assert v.is_safe is False
+
+
+def test_verdict_parses_is_safe_from_claude_response():
+    v = _Verdict(appropriate=False, reason="x", is_safe=True)
+    assert v.is_safe is True
+
+
+def test_pick_returns_last_resort_safe_when_all_appropriate_rejected(tmp_path):
+    """When NO source returns an appropriate image but at least one returns
+    is_safe=true, pipeline gets that image (better than no video). This
+    fixes the Putin/savaş case: DDG returned thematic but not exact-match
+    images (Russian flag, Kremlin) — old behavior rejected all → no video.
+    New behavior keeps the first safe one as last-resort fallback."""
+    cand_a = _cand("https://example.com/a.jpg")
+    cand_b = _cand("https://example.com/b.jpg")
+    # Pad verdicts because the source-by-source loop may re-verify cached
+    # candidates from later sources (DDG ASCII / header / Wikimedia /
+    # Pexels in production differ, but in this test search_images returns
+    # the same pair for every source).
+    pad = _Verdict(appropriate=False, is_safe=False, reason="repeat reject")
+    verdicts = [
+        _Verdict(appropriate=False, is_safe=False, reason="absurd cat"),
+        _Verdict(appropriate=False, is_safe=True, reason="thematic russian flag"),
+    ] + [pad] * 50
+    with patch("short_bot.image_picker.search_images", return_value=[cand_a, cand_b]), \
+         patch("short_bot.wikimedia_search.search_images_commons", return_value=[]), \
+         patch("short_bot.pexels.search_photos", return_value=[]), \
+         patch("short_bot.image_picker._download", return_value=True), \
+         patch("short_bot.image_picker._verify_with_claude", side_effect=verdicts):
+        result = pick_image_for_script(_script(), tmp_path / "img", claude_path="claude")
+    assert result is not None, "last-resort safe candidate should be returned"
+
+
+def test_pick_prefers_appropriate_over_last_resort_safe(tmp_path):
+    """When both appropriate and safe-only candidates exist, the appropriate
+    one wins regardless of order."""
+    cand_a = _cand("https://example.com/a.jpg")
+    cand_b = _cand("https://example.com/b.jpg")
+    verdicts = [
+        _Verdict(appropriate=False, is_safe=True, reason="thematic only"),
+        _Verdict(appropriate=True, is_safe=True, reason="exact match"),
+    ]
+    with patch("short_bot.image_picker.search_images", return_value=[cand_a, cand_b]), \
+         patch("short_bot.wikimedia_search.search_images_commons", return_value=[]), \
+         patch("short_bot.pexels.search_photos", return_value=[]), \
+         patch("short_bot.image_picker._download", return_value=True), \
+         patch("short_bot.image_picker._verify_with_claude", side_effect=verdicts):
+        result = pick_image_for_script(_script(), tmp_path / "img", claude_path="claude")
+    assert result is not None
+    # second candidate (the appropriate one) wins
+    assert result.name.startswith(
+        __import__("hashlib").sha1(cand_b.url.encode()).hexdigest()[:16]
+    )
+
+
+def test_pick_returns_none_when_all_unsafe(tmp_path):
+    """All rejected AND no is_safe=true → still None (no video over bad video)."""
+    cand_a = _cand("https://example.com/a.jpg")
+    with patch("short_bot.image_picker.search_images", return_value=[cand_a]), \
+         patch("short_bot.wikimedia_search.search_images_commons", return_value=[]), \
+         patch("short_bot.pexels.search_photos", return_value=[]), \
+         patch("short_bot.image_picker._download", return_value=True), \
+         patch("short_bot.image_picker._verify_with_claude",
+               return_value=_Verdict(appropriate=False, is_safe=False, reason="bad")):
+        result = pick_image_for_script(_script(), tmp_path / "img", claude_path="claude")
+    assert result is None
+
+
+def test_verify_with_claude_prompt_signals_loose_matching_and_dual_axis():
+    """Probe the prompt sent to Claude (without invoking the real CLI).
+    It must encourage loose/thematic matching AND ask for is_safe field."""
+    from short_bot.image_picker import _verify_with_claude
+    captured = {}
+
+    def fake_run_json(prompt, model, **kw):
+        captured["prompt"] = prompt
+        return _Verdict(appropriate=True, is_safe=True, reason="ok")
+
+    with patch("short_bot.image_picker.run_json", side_effect=fake_run_json):
+        _verify_with_claude(Path("/tmp/x.jpg"), _script(), "claude")
+
+    p = captured["prompt"]
+    assert "is_safe" in p, "prompt must request is_safe field"
+    assert "appropriate" in p, "prompt must request appropriate field"
+    # loose/thematic signal — at least one of these phrases
+    pl = p.lower()
+    assert any(s in pl for s in ("tema", "thematic", "gevşek", "loose")), \
+        "prompt must signal loose thematic matching"
