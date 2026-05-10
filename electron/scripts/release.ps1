@@ -155,13 +155,24 @@ if ($LASTEXITCODE -ne 0) { Fail "gh release create basarisiz: $releaseId" }
 Write-Host "  -> release id: $releaseId"
 
 # ---------------------------------------------------------------------------
-# 7. Upload assets
+# 7. Upload assets — TWO PHASES to prevent auto-updater 404 race condition.
+#    gh release upload yields a multi-file upload that runs in parallel; the
+#    350-byte latest.yml finishes in ~1s while the 194 MB .exe takes ~30-60s.
+#    Auto-updaters on running clients poll for latest.yml every ~30s and, the
+#    moment they see it, GET the .exe — if .exe isn't fully uploaded yet, they
+#    hit 404 and surface "Cannot download .../VurucuTim-Setup-X.Y.Z.exe".
+#    Fix: upload heavy assets FIRST, then publish latest.yml LAST so it's only
+#    visible after the installer is fully accessible.
 # ---------------------------------------------------------------------------
-Step 7 7 "asset'leri yukle ($exeSize MB)"
-$uploadAssets = @($exe, $blockmap, $latestYml)
-if ($batOut -and (Test-Path $batOut)) { $uploadAssets += $batOut }
-gh release upload "v$NewVersion" @uploadAssets --repo $repo | Out-Host
-if ($LASTEXITCODE -ne 0) { Fail "asset upload basarisiz" }
+Step 7 7 "asset'leri yukle ($exeSize MB) — 2 phase: installer + blockmap + bat first, latest.yml last"
+$primaryAssets = @($exe, $blockmap)
+if ($batOut -and (Test-Path $batOut)) { $primaryAssets += $batOut }
+Write-Host "  phase 1/2: installer + blockmap + bat..."
+gh release upload "v$NewVersion" @primaryAssets --repo $repo | Out-Host
+if ($LASTEXITCODE -ne 0) { Fail "primary asset upload basarisiz" }
+Write-Host "  phase 2/2: latest.yml (auto-updater trigger)..."
+gh release upload "v$NewVersion" $latestYml --repo $repo | Out-Host
+if ($LASTEXITCODE -ne 0) { Fail "latest.yml upload basarisiz" }
 
 # ---------------------------------------------------------------------------
 # Done
