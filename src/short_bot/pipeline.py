@@ -657,8 +657,25 @@ def _run_rss(*, channel, run_id, log, eng, settings,
         log.info(f"[4-6/8] candidate {attempt}/{len(top_n_candidates)} "
                  f"score={candidate.score:.1f} | {candidate.item.title[:80]}")
 
+        # Resolve google-news redirect URLs to the publisher URL so BOTH the
+        # body extractor AND the og:image fetch see the real article page
+        # (mynet.com.tr / sozcu.com.tr etc.) instead of Google's JS-redirect
+        # interstitial. Costs ~3-5s per resolve via Playwright; this is
+        # cheaper than falling through to DDG search + Claude vision verify
+        # AND it eliminates the "burned-in news graphic" failure mode (the
+        # publisher's own og:image is by construction the right photo).
+        article_url = candidate.item.link
+        if _is_google_news_url(article_url):
+            from short_bot.google_news_resolver import resolve as _resolve_gnews
+            resolved = _resolve_gnews(article_url)
+            if resolved:
+                log.info(f"  resolved gnews → {resolved[:90]}")
+                article_url = resolved
+            else:
+                log.info("  gnews resolve failed — using raw URL (body/og may be empty)")
+
         log.info("  extract_article")
-        body_try = extract_article(candidate.item.link)
+        body_try = extract_article(article_url)
         if body_try is None:
             body_try = candidate.item.description or candidate.item.title
             log.warning("  trafilatura empty → fallback description")
@@ -693,24 +710,22 @@ def _run_rss(*, channel, run_id, log, eng, settings,
 
         log.info("  assets/image")
         bg_try = None
-        is_gnews = _is_google_news_url(candidate.item.link)
-        # 1. og:image — publisher's actual hero photo. Google News article
-        # URLs serve a JS-redirect intermediate page whose og:image is
-        # always Google's generic CDN preview (same image for every story
-        # on a topic) → skip og:image AND RSS thumb for those.
-        if is_gnews:
-            log.info("  google news url → skipping og:image + rss thumb "
-                     "(both are generic CDN previews); going to image search")
-        else:
-            og_url = extract_og_image_url(candidate.item.link)
-            if og_url:
-                log.info(f"  og:image: {og_url[:100]}")
-                bg_try = download_and_blur_thumb(og_url, cache_dir)
-                if bg_try:
-                    log.info(f"  og:image accepted: {bg_try.name}")
-            # 2. RSS thumb fallback (publisher media:thumbnail).
-            if bg_try is None and candidate.item.thumb_url:
-                bg_try = download_and_blur_thumb(candidate.item.thumb_url, cache_dir)
+        original_was_gnews = _is_google_news_url(candidate.item.link)
+        # 1. og:image — publisher's actual hero photo. When the original RSS
+        # URL was a google-news redirect, `article_url` was resolved above
+        # to the publisher's real page, so og:image now reads the real hero
+        # photo (mynet/sozcu/etc.) instead of Google's generic CDN preview.
+        og_url = extract_og_image_url(article_url)
+        if og_url:
+            log.info(f"  og:image: {og_url[:100]}")
+            bg_try = download_and_blur_thumb(og_url, cache_dir)
+            if bg_try:
+                log.info(f"  og:image accepted: {bg_try.name}")
+        # 2. RSS thumb fallback (publisher media:thumbnail). Still skipped
+        # when the original was google-news -- the thumb on those feeds is
+        # always Google's generic publisher logo, identical across articles.
+        if bg_try is None and not original_was_gnews and candidate.item.thumb_url:
+            bg_try = download_and_blur_thumb(candidate.item.thumb_url, cache_dir)
         # 3. DDG/Wikimedia/Pexels search fallback.
         if bg_try is None:
             from short_bot.image_picker import pick_image_for_script
