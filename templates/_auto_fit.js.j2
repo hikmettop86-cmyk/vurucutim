@@ -67,8 +67,14 @@ async function _autoFit() {
 
   var origClamp = text.style.webkitLineClamp;
   var origDisplay = text.style.display;
+  var origOverflow = text.style.overflow;
   text.style.webkitLineClamp = 'unset';
   text.style.display = 'block';
+  /* Critical: overflow:hidden (set by .body CSS in single-element templates
+     like newscast/politika/...) clamps scrollHeight to clientHeight, which
+     defeats the whole measurement. Strip it during measurement; restore at
+     the end alongside display+clamp. */
+  text.style.overflow = 'visible';
 
   /* For non-wrapper templates (.body is the text), clientHeight is the
      line-clamped/flex-allocated height. We want the flex-allocated height
@@ -87,6 +93,7 @@ async function _autoFit() {
 
   text.style.webkitLineClamp = origClamp;
   text.style.display = origDisplay;
+  text.style.overflow = origOverflow;
   void text.offsetHeight;
 }
 window.__autoFitDone = _autoFit().catch(function(){});

@@ -68,19 +68,30 @@
     box-shadow: 0 8px 0 rgba(0,0,0,.4);
   }
 
-  /* BODY paragraph */
+  /* BODY paragraph — TWO LAYERS:
+       .body       outer flex container (allocates remaining stage height)
+       .body-text  inner text element (auto-fit script measures this; its
+                   parent .body is the height-constraint container)
+     The split is essential: auto-fit needs container.clientHeight ≠ text.scrollHeight
+     so the shrink loop can actually detect overflow. Single-element layout
+     (body acts as both container AND text) breaks because flex:1 forces
+     scrollHeight=clientHeight even when content would fit. */
   .body {
     background: linear-gradient(180deg, #1a1a2a, #0a0a1a);
-    /* Flex grows to fill remaining stage height; margin-bottom reserves 240px
-       for the persistent chip / progress / handle row. */
     flex: 1;
     min-height: 0;
     margin-bottom: 240px;
     padding: 50px 60px 30px;
+    color: #fff;
+    overflow: hidden;
+    display: flex;
+    align-items: flex-start;
+  }
+  .body-text {
+    width: 100%;
     font-size: 48px;
     line-height: 1.42;
     font-weight: 600;
-    color: #fff;
     display: -webkit-box;
     -webkit-line-clamp: 9;
     -webkit-box-orient: vertical;
@@ -341,7 +352,7 @@
     <div class="yellow">{{ script.photo_overlay }}</div>
   </div>
 
-  <div class="body" data-fit-min="36" data-fit-max="60" data-fit-pad="20">{{ body_html|safe }}</div>
+  <div class="body"><div class="body-text" data-fit-min="36" data-fit-max="60" data-fit-pad="20">{{ body_html|safe }}</div></div>
 
   <div class="progress"></div>
   <div class="handle">{{ handle }}</div>
