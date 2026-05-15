@@ -141,6 +141,19 @@ dna_cache = Table(
 Index("idx_dna_cache_channel_created",
       dna_cache.c.channel_slug, dna_cache.c.created_at)
 
+# Per-channel performance insights computed nightly (and on-demand from the
+# /insights/<slug> web view). data_json is the structured aggregation dict
+# documented in short_bot.learning.aggregator.compute_channel_insights().
+# Used both for UI display AND for scorer prompt injection (so future runs
+# inherit "what's actually worked for this channel").
+channel_insights = Table(
+    "channel_insights", metadata,
+    Column("channel", String, primary_key=True),
+    Column("computed_at", DateTime, default=_utcnow, nullable=False),
+    Column("sample_size", Integer, default=0, nullable=False),
+    Column("data_json", Text, nullable=False),
+)
+
 
 def init_db(db_path: Path | str) -> Engine:
     """Create engine, enable WAL + FK + busy_timeout, create schema if absent."""
@@ -554,3 +567,60 @@ def last_upload_at_for_channel(eng: Engine, channel: str):
             .limit(1)
         ).first()
         return row[0] if row else None
+
+
+def upsert_channel_insights(eng: Engine, *, channel: str, sample_size: int,
+                              data_json: str) -> None:
+    """Persist computed insights for `channel`. Overwrites any prior row."""
+    import json as _json
+    with eng.begin() as conn:
+        # SQLite-friendly upsert: try update first, insert if no row touched
+        result = conn.execute(
+            channel_insights.update()
+            .where(channel_insights.c.channel == channel)
+            .values(computed_at=_utcnow(), sample_size=sample_size,
+                    data_json=data_json)
+        )
+        if result.rowcount == 0:
+            conn.execute(channel_insights.insert().values(
+                channel=channel, computed_at=_utcnow(),
+                sample_size=sample_size, data_json=data_json,
+            ))
+
+
+def load_channel_insights(eng: Engine, channel: str) -> dict | None:
+    """Return the cached insights dict for `channel`, or None when missing.
+
+    Returned dict shape mirrors short_bot.learning.aggregator output plus a
+    `_meta` wrapper with `computed_at` (ISO timestamp) and `sample_size`.
+    """
+    import json as _json
+    with eng.connect() as conn:
+        row = conn.execute(
+            select(channel_insights).where(channel_insights.c.channel == channel)
+        ).first()
+    if row is None:
+        return None
+    try:
+        data = _json.loads(row.data_json)
+    except (ValueError, TypeError):
+        return None
+    data["_meta"] = {
+        "computed_at": (row.computed_at.isoformat()
+                         if row.computed_at else None),
+        "sample_size": int(row.sample_size or 0),
+    }
+    return data
+
+
+def load_channels_with_uploads(eng: Engine) -> list[str]:
+    """Distinct channel slugs that have at least one successful YT upload.
+    Used by the nightly insights aggregation cron to decide which channels
+    need a refresh."""
+    with eng.connect() as conn:
+        rows = conn.execute(
+            select(shorts.c.channel).distinct()
+            .select_from(youtube_uploads.join(shorts, youtube_uploads.c.short_id == shorts.c.id))
+            .where(youtube_uploads.c.status == "success")
+        ).all()
+    return [r[0] for r in rows]

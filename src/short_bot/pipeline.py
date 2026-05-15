@@ -607,11 +607,26 @@ def _run_rss(*, channel, run_id, log, eng, settings,
 
     log.info("[3/8] score_items")
     candidates = new_items[:channel.max_candidates_per_run]
+    # Load cached insights (computed nightly + on-demand from /insights page).
+    # When sparse or absent the formatter returns "" so the scorer prompt
+    # stays unchanged — strictly additive feature.
+    perf_insights = None
+    try:
+        from short_bot.db import load_channel_insights
+        perf_insights = load_channel_insights(eng, channel.slug)
+        if perf_insights:
+            log.info(
+                f"  [insights] loaded (sample_size="
+                f"{perf_insights.get('sample_size', 0)})"
+            )
+    except Exception as e:  # noqa: BLE001 -- never let insights crash pipeline
+        log.warning(f"  [insights] load failed: {e} -- skipping injection")
     scored = score_items(
         candidates,
         claude_path=settings.claude_cli_path,
         model=settings.claude_models.get("default", "haiku"),
         channel=channel,
+        performance_insights=perf_insights,
     )
     # Trend boost: augment scores when a candidate headline matches a
     # currently trending term in the channel's region. Best-effort -- any

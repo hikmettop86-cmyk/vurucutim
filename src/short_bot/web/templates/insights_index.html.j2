@@ -1,0 +1,75 @@
+{% extends "base.html.j2" %}
+{% block title %}Vurucu TIM — İçgörüler{% endblock %}
+{% block content %}
+
+<div class="mb-6">
+  <h1 class="font-serif text-3xl font-bold">İçgörüler</h1>
+  <p class="text-sm text-claude-muted mt-1">
+    Kanal başına gerçek YouTube performansından otomatik çıkarılmış pattern'ler.
+    Scorer her run'da bu içgörüleri prompt'a inject ederek seçimini iyileştirir.
+  </p>
+</div>
+
+<div class="bg-white border border-claude-border rounded-xl shadow-soft">
+  <table class="w-full text-sm">
+    <thead class="bg-claude-surface">
+      <tr class="text-xs uppercase text-claude-muted">
+        <th class="text-left px-5 py-2">Kanal</th>
+        <th class="text-left px-5 py-2 w-20">Dil</th>
+        <th class="text-left px-5 py-2 w-28">YT bağlı</th>
+        <th class="text-right px-5 py-2 w-32">Örnek (stats)</th>
+        <th class="text-left px-5 py-2 w-44">Son hesap</th>
+        <th class="text-left px-5 py-2 w-20"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for ch in channels %}
+      <tr class="border-t border-claude-border/40 {% if not ch.enabled %}opacity-60{% endif %}">
+        <td class="px-5 py-2">
+          {% if ch.has_uploads %}
+            <a href="/insights/{{ ch.slug }}" class="font-medium hover:underline">{{ ch.name }}</a>
+          {% else %}
+            <span class="font-medium text-claude-muted">{{ ch.name }}</span>
+          {% endif %}
+          <div class="text-xs text-claude-muted font-mono">{{ ch.slug }}</div>
+        </td>
+        <td class="px-5 py-2 font-mono">{{ ch.language }}</td>
+        <td class="px-5 py-2">
+          {% if ch.has_uploads %}
+            <span class="bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs">bağlı</span>
+          {% else %}
+            <span class="text-xs text-claude-muted">—</span>
+          {% endif %}
+        </td>
+        <td class="px-5 py-2 text-right font-mono">
+          {% if ch.sample_size > 0 %}
+            {{ ch.sample_size }}
+          {% else %}
+            <span class="text-claude-muted">0</span>
+          {% endif %}
+        </td>
+        <td class="px-5 py-2 font-mono text-xs">
+          {% if ch.last_computed %}
+            {{ ch.last_computed[:16].replace('T',' ') }}
+          {% else %}
+            <span class="text-claude-muted">hiç</span>
+          {% endif %}
+        </td>
+        <td class="px-5 py-2">
+          {% if ch.has_uploads %}
+            <a href="/insights/{{ ch.slug }}" class="text-xs underline">aç →</a>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="mt-4 text-xs text-claude-muted">
+  <b>Otomatik yenileme:</b> her gece 04:00 cron'u tüm kanalları yeniden hesaplar.
+  Veriler 24 saatten eski ise sayfa açılışında otomatik tazelenir.
+  Bir kanalın stats'ı oluşması için ilk YouTube uploadından sonra 48-72 saat YT Analytics gecikmesi olur.
+</div>
+
+{% endblock %}

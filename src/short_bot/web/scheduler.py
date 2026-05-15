@@ -123,6 +123,30 @@ def init_scheduler(app):
         id="_dna_cache_cleanup",
         replace_existing=True,
     )
+
+    def _nightly_insights_refresh():
+        """Daily cron at 04:00: recompute per-channel performance insights.
+
+        Runs AFTER the YT stats refresh cron at 03:00 so the freshest snapshots
+        are reflected in the aggregation. Best-effort: any single channel's
+        failure does NOT abort the rest."""
+        try:
+            from short_bot.learning.aggregator import refresh_all_channels
+            eng = init_db(app.config["SHORTBOT_DB_PATH"])
+            results = refresh_all_channels(eng, lookback_days=30)
+            _LOG.info(
+                f"[insights] nightly refresh: "
+                f"{', '.join(f'{k}={v}' for k, v in results.items()) or '(no channels)'}"
+            )
+        except Exception as e:  # noqa: BLE001 — cron must not crash
+            _LOG.warning(f"[insights] nightly refresh failed: {e}")
+
+    scheduler.add_job(
+        _nightly_insights_refresh,
+        trigger=CronTrigger(hour=4, minute=0),
+        id="_insights_refresh",
+        replace_existing=True,
+    )
     # Trend cache refresh on the interval from settings.trends.refresh_minutes.
     # Default 60min keeps the cache well under the 90min freshness window
     # used by the pipeline (so inline refresh on stale cache is rare).

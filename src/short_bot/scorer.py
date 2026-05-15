@@ -83,6 +83,7 @@ def build_scoring_prompt(
     items: list[NewsItem],
     *,
     channel: "ChannelConfig | None" = None,
+    performance_insights: dict | None = None,
 ) -> str:
     listing = "\n".join(f"- guid={i.guid} | {i.title}" for i in items)
     if channel is None:
@@ -99,11 +100,20 @@ def build_scoring_prompt(
         )
     template = _PROMPT_TEMPLATES.get(channel.language, _PROMPT_TEMPLATES["en"])
     keywords_str = ", ".join(channel.keywords) if channel.keywords else "(no keywords)"
-    return template.format(
+    base = template.format(
         channel_name=channel.name,
         keywords=keywords_str,
         listing=listing,
     )
+    # Optional performance-feedback hint. format_scorer_hint returns "" when
+    # the insight set is too sparse (<5 samples) so callers can pass freely
+    # without worrying about anchoring on noise.
+    if performance_insights:
+        from short_bot.learning.injection import format_scorer_hint
+        hint = format_scorer_hint(performance_insights)
+        if hint:
+            base = base + "\n\n" + hint
+    return base
 
 
 _BATCH_SIZE = 30   # tighter batches keep Haiku responses fast and well within
@@ -118,6 +128,7 @@ def score_items(
     model: str = "default",
     batch_size: int = _BATCH_SIZE,
     channel: "ChannelConfig | None" = None,
+    performance_insights: dict | None = None,
 ) -> list[ScoredItem]:
     if not items:
         return []
@@ -127,7 +138,10 @@ def score_items(
     # claude call — failures in one batch shouldn't kill the whole run.
     for start in range(0, len(items), batch_size):
         batch = items[start:start + batch_size]
-        prompt = build_scoring_prompt(batch, channel=channel)
+        prompt = build_scoring_prompt(
+            batch, channel=channel,
+            performance_insights=performance_insights,
+        )
         try:
             response = run_json(
                 prompt, _ScoreResponse,
