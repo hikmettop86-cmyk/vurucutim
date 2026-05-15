@@ -349,3 +349,78 @@ def test_verify_with_claude_prompt_signals_loose_matching_and_dual_axis():
     pl = p.lower()
     assert any(s in pl for s in ("tema", "thematic", "gevşek", "loose")), \
         "prompt must signal loose thematic matching"
+
+
+# ---- Verdict.has_text_overlay (burned-in news-graphic hard reject) ---------
+
+def test_verdict_defaults_has_text_overlay_to_false():
+    """Older verdicts (pre-feature) must not be retroactively rejected."""
+    v = _Verdict(appropriate=True, reason="x")
+    assert v.has_text_overlay is False
+
+
+def test_verdict_parses_has_text_overlay_from_claude_response():
+    v = _Verdict(appropriate=False, reason="x", has_text_overlay=True)
+    assert v.has_text_overlay is True
+
+
+def test_pick_rejects_text_overlay_even_if_appropriate(tmp_path):
+    """A burned-in 'ATEŞKES 15 GÜN' news card that matches the theme of a
+    '45 GÜN' story must be REJECTED — text overlay contradicts our script.
+    Hard reject overrides appropriate=True."""
+    cand_a = _cand("https://example.com/a.jpg")
+    cand_b = _cand("https://example.com/b.jpg")
+    # First candidate: appropriate=True BUT has burned-in text → skip
+    # Second candidate: clean photo, appropriate=True → accept
+    verdicts = [
+        _Verdict(appropriate=True, is_safe=True,
+                 has_text_overlay=True, reason="haber kartı, 15 gün yazıyor"),
+        _Verdict(appropriate=True, is_safe=True,
+                 has_text_overlay=False, reason="temiz fotoğraf"),
+    ]
+    with patch("short_bot.image_picker.search_images",
+               return_value=[cand_a, cand_b]), \
+         patch("short_bot.image_picker._download", return_value=True), \
+         patch("short_bot.image_picker._verify_with_claude", side_effect=verdicts):
+        result = pick_image_for_script(_script(), tmp_path / "img", claude_path="claude")
+    assert result is not None
+    assert result.name.endswith(".jpg")
+    # We expect the SECOND candidate's hash (b.jpg url) to be the result, not
+    # the first. Verify by checking that the file path differs.
+    import hashlib
+    expected_key = hashlib.sha1(cand_b.url.encode("utf-8")).hexdigest()[:16]
+    assert result.name == f"{expected_key}.jpg"
+
+
+def test_pick_text_overlay_does_not_become_last_resort_safe(tmp_path):
+    """Even when appropriate fails everywhere, a text-overlay image must NOT
+    be promoted to the last-resort fallback path. has_text_overlay > is_safe."""
+    cand = _cand("https://example.com/a.jpg")
+    # is_safe=True but has_text_overlay=True → should be hard-rejected,
+    # NOT saved as last-resort, returns None overall.
+    verdict = _Verdict(appropriate=False, is_safe=True,
+                       has_text_overlay=True, reason="news graphic card")
+    with patch("short_bot.image_picker.search_images", return_value=[cand]), \
+         patch("short_bot.wikimedia_search.search_images_commons", return_value=[]), \
+         patch("short_bot.pexels.search_photos", return_value=[]), \
+         patch("short_bot.image_picker._download", return_value=True), \
+         patch("short_bot.image_picker._verify_with_claude", return_value=verdict):
+        result = pick_image_for_script(_script(), tmp_path / "img", claude_path="claude")
+    assert result is None
+
+
+def test_verify_prompt_requests_has_text_overlay_field():
+    """Prompt must instruct Claude to evaluate burned-in headline graphics."""
+    from short_bot.image_picker import _verify_with_claude
+    captured = {}
+    def fake_run_json(prompt, model, **kw):
+        captured["prompt"] = prompt
+        return _Verdict(appropriate=True, is_safe=True,
+                        has_text_overlay=False, reason="ok")
+    with patch("short_bot.image_picker.run_json", side_effect=fake_run_json):
+        _verify_with_claude(Path("/tmp/x.jpg"), _script(), "claude")
+    p = captured["prompt"]
+    assert "has_text_overlay" in p
+    # examples of news-graphic cues
+    pl = p.lower()
+    assert any(s in pl for s in ("burned", "banner", "başlık", "kart"))

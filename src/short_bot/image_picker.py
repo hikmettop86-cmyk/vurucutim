@@ -36,6 +36,13 @@ class _Verdict(BaseModel):
     # Default False so older prompt outputs (which omit the field) don't
     # accidentally make every reject eligible for fallback.
     is_safe: bool = False
+    # Hard-reject signal: image contains burned-in headline/news graphic
+    # (e.g. another outlet's "ATEŞKES 15 GÜN UZATILDI" card with contradictory
+    # numbers when our script says "45 GÜN"). These graphics overlay onto
+    # the video frame and surface conflicting facts to the viewer. Treat as
+    # rejection — even disqualifies the last-resort fallback path. Default
+    # False so older verdicts (pre-feature) are not retroactively rejected.
+    has_text_overlay: bool = False
 
 
 def build_search_query(script: Script) -> str:
@@ -66,11 +73,14 @@ def _download(url: str, dest: Path, *, timeout: int = 15) -> bool:
 def _verify_with_claude(image_path: Path, script: Script, claude_path: str) -> _Verdict | None:
     """Ask Claude (vision) whether the image is appropriate. Returns None on CLI failure.
 
-    Asks for two separate booleans:
+    Three signals returned:
       - appropriate: STRICT fit (image directly represents the news topic)
       - is_safe: LOOSE/thematic fit (no inappropriate content, at least
         plausible for the news category — used as last-resort fallback
         when every source rejects on appropriate=true)
+      - has_text_overlay: HARD REJECT — another outlet's burned-in headline
+        graphic, embedded text will appear in our frame and may contradict
+        the script (e.g. our script says '45 gün', image says '15 gün').
     Loose phrasing in the prompt prevents over-rejection on stories like
     'Putin announces ceasefire' where the search returns thematic images
     (Kremlin, Russian flag, soldiers) rather than a direct headshot.
@@ -84,7 +94,7 @@ def _verify_with_claude(image_path: Path, script: Script, claude_path: str) -> _
         f"HABER: {script.header_top} {script.header_bottom}\n"
         f"KATEGORİ: {script.category}\n"
         f"ÖZET: {summary}\n\n"
-        f"İKİ AYRI KARAR VER:\n\n"
+        f"ÜÇ AYRI KARAR VER:\n\n"
         f"1) appropriate (sıkı kriter): görsel haberin konusunu/temasını "
         f"yansıtıyor mu?\n"
         f"   - TRUE örnekler: Putin haberi → Putin/Kremlin/Rus bayrağı; "
@@ -97,10 +107,25 @@ def _verify_with_claude(image_path: Path, script: Script, claude_path: str) -> _
         f"planda değil, kategoriyle uyumlu stok/jenerik görsel\n"
         f"   - FALSE: müstehcen/şiddet, kalın watermark, çocuk kitabı "
         f"kapağı, kategoriyle hiç uyuşmayan absürt görsel\n\n"
+        f"3) has_text_overlay (OTOMATIK RED kriteri): görsel BURNED-IN büyük "
+        f"metin/başlık içeriyor mu — başka bir haber sitesinin grafik kartı "
+        f"gibi? Bu metin video frame'imize gömülür ve haberle çelişebilir "
+        f"(örn. bizim script '45 gün' der ama görseldeki yazıda '15 gün' "
+        f"geçer). Tam ekran kaplayan başlık metni varsa REDDEDİLİR.\n"
+        f"   - TRUE: ekrana yapışık iri başlık/banner (Habertürk/CNN/Sözcü "
+        f"tarzı haber kartı), tam ekran 'SON DAKİKA ATEŞKES UZATILDI' yazısı, "
+        f"alt yazı + kanal logosu + başlık birleşimi\n"
+        f"   - FALSE: doğal fotoğraf (politikacı, stadyum, mekan, ürün), "
+        f"küçük köşe watermark/logo, TV anchor görüntüsü (sadece kişi, alt "
+        f"chyron şerit yoksa veya çok küçükse), grafik (chart) ama büyük "
+        f"başlık metni yoksa\n\n"
         f"appropriate her zaman is_safe'in alt kümesi olmalı "
-        f"(appropriate=true ise is_safe=true).\n\n"
+        f"(appropriate=true ise is_safe=true).\n"
+        f"has_text_overlay=true ise appropriate ve is_safe ne olursa olsun "
+        f"GÖRSEL KULLANILMAZ.\n\n"
         f"SADECE JSON:\n"
         f'{{"appropriate": true|false, "is_safe": true|false, '
+        f'"has_text_overlay": true|false, '
         f'"reason": "<kısa Türkçe açıklama, 1 cümle>"}}'
     )
     try:
@@ -315,6 +340,14 @@ def _run_image_search(
             verdict = _verify_with_claude(path, script, claude_path)
             if verdict is None:
                 logger.warning(f"  {source_name} cand {i}: verification CLI failed -> skip")
+                continue
+            # Hard reject: burned-in news graphic with embedded headline. These
+            # contradict our own script (e.g. '45 gün' vs image's '15 gün').
+            # Skip entirely — do not promote to last-resort fallback either.
+            if verdict.has_text_overlay:
+                logger.warning(
+                    f"  {source_name} cand {i} REJECTED (text overlay): {verdict.reason}"
+                )
                 continue
             if verdict.appropriate:
                 logger.warning(f"  {source_name} cand {i} ACCEPTED: {verdict.reason}")
