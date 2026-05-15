@@ -70,6 +70,48 @@ def init_scheduler(app):
         except Exception as e:  # noqa: BLE001 — cron must not crash
             _LOG.warning(f"[dna_cache] daily cleanup failed: {e}")
 
+    def _trends_refresh():
+        """Cron: refresh trend cache for every distinct region in use by
+        trend-boost-enabled channels. Each source failure is absorbed; the
+        scheduler keeps running."""
+        try:
+            from short_bot.locale import trend_region_for
+            from short_bot.pexels import load_secrets as _ls
+            from short_bot.trends.aggregator import refresh_trends
+
+            settings = app.config["SHORTBOT_SETTINGS"]
+            if not settings.trends.enabled:
+                return
+            cfg_dir = app.config["SHORTBOT_CONFIG_DIR"]
+            cache_root = Path(app.config["SHORTBOT_CACHE_DIR"]) / "trends"
+            secrets = _ls(Path(app.config["SHORTBOT_DB_PATH"]).parent
+                          / "secrets.yaml")
+            yt_key = secrets.get("youtube_api_key", "") or ""
+
+            # Collect (region, sources) pairs from channels that opted in
+            wanted: dict[str, set[str]] = {}
+            for ch in list_channels(cfg_dir / "channels", enabled_only=True):
+                tb = ch.trend_boost
+                if tb is None or not tb.enabled:
+                    continue
+                region = tb.region_override or trend_region_for(ch.language)
+                srcs = (set(tb.sources) if tb.sources
+                        else set(settings.trends.default_sources))
+                wanted.setdefault(region, set()).update(srcs)
+
+            for region, srcs in wanted.items():
+                try:
+                    cache = refresh_trends(
+                        region, sources=list(srcs),
+                        youtube_api_key=yt_key, cache_dir=cache_root,
+                    )
+                    _LOG.info(f"[trends] refreshed {region}: "
+                              f"{len(cache.items)} items ({','.join(srcs)})")
+                except Exception as e:  # noqa: BLE001
+                    _LOG.warning(f"[trends] refresh {region} failed: {e}")
+        except Exception as e:  # noqa: BLE001 — cron must not crash
+            _LOG.warning(f"[trends] refresh job failed: {e}")
+
     # Initial register
     _reload_jobs()
     # Re-scan channel configs every 5 minutes
@@ -80,6 +122,15 @@ def init_scheduler(app):
         trigger=CronTrigger(hour=3, minute=15),
         id="_dna_cache_cleanup",
         replace_existing=True,
+    )
+    # Trend cache refresh on the interval from settings.trends.refresh_minutes.
+    # Default 60min keeps the cache well under the 90min freshness window
+    # used by the pipeline (so inline refresh on stale cache is rare).
+    _trend_minutes = app.config["SHORTBOT_SETTINGS"].trends.refresh_minutes
+    scheduler.add_job(
+        _trends_refresh, "interval",
+        minutes=_trend_minutes, id="_trends_refresh",
+        replace_existing=True, next_run_time=None,
     )
 
     scheduler.start()

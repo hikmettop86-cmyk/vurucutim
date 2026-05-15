@@ -53,11 +53,14 @@ def view():
     }
     pexels_key_masked = _mask_key(secrets.get("pexels_api_key", ""))
     openai_key_masked = _mask_key(secrets.get("openai_api_key", ""))
+    youtube_key_masked = _mask_key(secrets.get("youtube_api_key", ""))
     return render_template("settings.html.j2", data=data, paths=paths,
                             pexels_key_masked=pexels_key_masked,
                             pexels_key_set=bool(secrets.get("pexels_api_key")),
                             openai_key_masked=openai_key_masked,
-                            openai_key_set=bool(secrets.get("openai_api_key")))
+                            openai_key_set=bool(secrets.get("openai_api_key")),
+                            youtube_key_masked=youtube_key_masked,
+                            youtube_key_set=bool(secrets.get("youtube_api_key")))
 
 
 @bp.route("/settings", methods=["POST"])
@@ -91,6 +94,32 @@ def save():
     models["script"]  = request.form.get("model_script", models.get("script"))
     data["claude_models"] = models
 
+    # Trends block
+    trends_data = data.get("trends", {}) or {}
+    trends_data["enabled"] = (request.form.get("trends_enabled") == "1")
+    try:
+        trends_data["refresh_minutes"] = int(
+            request.form.get("trends_refresh_minutes",
+                             trends_data.get("refresh_minutes", 60))
+        )
+    except (TypeError, ValueError):
+        pass
+    try:
+        trends_data["cache_max_age_minutes"] = float(
+            request.form.get("trends_cache_max_age_minutes",
+                             trends_data.get("cache_max_age_minutes", 90))
+        )
+    except (TypeError, ValueError):
+        pass
+    src_list: list[str] = []
+    if request.form.get("trends_src_google_daily") == "1":
+        src_list.append("google_daily")
+    if request.form.get("trends_src_youtube") == "1":
+        src_list.append("youtube")
+    if src_list:
+        trends_data["default_sources"] = src_list
+    data["trends"] = trends_data
+
     path.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
                     encoding="utf-8")
 
@@ -113,6 +142,17 @@ def save():
         _save_secrets(secrets)
     elif clear_openai:
         secrets.pop("openai_api_key", None)
+        _save_secrets(secrets)
+
+    # YouTube API key — separate file (used by trends/youtube_trending for
+    # videos.list(chart=mostPopular); does NOT replace per-channel OAuth)
+    new_yt_key = request.form.get("youtube_api_key", "").strip()
+    clear_yt = request.form.get("youtube_api_key_clear") == "1"
+    if new_yt_key:
+        secrets["youtube_api_key"] = new_yt_key
+        _save_secrets(secrets)
+    elif clear_yt:
+        secrets.pop("youtube_api_key", None)
         _save_secrets(secrets)
 
     flash("Ayarlar kaydedildi. Bazı değişiklikler için panel yeniden başlatılmalı.", "success")

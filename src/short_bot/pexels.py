@@ -31,6 +31,14 @@ def resolve_openai_api_key(secrets: dict) -> str:
     return os.environ.get("OPENAI_API_KEY") or secrets.get("openai_api_key") or ""
 
 
+def resolve_youtube_api_key(secrets: dict) -> str:
+    """Resolve the YouTube Data API v3 key (used by trends/youtube_trending).
+
+    Env var YOUTUBE_API_KEY beats secrets dict.
+    """
+    return os.environ.get("YOUTUBE_API_KEY") or secrets.get("youtube_api_key") or ""
+
+
 ARCHETYPE_BG_QUERIES: dict[str, list[str]] = {
     "newscast":  ["newsroom blur", "studio lights motion", "news ticker abstract"],
     "tabloid":   ["paparazzi flash", "neon city night", "magazine pages turning"],

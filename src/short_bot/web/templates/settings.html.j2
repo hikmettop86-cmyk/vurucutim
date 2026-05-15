@@ -131,6 +131,72 @@
       {% endif %}
     </div>
 
+    <h2 class="font-serif text-lg font-bold mt-6 border-t border-claude-border pt-4">YouTube Data API Key</h2>
+    <div class="bg-claude-surface border border-claude-border rounded-lg p-4">
+      {% if youtube_key_set %}
+        <div class="flex items-center gap-3">
+          <span class="font-mono text-sm">{{ youtube_key_masked }}</span>
+          <label class="text-xs flex items-center gap-1 text-claude-muted">
+            <input type="checkbox" name="youtube_api_key_clear" value="1"> Sil
+          </label>
+        </div>
+        <input type="password" name="youtube_api_key" placeholder="Yeni key gir (değiştir)"
+               autocomplete="new-password"
+               class="bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm w-full mt-2 text-claude-text">
+      {% else %}
+        <input type="password" name="youtube_api_key" value="" placeholder="AIza..."
+               autocomplete="new-password"
+               class="bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm w-full text-claude-text">
+        <div class="text-xs text-claude-muted mt-1">
+          <b>Trend Detection</b> için gereklidir (YouTube Trending verileri). console.cloud.google.com → YouTube Data API v3 → API key oluştur → buraya yapıştır.
+          Kanal OAuth credentials'larınız bundan ayrıdır; bu key sadece public "most popular" sorguları için kullanılır (~1 quota/saat).
+        </div>
+      {% endif %}
+    </div>
+
+    <h2 class="font-serif text-lg font-bold mt-6 border-t border-claude-border pt-4">Trend Detection</h2>
+    <div class="bg-claude-surface border border-claude-border rounded-lg p-4 space-y-3">
+      <label class="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="trends_enabled" value="1"
+               {% if data.trends and data.trends.enabled %}checked{% endif %}>
+        Etkin (genel anahtar; kanal başına ayrıca aç/kapat)
+      </label>
+      <div class="grid grid-cols-2 gap-3">
+        <label class="block">
+          <span class="text-xs text-claude-muted uppercase">Cron yenileme aralığı (dk)</span>
+          <input type="number" name="trends_refresh_minutes" min="10" max="360"
+                 value="{{ (data.trends.refresh_minutes if data.trends and data.trends.refresh_minutes else 60) }}"
+                 class="bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
+        </label>
+        <label class="block">
+          <span class="text-xs text-claude-muted uppercase">Cache geçerliliği (dk)</span>
+          <input type="number" name="trends_cache_max_age_minutes" min="30" max="720"
+                 value="{{ (data.trends.cache_max_age_minutes if data.trends and data.trends.cache_max_age_minutes else 90) }}"
+                 class="bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
+        </label>
+      </div>
+      <div>
+        <span class="text-xs text-claude-muted uppercase block mb-1">Varsayılan kaynaklar</span>
+        <div class="flex gap-4">
+          {% set _srcs = (data.trends.default_sources if data.trends else ['google_daily', 'youtube']) %}
+          <label class="text-sm flex items-center gap-2">
+            <input type="checkbox" name="trends_src_google_daily" value="1"
+                   {% if 'google_daily' in _srcs %}checked{% endif %}>
+            Google Daily Trends
+          </label>
+          <label class="text-sm flex items-center gap-2">
+            <input type="checkbox" name="trends_src_youtube" value="1"
+                   {% if 'youtube' in _srcs %}checked{% endif %}>
+            YouTube Trending
+            {% if not youtube_key_set %}<span class="text-amber-600 text-xs">(API key gerekli)</span>{% endif %}
+          </label>
+        </div>
+      </div>
+      <div class="text-xs text-claude-muted">
+        Kanalın trend boost ayarları kanal düzenleme sayfasındaki "İçerik" sekmesindedir. Kanal bazında bu varsayılan kaynaklar override edilebilir.
+      </div>
+    </div>
+
     <button type="submit" class="bg-claude-accent hover:bg-claude-accent-hover text-white px-4 py-2 rounded-lg font-semibold mt-6 w-full">
       Kaydet
     </button>

@@ -66,6 +66,8 @@ from short_bot.dna_cache import (
     increment_hit_count, lookup_cached_dna, save_cached_dna,
 )
 from short_bot.embeddings import EmbeddingError, embed_text
+from short_bot.locale import trend_region_for
+from short_bot.models import ScoredItem
 
 _GENERATOR_TOPIC_DIST_DAYS = 7   # window for topic_distribution Sonnet hint
 _IMAGE_RETRY_MAX = 3   # try this many top candidates before giving up on image
@@ -92,6 +94,89 @@ def _filter_negative_keywords(items: list, negative_keywords: list[str]) -> list
         i for i in items
         if not any(n in i.title.lower() for n in needles)
     ]
+
+
+def _apply_trend_boost(
+    scored: list[ScoredItem],
+    *,
+    channel: ChannelConfig,
+    settings: Settings,
+    cache_dir: Path,
+    secrets_path: Path,
+    log: logging.Logger,
+) -> list[ScoredItem]:
+    """Augment each ScoredItem.score by +trend_boost when its headline
+    matches a currently trending term in the channel's region.
+
+    Graceful: any failure (no cache, no api key, network error) returns
+    the input list unchanged. Boost amount + matched term shown in log.
+    """
+    if channel.trend_boost is None or not channel.trend_boost.enabled:
+        return scored
+    if not settings.trends.enabled:
+        log.info("  [trends] settings.trends.enabled=false -- skipping boost")
+        return scored
+    if not scored:
+        return scored
+
+    from short_bot.trends.aggregator import get_or_refresh
+    from short_bot.trends.matcher import compute_trend_boost
+
+    tb = channel.trend_boost
+    region = tb.region_override or trend_region_for(channel.language)
+    sources = list(tb.sources) if tb.sources else list(settings.trends.default_sources)
+    secrets = _load_secrets(secrets_path)
+    yt_key = secrets.get("youtube_api_key", "") or ""
+
+    try:
+        cache = get_or_refresh(
+            region, sources=sources, youtube_api_key=yt_key,
+            cache_dir=cache_dir / "trends",
+            max_age_minutes=settings.trends.cache_max_age_minutes,
+        )
+    except Exception as e:  # noqa: BLE001 -- never let trend fetch break pipeline
+        log.warning(f"  [trends] fetch failed: {e} -- skipping boost")
+        return scored
+
+    if cache is None or not cache.items:
+        log.info(f"  [trends] no trends loaded for region={region} -- skipping boost")
+        return scored
+
+    log.info(f"  [trends] {len(cache.items)} terms (region={region}, "
+             f"age={cache.age_minutes():.0f}m, sources={','.join(cache.sources)})")
+
+    boosted: list[ScoredItem] = []
+    boost_count = 0
+    for s in scored:
+        boost, matches = compute_trend_boost(
+            s.item.title, cache.items,
+            max_boost=tb.max_boost,
+            min_term_length=tb.min_term_length,
+            exclude_terms=tb.exclude_terms,
+            fuzzy_threshold=tb.fuzzy_threshold,
+        )
+        if boost <= 0:
+            boosted.append(s)
+            continue
+        new_score = min(10.0, s.score + boost)
+        boost_count += 1
+        top = matches[0]
+        log.info(
+            f"  trend boost +{boost:.2f} "
+            f"[{top.match_type} rank#{top.item.rank} '{top.item.term[:60]}'] "
+            f"{s.score:.1f}->{new_score:.1f} | {s.item.title[:70]}"
+        )
+        boosted.append(ScoredItem(
+            item=s.item,
+            score=new_score,
+            reasoning=f"{s.reasoning} [trend+{boost:.2f}]",
+        ))
+
+    if boost_count == 0:
+        log.info("  [trends] no candidate headlines matched any trending term")
+    else:
+        log.info(f"  [trends] {boost_count}/{len(scored)} item(s) boosted")
+    return boosted
 
 
 def _resolve_dna_for_video(
@@ -527,6 +612,18 @@ def _run_rss(*, channel, run_id, log, eng, settings,
         claude_path=settings.claude_cli_path,
         model=settings.claude_models.get("default", "haiku"),
         channel=channel,
+    )
+    # Trend boost: augment scores when a candidate headline matches a
+    # currently trending term in the channel's region. Best-effort -- any
+    # failure leaves scores untouched.
+    secrets_path_for_trends = (
+        (Path(eng.url.database).parent / "secrets.yaml").resolve()
+        if eng.url.database else Path("data/secrets.yaml").resolve()
+    )
+    scored = _apply_trend_boost(
+        scored, channel=channel, settings=settings,
+        cache_dir=Path(cache_dir),
+        secrets_path=secrets_path_for_trends, log=log,
     )
     top_n_candidates = select_top(scored, min_score=channel.min_score,
                                   n=_IMAGE_RETRY_MAX)

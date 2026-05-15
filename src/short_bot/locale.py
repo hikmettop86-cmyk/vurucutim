@@ -28,6 +28,22 @@ LANGUAGE_NAMES: dict[str, str] = {
 }
 
 
+# ISO 3166-1 alpha-2 region codes for Google Trends / YouTube Trending.
+# YouTube uses `regionCode`; Google Trends uses `geo` — both accept the same codes.
+TREND_REGIONS: dict[str, str] = {
+    "tr": "TR",
+    "en": "US",
+    "de": "DE",
+    "es": "ES",
+    "fr": "FR",
+}
+
+
+def trend_region_for(language: str) -> str:
+    """Return the ISO region code used by Google Trends/YouTube Trending APIs."""
+    return TREND_REGIONS[language]
+
+
 UI_LABELS: dict[str, dict[str, str]] = {
     "tr": {"like": "BEĞEN",       "subscribe": "ABONE OL",   "share": "PAYLAŞ",   "breaking": "SON DAKİKA",     "source": "Kaynak"},
     "en": {"like": "LIKE",        "subscribe": "SUBSCRIBE",  "share": "SHARE",    "breaking": "BREAKING",        "source": "Source"},

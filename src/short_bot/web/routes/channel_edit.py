@@ -261,6 +261,47 @@ def save(slug):
     else:
         new_bg_video = None
 
+    # Trend boost — read form, build TrendBoostConfig (None when nothing set
+    # so YAML stays clean for channels that never used the feature).
+    from short_bot.config import TrendBoostConfig
+    tb_enabled = request.form.get("tb_enabled") == "1"
+    tb_form_present = any(k in request.form for k in (
+        "tb_enabled", "tb_max_boost", "tb_min_term_length",
+        "tb_fuzzy_threshold", "tb_region_override",
+        "tb_src_google_daily", "tb_src_youtube", "tb_exclude_terms",
+    ))
+    if tb_form_present:
+        tb_sources: list[str] | None = []
+        if request.form.get("tb_src_google_daily") == "1":
+            tb_sources.append("google_daily")
+        if request.form.get("tb_src_youtube") == "1":
+            tb_sources.append("youtube")
+        if not tb_sources:
+            tb_sources = None  # inherit settings default
+        tb_region = (request.form.get("tb_region_override", "").strip().upper()
+                     or None)
+        tb_excl = _form_get_list("tb_exclude_terms")
+        new_trend_boost = TrendBoostConfig(
+            enabled=tb_enabled,
+            max_boost=_form_get_float(
+                "tb_max_boost",
+                (cfg.trend_boost.max_boost if cfg.trend_boost else 2.0),
+            ),
+            sources=tb_sources,
+            min_term_length=_form_get_int(
+                "tb_min_term_length",
+                (cfg.trend_boost.min_term_length if cfg.trend_boost else 4),
+            ),
+            fuzzy_threshold=_form_get_int(
+                "tb_fuzzy_threshold",
+                (cfg.trend_boost.fuzzy_threshold if cfg.trend_boost else 85),
+            ),
+            exclude_terms=tb_excl,
+            region_override=tb_region,
+        )
+    else:
+        new_trend_boost = cfg.trend_boost
+
     new_cfg = ChannelConfig(
         slug=cfg.slug,
         name=cfg.name,
@@ -295,6 +336,7 @@ def save(slug):
         generator=new_generator,
         youtube=new_youtube,
         bg_video=new_bg_video,
+        trend_boost=new_trend_boost,
     )
     save_channel(path, new_cfg)
     flash("Kanal güncellendi.", "success")

@@ -7,10 +7,26 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, Field
 
+
+def _default_trends_settings() -> "TrendsSettings":
+    return TrendsSettings(
+        enabled=False, refresh_minutes=60,
+        default_sources=("google_daily", "youtube"),
+        cache_max_age_minutes=90.0,
+    )
+
 from short_bot.dna import DnaSpec
 from short_bot.locale import RSS_LOCALES, SUPPORTED_LANGUAGES
 
 SLUG_RE = re.compile(r"^[a-z0-9\-]+$")
+
+
+@dataclass(frozen=True)
+class TrendsSettings:
+    enabled: bool
+    refresh_minutes: int
+    default_sources: tuple[str, ...]
+    cache_max_age_minutes: float
 
 
 @dataclass(frozen=True)
@@ -23,6 +39,7 @@ class Settings:
     fuzzy_dedup_threshold: float
     log_level: str
     claude_models: dict
+    trends: TrendsSettings = field(default_factory=_default_trends_settings)
 
 
 @dataclass(frozen=True)
@@ -50,6 +67,21 @@ class BgVideoConfig(BaseModel):
     # Default 0.7 = subtle dim, BG video gorunur kalir ama on plana
     # yer acar. (0.4 default'u "hep siyah video" sikayetine yol aciyordu.)
     dim: float = Field(ge=0.0, le=1.0, default=0.7)
+
+
+class TrendBoostConfig(BaseModel):
+    """Per-channel trend-boost knobs. Score augmentation when a candidate
+    headline matches an active trending term in the channel's region."""
+    enabled: bool = False
+    max_boost: float = Field(default=2.0, ge=0.0, le=5.0)
+    # When None, inherits Settings.trends.default_sources.
+    sources: list[str] | None = None
+    min_term_length: int = Field(default=4, ge=2, le=20)
+    fuzzy_threshold: int = Field(default=85, ge=50, le=100)
+    exclude_terms: list[str] = Field(default_factory=list)
+    # Override the channel-language -> region default (e.g. 'GB' for an
+    # English-language channel targeting UK YouTube trending).
+    region_override: str | None = None
 
 
 @dataclass(frozen=True)
@@ -85,11 +117,20 @@ class ChannelConfig:
     generator: GeneratorConfig | None = None
     youtube: YoutubeChannelConfig | None = None
     bg_video: BgVideoConfig | None = None
+    trend_boost: TrendBoostConfig | None = None
 
 
 def load_settings(path: Path) -> Settings:
     data = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
     web = data.get("web", {})
+    tr_data = data.get("trends", {}) or {}
+    trends = TrendsSettings(
+        enabled=bool(tr_data.get("enabled", False)),
+        refresh_minutes=int(tr_data.get("refresh_minutes", 60)),
+        default_sources=tuple(tr_data.get("default_sources",
+                                          ["google_daily", "youtube"])),
+        cache_max_age_minutes=float(tr_data.get("cache_max_age_minutes", 90)),
+    )
     return Settings(
         ffmpeg_path=data["ffmpeg_path"],
         claude_cli_path=data["claude_cli_path"],
@@ -99,6 +140,7 @@ def load_settings(path: Path) -> Settings:
         fuzzy_dedup_threshold=float(data.get("fuzzy_dedup_threshold", 0.85)),
         log_level=data.get("log_level", "INFO"),
         claude_models=dict(data.get("claude_models", {"dna": "opus", "default": "haiku"})),
+        trends=trends,
     )
 
 
@@ -168,6 +210,10 @@ def load_channel(path: Path) -> ChannelConfig:
     bg_video_data = data.get("bg_video")
     bg_video = BgVideoConfig.model_validate(bg_video_data) if bg_video_data else None
 
+    trend_boost_data = data.get("trend_boost")
+    trend_boost = (TrendBoostConfig.model_validate(trend_boost_data)
+                   if trend_boost_data else None)
+
     cta = data.get("cta", {})
     return ChannelConfig(
         slug=slug,
@@ -198,6 +244,7 @@ def load_channel(path: Path) -> ChannelConfig:
         generator=generator,
         youtube=youtube,
         bg_video=bg_video,
+        trend_boost=trend_boost,
     )
 
 
@@ -260,6 +307,20 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
             "blur_px": cfg.bg_video.blur_px,
             "dim": cfg.bg_video.dim,
         }
+    if cfg.trend_boost is not None:
+        tb = {
+            "enabled": cfg.trend_boost.enabled,
+            "max_boost": cfg.trend_boost.max_boost,
+            "min_term_length": cfg.trend_boost.min_term_length,
+            "fuzzy_threshold": cfg.trend_boost.fuzzy_threshold,
+        }
+        if cfg.trend_boost.sources is not None:
+            tb["sources"] = list(cfg.trend_boost.sources)
+        if cfg.trend_boost.exclude_terms:
+            tb["exclude_terms"] = list(cfg.trend_boost.exclude_terms)
+        if cfg.trend_boost.region_override:
+            tb["region_override"] = cfg.trend_boost.region_override
+        data["trend_boost"] = tb
     if cfg.dna is not None:
         # mode='json' → tuple becomes list, ready for YAML round-trip
         data["dna"] = cfg.dna.model_dump(mode="json")

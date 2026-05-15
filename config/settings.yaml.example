@@ -33,3 +33,17 @@ claude_models:
   dna: opus      # Kanal DNA olusturma — Opus kullanir (~30-60s)
   default: haiku # Skoring + diger islemler — Haiku kullanir (hizli + ucuz)
   script: sonnet # Script yazimi — Sonnet kullanir (Haiku basliklarda klise/yanlis caption uretiyordu)
+
+# Trend detection: trend olan bir konu icin scorer puanini yukseltir.
+# enabled=false ise tum trend kanal ayarlari yok sayilir.
+# default_sources: Channel kendi 'sources' override etmedikce bu kullanilir.
+#   google_daily = Google Daily Trends RSS (ucretsiz, dakika icinde guncel)
+#   youtube      = YouTube Trending (videos.list chart=mostPopular)
+#                  -- secrets.yaml'a youtube_api_key gerektirir
+# refresh_minutes: Scheduler cron araligi (default 60dk).
+# cache_max_age_minutes: Pipeline'in cache'i 'taze' sayma esigi (default 90dk).
+trends:
+  enabled: true
+  refresh_minutes: 60
+  default_sources: [google_daily, youtube]
+  cache_max_age_minutes: 90
