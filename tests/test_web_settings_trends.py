@@ -131,3 +131,24 @@ def test_settings_save_trends_single_source(app, tmp_path):
     app.test_client().post("/settings", data=form)
     data = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
     assert data["trends"]["default_sources"] == ["google_daily"]
+
+
+# --- In-memory reload after save (no app restart required) ------------------
+
+def test_settings_save_reloads_in_memory_settings(app, tmp_path):
+    """After POST, current_app.config['SHORTBOT_SETTINGS'] must reflect the
+    new trends block — otherwise pipeline runs use the stale boot-time copy
+    and the boost stays off until restart."""
+    before = app.config["SHORTBOT_SETTINGS"]
+    assert before.trends.enabled is False  # fixture default
+
+    form = _base_form()
+    form["trends_enabled"] = "1"
+    form["trends_refresh_minutes"] = "45"
+    form["trends_src_google_daily"] = "1"
+    app.test_client().post("/settings", data=form)
+
+    after = app.config["SHORTBOT_SETTINGS"]
+    assert after.trends.enabled is True
+    assert after.trends.refresh_minutes == 45
+    assert after.trends.default_sources == ("google_daily",)

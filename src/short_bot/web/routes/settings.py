@@ -1,11 +1,15 @@
 """Settings page: view + edit settings.yaml + write Pexels API key to data/secrets.yaml."""
+import logging
 from pathlib import Path
 
 import yaml
 from flask import (Blueprint, current_app, flash, redirect, render_template,
                    request, url_for)
 
+from short_bot.config import load_settings
+
 bp = Blueprint("settings", __name__)
+_LOG = logging.getLogger(__name__)
 
 
 def _settings_path() -> Path:
@@ -155,5 +159,29 @@ def save():
         secrets.pop("youtube_api_key", None)
         _save_secrets(secrets)
 
-    flash("Ayarlar kaydedildi. Bazı değişiklikler için panel yeniden başlatılmalı.", "success")
+    # Reload in-memory Settings so trend boost / refresh cron / cache TTL
+    # take effect on the next pipeline run without an app restart. host/port
+    # still need restart (Flask server bind happens once at startup) — flash
+    # message hints at this.
+    try:
+        new_settings = load_settings(path)
+        current_app.config["SHORTBOT_SETTINGS"] = new_settings
+        _LOG.info("[settings] reloaded in-memory SHORTBOT_SETTINGS")
+        # Re-arm the trends refresh cron with the new interval, if scheduler is running
+        sched = getattr(current_app, "scheduler", None)
+        if sched is not None and sched.get_job("_trends_refresh") is not None:
+            from apscheduler.triggers.interval import IntervalTrigger
+            sched.reschedule_job(
+                "_trends_refresh",
+                trigger=IntervalTrigger(minutes=new_settings.trends.refresh_minutes),
+            )
+            _LOG.info(
+                f"[settings] _trends_refresh cron re-armed: "
+                f"every {new_settings.trends.refresh_minutes}m"
+            )
+    except Exception as e:  # noqa: BLE001 — never let reload break the save flow
+        _LOG.warning(f"[settings] in-memory reload failed: {e}")
+
+    flash("Ayarlar kaydedildi. (host/port değişikliği için restart gerekir; "
+          "diğer ayarlar anında aktif olur.)", "success")
     return redirect(url_for("settings.view"))
