@@ -624,3 +624,20 @@ def load_channels_with_uploads(eng: Engine) -> list[str]:
             .where(youtube_uploads.c.status == "success")
         ).all()
     return [r[0] for r in rows]
+
+
+def clear_recent_failed_runs(eng: Engine, *, hours: int = 24) -> int:
+    """Delete 'failed' runs that started within the last `hours` hours.
+
+    The dashboard surfaces these in its "Son 24 saat — N hata" panel; this
+    helper backs the "Hataları temizle" button. Filesystem run logs are NOT
+    touched — only the DB row that drives the panel. Returns deleted count.
+    """
+    from sqlalchemy import text
+    with eng.begin() as conn:
+        result = conn.execute(
+            text("DELETE FROM runs WHERE status='failed' "
+                 "AND datetime(started_at) > datetime('now', :delta)"),
+            {"delta": f"-{hours} hours"}
+        )
+        return int(result.rowcount or 0)

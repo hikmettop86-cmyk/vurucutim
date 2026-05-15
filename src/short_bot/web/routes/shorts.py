@@ -36,11 +36,15 @@ def _apply_filters(query, *, channel, q, since, youtube):
 
 
 def _read_filter_args():
+    """Read filter params from query string OR POST form (form-encoded
+    bulk-delete posts the same fieldnames as hidden inputs)."""
+    def _get(name: str) -> str:
+        return (request.args.get(name) or request.form.get(name, "")).strip()
     return {
-        "channel": request.args.get("channel", "").strip(),
-        "q":       request.args.get("q", "").strip(),
-        "since":   request.args.get("since", "").strip(),
-        "youtube": request.args.get("youtube", "").strip(),
+        "channel": _get("channel"),
+        "q":       _get("q"),
+        "since":   _get("since"),
+        "youtube": _get("youtube"),
     }
 
 
@@ -133,3 +137,38 @@ def delete(short_id):
         resp.headers["HX-Redirect"] = url_for("shorts.list_view")
         return resp
     return redirect(url_for("shorts.list_view"))
+
+
+@bp.route("/shorts/delete-all", methods=["POST"])
+def delete_all():
+    """Bulk soft-delete shorts. Honors the same filter args as the list view
+    (channel/q/since/youtube) so the user can scope deletion to whatever was
+    visible. With no filters this clears EVERY non-deleted short for the
+    user — frontend MUST send a confirm dialog first."""
+    f = _read_filter_args()
+    query = Short.query.filter(Short.deleted_at.is_(None))
+    query = _apply_filters(query, **f)
+    matched = query.all()
+    now = datetime.utcnow()
+    count = 0
+    for s in matched:
+        s.deleted_at = now
+        count += 1
+    db.session.commit()
+    flash(f"{count} short silindi.", "success" if count else "info")
+    if request.headers.get("HX-Request"):
+        resp = make_response("", 200)
+        resp.headers["HX-Redirect"] = url_for("shorts.list_view")
+        return resp
+    return redirect(url_for("shorts.list_view"))
+
+
+@bp.route("/shorts/count", methods=["GET"])
+def count():
+    """Tiny JSON endpoint for the bulk-delete confirm dialog — returns the
+    number of shorts that the current filters would delete."""
+    from flask import jsonify
+    f = _read_filter_args()
+    query = Short.query.filter(Short.deleted_at.is_(None))
+    query = _apply_filters(query, **f)
+    return jsonify({"count": query.count()})

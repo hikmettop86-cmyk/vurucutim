@@ -1,9 +1,10 @@
 from datetime import datetime, timedelta, timezone
 
-from flask import Blueprint, current_app, render_template
+from flask import (Blueprint, current_app, flash, make_response,
+                   redirect, render_template, request, url_for)
 
 from short_bot.config import list_channels
-from short_bot.db import init_db
+from short_bot.db import clear_recent_failed_runs, init_db
 from short_bot.dna_cache import get_cache_stats
 from short_bot.web.extensions import db
 from short_bot.web.models import Run, Short, YoutubeUpload
@@ -76,3 +77,21 @@ def index():
         recent_errors=recent_errors,
         cache_stats=cache_stats,
     )
+
+
+@bp.route("/dashboard/clear-errors", methods=["POST"])
+def clear_errors():
+    """Backs the 'Hataları temizle' button on the recent-errors panel.
+    Deletes the failed run DB rows from the last 24h; run log files on disk
+    are NOT touched (still browsable via /logs if user needs history)."""
+    eng = init_db(current_app.config["SHORTBOT_DB_PATH"])
+    deleted = clear_recent_failed_runs(eng, hours=24)
+    if deleted:
+        flash(f"{deleted} hata kaydı silindi.", "success")
+    else:
+        flash("Silinecek hata yok.", "info")
+    if request.headers.get("HX-Request"):
+        resp = make_response("", 200)
+        resp.headers["HX-Redirect"] = url_for("dashboard.index")
+        return resp
+    return redirect(url_for("dashboard.index"))

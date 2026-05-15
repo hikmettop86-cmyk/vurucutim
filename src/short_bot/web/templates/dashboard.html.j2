@@ -43,6 +43,15 @@
     <a href="/logs?level=ERROR" class="text-xs font-normal text-red-600 hover:underline ml-auto">
       Tum hatalar &rarr;
     </a>
+    <form method="POST" action="/dashboard/clear-errors"
+          onsubmit="return confirm('Son 24 saatteki tüm hata kayıtları silinsin mi? (log dosyaları korunur)');"
+          class="inline">
+      <button type="submit"
+              class="text-xs font-normal text-red-700 hover:text-white hover:bg-red-600 border border-red-300 px-2 py-0.5 rounded transition-colors"
+              title="Bu paneldeki hatalari sil (log dosyalari korunur)">
+        🗑 Temizle
+      </button>
+    </form>
   </h2>
   <div class="space-y-2">
     {% for err in recent_errors %}

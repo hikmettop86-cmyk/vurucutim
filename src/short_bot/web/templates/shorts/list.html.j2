@@ -3,7 +3,39 @@
 {% block content %}
 <div class="flex justify-between items-center mb-6">
   <h1 class="font-serif text-3xl font-bold">Shorts</h1>
+  <form method="POST" action="/shorts/delete-all"
+        onsubmit="return confirmBulkDelete(this);"
+        class="flex items-center gap-2">
+    <input type="hidden" name="channel" value="{{ channel }}">
+    <input type="hidden" name="q" value="{{ q }}">
+    <input type="hidden" name="since" value="{{ since }}">
+    <input type="hidden" name="youtube" value="{{ youtube }}">
+    <button type="submit"
+            class="text-xs px-3 py-1.5 rounded-lg bg-red-50 border border-red-200 text-red-700 hover:bg-red-100 transition-colors"
+            title="Filtreye uyan tüm shortları sil (geri alınamaz)">
+      🗑 Tümünü sil
+    </button>
+  </form>
 </div>
+<script>
+async function confirmBulkDelete(form) {
+  const params = new URLSearchParams();
+  for (const el of form.querySelectorAll('input[type=hidden]')) {
+    if (el.value) params.set(el.name, el.value);
+  }
+  let count = null;
+  try {
+    const r = await fetch('/shorts/count?' + params.toString());
+    const j = await r.json();
+    count = j.count;
+  } catch (e) { /* network fallback */ }
+  const scope = params.toString() ? 'filtreye uyan' : 'TÜM';
+  const msg = count !== null
+    ? `${count} adet ${scope} short silinecek. Devam edilsin mi?`
+    : `${scope} shortlar silinecek. Devam edilsin mi?`;
+  return confirm(msg);
+}
+</script>
 
 <div class="flex gap-3 mb-3 items-center">
   <input type="text" name="q" value="{{ q }}" placeholder="Başlık ara..."

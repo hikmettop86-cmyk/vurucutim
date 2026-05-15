@@ -64,12 +64,12 @@
 <body class="bg-claude-bg text-claude-text min-h-screen flex flex-col">
   {% set p = request.path %}
   <nav class="bg-claude-surface/80 backdrop-blur border-b border-claude-border sticky top-0 z-40">
-    <div class="container mx-auto max-w-6xl px-6 py-3 flex items-center gap-7">
-      <a href="/" class="flex items-center gap-2 group">
+    <div class="container mx-auto max-w-7xl px-5 py-3 flex items-center gap-4">
+      <a href="/" class="flex items-center gap-2 group flex-shrink-0">
         <span class="w-8 h-8 rounded-md bg-claude-accent text-white flex items-center justify-center font-serif italic text-lg shadow-soft group-hover:bg-claude-accent-hover transition-colors">V</span>
         <span class="font-serif font-bold text-claude-text text-base tracking-tight">Vurucu <span class="text-claude-accent">TİM</span></span>
       </a>
-      <div class="flex items-center gap-7 text-sm text-claude-muted ml-2">
+      <div class="flex items-center gap-4 text-sm text-claude-muted overflow-x-auto whitespace-nowrap flex-1 min-w-0">
         <a href="/" class="nav-link hover:text-claude-text {% if p == '/' %}active{% endif %}">Dashboard</a>
         <a href="/activity" class="nav-link hover:text-claude-text {% if p.startswith('/activity') %}active{% endif %}">Akış</a>
         <a href="/shorts" class="nav-link hover:text-claude-text {% if p.startswith('/shorts') %}active{% endif %}">Shorts</a>
@@ -81,7 +81,7 @@
         <a href="/insights" class="nav-link hover:text-claude-text {% if p.startswith('/insights') %}active{% endif %}">İçgörüler</a>
         <a href="/logs" class="nav-link hover:text-claude-text {% if p.startswith('/logs') %}active{% endif %}">Loglar</a>
       </div>
-      <span class="ml-auto flex items-center gap-2 text-xs">
+      <span class="flex items-center gap-2 text-xs flex-shrink-0">
         {# Cron health badge #}
         <span x-data="cronHealthBadge()" x-init="poll()">
           <template x-if="loading">
@@ -118,11 +118,11 @@
           </span>
         {% endif %}
       </span>
-      <a href="/settings" class="nav-link text-sm text-claude-muted hover:text-claude-text {% if p.startswith('/settings') %}active{% endif %}">Ayarlar</a>
+      <a href="/settings" class="nav-link text-sm text-claude-muted hover:text-claude-text flex-shrink-0 {% if p.startswith('/settings') %}active{% endif %}">Ayarlar</a>
       <button hx-post="/system/restart"
               hx-confirm="Sunucu yeniden başlatılsın mı? (5 saniye sürer)"
               hx-swap="none"
-              class="text-xs px-2.5 py-1 rounded-full bg-claude-surface ring-1 ring-claude-border text-claude-muted hover:text-claude-text hover:bg-claude-surface-alt transition-colors"
+              class="text-xs px-2.5 py-1 rounded-full bg-claude-surface ring-1 ring-claude-border text-claude-muted hover:text-claude-text hover:bg-claude-surface-alt transition-colors flex-shrink-0"
               title="Sunucuyu yeniden başlat">↻</button>
     </div>
   </nav>
