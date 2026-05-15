@@ -27,6 +27,12 @@ processed_items = Table(
     # array. NULL on legacy rows or when no API key is configured. Used by
     # dedup.filter_new for topic-level similarity check beyond fuzzy title.
     Column("embedding_json", Text),
+    # Embedding of the Claude-PRODUCED headline ("SON DAKIKA KADIR INANIR
+    # YOGUN BAKIMDA") rather than the RSS-side input title. Catches the case
+    # where 3 publishers' headlines all converge on the same Claude output —
+    # the RSS-side embedding may miss this when individual titles diverge,
+    # but the produced-side embedding is by construction consistent.
+    Column("produced_title_embedding_json", Text),
 )
 Index("idx_processed_channel_ts",
       processed_items.c.channel, processed_items.c.processed_at)
@@ -187,6 +193,7 @@ def _migrate_add_columns(eng: Engine) -> None:
     migrations: list[tuple[str, str, str]] = [
         # (table, column, type)
         ("processed_items", "embedding_json", "TEXT"),
+        ("processed_items", "produced_title_embedding_json", "TEXT"),
     ]
     with eng.begin() as conn:
         for table, col, coltype in migrations:
@@ -203,34 +210,59 @@ def _migrate_add_columns(eng: Engine) -> None:
 def mark_processed(
     eng: Engine, guid: str, title: str, channel: str,
     *, embedding: list[float] | None = None,
+    produced_title_embedding: list[float] | None = None,
 ) -> None:
-    """Mark item as processed. embedding is optional; when provided it's
-    stored as JSON and used by future fetch_recent_embeddings calls for
-    topic-level dedup."""
+    """Mark item as processed. embedding (RSS-side) and produced_title_embedding
+    (Claude-side, after script generation) are optional; both feed downstream
+    dedup checks against future candidates."""
     import json as _json
     with eng.begin() as conn:
         conn.execute(
             processed_items.insert().prefix_with("OR IGNORE"),
             {"guid": guid, "title": title, "channel": channel,
              "processed_at": _utcnow(),
-             "embedding_json": _json.dumps(embedding) if embedding else None},
+             "embedding_json": _json.dumps(embedding) if embedding else None,
+             "produced_title_embedding_json":
+                 _json.dumps(produced_title_embedding)
+                 if produced_title_embedding else None},
         )
 
 
 def fetch_recent_embeddings(
-    eng: Engine, channel: str, *, lookback_days: int = 7,
+    eng: Engine, channel: str, *, lookback_days: int = 14,
 ) -> list[list[float]]:
-    """Return all non-null embedding vectors for `channel` processed in the
-    last `lookback_days`. Rows with NULL embedding_json (pre-feature legacy
-    or no API key at the time) are silently skipped."""
+    """Return all non-null RSS-title embeddings for `channel` in the last
+    `lookback_days`. Rows with NULL embedding_json (pre-feature legacy or
+    no API key at the time) are silently skipped."""
+    return _fetch_recent_embedding_column(
+        eng, channel, lookback_days, "embedding_json",
+    )
+
+
+def fetch_recent_produced_title_embeddings(
+    eng: Engine, channel: str, *, lookback_days: int = 14,
+) -> list[list[float]]:
+    """Return all non-null Claude-PRODUCED-title embeddings for `channel` in
+    the last `lookback_days`. Drives the second dedup layer that catches the
+    case where multiple publishers' RSS titles diverge but Claude normalizes
+    them all to the same headline."""
+    return _fetch_recent_embedding_column(
+        eng, channel, lookback_days, "produced_title_embedding_json",
+    )
+
+
+def _fetch_recent_embedding_column(
+    eng: Engine, channel: str, lookback_days: int, column: str,
+) -> list[list[float]]:
     import json as _json
     cutoff = _utcnow() - timedelta(days=lookback_days)
+    col = getattr(processed_items.c, column)
     with eng.connect() as conn:
         rows = conn.execute(
-            select(processed_items.c.embedding_json)
+            select(col)
             .where(processed_items.c.channel == channel)
             .where(processed_items.c.processed_at >= cutoff)
-            .where(processed_items.c.embedding_json.is_not(None))
+            .where(col.is_not(None))
         ).fetchall()
     out: list[list[float]] = []
     for (raw,) in rows:
@@ -624,6 +656,69 @@ def load_channels_with_uploads(eng: Engine) -> list[str]:
             .where(youtube_uploads.c.status == "success")
         ).all()
     return [r[0] for r in rows]
+
+
+def backfill_produced_embeddings(
+    eng: Engine, openai_api_key: str, *, days: int = 14,
+) -> dict[str, int]:
+    """Retroactively populate produced_title_embedding_json for processed_items
+    whose row exists but lacks the new column (records created before the
+    feature shipped). Embeds the Claude-produced header from shorts.script_json
+    joined by RSS GUID. Returns {'updated': N, 'skipped': M, 'errors': K}.
+
+    Idempotent: rows that already have a non-null embedding are skipped.
+    """
+    import json as _json
+    from datetime import timedelta
+    from short_bot.embeddings import embed_text, EmbeddingError
+
+    if not openai_api_key:
+        return {"updated": 0, "skipped": 0, "errors": 0, "no_key": 1}
+
+    cutoff = _utcnow() - timedelta(days=days)
+    # Pull processed_items rows missing the embedding, joined with shorts via
+    # rss_item_guid so we can read the Claude-produced header text.
+    from sqlalchemy import text
+    sql = text(
+        "SELECT p.guid, p.channel, s.script_json "
+        "FROM processed_items p "
+        "JOIN shorts s ON s.rss_item_guid = p.guid AND s.channel = p.channel "
+        "WHERE p.processed_at >= :cutoff "
+        "AND p.produced_title_embedding_json IS NULL "
+        "AND s.script_json IS NOT NULL"
+    )
+    with eng.connect() as conn:
+        rows = conn.execute(sql, {"cutoff": cutoff}).fetchall()
+
+    updated = skipped = errors = 0
+    for r in rows:
+        try:
+            sc = _json.loads(r.script_json)
+        except (ValueError, TypeError):
+            skipped += 1
+            continue
+        header = (f"{sc.get('header_top', '')} "
+                  f"{sc.get('header_bottom', '')}").strip()
+        if not header:
+            skipped += 1
+            continue
+        try:
+            vec = embed_text(header, api_key=openai_api_key)
+        except EmbeddingError:
+            errors += 1
+            continue
+        try:
+            with eng.begin() as conn:
+                conn.execute(
+                    processed_items.update()
+                    .where(processed_items.c.guid == r.guid)
+                    .where(processed_items.c.channel == r.channel)
+                    .values(produced_title_embedding_json=_json.dumps(vec))
+                )
+            updated += 1
+        except Exception:
+            errors += 1
+    return {"updated": updated, "skipped": skipped, "errors": errors}
 
 
 def clear_recent_failed_runs(eng: Engine, *, hours: int = 24) -> int:

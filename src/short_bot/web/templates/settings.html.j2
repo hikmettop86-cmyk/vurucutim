@@ -110,6 +110,21 @@
     </div>
 
     <h2 class="font-serif text-lg font-bold mt-6 border-t border-claude-border pt-4">OpenAI API Key</h2>
+    {% if openai_key_set %}
+    <div class="mb-3 text-xs">
+      <form method="POST" action="/system/backfill-embeddings"
+            onsubmit="return confirm('Son 14 gün üretilen shortlar için tekrar-uretim filtresi (Claude başlık embedding) hesaplanacak. ~30 saniye sürer. Devam?');"
+            class="inline">
+        <button type="submit"
+                class="bg-claude-surface-alt hover:bg-claude-surface border border-claude-border px-3 py-1.5 rounded text-claude-text">
+          🔄 Tekrar-üretim filtresi: geçmiş shortlar için backfill
+        </button>
+      </form>
+      <span class="text-claude-muted ml-2">
+        Yeni dedup katmanı için (v0.1.68+). İdempotent — birden fazla çalıştırmak güvenli.
+      </span>
+    </div>
+    {% endif %}
     <div class="bg-claude-surface border border-claude-border rounded-lg p-4">
       {% if openai_key_set %}
         <div class="flex items-center gap-3">

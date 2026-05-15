@@ -867,9 +867,26 @@ def _run_rss(*, channel, run_id, log, eng, settings,
         render_ms = int((time.perf_counter() - t0) * 1000)
         log.info(f"  → {out_path.name} ({render_ms}ms)")
 
+    # Compute embedding of the Claude-PRODUCED headline too — drives the new
+    # "produced-headline dedup" layer in dedup.filter_new on future runs.
+    # Best-effort: any failure leaves it NULL and we still benefit from the
+    # RSS-side dedup. Reuses the same OpenAI key as RSS-side embedding.
+    produced_embedding = None
+    try:
+        if dedup_openai_key:
+            produced_text = (
+                f"{script.header_top} {script.header_bottom}".strip()
+            )
+            if produced_text:
+                from short_bot.embeddings import embed_text as _embed
+                produced_embedding = _embed(produced_text, api_key=dedup_openai_key)
+    except Exception as e:  # noqa: BLE001 — never block render success
+        log.warning(f"  produced-title embedding failed: {e}")
+
     mark_processed(
         eng, picked.item.guid, picked.item.title, channel.slug,
         embedding=dedup_embeddings.get(picked.item.guid),
+        produced_title_embedding=produced_embedding,
     )
     short_id = record_short(eng,
         channel=channel.slug, rss_item_guid=picked.item.guid,

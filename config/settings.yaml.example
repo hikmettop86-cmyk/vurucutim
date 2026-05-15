@@ -22,8 +22,11 @@ web:
   host: 127.0.0.1
   port: 5005
 
-# Benzer/tekrar icerikleri filtrelemek icin esik degeri (0.0-1.0)
-fuzzy_dedup_threshold: 0.85
+# Benzer/tekrar icerikleri filtrelemek icin esik degeri (0.0-1.0).
+# Dusuk = daha agresif (daha cok benzer haber elenir). 0.70 default 2026-05'te
+# 0.85'ten dusuruldu cunku '...yogun bakima alindi' / '...yogun bakimda' gibi
+# kelime varyasyonlari 0.85'i gecemiyordu, ayni haber tekrar uretiliyordu.
+fuzzy_dedup_threshold: 0.70
 
 # Log seviyesi: DEBUG, INFO, WARNING, ERROR
 log_level: INFO

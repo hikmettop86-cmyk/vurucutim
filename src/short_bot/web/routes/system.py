@@ -9,7 +9,7 @@ import threading
 import time
 from pathlib import Path
 
-from flask import Blueprint, flash, redirect, request, url_for
+from flask import Blueprint, current_app, flash, redirect, request, url_for
 
 bp = Blueprint("system", __name__)
 
@@ -158,6 +158,29 @@ def _spawn_replacement():
         creationflags=creationflags,
         close_fds=True,
     )
+
+
+@bp.route("/system/backfill-embeddings", methods=["POST"])
+def backfill_embeddings():
+    """Retroactively populate produced-headline embeddings for shorts that
+    pre-date the dedup-v2 feature. Idempotent — re-running is safe."""
+    from short_bot.db import init_db, backfill_produced_embeddings
+    from short_bot.pexels import load_secrets as _load_secrets, resolve_openai_api_key
+    secrets_path = current_app.config.get("SHORTBOT_SECRETS_PATH")
+    if not secrets_path:
+        flash("Secrets path yok — backfill atlandı.", "error")
+        return redirect(url_for("dashboard.index"))
+    api_key = resolve_openai_api_key(_load_secrets(Path(secrets_path)))
+    if not api_key:
+        flash("OpenAI API key tanımlı değil. /settings'ten ekle.", "error")
+        return redirect(url_for("settings.view"))
+    eng = init_db(current_app.config["SHORTBOT_DB_PATH"])
+    result = backfill_produced_embeddings(eng, api_key, days=14)
+    msg = (f"Backfill tamam: {result['updated']} güncellendi, "
+           f"{result['skipped']} atlandı, {result['errors']} hata.")
+    flash(msg, "success" if result["updated"] > 0 or result["errors"] == 0
+                       else "warning")
+    return redirect(url_for("dashboard.index"))
 
 
 @bp.route("/system/restart", methods=["POST"])
