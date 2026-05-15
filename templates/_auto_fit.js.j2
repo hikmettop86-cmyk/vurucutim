@@ -13,6 +13,27 @@ async function _autoFit() {
   if (document.fonts && document.fonts.ready) {
     try { await document.fonts.ready; } catch (_) {}
   }
+  /* Width-fit mode (header lines etc.): any element with data-fit-width
+     scales DOWN so scrollWidth ≤ parent.clientWidth - padding. Independent
+     of height; complements the body height-fit logic below.
+     Triggered by adding data-fit-width to an element with data-fit-min /
+     data-fit-max attrs. */
+  document.querySelectorAll('[data-fit-width][data-fit-min]').forEach(function(el) {
+    var parent = el.parentElement;
+    if (!parent) return;
+    var wmin = parseFloat(el.getAttribute('data-fit-min') || '36');
+    var wmax = parseFloat(el.getAttribute('data-fit-max') || '120');
+    var wpad = parseFloat(el.getAttribute('data-fit-width') || '0');
+    var wsize = wmax;
+    el.style.fontSize = wsize + 'px';
+    void el.offsetHeight;
+    while (wsize > wmin && el.scrollWidth > parent.clientWidth - wpad) {
+      wsize -= 2;
+      el.style.fontSize = wsize + 'px';
+      void el.offsetHeight;
+    }
+  });
+
   /* List-container mode (gundem): every .list-item .text shares one font size,
      scales together so the list fits in container.clientHeight. */
   var list = document.querySelector('.list-container[data-fit-min]');

@@ -34,8 +34,8 @@
     box-shadow: 0 10px 0 rgba(0,0,0,.4);
     position: relative;
   }
-  .header .top { display: block; }
-  .header .bot { display: block; margin-top: 8px; }
+  .header .top { display: block; white-space: nowrap; }
+  .header .bot { display: block; margin-top: 8px; white-space: nowrap; }
 
   /* PHOTO band */
   .photo {
@@ -326,8 +326,12 @@
 <div class="stage dna-anim-{{ animation_style|default('none') }}">
   <div class="stage-badge">{{ ui_breaking }}</div>
   <div class="header">
-    <span class="top">{{ script.header_top }}</span>
-    <span class="bot">{{ script.header_bottom }}</span>
+    {# Width-fit data attrs: shrinks 100px font down to fit the 1080px-wide
+       header column (with 60px L/R padding from .header CSS rule). Without
+       these, 20+-char headers like "VERGİ ARTIŞI GÜNDEMDE YOK" overflow the
+       frame. Short text stays at 100px; long text scales down to 50px floor. #}
+    <span class="top" data-fit-min="50" data-fit-max="100" data-fit-width="120">{{ script.header_top }}</span>
+    <span class="bot" data-fit-min="50" data-fit-max="100" data-fit-width="120">{{ script.header_bottom }}</span>
   </div>
 
   <div class="photo">
