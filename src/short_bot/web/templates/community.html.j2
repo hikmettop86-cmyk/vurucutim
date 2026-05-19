@@ -1,0 +1,104 @@
+{% extends "base.html.j2" %}
+{% block title %}Community — {{ cfg.name }}{% endblock %}
+{% block content %}
+
+<div class="flex items-center justify-between mb-6">
+  <div>
+    <div class="text-xs text-claude-muted uppercase">
+      <a href="/channels/{{ cfg.slug }}/edit" class="hover:underline">← {{ cfg.name }}</a>
+    </div>
+    <h1 class="font-serif text-3xl font-bold mt-1">Topluluk Post Önerileri</h1>
+    <p class="text-sm text-claude-muted">
+      YouTube Data API community post yazımına izin vermiyor — bu sayfa
+      kopyala-yapıştır taslakları üretir. Sonnet kanalın DNA tonunu ve son
+      shorts'larını okuyarak 5 farklı format öneriyor.
+    </p>
+  </div>
+  <form method="POST" action="/community/{{ cfg.slug }}/generate">
+    <button type="submit"
+            class="bg-claude-accent hover:bg-claude-accent-hover text-white px-4 py-2 rounded-lg text-sm font-semibold">
+      {% if drafts %}🔄 Yeniden üret{% else %}✨ Taslak üret{% endif %}
+    </button>
+  </form>
+</div>
+
+{% if drafts %}
+<div class="grid grid-cols-1 gap-4 mb-6">
+  {% for d in drafts %}
+  <div class="bg-white border border-claude-border rounded-xl shadow-soft p-5"
+       x-data="{ copied: false }">
+    <div class="flex items-center justify-between mb-3">
+      <div class="text-xs uppercase tracking-wider">
+        {% if d.format == 'poll' %}
+          <span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded">📊 POLL</span>
+        {% elif d.format == 'question' %}
+          <span class="bg-green-100 text-green-800 px-2 py-0.5 rounded">💬 SORU</span>
+        {% elif d.format == 'nostalgia' %}
+          <span class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded">📸 NOSTALJİ</span>
+        {% elif d.format == 'tier_list' %}
+          <span class="bg-purple-100 text-purple-800 px-2 py-0.5 rounded">🏅 SIRALAMA</span>
+        {% elif d.format == 'hot_take' %}
+          <span class="bg-red-100 text-red-800 px-2 py-0.5 rounded">💥 HOT TAKE</span>
+        {% else %}
+          <span class="bg-gray-100 text-gray-800 px-2 py-0.5 rounded">{{ d.format }}</span>
+        {% endif %}
+      </div>
+      <button type="button"
+              @click="
+                const txt = $refs.body.innerText;
+                navigator.clipboard.writeText(txt).then(() => {
+                  copied = true;
+                  setTimeout(() => copied = false, 2000);
+                });
+              "
+              class="text-xs px-3 py-1 rounded bg-claude-surface hover:bg-claude-surface-alt border border-claude-border">
+        <span x-show="!copied">📋 Kopyala</span>
+        <span x-show="copied" class="text-green-700">✓ Kopyalandı</span>
+      </button>
+    </div>
+
+    <div x-ref="body" class="text-base leading-relaxed text-claude-text whitespace-pre-wrap">{{ d.text }}{% if d.options %}
+
+{% for opt in d.options %}{{ opt }}
+{% endfor %}{% endif %}</div>
+
+    {% if d.image_hint %}
+    <div class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2 mt-3">
+      💡 Görsel önerisi: {{ d.image_hint }}
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+<details class="bg-claude-surface border border-claude-border rounded-xl">
+  <summary class="px-5 py-3 cursor-pointer text-sm font-medium">
+    Kullanılan bağlam (debug)
+  </summary>
+  <div class="px-5 pb-5 text-xs text-claude-muted space-y-3">
+    <div>
+      <div class="font-semibold mb-1">Son shortlar:</div>
+      <ul class="list-disc list-inside">
+      {% for r in (recent or []) %}<li>{{ r }}</li>{% endfor %}
+      </ul>
+    </div>
+    <div>
+      <div class="font-semibold mb-1">Aktif trendler ({{ cfg.language|upper }}):</div>
+      <ul class="list-disc list-inside">
+      {% for t in (trends or []) %}<li>{{ t }}</li>{% endfor %}
+      {% if not trends %}<li>(trend cache yok)</li>{% endif %}
+      </ul>
+    </div>
+  </div>
+</details>
+{% else %}
+<div class="bg-claude-surface border border-claude-border rounded-xl p-8 text-center text-claude-muted">
+  Henüz taslak yok. <b>"✨ Taslak üret"</b> butonuna basarak başla.
+  <div class="text-xs mt-2">
+    Sonnet kanalın DNA tonunu + son 14 günlük shortları + aktif trendleri okur, 5 farklı format öneriyor.
+    ~10-20 saniye sürer.
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

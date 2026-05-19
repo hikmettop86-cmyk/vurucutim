@@ -355,6 +355,26 @@
     {# ── TAB: YouTube ───────────────────────────────────────────────── #}
     <div x-show="currentTab === 'youtube'">
 
+    {# ── Card: Topluluk post fikirleri ─────────────────────────────────── #}
+    <div class="bg-white border border-claude-border rounded-xl shadow-soft mb-4 p-5">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="font-serif text-base font-semibold flex items-center gap-2">
+            <span class="text-lg opacity-70">💬</span> Topluluk Sekmesi
+          </h2>
+          <p class="text-xs text-claude-muted mt-1">
+            YouTube Community için 5 hazır post taslağı üret (poll / soru /
+            nostalji / sıralama / hot-take). Kanalın DNA tonu + son
+            shortlar + aktif trendler birlikte. Kopyala-yapıştır akışı.
+          </p>
+        </div>
+        <a href="/community/{{ c.slug }}"
+           class="bg-claude-accent hover:bg-claude-accent-hover text-white text-sm font-semibold px-4 py-2 rounded-lg whitespace-nowrap">
+          ✨ Post fikirleri →
+        </a>
+      </div>
+    </div>
+
     {# ── Card: YouTube bağlantısı (open by default) ───────────────────── #}
     <div x-data="{ open: true }" class="bg-white border border-claude-border rounded-xl shadow-soft mb-4">
       <button type="button" @click="open = !open"
