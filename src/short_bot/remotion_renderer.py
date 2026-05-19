@@ -209,6 +209,7 @@ def ensure_remotion_installed(
             [npm, "install", "--no-audit", "--no-fund", "--loglevel=error"],
             cwd=str(root), timeout=timeout_s,
             capture_output=True, text=True, shell=False,
+            encoding="utf-8", errors="replace",
         )
     except subprocess.TimeoutExpired as e:
         raise RemotionRenderError(
@@ -299,6 +300,7 @@ def render(
         proc = subprocess.run(
             cmd, cwd=str(root), timeout=timeout_s,
             capture_output=True, text=True, shell=False,
+            encoding="utf-8", errors="replace",
         )
     except subprocess.TimeoutExpired as e:
         raise RemotionRenderError(
