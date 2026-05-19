@@ -771,3 +771,84 @@ def test_save_channel_writes_renderer_when_remotion(tmp_path):
     cfg2 = load_channel(p)
     assert cfg2.renderer == "remotion"
     assert cfg2.remotion_template == "stat-hero"
+
+
+def test_remotion_dimensions_roundtrip(tmp_path):
+    p = tmp_path / "ch.yaml"
+    p.write_text(
+        _minimal_channel_yaml(
+            "renderer: remotion\nremotion_template: adaptive\n"
+            "remotion_dimensions:\n"
+            "  headerStyle: banner-skewed\n"
+            "  photoTreatment: banded\n"
+            "  bodyStyle: stat-hero\n"
+        ),
+        encoding="utf-8",
+    )
+    c = load_channel(p)
+    assert c.remotion_template == "adaptive"
+    assert c.remotion_dimensions == {
+        "headerStyle": "banner-skewed",
+        "photoTreatment": "banded",
+        "bodyStyle": "stat-hero",
+    }
+
+
+def test_remotion_dimensions_partial_kept(tmp_path):
+    """Only one axis specified — others use Zod defaults at render time."""
+    p = tmp_path / "ch.yaml"
+    p.write_text(
+        _minimal_channel_yaml(
+            "renderer: remotion\nremotion_template: adaptive\n"
+            "remotion_dimensions:\n  bodyStyle: quote\n"
+        ),
+        encoding="utf-8",
+    )
+    c = load_channel(p)
+    assert c.remotion_dimensions == {"bodyStyle": "quote"}
+
+
+def test_remotion_dimensions_empty_dict_becomes_none(tmp_path):
+    """`remotion_dimensions: {}` is equivalent to omitting the field."""
+    p = tmp_path / "ch.yaml"
+    p.write_text(
+        _minimal_channel_yaml(
+            "renderer: remotion\nremotion_template: adaptive\n"
+            "remotion_dimensions: {}\n"
+        ),
+        encoding="utf-8",
+    )
+    c = load_channel(p)
+    assert c.remotion_dimensions is None
+
+
+def test_remotion_dimensions_non_dict_rejected(tmp_path):
+    p = tmp_path / "ch.yaml"
+    p.write_text(
+        _minimal_channel_yaml(
+            "renderer: remotion\nremotion_dimensions: \"not a dict\"\n"
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="must be a mapping"):
+        load_channel(p)
+
+
+def test_save_channel_writes_remotion_dimensions(tmp_path):
+    from short_bot.config import ChannelConfig, save_channel
+    cfg = ChannelConfig(
+        slug="t", name="t", keywords=["a"], rss_locale="tr-TR",
+        schedule_cron="0 * * * *", duration_s=25, min_score=6.0,
+        max_candidates_per_run=3, template="newscast",
+        colors={"primary": "#fff"}, handle="@t", output_dir="o",
+        enabled=True, cta_enabled=True, cta_text="x", cta_icons=[],
+        cta_duration_s=4, cta_show_handle=True, language="tr",
+        renderer="remotion", remotion_template="adaptive",
+        remotion_dimensions={"headerStyle": "hero-overlay", "bodyStyle": "quote"},
+    )
+    p = tmp_path / "ch.yaml"
+    save_channel(p, cfg)
+    cfg2 = load_channel(p)
+    assert cfg2.remotion_dimensions == {
+        "headerStyle": "hero-overlay", "bodyStyle": "quote"
+    }

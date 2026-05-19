@@ -78,10 +78,21 @@ logger = logging.getLogger(__name__)
 # Hardcoded list — kept in sync with remotion/src/Root.tsx Compositions.
 # Phase 1 (2026-05-19): stadium-basic + stat-hero added.
 # Phase 4 (2026-05-19): big-quote — Remotion-only template, no HTML counterpart.
+# Phase 5 (2026-05-20): adaptive — dimension-driven composable, 27 combos in 1 .tsx.
 # To add another template: drop a .tsx in remotion/src/templates/, register
 # in Root.tsx, append the id here. Tests in tests/test_remotion_renderer.py
 # pick up the new id automatically via list_templates().
-_AVAILABLE_TEMPLATES = {"newscast-basic", "stadium-basic", "stat-hero", "big-quote"}
+_AVAILABLE_TEMPLATES = {"newscast-basic", "stadium-basic", "stat-hero",
+                        "big-quote", "adaptive"}
+
+# Adaptive template dimension axes — must match adaptiveSchema in
+# remotion/src/templates/Adaptive.tsx. Values used to validate channel YAML
+# entries and populate the channel-edit UI dropdowns.
+ADAPTIVE_DIMENSION_OPTIONS: dict[str, tuple[str, ...]] = {
+    "headerStyle": ("banner-flat", "banner-skewed", "hero-overlay"),
+    "photoTreatment": ("full-bleed", "banded", "blur-bg"),
+    "bodyStyle": ("paragraph", "quote", "stat-hero"),
+}
 
 _REMOTION_PORT = 3210   # avoid colliding with default 3000
 
@@ -114,12 +125,16 @@ class RemotionRenderJob:
     bg_grad_2: str = "#1a2a4f"
     text_main: str = "#ffffff"
     text_muted: str = "#cccccc"
+    # Only consumed by the `adaptive` template; ignored by others.
+    # Keys: headerStyle / photoTreatment / bodyStyle. See
+    # ADAPTIVE_DIMENSION_OPTIONS for valid values per axis.
+    dimensions: dict[str, str] | None = None
 
     def to_props_dict(self) -> dict[str, Any]:
         """Build the JSON payload Remotion's --props= flag expects.
 
         Field names use camelCase to match the TypeScript Zod schema."""
-        return {
+        out: dict[str, Any] = {
             "headerTop": self.header_top,
             "headerBottom": self.header_bottom,
             "photoOverlay": self.photo_overlay,
@@ -138,6 +153,9 @@ class RemotionRenderJob:
                 "textMuted": self.text_muted,
             },
         }
+        if self.dimensions:
+            out["dimensions"] = dict(self.dimensions)
+        return out
 
 
 def _resolve_remotion_root(explicit: Path | None = None) -> Path:
@@ -369,6 +387,7 @@ def render_job_from_pipeline(
     template: str,
     bg_image_path: Path | None,
     ui_breaking: str = "SON DAKİKA",
+    dimensions: dict[str, str] | None = None,
 ) -> RemotionRenderJob:
     """Build a RemotionRenderJob from the pipeline's Script + Channel state.
 
@@ -400,4 +419,5 @@ def render_job_from_pipeline(
         accent=channel_colors.get("accent", "#ffb81c"),
         bg_grad_1=bg1,
         bg_grad_2=bg2,
+        dimensions=dimensions,
     )

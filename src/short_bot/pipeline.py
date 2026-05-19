@@ -871,6 +871,7 @@ def _run_rss(*, channel, run_id, log, eng, settings,
                 duration_s=channel.duration_s,
                 template=channel.resolved_remotion_template,
                 bg_image_path=bg,
+                dimensions=channel.remotion_dimensions,
             )
             log.info(f"  → remotion render {remotion_job.template}")
             try:

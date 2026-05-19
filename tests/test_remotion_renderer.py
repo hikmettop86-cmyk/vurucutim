@@ -90,6 +90,69 @@ def test_list_templates_includes_big_quote():
     assert "big-quote" in list_templates()
 
 
+def test_list_templates_includes_adaptive():
+    """Phase 5: dimension-driven template — single .tsx, 27 combinations."""
+    assert "adaptive" in list_templates()
+
+
+def test_to_props_dict_includes_dimensions_when_set():
+    from short_bot.remotion_renderer import RemotionRenderJob
+    job = RemotionRenderJob(
+        template="adaptive", header_top="A", header_bottom="B",
+        photo_overlay="C", body_paragraph="D body", category="E",
+        handle="@h", duration_seconds=4,
+        dimensions={"headerStyle": "banner-skewed", "bodyStyle": "quote"},
+    )
+    p = job.to_props_dict()
+    assert p["dimensions"] == {"headerStyle": "banner-skewed", "bodyStyle": "quote"}
+
+
+def test_to_props_dict_omits_dimensions_when_none():
+    from short_bot.remotion_renderer import RemotionRenderJob
+    job = RemotionRenderJob(
+        template="newscast-basic", header_top="A", header_bottom="B",
+        photo_overlay="C", body_paragraph="D body", category="E",
+        handle="@h", duration_seconds=4,
+    )
+    assert "dimensions" not in job.to_props_dict()
+
+
+def test_adaptive_dimension_options_match_zod_enum():
+    """Tripwire: if Adaptive.tsx adds a new option, ADAPTIVE_DIMENSION_OPTIONS
+    must be updated too — UI dropdowns + form-validation depend on it."""
+    from short_bot.remotion_renderer import ADAPTIVE_DIMENSION_OPTIONS
+    assert "banner-flat" in ADAPTIVE_DIMENSION_OPTIONS["headerStyle"]
+    assert "banner-skewed" in ADAPTIVE_DIMENSION_OPTIONS["headerStyle"]
+    assert "hero-overlay" in ADAPTIVE_DIMENSION_OPTIONS["headerStyle"]
+    assert "full-bleed" in ADAPTIVE_DIMENSION_OPTIONS["photoTreatment"]
+    assert "banded" in ADAPTIVE_DIMENSION_OPTIONS["photoTreatment"]
+    assert "blur-bg" in ADAPTIVE_DIMENSION_OPTIONS["photoTreatment"]
+    assert "paragraph" in ADAPTIVE_DIMENSION_OPTIONS["bodyStyle"]
+    assert "quote" in ADAPTIVE_DIMENSION_OPTIONS["bodyStyle"]
+    assert "stat-hero" in ADAPTIVE_DIMENSION_OPTIONS["bodyStyle"]
+
+
+def test_render_job_from_pipeline_passes_dimensions():
+    from short_bot.remotion_renderer import render_job_from_pipeline
+
+    class _FakeScript:
+        header_top = "A"
+        header_bottom = "B"
+        photo_overlay = "C"
+        body_paragraph = "D"
+        category = "E"
+
+    job = render_job_from_pipeline(
+        script=_FakeScript(),
+        channel_colors={"primary": "#000", "accent": "#fff",
+                        "bg_gradient": ["#111", "#222"]},
+        handle="@h", duration_s=6, template="adaptive",
+        bg_image_path=None,
+        dimensions={"headerStyle": "hero-overlay"},
+    )
+    assert job.dimensions == {"headerStyle": "hero-overlay"}
+
+
 def test_list_templates_returns_sorted():
     """Stable ordering matters when surfacing the list in the UI dropdown."""
     out = list_templates()

@@ -1115,12 +1115,52 @@
             <option value="stadium-basic" {% if c.remotion_template == 'stadium-basic' %}selected{% endif %}>stadium-basic</option>
             <option value="stat-hero" {% if c.remotion_template == 'stat-hero' %}selected{% endif %}>stat-hero</option>
             <option value="big-quote" {% if c.remotion_template == 'big-quote' %}selected{% endif %}>big-quote (Remotion-only)</option>
+            <option value="adaptive" {% if c.remotion_template == 'adaptive' %}selected{% endif %}>adaptive (27 kombinasyon)</option>
           </select>
         </label>
       </div>
+
+      {# Adaptive dimensions — only visible when remotion_template = adaptive #}
+      <div class="mt-3 pt-3 border-t border-claude-border">
+        <div class="text-xs text-claude-muted uppercase mb-2">Adaptive boyutlar (yalnızca adaptive seçiliyse)</div>
+        <div class="grid grid-cols-3 gap-3">
+          {% set dims = c.remotion_dimensions or {} %}
+          <label class="text-xs">
+            <span class="block text-claude-muted mb-1">Header</span>
+            <select name="adaptive_headerStyle"
+                    class="bg-claude-surface-alt border border-claude-border px-2 py-1 rounded w-full text-sm text-claude-text">
+              <option value="" {% if not dims.get('headerStyle') %}selected{% endif %}>(varsayılan: banner-flat)</option>
+              <option value="banner-flat" {% if dims.get('headerStyle') == 'banner-flat' %}selected{% endif %}>banner-flat</option>
+              <option value="banner-skewed" {% if dims.get('headerStyle') == 'banner-skewed' %}selected{% endif %}>banner-skewed</option>
+              <option value="hero-overlay" {% if dims.get('headerStyle') == 'hero-overlay' %}selected{% endif %}>hero-overlay</option>
+            </select>
+          </label>
+          <label class="text-xs">
+            <span class="block text-claude-muted mb-1">Photo</span>
+            <select name="adaptive_photoTreatment"
+                    class="bg-claude-surface-alt border border-claude-border px-2 py-1 rounded w-full text-sm text-claude-text">
+              <option value="" {% if not dims.get('photoTreatment') %}selected{% endif %}>(varsayılan: full-bleed)</option>
+              <option value="full-bleed" {% if dims.get('photoTreatment') == 'full-bleed' %}selected{% endif %}>full-bleed</option>
+              <option value="banded" {% if dims.get('photoTreatment') == 'banded' %}selected{% endif %}>banded</option>
+              <option value="blur-bg" {% if dims.get('photoTreatment') == 'blur-bg' %}selected{% endif %}>blur-bg</option>
+            </select>
+          </label>
+          <label class="text-xs">
+            <span class="block text-claude-muted mb-1">Body</span>
+            <select name="adaptive_bodyStyle"
+                    class="bg-claude-surface-alt border border-claude-border px-2 py-1 rounded w-full text-sm text-claude-text">
+              <option value="" {% if not dims.get('bodyStyle') %}selected{% endif %}>(varsayılan: paragraph)</option>
+              <option value="paragraph" {% if dims.get('bodyStyle') == 'paragraph' %}selected{% endif %}>paragraph</option>
+              <option value="quote" {% if dims.get('bodyStyle') == 'quote' %}selected{% endif %}>quote</option>
+              <option value="stat-hero" {% if dims.get('bodyStyle') == 'stat-hero' %}selected{% endif %}>stat-hero</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
       <p class="text-xs text-claude-muted mt-2">
         Remotion daha pürüzsüz animasyon + 60fps yetenek sunar ama Node.js + npm install gerektirir.
-        Kararsız kalırsanız varsayılan HTML motorunda kalın.
+        Adaptive template'de 3×3×3 = 27 kombinasyon var. Kararsız kalırsanız HTML motorunda kalın.
       </p>
     </div>
 
