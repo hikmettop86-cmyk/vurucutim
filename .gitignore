@@ -74,5 +74,10 @@ electron/dist/
 electron/cache/
 !electron/build/
 
+# Remotion renderer (Node subproject) — track source, exclude installs
+remotion/node_modules/
+remotion/out/
+remotion/.cache/
+
 # Git worktrees (project-local, isolated dev branches)
 .worktrees/
