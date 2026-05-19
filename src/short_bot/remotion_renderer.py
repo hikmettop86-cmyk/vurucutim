@@ -76,9 +76,12 @@ def _node_command() -> str | None:
 logger = logging.getLogger(__name__)
 
 # Hardcoded list — kept in sync with remotion/src/Root.tsx Compositions.
-# Phase 1 (2026-05-19): stadium-basic + stat-hero added. Future phases
-# can move this to runtime discovery by scanning remotion/src/templates/.
-_AVAILABLE_TEMPLATES = {"newscast-basic", "stadium-basic", "stat-hero"}
+# Phase 1 (2026-05-19): stadium-basic + stat-hero added.
+# Phase 4 (2026-05-19): big-quote — Remotion-only template, no HTML counterpart.
+# To add another template: drop a .tsx in remotion/src/templates/, register
+# in Root.tsx, append the id here. Tests in tests/test_remotion_renderer.py
+# pick up the new id automatically via list_templates().
+_AVAILABLE_TEMPLATES = {"newscast-basic", "stadium-basic", "stat-hero", "big-quote"}
 
 _REMOTION_PORT = 3210   # avoid colliding with default 3000
 

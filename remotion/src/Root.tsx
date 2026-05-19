@@ -11,6 +11,7 @@ import {
   STADIUM_DEFAULTS,
 } from './templates/StadiumBasic';
 import {StatHero, statHeroSchema, STAT_HERO_DEFAULTS} from './templates/StatHero';
+import {BigQuote, bigQuoteSchema, BIG_QUOTE_DEFAULTS} from './templates/BigQuote';
 
 // 1080×1920 (YouTube Shorts), 30 fps. duration in frames = duration_s * 30.
 // calculateMetadata lets the Python wrapper override durationSeconds at
@@ -57,6 +58,19 @@ export const RemotionRoot: React.FC = () => {
         height={HEIGHT}
         schema={statHeroSchema}
         defaultProps={STAT_HERO_DEFAULTS}
+        calculateMetadata={({props}) => ({
+          durationInFrames: Math.max(1, Math.round((props.durationSeconds ?? 6) * FPS)),
+        })}
+      />
+      <Composition
+        id="big-quote"
+        component={BigQuote}
+        durationInFrames={BIG_QUOTE_DEFAULTS.durationSeconds * FPS}
+        fps={FPS}
+        width={WIDTH}
+        height={HEIGHT}
+        schema={bigQuoteSchema}
+        defaultProps={BIG_QUOTE_DEFAULTS}
         calculateMetadata={({props}) => ({
           durationInFrames: Math.max(1, Math.round((props.durationSeconds ?? 6) * FPS)),
         })}

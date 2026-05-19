@@ -85,6 +85,11 @@ def test_list_templates_includes_stat_hero():
     assert "stat-hero" in list_templates()
 
 
+def test_list_templates_includes_big_quote():
+    """Phase 4: Remotion-only template, no HTML counterpart."""
+    assert "big-quote" in list_templates()
+
+
 def test_list_templates_returns_sorted():
     """Stable ordering matters when surfacing the list in the UI dropdown."""
     out = list_templates()
@@ -131,7 +136,7 @@ def test_render_rejects_unknown_template(tmp_path):
         render(job, tmp_path / "out.mp4", remotion_root=tmp_path)
 
 
-@pytest.mark.parametrize("template", ["newscast-basic", "stadium-basic", "stat-hero"])
+@pytest.mark.parametrize("template", ["newscast-basic", "stadium-basic", "stat-hero", "big-quote"])
 def test_render_accepts_known_template_passes_to_root_check(tmp_path, template):
     """All 3 registered templates pass the whitelist check — proves that
     template name typos in _AVAILABLE_TEMPLATES would be caught here. We
