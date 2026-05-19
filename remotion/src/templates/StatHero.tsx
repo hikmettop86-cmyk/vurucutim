@@ -195,6 +195,18 @@ export const StatHero: React.FC<StatHeroProps> = ({
     extrapolateRight: 'clamp',
   });
 
+  // Header auto-scale on text length — prevents long Turkish headlines from
+  // clipping at the right edge (whiteSpace: nowrap below).
+  const topLen = headerTop.length;
+  const topFontSize = topLen <= 12 ? 80
+                    : topLen <= 18 ? 64
+                    : topLen <= 24 ? 52
+                    : 44;
+  const bottomLen = headerBottom.length;
+  const bottomFontSize = bottomLen <= 16 ? 56
+                       : bottomLen <= 24 ? 46
+                       : 38;
+
   return (
     <AbsoluteFill
       style={{
@@ -230,7 +242,6 @@ export const StatHero: React.FC<StatHeroProps> = ({
           padding: '70px 60px 36px',
           textAlign: 'center',
           fontWeight: 900,
-          fontSize: 80,
           lineHeight: 1.05,
           letterSpacing: 0.3,
           borderBottom: `4px solid ${colors.accent}`,
@@ -242,6 +253,7 @@ export const StatHero: React.FC<StatHeroProps> = ({
           style={{
             display: 'block',
             whiteSpace: 'nowrap',
+            fontSize: topFontSize,
             color: colors.accent,
             textShadow: '0 2px 8px rgba(0,0,0,.5)',
           }}
@@ -253,7 +265,7 @@ export const StatHero: React.FC<StatHeroProps> = ({
             display: 'block',
             whiteSpace: 'nowrap',
             marginTop: 6,
-            fontSize: 56,
+            fontSize: bottomFontSize,
             color: '#fff',
             opacity: 0.92,
           }}

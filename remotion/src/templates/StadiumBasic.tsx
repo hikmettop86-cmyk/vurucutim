@@ -129,6 +129,21 @@ export const StadiumBasic: React.FC<StadiumProps> = ({
   const bodyFontSize =
     bodyLen < 220 ? 68 : bodyLen < 360 ? 58 : bodyLen < 500 ? 50 : 42;
 
+  // Oswald header font auto-scale — letterSpacing 8px at 180px font means
+  // ~110px per char. 1080 wide minus 80px padding = 1000px content; ~9 chars
+  // fit at full size. Turkish headlines often exceed that ("TRANSFER BOMBASI").
+  const topLen = headerTop.length;
+  const topFontSize = topLen <= 9 ? 180
+                    : topLen <= 12 ? 150
+                    : topLen <= 16 ? 120
+                    : topLen <= 22 ? 95
+                    : 75;
+  const bottomLen = headerBottom.length;
+  const bottomFontSize = bottomLen <= 14 ? 60
+                       : bottomLen <= 20 ? 50
+                       : bottomLen <= 28 ? 44
+                       : 38;
+
   return (
     <AbsoluteFill
       style={{
@@ -173,9 +188,9 @@ export const StadiumBasic: React.FC<StadiumProps> = ({
         <span
           style={{
             display: 'block',
-            fontSize: 180,
+            fontSize: topFontSize,
             lineHeight: 0.95,
-            letterSpacing: 8,
+            letterSpacing: topFontSize >= 150 ? 8 : topFontSize >= 120 ? 6 : 4,
             textShadow: '6px 6px 0 #000',
             WebkitTextStroke: '2px #000',
             whiteSpace: 'nowrap',
@@ -186,9 +201,9 @@ export const StadiumBasic: React.FC<StadiumProps> = ({
         <span
           style={{
             display: 'block',
-            fontSize: 60,
+            fontSize: bottomFontSize,
             color: colors.textMain,
-            letterSpacing: 6,
+            letterSpacing: bottomFontSize >= 50 ? 6 : 4,
             marginTop: 14,
             whiteSpace: 'nowrap',
           }}

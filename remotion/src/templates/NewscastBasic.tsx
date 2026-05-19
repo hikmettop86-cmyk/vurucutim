@@ -112,6 +112,21 @@ export const NewscastBasic: React.FC<NewscastProps> = ({
     extrapolateRight: 'clamp',
   });
 
+  // Header font sizing — auto-scale on text length to avoid horizontal
+  // clipping on long Turkish headlines. Top line is heavier (font-weight 900,
+  // larger) than bottom, so they have separate curves. Empirically: 1080px
+  // wide minus 120px side padding = 960px content; ~50px/char at 100px font.
+  const topLen = headerTop.length;
+  const topFontSize = topLen <= 14 ? 100
+                    : topLen <= 18 ? 84
+                    : topLen <= 22 ? 72
+                    : 60;
+  const bottomLen = headerBottom.length;
+  const bottomFontSize = bottomLen <= 18 ? 70
+                       : bottomLen <= 24 ? 60
+                       : bottomLen <= 30 ? 52
+                       : 44;
+
   return (
     <AbsoluteFill
       style={{
@@ -149,7 +164,6 @@ export const NewscastBasic: React.FC<NewscastProps> = ({
           padding: '78px 60px 44px',
           textAlign: 'center',
           fontWeight: 900,
-          fontSize: 100,
           lineHeight: 1.02,
           letterSpacing: 0.5,
           boxShadow: '0 10px 0 rgba(0,0,0,.4)',
@@ -157,7 +171,7 @@ export const NewscastBasic: React.FC<NewscastProps> = ({
           transform: `translateY(${headerTranslateY}px)`,
         }}
       >
-        <span style={{display: 'block', whiteSpace: 'nowrap'}}>
+        <span style={{display: 'block', whiteSpace: 'nowrap', fontSize: topFontSize}}>
           {headerTop}
         </span>
         <span
@@ -165,7 +179,7 @@ export const NewscastBasic: React.FC<NewscastProps> = ({
             display: 'block',
             whiteSpace: 'nowrap',
             marginTop: 8,
-            fontSize: 70,
+            fontSize: bottomFontSize,
           }}
         >
           {headerBottom}
