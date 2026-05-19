@@ -27,8 +27,48 @@ import {
 } from 'remotion';
 
 const headerStyles = ['banner-flat', 'banner-skewed', 'hero-overlay'] as const;
-const photoTreatments = ['full-bleed', 'banded', 'blur-bg'] as const;
+const photoTreatments = ['full-bleed', 'banded', 'blur-bg', 'polaroid-tilt', 'cutout-float'] as const;
 const bodyStyles = ['paragraph', 'quote', 'stat-hero'] as const;
+const motionPresets = ['subtle', 'dramatic', 'sport', 'news', 'cinematic'] as const;
+const typographies = ['default', 'authoritative', 'tabloid', 'editorial', 'tech', 'sport-bold', 'cinematic-serif'] as const;
+
+// Font pairs — name → CSS font-family stack. Headless Chromium will use
+// system fallbacks if the named font isn't installed; for production
+// fidelity, package the fonts via @font-face in remotion/public/ later.
+type FontPair = {headline: string; body: string};
+const FONT_PAIRS: Record<string, FontPair> = {
+  'default':         {headline: "'Inter', sans-serif",          body: "'Inter', sans-serif"},
+  'authoritative':   {headline: "'Oswald', Impact, sans-serif", body: "'Inter', sans-serif"},
+  'tabloid':         {headline: "'Anton', Impact, sans-serif",  body: "'Roboto', sans-serif"},
+  'editorial':       {headline: "'Playfair Display', Georgia, serif", body: "'Lora', Georgia, serif"},
+  'tech':            {headline: "'Outfit', sans-serif",         body: "'JetBrains Mono', monospace"},
+  'sport-bold':      {headline: "'Bebas Neue', Impact, sans-serif", body: "'Inter', sans-serif"},
+  'cinematic-serif': {headline: "'Cinzel', Georgia, serif",     body: "'Source Sans 3', sans-serif"},
+};
+
+// Motion preset — entrance speed + spring physics + delays.
+type MotionPreset = {
+  headerStiffness: number; headerDamping: number; headerDurationS: number;
+  photoDelayS: number; photoDurationS: number;
+  bodyDelayS: number; bodyDurationS: number;
+};
+const MOTION_PRESETS: Record<string, MotionPreset> = {
+  subtle:    {headerStiffness: 110, headerDamping: 200, headerDurationS: 0.6,
+              photoDelayS: 0.15, photoDurationS: 0.5,
+              bodyDelayS: 0.3, bodyDurationS: 0.6},
+  dramatic:  {headerStiffness: 70,  headerDamping: 150, headerDurationS: 0.8,
+              photoDelayS: 0.25, photoDurationS: 0.6,
+              bodyDelayS: 0.5, bodyDurationS: 0.8},
+  sport:     {headerStiffness: 280, headerDamping: 220, headerDurationS: 0.35,
+              photoDelayS: 0.1, photoDurationS: 0.35,
+              bodyDelayS: 0.2, bodyDurationS: 0.45},
+  news:      {headerStiffness: 350, headerDamping: 250, headerDurationS: 0.25,
+              photoDelayS: 0.05, photoDurationS: 0.3,
+              bodyDelayS: 0.15, bodyDurationS: 0.35},
+  cinematic: {headerStiffness: 50,  headerDamping: 140, headerDurationS: 1.2,
+              photoDelayS: 0.3, photoDurationS: 0.9,
+              bodyDelayS: 0.7, bodyDurationS: 1.0},
+};
 
 export const adaptiveSchema = z.object({
   headerTop: z.string().min(1).max(60),
@@ -62,11 +102,15 @@ export const adaptiveSchema = z.object({
       headerStyle: z.enum(headerStyles).default('banner-flat'),
       photoTreatment: z.enum(photoTreatments).default('full-bleed'),
       bodyStyle: z.enum(bodyStyles).default('paragraph'),
+      motionPreset: z.enum(motionPresets).default('subtle'),
+      typography: z.enum(typographies).default('default'),
     })
     .default({
       headerStyle: 'banner-flat',
       photoTreatment: 'full-bleed',
       bodyStyle: 'paragraph',
+      motionPreset: 'subtle',
+      typography: 'default',
     }),
 });
 
@@ -98,6 +142,8 @@ export const ADAPTIVE_DEFAULTS: AdaptiveProps = {
     headerStyle: 'banner-flat',
     photoTreatment: 'full-bleed',
     bodyStyle: 'paragraph',
+    motionPreset: 'subtle',
+    typography: 'default',
   },
 };
 
@@ -118,9 +164,10 @@ interface HeaderRenderProps {
   uiBreaking: string;
   colors: Colors;
   entrance: number;  // spring 0..1
+  fonts?: FontPair;
 }
 
-function HeaderBannerFlat({headerTop, headerBottom, colors, entrance, uiBreaking}: HeaderRenderProps) {
+function HeaderBannerFlat({headerTop, headerBottom, colors, entrance, uiBreaking, fonts}: HeaderRenderProps) {
   const sizes = headerFontSizes(headerTop.length, headerBottom.length);
   const translate = interpolate(entrance, [0, 1], [-40, 0]);
   return (
@@ -131,6 +178,7 @@ function HeaderBannerFlat({headerTop, headerBottom, colors, entrance, uiBreaking
           background: `linear-gradient(90deg, ${colors.primary}, ${shiftLighter(colors.primary)})`,
           padding: '78px 60px 44px',
           textAlign: 'center',
+          fontFamily: fonts?.headline,
           fontWeight: 900,
           lineHeight: 1.02,
           letterSpacing: 0.5,
@@ -149,7 +197,7 @@ function HeaderBannerFlat({headerTop, headerBottom, colors, entrance, uiBreaking
   );
 }
 
-function HeaderBannerSkewed({headerTop, headerBottom, colors, entrance, uiBreaking}: HeaderRenderProps) {
+function HeaderBannerSkewed({headerTop, headerBottom, colors, entrance, uiBreaking, fonts}: HeaderRenderProps) {
   const sizes = {
     top: headerTop.length <= 10 ? 150 : headerTop.length <= 14 ? 120 : headerTop.length <= 20 ? 95 : 75,
     bottom: headerBottom.length <= 16 ? 56 : headerBottom.length <= 22 ? 46 : 38,
@@ -163,7 +211,7 @@ function HeaderBannerSkewed({headerTop, headerBottom, colors, entrance, uiBreaki
           background: `linear-gradient(135deg, ${colors.primary}, ${colors.bgGrad2})`,
           padding: '50px 40px 40px',
           textAlign: 'center',
-          fontFamily: "'Oswald', Impact, sans-serif",
+          fontFamily: fonts?.headline || "'Oswald', Impact, sans-serif",
           color: colors.accent,
           borderBottom: `8px solid ${colors.accent}`,
           opacity: entrance,
@@ -200,7 +248,7 @@ function HeaderBannerSkewed({headerTop, headerBottom, colors, entrance, uiBreaki
   );
 }
 
-function HeaderHeroOverlay({headerTop, headerBottom, colors, entrance, uiBreaking}: HeaderRenderProps) {
+function HeaderHeroOverlay({headerTop, headerBottom, colors, entrance, uiBreaking, fonts}: HeaderRenderProps) {
   // No background panel — headline sits ON the photo. Tight chip + bold text.
   const sizes = headerFontSizes(headerTop.length, headerBottom.length);
   return (
@@ -213,6 +261,7 @@ function HeaderHeroOverlay({headerTop, headerBottom, colors, entrance, uiBreakin
           left: 40,
           right: 40,
           textAlign: 'left',
+          fontFamily: fonts?.headline,
           fontWeight: 900,
           letterSpacing: 0.4,
           color: colors.accent,
@@ -430,6 +479,176 @@ function PhotoBlurBg({bgImageUrl, photoOverlay, category, colors}: PhotoRenderPr
   );
 }
 
+function PhotoPolaroidTilt({bgImageUrl, photoOverlay, category, colors, entrance}: PhotoRenderProps) {
+  // Tilted polaroid card centered in the photo band — nostalgic / magazine feel.
+  const tilt = interpolate(entrance, [0, 1], [-12, -5]);
+  const scale = interpolate(entrance, [0, 1], [0.85, 1]);
+  return (
+    <div
+      style={{
+        position: 'relative',
+        height: 640,
+        background: `linear-gradient(135deg, ${colors.bgGrad1}, ${colors.bgGrad2})`,
+        overflow: 'hidden',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      {/* Polaroid card */}
+      <div
+        style={{
+          width: 600, height: 520,
+          background: '#f5f1e6',
+          padding: '18px 18px 70px',
+          boxShadow: '0 12px 40px rgba(0,0,0,.55)',
+          transform: `rotate(${tilt}deg) scale(${scale})`,
+          opacity: entrance,
+        }}
+      >
+        {bgImageUrl ? (
+          <div
+            style={{
+              width: '100%', height: '100%',
+              backgroundImage: `url(${bgImageUrl})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              filter: 'saturate(0.85) contrast(1.05)',
+            }}
+          />
+        ) : (
+          <div style={{
+            width: '100%', height: '100%',
+            background: `linear-gradient(135deg, ${colors.bgGrad1}, ${colors.bgGrad2})`,
+          }} />
+        )}
+        {photoOverlay && (
+          <div
+            style={{
+              position: 'absolute',
+              bottom: 12,
+              left: 0,
+              right: 0,
+              fontFamily: "'Caveat', 'Brush Script MT', cursive",
+              fontSize: 36,
+              color: '#1a1a1a',
+              textAlign: 'center',
+              padding: '0 18px',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            {photoOverlay}
+          </div>
+        )}
+      </div>
+      {category && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 24,
+            left: 24,
+            background: 'rgba(0,0,0,.78)',
+            color: colors.accent,
+            fontSize: 26,
+            fontWeight: 700,
+            padding: '6px 14px',
+            letterSpacing: 1,
+          }}
+        >
+          {category}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PhotoCutoutFloat({bgImageUrl, photoOverlay, category, colors, entrance}: PhotoRenderProps) {
+  // Subject "cutout" floating over flat color — modern infographic feel.
+  // Note: real bg-removal would happen upstream; here we just render the
+  // image without a frame, letting whatever has a transparent or trimmed
+  // bg shine through. For typical jpgs, full image still shown but rounded.
+  const float = interpolate(entrance, [0, 1], [25, 0]);
+  return (
+    <div
+      style={{
+        position: 'relative',
+        height: 640,
+        background: colors.accent,
+        overflow: 'hidden',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      {/* Subtle dot pattern */}
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          backgroundImage: `radial-gradient(${colors.bgGrad2} 1px, transparent 1.5px)`,
+          backgroundSize: '24px 24px',
+          opacity: 0.18,
+        }}
+      />
+      {bgImageUrl && (
+        <div
+          style={{
+            position: 'relative',
+            width: 560, height: 560,
+            borderRadius: '50%',
+            backgroundImage: `url(${bgImageUrl})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center top',
+            transform: `translateY(${float}px)`,
+            opacity: entrance,
+            boxShadow: `0 20px 50px rgba(0,0,0,.4)`,
+            border: `8px solid ${colors.bgGrad1}`,
+          }}
+        />
+      )}
+      {category && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 28,
+            left: 28,
+            background: colors.bgGrad1,
+            color: '#fff',
+            fontSize: 26,
+            fontWeight: 800,
+            padding: '8px 16px',
+            letterSpacing: 2,
+            opacity: entrance,
+          }}
+        >
+          {category}
+        </div>
+      )}
+      {photoOverlay && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 30,
+            left: 30,
+            right: 30,
+            background: colors.bgGrad1,
+            color: colors.accent,
+            fontSize: 34,
+            fontWeight: 900,
+            padding: '12px 18px',
+            textAlign: 'center',
+            opacity: entrance,
+          }}
+        >
+          {photoOverlay}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Body sub-renderers ────────────────────────────────────────────────────
 
 interface BodyRenderProps {
@@ -579,6 +798,24 @@ function BodyStatHero({bodyParagraph, colors, entrance, frame, fps}: BodyRenderP
 
 // ─── Shared helpers ────────────────────────────────────────────────────────
 
+function buildGoogleFontsHref(typography: string): string | null {
+  // Build a Google Fonts CSS URL for the chosen pairing. Returning null
+  // when typography === 'default' lets us skip the network roundtrip in
+  // the common case.
+  if (typography === 'default') return null;
+  const familiesByPairing: Record<string, string> = {
+    authoritative:    'Oswald:wght@500;700&family=Inter:wght@400;600',
+    tabloid:          'Anton&family=Roboto:wght@400;700',
+    editorial:        'Playfair+Display:wght@700;900&family=Lora:wght@400;500',
+    tech:             'Outfit:wght@600;900&family=JetBrains+Mono:wght@400;600',
+    'sport-bold':     'Bebas+Neue&family=Inter:wght@400;800',
+    'cinematic-serif': 'Cinzel:wght@700;900&family=Source+Sans+3:wght@400;500',
+  };
+  const fams = familiesByPairing[typography];
+  if (!fams) return null;
+  return `https://fonts.googleapis.com/css2?family=${fams}&display=swap`;
+}
+
 function shiftLighter(hex: string): string {
   // Subtle horizontal-gradient endpoint — same trick as NewscastBasic.
   const m = hex.replace('#', '');
@@ -645,20 +882,23 @@ export const Adaptive: React.FC<AdaptiveProps> = ({
   const frame = useCurrentFrame();
   const {fps, durationInFrames} = useVideoConfig();
 
+  const motion = MOTION_PRESETS[dimensions.motionPreset] || MOTION_PRESETS.subtle;
+  const fonts = FONT_PAIRS[dimensions.typography] || FONT_PAIRS.default;
+
   const headerEntrance = spring({
     frame, fps,
-    config: {damping: 200, stiffness: 220},
-    durationInFrames: Math.round(fps * 0.4),
+    config: {damping: motion.headerDamping, stiffness: motion.headerStiffness},
+    durationInFrames: Math.round(fps * motion.headerDurationS),
   });
   const photoEntrance = spring({
-    frame: frame - Math.round(fps * 0.15), fps,
-    config: {damping: 200, stiffness: 180},
-    durationInFrames: Math.round(fps * 0.5),
+    frame: frame - Math.round(fps * motion.photoDelayS), fps,
+    config: {damping: motion.headerDamping, stiffness: motion.headerStiffness * 0.82},
+    durationInFrames: Math.round(fps * motion.photoDurationS),
   });
   const bodyEntrance = spring({
-    frame: frame - Math.round(fps * 0.3), fps,
-    config: {damping: 200, stiffness: 180},
-    durationInFrames: Math.round(fps * 0.6),
+    frame: frame - Math.round(fps * motion.bodyDelayS), fps,
+    config: {damping: motion.headerDamping, stiffness: motion.headerStiffness * 0.82},
+    durationInFrames: Math.round(fps * motion.bodyDurationS),
   });
 
   const progress = interpolate(frame, [0, durationInFrames], [0, 100], {
@@ -679,33 +919,44 @@ export const Adaptive: React.FC<AdaptiveProps> = ({
   // hero-overlay header sits ON the photo — render photo first, then header on top
   const heroOverlayMode = dimensions.headerStyle === 'hero-overlay';
 
+  // Google Fonts URL for the selected typography pair. Headless Chromium
+  // fetches at render time; first frame may use fallback while font loads.
+  // For production fidelity bundle the fonts; this is the lightweight path.
+  const googleFontsHref = buildGoogleFontsHref(dimensions.typography);
+
   return (
     <AbsoluteFill
       style={{
         background: `linear-gradient(180deg, ${colors.bgGrad1}, ${colors.bgGrad2})`,
-        fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+        fontFamily: fonts.body,
         color: colors.textMain,
         display: 'flex',
         flexDirection: 'column',
       }}
     >
+      {googleFontsHref && (
+        <style>{`@import url("${googleFontsHref}");`}</style>
+      )}
+
       {/* When blur-bg is selected, the image fills the entire frame underneath everything */}
       {dimensions.photoTreatment === 'blur-bg' && <PhotoBlurBg {...photoCommon} />}
 
       {/* Order: header → photo → body — unless hero-overlay (photo first, header floats over) */}
       {!heroOverlayMode && (() => {
-        if (dimensions.headerStyle === 'banner-flat')   return <HeaderBannerFlat {...headerCommon} />;
-        if (dimensions.headerStyle === 'banner-skewed') return <HeaderBannerSkewed {...headerCommon} />;
+        if (dimensions.headerStyle === 'banner-flat')   return <HeaderBannerFlat {...headerCommon} fonts={fonts} />;
+        if (dimensions.headerStyle === 'banner-skewed') return <HeaderBannerSkewed {...headerCommon} fonts={fonts} />;
         return null;
       })()}
 
       {dimensions.photoTreatment !== 'blur-bg' && (() => {
-        if (dimensions.photoTreatment === 'full-bleed') return <PhotoFullBleed {...photoCommon} />;
-        if (dimensions.photoTreatment === 'banded')     return <PhotoBanded {...photoCommon} />;
+        if (dimensions.photoTreatment === 'full-bleed')    return <PhotoFullBleed {...photoCommon} />;
+        if (dimensions.photoTreatment === 'banded')        return <PhotoBanded {...photoCommon} />;
+        if (dimensions.photoTreatment === 'polaroid-tilt') return <PhotoPolaroidTilt {...photoCommon} />;
+        if (dimensions.photoTreatment === 'cutout-float')  return <PhotoCutoutFloat {...photoCommon} />;
         return null;
       })()}
 
-      {heroOverlayMode && <HeaderHeroOverlay {...headerCommon} />}
+      {heroOverlayMode && <HeaderHeroOverlay {...headerCommon} fonts={fonts} />}
 
       {(() => {
         if (dimensions.bodyStyle === 'paragraph') return <BodyParagraph {...bodyCommon} />;

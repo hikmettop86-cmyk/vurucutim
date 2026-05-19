@@ -87,11 +87,17 @@ _AVAILABLE_TEMPLATES = {"newscast-basic", "stadium-basic", "stat-hero",
 
 # Adaptive template dimension axes — must match adaptiveSchema in
 # remotion/src/templates/Adaptive.tsx. Values used to validate channel YAML
-# entries and populate the channel-edit UI dropdowns.
+# entries and populate the channel-edit UI dropdowns. Phase 6b: motionPreset
+# + typography + 2 new photoTreatment options (polaroid-tilt, cutout-float).
+# 3×5×3×5×7 = 1575 visual combinations from a single .tsx.
 ADAPTIVE_DIMENSION_OPTIONS: dict[str, tuple[str, ...]] = {
     "headerStyle": ("banner-flat", "banner-skewed", "hero-overlay"),
-    "photoTreatment": ("full-bleed", "banded", "blur-bg"),
+    "photoTreatment": ("full-bleed", "banded", "blur-bg",
+                       "polaroid-tilt", "cutout-float"),
     "bodyStyle": ("paragraph", "quote", "stat-hero"),
+    "motionPreset": ("subtle", "dramatic", "sport", "news", "cinematic"),
+    "typography": ("default", "authoritative", "tabloid", "editorial",
+                   "tech", "sport-bold", "cinematic-serif"),
 }
 
 _REMOTION_PORT = 3210   # avoid colliding with default 3000

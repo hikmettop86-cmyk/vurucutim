@@ -95,6 +95,8 @@
         dimHeaderStyle: "{{ (c.remotion_dimensions or {}).get('headerStyle', '') }}",
         dimPhotoTreatment: "{{ (c.remotion_dimensions or {}).get('photoTreatment', '') }}",
         dimBodyStyle: "{{ (c.remotion_dimensions or {}).get('bodyStyle', '') }}",
+        dimMotionPreset: "{{ (c.remotion_dimensions or {}).get('motionPreset', '') }}",
+        dimTypography: "{{ (c.remotion_dimensions or {}).get('typography', '') }}",
         remotionPreviewBusy: false,
         remotionPreviewKey: 0,
         get effectiveRemotionTemplate() {
@@ -141,7 +143,7 @@
                trigger x-bind:src updates reliably across browsers). #}
             <template x-if="currentTab === 'remotion'">
               <div class="absolute inset-0">
-                <img x-bind:src="`/preview/{{ c.slug }}/remotion-frame?primary=${encodeURIComponent(primary)}&accent=${encodeURIComponent(accent)}&bg_grad_1=${encodeURIComponent(bgGrad1)}&bg_grad_2=${encodeURIComponent(bgGrad2)}&remotion_template=${encodeURIComponent(remotionTemplate || '{{ c.resolved_remotion_template }}')}&dim_headerStyle=${encodeURIComponent(dimHeaderStyle)}&dim_photoTreatment=${encodeURIComponent(dimPhotoTreatment)}&dim_bodyStyle=${encodeURIComponent(dimBodyStyle)}`"
+                <img x-bind:src="`/preview/{{ c.slug }}/remotion-frame?primary=${encodeURIComponent(primary)}&accent=${encodeURIComponent(accent)}&bg_grad_1=${encodeURIComponent(bgGrad1)}&bg_grad_2=${encodeURIComponent(bgGrad2)}&remotion_template=${encodeURIComponent(remotionTemplate || '{{ c.resolved_remotion_template }}')}&dim_headerStyle=${encodeURIComponent(dimHeaderStyle)}&dim_photoTreatment=${encodeURIComponent(dimPhotoTreatment)}&dim_bodyStyle=${encodeURIComponent(dimBodyStyle)}&dim_motionPreset=${encodeURIComponent(dimMotionPreset)}&dim_typography=${encodeURIComponent(dimTypography)}`"
                      @load="remotionPreviewBusy = false"
                      @error="remotionPreviewBusy = false"
                      @loadstart="remotionPreviewBusy = true"
@@ -399,7 +401,69 @@
       </div>
     </div>
 
-    </div>{# end TAB: Genel (partial — Son calishmalar appended below) #}
+    {# ── Card: Son çalışmalar (closed by default) ─────────────────────── #}
+    <div x-data="{ open: false }" class="bg-white border border-claude-border rounded-xl shadow-soft mb-4">
+      <button type="button" @click="open = !open"
+              class="w-full flex items-center justify-between px-5 py-3 hover:bg-claude-surface/40 transition-colors text-left">
+        <h2 class="font-serif text-base font-semibold flex items-center gap-2">
+          <span class="text-lg opacity-70">⏱</span> Son çalışmalar
+        </h2>
+        <span x-text="open ? '−' : '+'" class="text-claude-muted text-xl leading-none w-5 text-center"></span>
+      </button>
+      <div x-show="open" class="px-5 pb-5 pt-3 border-t border-claude-border/40">
+        {% if runs %}
+        <table class="w-full text-xs border border-claude-border rounded-lg overflow-hidden">
+          <thead class="bg-claude-surface">
+            <tr class="text-left">
+              <th class="p-2">Tarih</th>
+              <th class="p-2">Trigger</th>
+              <th class="p-2">Durum</th>
+              <th class="p-2">Süre</th>
+              <th class="p-2"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in runs %}
+            <tr class="border-t border-claude-border">
+              <td class="p-2 font-mono">{{ r.started_at.strftime('%d %b %H:%M') }}</td>
+              <td class="p-2 text-claude-muted">{{ r.trigger }}</td>
+              <td class="p-2">
+                {% if r.status == 'success' %}
+                  <span class="text-claude-success">✓ {{ r.status }}</span>
+                {% elif r.status == 'failed' %}
+                  <span class="text-claude-error">✗ {{ r.status }}</span>
+                {% elif r.status == 'cancelled' %}
+                  <span class="text-claude-muted">⊘ cancelled</span>
+                {% elif r.status == 'running' or r.status is none %}
+                  <span class="text-yellow-600">● running</span>
+                {% else %}
+                  <span class="text-claude-muted">{{ r.status or '—' }}</span>
+                {% endif %}
+              </td>
+              <td class="p-2 text-claude-muted">
+                {% if r.duration_seconds is not none %}
+                  {{ r.duration_seconds }}s
+                {% else %}—{% endif %}
+              </td>
+              <td class="p-2 text-right">
+                {% if r.status == 'running' or r.status is none %}
+                  <form method="POST" action="/runs/{{ r.id }}/cancel" class="inline"
+                        onsubmit="return confirm('Run #{{ r.id }} iptal edilsin mi?')">
+                    <button class="text-claude-error hover:underline">İptal</button>
+                  </form>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+          <p class="text-sm text-claude-muted pt-1">Henüz run yok.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    </div>{# end TAB: Genel #}
 
     {# ── TAB: YouTube ───────────────────────────────────────────────── #}
     <div x-show="currentTab === 'youtube'">
@@ -644,12 +708,7 @@
       </div>
     </div>
 
-    </div>{# end TAB: YouTube #}
-
-    {# ── TAB: Sistem ─────────────────────────────────────────────────── #}
-    <div x-show="currentTab === 'sistem'">
-
-    {# ── Card: CTA (open by default — siklikla acilip kapatilan ayar) ── #}
+    {# ── Card: CTA (open by default — youtube tab içinde mantıklı yer) ── #}
     <div x-data="{ open: true }" class="bg-white border border-claude-border rounded-xl shadow-soft mb-4">
       <button type="button" @click="open = !open"
               class="w-full flex items-center justify-between px-5 py-3 hover:bg-claude-surface/40 transition-colors text-left">
@@ -698,12 +757,34 @@
       </div>
     </div>
 
-    </div>{# end TAB: Sistem #}
+    </div>{# end TAB: YouTube #}
 
-    {% if c.dna %}
-
-    {# ── TAB: DNA ────────────────────────────────────────────────────── #}
+    {# ── TAB: DNA / Renkler ──────────────────────────────────────────── #}
     <div x-show="currentTab === 'dna'">
+
+    {% if not c.dna %}
+    {# Fallback: channel has no DNA yet — show a helpful card with action #}
+    <div class="bg-white border border-claude-border rounded-xl shadow-soft mb-4 p-5 text-center">
+      <h2 class="font-serif text-base font-semibold mb-2">
+        <span class="opacity-70 mr-1">🧬</span> DNA henüz oluşturulmamış
+      </h2>
+      <p class="text-sm text-claude-muted mb-4">
+        Bu kanal için Claude (Opus) ile özel palet + font + ton + arketip seti üret.
+        ~30-60 saniye sürer. Sonradan elle ince ayar yapabilirsin.
+      </p>
+      <form method="POST" action="/channels/{{ c.slug }}/regenerate-dna" class="inline"
+            onsubmit="return confirm('DNA Opus ile üretilsin mi? ~30-60s sürer.')">
+        <button type="submit"
+                class="bg-claude-accent hover:bg-claude-accent-hover text-white px-5 py-2 rounded-lg text-sm font-semibold">
+          ✨ DNA Oluştur
+        </button>
+      </form>
+      <p class="text-xs text-claude-muted mt-3">
+        DNA ayarlı değilken bile <strong>Genel</strong> tab'ından temel renkleri ve
+        <strong>Remotion</strong> tab'ından şablonu kullanabilirsin.
+      </p>
+    </div>
+    {% else %}
 
     {# ── Card: DNA — Renkler & Tipografi (open by default) ───────────── #}
     <div x-data="{ open: true }" class="bg-white border border-claude-border rounded-xl shadow-soft mb-4">
@@ -1015,53 +1096,9 @@
       </div>
     </div>
 
+    {% endif %}{# end if c.dna / else fallback #}
+
     </div>{# end TAB: DNA #}
-
-    {# ── Card: Generator Ayarları (closed by default, conditional) ────── #}
-    {% if c.content_source == 'generator' %}
-    <div x-data="{ open: false }" class="bg-white border border-claude-border rounded-xl shadow-soft mb-4">
-      <button type="button" @click="open = !open"
-              class="w-full flex items-center justify-between px-5 py-3 hover:bg-claude-surface/40 transition-colors text-left">
-        <h2 class="font-serif text-base font-semibold flex items-center gap-2">
-          <span class="text-lg opacity-70">🧪</span> Generator Ayarları
-        </h2>
-        <span x-text="open ? '−' : '+'" class="text-claude-muted text-xl leading-none w-5 text-center"></span>
-      </button>
-      <div x-show="open" class="px-5 pb-5 pt-3 space-y-4 border-t border-claude-border/40">
-
-        <label class="block">
-          <span class="text-xs text-claude-muted uppercase">Konu (en az 10 karakter)</span>
-          <textarea name="generator_topic" rows="3"
-                    class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">{{ c.generator.topic }}</textarea>
-        </label>
-
-        <div class="grid grid-cols-3 gap-3">
-          <label class="block">
-            <span class="text-xs text-claude-muted uppercase">Forbidden lookback</span>
-            <input type="number" name="generator_forbidden_lookback"
-                   value="{{ c.generator.forbidden_lookback }}" min="0" max="500"
-                   class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
-          </label>
-          <label class="block">
-            <span class="text-xs text-claude-muted uppercase">Max retries</span>
-            <input type="number" name="generator_max_retries"
-                   value="{{ c.generator.max_retries }}" min="1" max="10"
-                   class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
-          </label>
-          <label class="block">
-            <span class="text-xs text-claude-muted uppercase">Fuzzy threshold</span>
-            <input type="number" name="generator_fuzzy_threshold" step="0.05" min="0" max="1"
-                   value="{{ c.generator.fuzzy_threshold if c.generator.fuzzy_threshold is not none else '' }}"
-                   placeholder="boş = settings"
-                   class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
-          </label>
-        </div>
-
-      </div>
-    </div>
-    {% endif %}
-
-    {% endif %}{# end if c.dna #}
 
     {# ── TAB: Icerik ─────────────────────────────────────────────────── #}
     <div x-show="currentTab === 'icerik'">
@@ -1141,6 +1178,50 @@
     </div>
 
     {# Render motoru kartı buradan kaldırıldı — Remotion tab'ine taşındı (Phase 6a) #}
+
+    {# ── Card: Generator Ayarları (closed by default, conditional) ────── #}
+    {% if c.content_source == 'generator' %}
+    <div x-data="{ open: false }" class="bg-white border border-claude-border rounded-xl shadow-soft mb-4 mt-4">
+      <button type="button" @click="open = !open"
+              class="w-full flex items-center justify-between px-5 py-3 hover:bg-claude-surface/40 transition-colors text-left">
+        <h2 class="font-serif text-base font-semibold flex items-center gap-2">
+          <span class="text-lg opacity-70">🧪</span> Generator Ayarları
+        </h2>
+        <span x-text="open ? '−' : '+'" class="text-claude-muted text-xl leading-none w-5 text-center"></span>
+      </button>
+      <div x-show="open" class="px-5 pb-5 pt-3 space-y-4 border-t border-claude-border/40">
+
+        <label class="block">
+          <span class="text-xs text-claude-muted uppercase">Konu (en az 10 karakter)</span>
+          <textarea name="generator_topic" rows="3"
+                    class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">{{ c.generator.topic }}</textarea>
+        </label>
+
+        <div class="grid grid-cols-3 gap-3">
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase">Forbidden lookback</span>
+            <input type="number" name="generator_forbidden_lookback"
+                   value="{{ c.generator.forbidden_lookback }}" min="0" max="500"
+                   class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
+          </label>
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase">Max retries</span>
+            <input type="number" name="generator_max_retries"
+                   value="{{ c.generator.max_retries }}" min="1" max="10"
+                   class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
+          </label>
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase">Fuzzy threshold</span>
+            <input type="number" name="generator_fuzzy_threshold" step="0.05" min="0" max="1"
+                   value="{{ c.generator.fuzzy_threshold if c.generator.fuzzy_threshold is not none else '' }}"
+                   placeholder="boş = settings"
+                   class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
+          </label>
+        </div>
+
+      </div>
+    </div>
+    {% endif %}
 
     {# ── Card: Arka plan videosu (Pexels) ───────────────────────────────── #}
     <div class="bg-claude-surface border border-claude-border rounded-lg p-4 mt-4">
@@ -1241,15 +1322,15 @@
         <div x-show="effectiveRemotionTemplate === 'adaptive'"
              class="pt-3 border-t border-claude-border">
           <div class="text-xs text-claude-muted uppercase mb-2">Adaptive boyutlar</div>
-          <div class="grid grid-cols-3 gap-3">
+          <div class="grid grid-cols-3 gap-3 mb-3">
             <label class="text-xs">
               <span class="block text-claude-muted mb-1">Header</span>
               <select name="adaptive_headerStyle" x-model="dimHeaderStyle"
                       class="bg-claude-surface-alt border border-claude-border px-2 py-1 rounded w-full text-sm text-claude-text">
                 <option value="">(varsayılan: banner-flat)</option>
-                <option value="banner-flat">banner-flat</option>
-                <option value="banner-skewed">banner-skewed</option>
-                <option value="hero-overlay">hero-overlay</option>
+                <option value="banner-flat">banner-flat (kırmızı bant)</option>
+                <option value="banner-skewed">banner-skewed (eğri spor)</option>
+                <option value="hero-overlay">hero-overlay (foto üstü)</option>
               </select>
             </label>
             <label class="text-xs">
@@ -1257,9 +1338,11 @@
               <select name="adaptive_photoTreatment" x-model="dimPhotoTreatment"
                       class="bg-claude-surface-alt border border-claude-border px-2 py-1 rounded w-full text-sm text-claude-text">
                 <option value="">(varsayılan: full-bleed)</option>
-                <option value="full-bleed">full-bleed</option>
-                <option value="banded">banded</option>
-                <option value="blur-bg">blur-bg</option>
+                <option value="full-bleed">full-bleed (tam)</option>
+                <option value="banded">banded (şerit)</option>
+                <option value="blur-bg">blur-bg (buğulu arka)</option>
+                <option value="polaroid-tilt">polaroid-tilt (eğri kart)</option>
+                <option value="cutout-float">cutout-float (yuvarlak)</option>
               </select>
             </label>
             <label class="text-xs">
@@ -1267,14 +1350,42 @@
               <select name="adaptive_bodyStyle" x-model="dimBodyStyle"
                       class="bg-claude-surface-alt border border-claude-border px-2 py-1 rounded w-full text-sm text-claude-text">
                 <option value="">(varsayılan: paragraph)</option>
-                <option value="paragraph">paragraph</option>
-                <option value="quote">quote</option>
-                <option value="stat-hero">stat-hero</option>
+                <option value="paragraph">paragraph (klasik)</option>
+                <option value="quote">quote (alıntı)</option>
+                <option value="stat-hero">stat-hero (büyük sayı)</option>
+              </select>
+            </label>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="text-xs">
+              <span class="block text-claude-muted mb-1">Motion</span>
+              <select name="adaptive_motionPreset" x-model="dimMotionPreset"
+                      class="bg-claude-surface-alt border border-claude-border px-2 py-1 rounded w-full text-sm text-claude-text">
+                <option value="">(varsayılan: subtle)</option>
+                <option value="subtle">subtle (yumuşak)</option>
+                <option value="dramatic">dramatic (yavaş & büyük)</option>
+                <option value="sport">sport (hızlı & sert)</option>
+                <option value="news">news (anında)</option>
+                <option value="cinematic">cinematic (sinematik)</option>
+              </select>
+            </label>
+            <label class="text-xs">
+              <span class="block text-claude-muted mb-1">Tipografi</span>
+              <select name="adaptive_typography" x-model="dimTypography"
+                      class="bg-claude-surface-alt border border-claude-border px-2 py-1 rounded w-full text-sm text-claude-text">
+                <option value="">(varsayılan: Inter)</option>
+                <option value="authoritative">authoritative (Oswald + Inter)</option>
+                <option value="tabloid">tabloid (Anton + Roboto)</option>
+                <option value="editorial">editorial (Playfair + Lora)</option>
+                <option value="tech">tech (Outfit + JetBrains)</option>
+                <option value="sport-bold">sport-bold (Bebas + Inter)</option>
+                <option value="cinematic-serif">cinematic-serif (Cinzel + Source)</option>
               </select>
             </label>
           </div>
           <p class="text-xs text-claude-muted mt-3">
-            3×3×3 = 27 kombinasyon. Eksik akslar Zod default'una düşer.
+            3 × 5 × 3 × 5 × 7 = <strong>1575 kombinasyon</strong>. Eksik akslar Zod default'una düşer.
+            Tipografi seçince Google Fonts CSS otomatik yüklenir.
           </p>
         </div>
       </div>
@@ -1288,76 +1399,12 @@
 
     </div>{# end TAB: Remotion #}
 
-    <button type="submit" class="bg-claude-accent hover:bg-claude-accent-hover text-white px-4 py-2 rounded-lg font-semibold mt-2 w-full">
-      Kaydet
-    </button>
-
-    {# ── TAB: Genel (Son calishmalar section) ────────────────────────── #}
-    <div x-show="currentTab === 'genel'">
-
-    {# ── Card: Son çalışmalar (closed by default) ─────────────────────── #}
-    <div x-data="{ open: false }" class="bg-white border border-claude-border rounded-xl shadow-soft mb-4">
-      <button type="button" @click="open = !open"
-              class="w-full flex items-center justify-between px-5 py-3 hover:bg-claude-surface/40 transition-colors text-left">
-        <h2 class="font-serif text-base font-semibold flex items-center gap-2">
-          <span class="text-lg opacity-70">⏱</span> Son çalışmalar
-        </h2>
-        <span x-text="open ? '−' : '+'" class="text-claude-muted text-xl leading-none w-5 text-center"></span>
+    {# ── Sticky save bar — always visible at bottom of right column #}
+    <div class="sticky bottom-0 bg-claude-bg/95 backdrop-blur border-t border-claude-border pt-3 pb-3 mt-4 -mx-1 px-1 z-20">
+      <button type="submit" class="bg-claude-accent hover:bg-claude-accent-hover text-white px-4 py-2.5 rounded-lg font-semibold w-full shadow-soft">
+        💾 Kaydet
       </button>
-      <div x-show="open" class="px-5 pb-5 pt-3 border-t border-claude-border/40">
-        {% if runs %}
-        <table class="w-full text-xs border border-claude-border rounded-lg overflow-hidden">
-          <thead class="bg-claude-surface">
-            <tr class="text-left">
-              <th class="p-2">Tarih</th>
-              <th class="p-2">Trigger</th>
-              <th class="p-2">Durum</th>
-              <th class="p-2">Süre</th>
-              <th class="p-2"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for r in runs %}
-            <tr class="border-t border-claude-border">
-              <td class="p-2 font-mono">{{ r.started_at.strftime('%d %b %H:%M') }}</td>
-              <td class="p-2 text-claude-muted">{{ r.trigger }}</td>
-              <td class="p-2">
-                {% if r.status == 'success' %}
-                  <span class="text-claude-success">✓ {{ r.status }}</span>
-                {% elif r.status == 'failed' %}
-                  <span class="text-claude-error">✗ {{ r.status }}</span>
-                {% elif r.status == 'cancelled' %}
-                  <span class="text-claude-muted">⊘ cancelled</span>
-                {% elif r.status == 'running' or r.status is none %}
-                  <span class="text-yellow-600">● running</span>
-                {% else %}
-                  <span class="text-claude-muted">{{ r.status or '—' }}</span>
-                {% endif %}
-              </td>
-              <td class="p-2 text-claude-muted">
-                {% if r.duration_seconds is not none %}
-                  {{ r.duration_seconds }}s
-                {% else %}—{% endif %}
-              </td>
-              <td class="p-2 text-right">
-                {% if r.status == 'running' or r.status is none %}
-                  <form method="POST" action="/runs/{{ r.id }}/cancel" class="inline"
-                        onsubmit="return confirm('Run #{{ r.id }} iptal edilsin mi?')">
-                    <button class="text-claude-error hover:underline">İptal</button>
-                  </form>
-                {% endif %}
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-        {% else %}
-          <p class="text-sm text-claude-muted pt-1">Henüz run yok.</p>
-        {% endif %}
-      </div>
     </div>
-
-    </div>{# end TAB: Genel (Son calishmalar) #}
 
   </div>
 </form>

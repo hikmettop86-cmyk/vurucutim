@@ -132,6 +132,38 @@ def test_adaptive_dimension_options_match_zod_enum():
     assert "stat-hero" in ADAPTIVE_DIMENSION_OPTIONS["bodyStyle"]
 
 
+def test_adaptive_dimensions_phase_6b_axes_present():
+    """Phase 6b: motionPreset + typography axes registered. Also: 2 new
+    photoTreatment values (polaroid-tilt, cutout-float)."""
+    from short_bot.remotion_renderer import ADAPTIVE_DIMENSION_OPTIONS
+    # New axes
+    assert "motionPreset" in ADAPTIVE_DIMENSION_OPTIONS
+    assert "typography" in ADAPTIVE_DIMENSION_OPTIONS
+    # Motion options
+    motion = ADAPTIVE_DIMENSION_OPTIONS["motionPreset"]
+    for m in ("subtle", "dramatic", "sport", "news", "cinematic"):
+        assert m in motion, f"missing motion preset: {m}"
+    # Typography options
+    typo = ADAPTIVE_DIMENSION_OPTIONS["typography"]
+    for t in ("default", "authoritative", "tabloid", "editorial",
+              "tech", "sport-bold", "cinematic-serif"):
+        assert t in typo, f"missing typography pair: {t}"
+    # New photo treatments
+    photo = ADAPTIVE_DIMENSION_OPTIONS["photoTreatment"]
+    assert "polaroid-tilt" in photo
+    assert "cutout-float" in photo
+
+
+def test_adaptive_dimensions_total_combinations():
+    """Brief invariant — confirm we hit the advertised 1575 combination count.
+    If this drifts unexpectedly, dimension counts changed without intent."""
+    from short_bot.remotion_renderer import ADAPTIVE_DIMENSION_OPTIONS
+    total = 1
+    for opts in ADAPTIVE_DIMENSION_OPTIONS.values():
+        total *= len(opts)
+    assert total == 1575, f"expected 1575 combos, got {total}"
+
+
 def test_render_still_uses_remotion_still_command(tmp_path):
     """Phase 6a: snapshot path must call `remotion still` (not `render`)
     so we hit the optimized single-frame codepath."""
