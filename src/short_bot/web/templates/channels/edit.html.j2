@@ -136,10 +136,12 @@
                     class="absolute top-0 left-0 border-0"
                     style="width: 1080px; height: 1920px; transform: scale(0.333); transform-origin: top left;"></iframe>
 
-            {# Remotion still-frame preview — single JPG, refreshes on form change #}
+            {# Remotion still-frame preview — single JPG, refreshes on form change.
+               URL inline computed via template literal (Alpine getters don't always
+               trigger x-bind:src updates reliably across browsers). #}
             <template x-if="currentTab === 'remotion'">
               <div class="absolute inset-0">
-                <img x-bind:src="remotionPreviewUrl"
+                <img x-bind:src="`/preview/{{ c.slug }}/remotion-frame?primary=${encodeURIComponent(primary)}&accent=${encodeURIComponent(accent)}&bg_grad_1=${encodeURIComponent(bgGrad1)}&bg_grad_2=${encodeURIComponent(bgGrad2)}&remotion_template=${encodeURIComponent(remotionTemplate || '{{ c.resolved_remotion_template }}')}&dim_headerStyle=${encodeURIComponent(dimHeaderStyle)}&dim_photoTreatment=${encodeURIComponent(dimPhotoTreatment)}&dim_bodyStyle=${encodeURIComponent(dimBodyStyle)}`"
                      @load="remotionPreviewBusy = false"
                      @error="remotionPreviewBusy = false"
                      @loadstart="remotionPreviewBusy = true"
@@ -177,10 +179,9 @@
         <template x-for="tab in [
           {id: 'genel', label: 'Genel'},
           {id: 'icerik', label: 'Icerik'},
-          {id: 'dna', label: 'DNA (HTML)'},
+          {id: 'dna', label: 'DNA / Renkler'},
           {id: 'remotion', label: 'Remotion'},
           {id: 'youtube', label: 'YouTube'},
-          {id: 'sistem', label: 'Sistem'},
         ]" :key="tab.id">
           <button type="button"
                   @click="currentTab = tab.id; window.location.hash = tab.id"
@@ -1279,9 +1280,10 @@
       </div>
 
       {# Tip: how to use the live preview #}
-      <div class="bg-blue-900/20 border border-blue-700/40 text-blue-100 text-xs rounded-lg p-3 mt-4">
-        💡 Sol kolondaki önizleme her form değişikliğinde otomatik yeniden render eder
-        (~3s). Renkler "DNA" tabından değiştirilebilir, değişiklik anında bu sekmeye de yansır.
+      <div class="bg-blue-50 border border-blue-200 text-blue-900 text-xs rounded-lg p-3 mt-4 space-y-1">
+        <div>💡 Sol kolondaki önizleme her form değişikliğinde otomatik yeniden render eder (~3s).</div>
+        <div>🎨 <strong>"DNA / Renkler"</strong> tab'ındaki paletler hem HTML hem Remotion'a uygulanır
+            — orada renk değiştirip Remotion tab'ına dönerek anında görebilirsin.</div>
       </div>
 
     </div>{# end TAB: Remotion #}
