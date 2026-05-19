@@ -132,6 +132,59 @@ def test_adaptive_dimension_options_match_zod_enum():
     assert "stat-hero" in ADAPTIVE_DIMENSION_OPTIONS["bodyStyle"]
 
 
+def test_render_still_uses_remotion_still_command(tmp_path):
+    """Phase 6a: snapshot path must call `remotion still` (not `render`)
+    so we hit the optimized single-frame codepath."""
+    from short_bot.remotion_renderer import render_still
+    (tmp_path / "package.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "node_modules").mkdir()
+    out_path = tmp_path / "snap.jpg"
+    captured = {}
+
+    job = RemotionRenderJob(
+        template="adaptive", header_top="A", header_bottom="B",
+        photo_overlay="C", body_paragraph="D body", category="E",
+        handle="@h", duration_seconds=4,
+    )
+
+    def fake_run(cmd, **kw):
+        captured["cmd"] = cmd
+        out_path.write_bytes(b"\xff\xd8\xff" * 200)
+        return MagicMock(returncode=0, stderr="")
+
+    with patch("short_bot.remotion_renderer.subprocess.run", side_effect=fake_run):
+        render_still(job, out_path, remotion_root=tmp_path, frame=30, port=3220)
+    assert captured["cmd"][1:3] == ["remotion", "still"]
+    assert any(a == "--frame=30" for a in captured["cmd"])
+    assert any(a == "--port=3220" for a in captured["cmd"])
+
+
+def test_render_still_rejects_unknown_template(tmp_path):
+    from short_bot.remotion_renderer import render_still
+    job = RemotionRenderJob(
+        template="bogus-template", header_top="A", header_bottom="B",
+        photo_overlay="C", body_paragraph="D", category="E",
+        handle="@h", duration_seconds=4,
+    )
+    with pytest.raises(RemotionRenderError, match="unknown"):
+        render_still(job, tmp_path / "snap.jpg", remotion_root=tmp_path)
+
+
+def test_render_still_surfaces_subprocess_failure(tmp_path):
+    from short_bot.remotion_renderer import render_still
+    (tmp_path / "package.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "node_modules").mkdir()
+    job = RemotionRenderJob(
+        template="newscast-basic", header_top="A", header_bottom="B",
+        photo_overlay="C", body_paragraph="D body", category="E",
+        handle="@h", duration_seconds=4,
+    )
+    with patch("short_bot.remotion_renderer.subprocess.run",
+               return_value=MagicMock(returncode=2, stderr="explode")):
+        with pytest.raises(RemotionRenderError, match="exit 2"):
+            render_still(job, tmp_path / "snap.jpg", remotion_root=tmp_path)
+
+
 def test_render_job_from_pipeline_passes_dimensions():
     from short_bot.remotion_renderer import render_job_from_pipeline
 

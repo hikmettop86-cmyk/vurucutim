@@ -88,7 +88,30 @@
         ctaText: "{{ (c.cta_text or '')|e }}",
         ctaShowHandle: {{ 'true' if c.cta_show_handle else 'false' }},
         rssSourceDemo: "",
-        currentTab: window.location.hash.replace("#", "") || "genel"
+        currentTab: window.location.hash.replace("#", "") || "genel",
+        // ── Remotion tab state (Phase 6a) ──
+        rendererType: "{{ c.renderer }}",
+        remotionTemplate: "{{ c.remotion_template or '' }}",
+        dimHeaderStyle: "{{ (c.remotion_dimensions or {}).get(\"headerStyle\", \"\") }}",
+        dimPhotoTreatment: "{{ (c.remotion_dimensions or {}).get(\"photoTreatment\", \"\") }}",
+        dimBodyStyle: "{{ (c.remotion_dimensions or {}).get(\"bodyStyle\", \"\") }}",
+        remotionPreviewBusy: false,
+        remotionPreviewKey: 0,
+        get effectiveRemotionTemplate() {
+          return this.remotionTemplate || "{{ c.resolved_remotion_template }}";
+        },
+        get remotionPreviewUrl() {
+          const p = new URLSearchParams({
+            primary: this.primary, accent: this.accent,
+            bg_grad_1: this.bgGrad1, bg_grad_2: this.bgGrad2,
+            remotion_template: this.effectiveRemotionTemplate,
+            dim_headerStyle: this.dimHeaderStyle,
+            dim_photoTreatment: this.dimPhotoTreatment,
+            dim_bodyStyle: this.dimBodyStyle,
+            _k: this.remotionPreviewKey,
+          });
+          return `/preview/{{ c.slug }}/remotion-frame?${p.toString()}`;
+        }
       }'>
 
   {# ═══════════════════════════════════════════════════════════════════════
@@ -105,14 +128,38 @@
         <div class="p-5">
           <div class="relative bg-black rounded-lg overflow-hidden mx-auto"
                style="width: 100%; max-width: 360px; aspect-ratio: 9/16;">
-            <iframe x-bind:src="`/preview/{{ c.slug }}?archetype=${encodeURIComponent(archetype)}&primary=${encodeURIComponent(primary)}&accent=${encodeURIComponent(accent)}&font_headline=${encodeURIComponent(fontHeadline)}&font_body=${encodeURIComponent(fontBody)}&banner_shape=${encodeURIComponent(bannerShape)}&highlight_style=${encodeURIComponent(highlightStyle)}&chip_style=${encodeURIComponent(chipStyle)}&category_icon=${encodeURIComponent(categoryIcon)}&bg_grad_1=${encodeURIComponent(bgGrad1)}&bg_grad_2=${encodeURIComponent(bgGrad2)}&body_bg_1=${encodeURIComponent(bodyBg1)}&body_bg_2=${encodeURIComponent(bodyBg2)}&text_main=${encodeURIComponent(textMain)}&text_muted=${encodeURIComponent(textMuted)}&header_top_color=${encodeURIComponent(headerTopColor)}&header_bottom_color=${encodeURIComponent(headerBottomColor)}&cta_enabled=${ctaEnabled ? '1' : '0'}&cta_text=${encodeURIComponent(ctaText)}&cta_show_handle=${ctaShowHandle ? '1' : '0'}&rss_source=${encodeURIComponent(rssSourceDemo)}`"
+            {# HTML preview iframe — used everywhere except Remotion tab #}
+            <iframe x-show="currentTab !== 'remotion'"
+                    x-bind:src="`/preview/{{ c.slug }}?archetype=${encodeURIComponent(archetype)}&primary=${encodeURIComponent(primary)}&accent=${encodeURIComponent(accent)}&font_headline=${encodeURIComponent(fontHeadline)}&font_body=${encodeURIComponent(fontBody)}&banner_shape=${encodeURIComponent(bannerShape)}&highlight_style=${encodeURIComponent(highlightStyle)}&chip_style=${encodeURIComponent(chipStyle)}&category_icon=${encodeURIComponent(categoryIcon)}&bg_grad_1=${encodeURIComponent(bgGrad1)}&bg_grad_2=${encodeURIComponent(bgGrad2)}&body_bg_1=${encodeURIComponent(bodyBg1)}&body_bg_2=${encodeURIComponent(bodyBg2)}&text_main=${encodeURIComponent(textMain)}&text_muted=${encodeURIComponent(textMuted)}&header_top_color=${encodeURIComponent(headerTopColor)}&header_bottom_color=${encodeURIComponent(headerBottomColor)}&cta_enabled=${ctaEnabled ? '1' : '0'}&cta_text=${encodeURIComponent(ctaText)}&cta_show_handle=${ctaShowHandle ? '1' : '0'}&rss_source=${encodeURIComponent(rssSourceDemo)}`"
                     src="/preview/{{ c.slug }}"
                     scrolling="no"
                     class="absolute top-0 left-0 border-0"
                     style="width: 1080px; height: 1920px; transform: scale(0.333); transform-origin: top left;"></iframe>
+
+            {# Remotion still-frame preview — single JPG, refreshes on form change #}
+            <template x-if="currentTab === 'remotion'">
+              <div class="absolute inset-0">
+                <img x-bind:src="remotionPreviewUrl"
+                     @load="remotionPreviewBusy = false"
+                     @error="remotionPreviewBusy = false"
+                     @loadstart="remotionPreviewBusy = true"
+                     class="w-full h-full object-cover"
+                     alt="Remotion önizleme" />
+                <div x-show="remotionPreviewBusy"
+                     class="absolute inset-0 flex items-center justify-center bg-black/50 pointer-events-none">
+                  <div class="text-white text-sm flex flex-col items-center gap-2">
+                    <div class="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <div>Render ediliyor… (~3s)</div>
+                  </div>
+                </div>
+              </div>
+            </template>
           </div>
-          <p class="text-xs text-claude-muted mt-2 text-center">
-            Gerçek 1080×1920 short, ölçekli önizleme.
+          <p class="text-xs text-claude-muted mt-2 text-center" x-show="currentTab !== 'remotion'">
+            Gerçek 1080×1920 short, ölçekli HTML önizleme.
+          </p>
+          <p class="text-xs text-claude-muted mt-2 text-center" x-show="currentTab === 'remotion'">
+            Remotion frame snapshot (1s noktası). Sağdaki form değişince yenilenir.
           </p>
         </div>
       </div>
@@ -130,7 +177,8 @@
         <template x-for="tab in [
           {id: 'genel', label: 'Genel'},
           {id: 'icerik', label: 'Icerik'},
-          {id: 'dna', label: 'DNA'},
+          {id: 'dna', label: 'DNA (HTML)'},
+          {id: 'remotion', label: 'Remotion'},
           {id: 'youtube', label: 'YouTube'},
           {id: 'sistem', label: 'Sistem'},
         ]" :key="tab.id">
@@ -1091,78 +1139,7 @@
       </label>
     </div>
 
-    {# ── Card: Render motoru (HTML vs Remotion) ─────────────────────────── #}
-    <div class="bg-claude-surface border border-claude-border rounded-lg p-4 mt-4">
-      <div class="flex items-center justify-between mb-3">
-        <div class="text-xs text-claude-muted uppercase tracking-wider">Render motoru</div>
-        <span class="text-xs text-claude-muted">Phase 2 (deneysel)</span>
-      </div>
-      <div class="grid grid-cols-2 gap-3">
-        <label class="text-xs">
-          <span class="block text-claude-muted mb-1">Motor</span>
-          <select name="renderer"
-                  class="bg-claude-surface-alt border border-claude-border px-2 py-1 rounded w-full text-sm text-claude-text">
-            <option value="html" {% if c.renderer == 'html' %}selected{% endif %}>HTML + Playwright (varsayılan)</option>
-            <option value="remotion" {% if c.renderer == 'remotion' %}selected{% endif %}>Remotion (TypeScript/React)</option>
-          </select>
-        </label>
-        <label class="text-xs">
-          <span class="block text-claude-muted mb-1">Remotion template (boşsa archetype'tan türetilir)</span>
-          <select name="remotion_template"
-                  class="bg-claude-surface-alt border border-claude-border px-2 py-1 rounded w-full text-sm text-claude-text">
-            <option value="" {% if not c.remotion_template %}selected{% endif %}>(otomatik: {{ c.resolved_remotion_template }})</option>
-            <option value="newscast-basic" {% if c.remotion_template == 'newscast-basic' %}selected{% endif %}>newscast-basic</option>
-            <option value="stadium-basic" {% if c.remotion_template == 'stadium-basic' %}selected{% endif %}>stadium-basic</option>
-            <option value="stat-hero" {% if c.remotion_template == 'stat-hero' %}selected{% endif %}>stat-hero</option>
-            <option value="big-quote" {% if c.remotion_template == 'big-quote' %}selected{% endif %}>big-quote (Remotion-only)</option>
-            <option value="adaptive" {% if c.remotion_template == 'adaptive' %}selected{% endif %}>adaptive (27 kombinasyon)</option>
-          </select>
-        </label>
-      </div>
-
-      {# Adaptive dimensions — only visible when remotion_template = adaptive #}
-      <div class="mt-3 pt-3 border-t border-claude-border">
-        <div class="text-xs text-claude-muted uppercase mb-2">Adaptive boyutlar (yalnızca adaptive seçiliyse)</div>
-        <div class="grid grid-cols-3 gap-3">
-          {% set dims = c.remotion_dimensions or {} %}
-          <label class="text-xs">
-            <span class="block text-claude-muted mb-1">Header</span>
-            <select name="adaptive_headerStyle"
-                    class="bg-claude-surface-alt border border-claude-border px-2 py-1 rounded w-full text-sm text-claude-text">
-              <option value="" {% if not dims.get('headerStyle') %}selected{% endif %}>(varsayılan: banner-flat)</option>
-              <option value="banner-flat" {% if dims.get('headerStyle') == 'banner-flat' %}selected{% endif %}>banner-flat</option>
-              <option value="banner-skewed" {% if dims.get('headerStyle') == 'banner-skewed' %}selected{% endif %}>banner-skewed</option>
-              <option value="hero-overlay" {% if dims.get('headerStyle') == 'hero-overlay' %}selected{% endif %}>hero-overlay</option>
-            </select>
-          </label>
-          <label class="text-xs">
-            <span class="block text-claude-muted mb-1">Photo</span>
-            <select name="adaptive_photoTreatment"
-                    class="bg-claude-surface-alt border border-claude-border px-2 py-1 rounded w-full text-sm text-claude-text">
-              <option value="" {% if not dims.get('photoTreatment') %}selected{% endif %}>(varsayılan: full-bleed)</option>
-              <option value="full-bleed" {% if dims.get('photoTreatment') == 'full-bleed' %}selected{% endif %}>full-bleed</option>
-              <option value="banded" {% if dims.get('photoTreatment') == 'banded' %}selected{% endif %}>banded</option>
-              <option value="blur-bg" {% if dims.get('photoTreatment') == 'blur-bg' %}selected{% endif %}>blur-bg</option>
-            </select>
-          </label>
-          <label class="text-xs">
-            <span class="block text-claude-muted mb-1">Body</span>
-            <select name="adaptive_bodyStyle"
-                    class="bg-claude-surface-alt border border-claude-border px-2 py-1 rounded w-full text-sm text-claude-text">
-              <option value="" {% if not dims.get('bodyStyle') %}selected{% endif %}>(varsayılan: paragraph)</option>
-              <option value="paragraph" {% if dims.get('bodyStyle') == 'paragraph' %}selected{% endif %}>paragraph</option>
-              <option value="quote" {% if dims.get('bodyStyle') == 'quote' %}selected{% endif %}>quote</option>
-              <option value="stat-hero" {% if dims.get('bodyStyle') == 'stat-hero' %}selected{% endif %}>stat-hero</option>
-            </select>
-          </label>
-        </div>
-      </div>
-
-      <p class="text-xs text-claude-muted mt-2">
-        Remotion daha pürüzsüz animasyon + 60fps yetenek sunar ama Node.js + npm install gerektirir.
-        Adaptive template'de 3×3×3 = 27 kombinasyon var. Kararsız kalırsanız HTML motorunda kalın.
-      </p>
-    </div>
+    {# Render motoru kartı buradan kaldırıldı — Remotion tab'ine taşındı (Phase 6a) #}
 
     {# ── Card: Arka plan videosu (Pexels) ───────────────────────────────── #}
     <div class="bg-claude-surface border border-claude-border rounded-lg p-4 mt-4">
@@ -1217,6 +1194,97 @@
     {% endif %}
 
     </div>{# end TAB: Icerik #}
+
+    {# ── TAB: Remotion ──────────────────────────────────────────────────── #}
+    <div x-show="currentTab === 'remotion'">
+
+      {# Status banner: which renderer is active #}
+      <div class="bg-claude-surface border border-claude-border rounded-lg p-4 mt-4">
+        <div class="flex items-center justify-between mb-3">
+          <div class="text-xs text-claude-muted uppercase tracking-wider">Render motoru</div>
+          <span class="text-xs"
+                :class="rendererType === 'remotion' ? 'text-claude-success' : 'text-claude-muted'"
+                x-text="rendererType === 'remotion' ? '● aktif' : '○ kapalı (sol kolon yine de Remotion önizler)'"></span>
+        </div>
+        <label class="text-xs block">
+          <span class="block text-claude-muted mb-1">Motor</span>
+          <select name="renderer" x-model="rendererType"
+                  class="bg-claude-surface-alt border border-claude-border px-2 py-1 rounded w-full text-sm text-claude-text">
+            <option value="html">HTML + Playwright (varsayılan)</option>
+            <option value="remotion">Remotion (TypeScript/React)</option>
+          </select>
+        </label>
+        <p class="text-xs text-claude-muted mt-2">
+          Remotion daha pürüzsüz animasyon + 60fps yetenek sunar ama Node.js + npm install gerektirir.
+          Önizleme her zaman Remotion ile çalışır — gerçek render için yukarıdaki "Motor"u <code>remotion</code>'a alın.
+        </p>
+      </div>
+
+      {# Template + Adaptive dimensions #}
+      <div class="bg-claude-surface border border-claude-border rounded-lg p-4 mt-4">
+        <div class="text-xs text-claude-muted uppercase tracking-wider mb-3">Şablon ve boyutlar</div>
+
+        <label class="text-xs block mb-3">
+          <span class="block text-claude-muted mb-1">Remotion template</span>
+          <select name="remotion_template" x-model="remotionTemplate"
+                  class="bg-claude-surface-alt border border-claude-border px-2 py-1 rounded w-full text-sm text-claude-text">
+            <option value="">(otomatik: {{ c.resolved_remotion_template }})</option>
+            <option value="newscast-basic">newscast-basic</option>
+            <option value="stadium-basic">stadium-basic</option>
+            <option value="stat-hero">stat-hero</option>
+            <option value="big-quote">big-quote (Remotion-only)</option>
+            <option value="adaptive">adaptive (27 kombinasyon)</option>
+          </select>
+        </label>
+
+        <div x-show="effectiveRemotionTemplate === 'adaptive'"
+             class="pt-3 border-t border-claude-border">
+          <div class="text-xs text-claude-muted uppercase mb-2">Adaptive boyutlar</div>
+          <div class="grid grid-cols-3 gap-3">
+            <label class="text-xs">
+              <span class="block text-claude-muted mb-1">Header</span>
+              <select name="adaptive_headerStyle" x-model="dimHeaderStyle"
+                      class="bg-claude-surface-alt border border-claude-border px-2 py-1 rounded w-full text-sm text-claude-text">
+                <option value="">(varsayılan: banner-flat)</option>
+                <option value="banner-flat">banner-flat</option>
+                <option value="banner-skewed">banner-skewed</option>
+                <option value="hero-overlay">hero-overlay</option>
+              </select>
+            </label>
+            <label class="text-xs">
+              <span class="block text-claude-muted mb-1">Photo</span>
+              <select name="adaptive_photoTreatment" x-model="dimPhotoTreatment"
+                      class="bg-claude-surface-alt border border-claude-border px-2 py-1 rounded w-full text-sm text-claude-text">
+                <option value="">(varsayılan: full-bleed)</option>
+                <option value="full-bleed">full-bleed</option>
+                <option value="banded">banded</option>
+                <option value="blur-bg">blur-bg</option>
+              </select>
+            </label>
+            <label class="text-xs">
+              <span class="block text-claude-muted mb-1">Body</span>
+              <select name="adaptive_bodyStyle" x-model="dimBodyStyle"
+                      class="bg-claude-surface-alt border border-claude-border px-2 py-1 rounded w-full text-sm text-claude-text">
+                <option value="">(varsayılan: paragraph)</option>
+                <option value="paragraph">paragraph</option>
+                <option value="quote">quote</option>
+                <option value="stat-hero">stat-hero</option>
+              </select>
+            </label>
+          </div>
+          <p class="text-xs text-claude-muted mt-3">
+            3×3×3 = 27 kombinasyon. Eksik akslar Zod default'una düşer.
+          </p>
+        </div>
+      </div>
+
+      {# Tip: how to use the live preview #}
+      <div class="bg-blue-900/20 border border-blue-700/40 text-blue-100 text-xs rounded-lg p-3 mt-4">
+        💡 Sol kolondaki önizleme her form değişikliğinde otomatik yeniden render eder
+        (~3s). Renkler "DNA" tabından değiştirilebilir, değişiklik anında bu sekmeye de yansır.
+      </div>
+
+    </div>{# end TAB: Remotion #}
 
     <button type="submit" class="bg-claude-accent hover:bg-claude-accent-hover text-white px-4 py-2 rounded-lg font-semibold mt-2 w-full">
       Kaydet

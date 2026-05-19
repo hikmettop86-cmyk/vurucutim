@@ -378,6 +378,100 @@ def list_templates() -> list[str]:
     return sorted(_AVAILABLE_TEMPLATES)
 
 
+def render_still(
+    job: RemotionRenderJob,
+    out_path: Path,
+    *,
+    frame: int = 30,
+    port: int = 3220,
+    remotion_root: Path | None = None,
+    timeout_s: int = 30,
+) -> Path:
+    """Render a SINGLE frame of the composition — for live preview snapshots.
+
+    Uses `npx remotion still` which spins up the Remotion bundler just long
+    enough to produce one image (~2-3s on first invocation, slightly faster
+    afterward due to esbuild cache). Output format derived from extension
+    (.jpg / .png). Different port than render() (3210) so previews don't
+    collide with concurrent renders.
+
+    Caller's responsibility to cache results — same params → same image,
+    don't re-invoke needlessly. Phase 6a preview route hashes params and
+    caches frames to disk.
+    """
+    if job.template not in _AVAILABLE_TEMPLATES:
+        raise RemotionRenderError(
+            f"unknown remotion template {job.template!r}; "
+            f"available: {sorted(_AVAILABLE_TEMPLATES)}"
+        )
+
+    root = _resolve_remotion_root(remotion_root)
+    if not root.is_dir():
+        raise RemotionRenderError(f"remotion root not found: {root}")
+    if not (root / "node_modules").is_dir():
+        ensure_remotion_installed(remotion_root=root)
+
+    out_path = Path(out_path).resolve()
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Reuse the same data-URL bg-image inlining as render() to defeat
+    # Chromium's file:// cross-origin policy.
+    import base64
+    import mimetypes
+    props = job.to_props_dict()
+    bg_url = props.get("bgImageUrl", "")
+    if bg_url and bg_url.startswith("file://"):
+        try:
+            src_path = Path(bg_url.removeprefix("file:///").replace("/", "\\")
+                            if sys.platform == "win32"
+                            else bg_url.removeprefix("file://"))
+            if src_path.is_file():
+                mime = mimetypes.guess_type(src_path.name)[0] or "image/jpeg"
+                b64 = base64.b64encode(src_path.read_bytes()).decode("ascii")
+                props["bgImageUrl"] = f"data:{mime};base64,{b64}"
+            else:
+                props["bgImageUrl"] = ""
+        except (OSError, ValueError):
+            props["bgImageUrl"] = ""
+
+    props_path = out_path.with_suffix(".props.json")
+    props_path.write_text(json.dumps(props, ensure_ascii=False), encoding="utf-8")
+
+    cmd = [
+        _npx_command(), "remotion", "still",
+        "src/index.ts",
+        job.template,
+        f"--props={props_path}",
+        f"--port={port}",
+        f"--frame={int(frame)}",
+        str(out_path),
+    ]
+    try:
+        proc = subprocess.run(
+            cmd, cwd=str(root), timeout=timeout_s,
+            capture_output=True, text=True, shell=False,
+            encoding="utf-8", errors="replace",
+        )
+    except subprocess.TimeoutExpired as e:
+        raise RemotionRenderError(
+            f"remotion still timed out after {timeout_s}s"
+        ) from e
+    finally:
+        try:
+            props_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+    if proc.returncode != 0:
+        tail = (proc.stderr or "")[-1000:]
+        raise RemotionRenderError(f"remotion still exit {proc.returncode}\n{tail}")
+    if not out_path.is_file() or out_path.stat().st_size < 200:
+        raise RemotionRenderError(
+            f"remotion still exit 0 but output missing/empty: {out_path}"
+        )
+    return out_path
+
+
 def render_job_from_pipeline(
     *,
     script: Any,
