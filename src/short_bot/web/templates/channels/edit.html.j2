@@ -92,9 +92,9 @@
         // ── Remotion tab state (Phase 6a) ──
         rendererType: "{{ c.renderer }}",
         remotionTemplate: "{{ c.remotion_template or '' }}",
-        dimHeaderStyle: "{{ (c.remotion_dimensions or {}).get(\"headerStyle\", \"\") }}",
-        dimPhotoTreatment: "{{ (c.remotion_dimensions or {}).get(\"photoTreatment\", \"\") }}",
-        dimBodyStyle: "{{ (c.remotion_dimensions or {}).get(\"bodyStyle\", \"\") }}",
+        dimHeaderStyle: "{{ (c.remotion_dimensions or {}).get('headerStyle', '') }}",
+        dimPhotoTreatment: "{{ (c.remotion_dimensions or {}).get('photoTreatment', '') }}",
+        dimBodyStyle: "{{ (c.remotion_dimensions or {}).get('bodyStyle', '') }}",
         remotionPreviewBusy: false,
         remotionPreviewKey: 0,
         get effectiveRemotionTemplate() {
