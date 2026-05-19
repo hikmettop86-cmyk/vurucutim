@@ -280,10 +280,40 @@ def render(
     out_path = Path(out_path).resolve()
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
+    # Inline the bg image as a base64 data URL. file:// URIs are blocked by
+    # Chromium cross-origin policy when used in CSS background-image, and
+    # Remotion's render-mode does not serve public/ at a stable URL we can
+    # reference via CSS url(). Data URLs sidestep both — they work in CSS
+    # and Img tags everywhere. ~30% size overhead vs the raw file is
+    # acceptable for a one-off prop payload.
+    import base64
+    import mimetypes
+    props = job.to_props_dict()
+    bg_url = props.get("bgImageUrl", "")
+    if bg_url and bg_url.startswith("file://"):
+        try:
+            src_path = Path(bg_url.removeprefix("file:///").replace("/", "\\")
+                            if sys.platform == "win32"
+                            else bg_url.removeprefix("file://"))
+            if src_path.is_file():
+                mime = mimetypes.guess_type(src_path.name)[0] or "image/jpeg"
+                b64 = base64.b64encode(src_path.read_bytes()).decode("ascii")
+                props["bgImageUrl"] = f"data:{mime};base64,{b64}"
+                logger.info(
+                    f"[remotion] inlined bg {src_path.name} "
+                    f"({src_path.stat().st_size // 1024}KB)"
+                )
+            else:
+                props["bgImageUrl"] = ""
+                logger.warning(f"[remotion] bg file missing: {src_path}")
+        except (OSError, ValueError) as e:
+            logger.warning(f"[remotion] bg inline failed ({e}), dropping image")
+            props["bgImageUrl"] = ""
+
     # Write props as a temp JSON file beside the output.
     props_path = out_path.with_suffix(".props.json")
     props_path.write_text(
-        json.dumps(job.to_props_dict(), ensure_ascii=False),
+        json.dumps(props, ensure_ascii=False),
         encoding="utf-8",
     )
 

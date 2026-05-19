@@ -190,6 +190,101 @@ def test_render_complains_when_output_missing_despite_zero_exit(tmp_path):
             render(_basic_job(), tmp_path / "out.mp4", remotion_root=tmp_path)
 
 
+def test_render_inlines_file_uri_image_as_data_url(tmp_path):
+    """Bug v0.1.75: file:// URIs in CSS background-image blocked by Chromium
+    cross-origin policy → photo silent-fails. Fix: inline the file content as
+    a base64 data URL — works in CSS url() without any cross-origin gymnastics."""
+    import base64
+    (tmp_path / "package.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "node_modules").mkdir()
+    bg_file = tmp_path / "src_bg.jpg"
+    bg_bytes = b"\xff\xd8\xff" * 1000
+    bg_file.write_bytes(bg_bytes)
+    out_path = tmp_path / "out.mp4"
+    captured = {}
+
+    job = RemotionRenderJob(
+        template="newscast-basic", header_top="A", header_bottom="B",
+        photo_overlay="C", body_paragraph="D body", category="E",
+        handle="@h", duration_seconds=4,
+        bg_image_url=bg_file.resolve().as_uri(),
+    )
+
+    def fake_run(cmd, **kw):
+        props_arg = next(a for a in cmd if a.startswith("--props="))
+        props_path = Path(props_arg.removeprefix("--props="))
+        captured["props"] = json.loads(props_path.read_text(encoding="utf-8"))
+        out_path.write_bytes(b"\x00" * 2048)
+        return MagicMock(returncode=0, stderr="")
+
+    with patch("short_bot.remotion_renderer.subprocess.run", side_effect=fake_run):
+        render(job, out_path, remotion_root=tmp_path)
+
+    # bg got rewritten to a data URL
+    bg = captured["props"]["bgImageUrl"]
+    assert bg.startswith("data:image/jpeg;base64,") or bg.startswith("data:image/jpg;base64,")
+    # Verify the data round-trips back to the original bytes
+    decoded = base64.b64decode(bg.split(",", 1)[1])
+    assert decoded == bg_bytes
+
+
+def test_render_drops_bg_url_when_source_file_missing(tmp_path):
+    """If the file:// path no longer exists, the bgImageUrl is dropped to ''
+    rather than passing a broken URL to the renderer."""
+    (tmp_path / "package.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "node_modules").mkdir()
+    out_path = tmp_path / "out.mp4"
+    captured = {}
+
+    # file:// URI to a non-existent path
+    job = RemotionRenderJob(
+        template="newscast-basic", header_top="A", header_bottom="B",
+        photo_overlay="C", body_paragraph="D body", category="E",
+        handle="@h", duration_seconds=4,
+        bg_image_url=(tmp_path / "missing.jpg").resolve().as_uri(),
+    )
+
+    def fake_run(cmd, **kw):
+        props_arg = next(a for a in cmd if a.startswith("--props="))
+        captured["props"] = json.loads(
+            Path(props_arg.removeprefix("--props=")).read_text(encoding="utf-8")
+        )
+        out_path.write_bytes(b"\x00" * 2048)
+        return MagicMock(returncode=0, stderr="")
+
+    with patch("short_bot.remotion_renderer.subprocess.run", side_effect=fake_run):
+        render(job, out_path, remotion_root=tmp_path)
+    assert captured["props"]["bgImageUrl"] == ""
+
+
+def test_render_skips_staging_for_http_urls(tmp_path):
+    """Non-file:// URLs (e.g. https://cdn/...) pass through untouched."""
+    (tmp_path / "package.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "node_modules").mkdir()
+    out_path = tmp_path / "out.mp4"
+    captured = {}
+
+    job = RemotionRenderJob(
+        template="newscast-basic", header_top="A", header_bottom="B",
+        photo_overlay="C", body_paragraph="D body", category="E",
+        handle="@h", duration_seconds=4,
+        bg_image_url="https://cdn.example.com/img.jpg",
+    )
+
+    def fake_run(cmd, **kw):
+        props_arg = next(a for a in cmd if a.startswith("--props="))
+        captured["props"] = json.loads(
+            Path(props_arg.removeprefix("--props=")).read_text(encoding="utf-8")
+        )
+        out_path.write_bytes(b"\x00" * 2048)
+        return MagicMock(returncode=0, stderr="")
+
+    with patch("short_bot.remotion_renderer.subprocess.run", side_effect=fake_run):
+        render(job, out_path, remotion_root=tmp_path)
+    assert captured["props"]["bgImageUrl"] == "https://cdn.example.com/img.jpg"
+    assert not (tmp_path / "public").exists()
+
+
 def test_render_writes_props_json_before_subprocess(tmp_path):
     """Verify the subprocess is invoked with --props pointing to a real file
     containing the camelCase payload."""

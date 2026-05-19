@@ -850,15 +850,19 @@ def _run_rss(*, channel, run_id, log, eng, settings,
             from short_bot.remotion_renderer import (
                 render as remotion_render,
                 render_job_from_pipeline,
-                is_available as remotion_available,
+                ensure_remotion_installed,
                 RemotionRenderError,
             )
-            if not remotion_available():
+            # ensure_remotion_installed is idempotent: no-op when node_modules
+            # already present, otherwise runs `npm install` (~2 min once).
+            # render() also does this internally, but calling it here surfaces
+            # any install error to the run log with the right context.
+            try:
+                ensure_remotion_installed(log=log)
+            except RemotionRenderError as e:
                 raise RuntimeError(
-                    "channel.renderer='remotion' but Remotion is not available. "
-                    "Run `npm install` inside the remotion/ directory and ensure "
-                    "node is on PATH."
-                )
+                    f"channel.renderer='remotion' but install failed: {e}"
+                ) from e
             silent_path = Path(tmpd) / "remotion-silent.mp4"
             remotion_job = render_job_from_pipeline(
                 script=script,
