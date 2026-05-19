@@ -170,4 +170,15 @@ ARCHETYPE_OVERFLOW_FIELDS: dict[str, list[OverflowField]] = {
         OverflowField("photo_overlay",  ".photo .dossier-stamp", 1),  # 1-line stamp
         OverflowField("body_paragraph", ".body",                  99),
     ],
+    # stat-hero: 80px header .top + 56px .bot, NOWRAP with width-fit JS shrink.
+    # Body is split — .stat-number renders a JS-extracted figure (e.g. "%54,3"),
+    # .stat-caption holds the rest. Both use auto-fit (number 120-280px,
+    # caption 24-42px). Generous clamp budgets so the script writer's natural
+    # 180-char-cap body doesn't trigger spurious overflow retries.
+    "stat-hero": [
+        OverflowField("header_top",     ".header .top",   3),
+        OverflowField("header_bottom",  ".header .bot",   3),
+        OverflowField("photo_overlay",  ".photo .yellow", 3),
+        OverflowField("body_paragraph", ".stat-caption",  99),
+    ],
 }

@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="{{ language }}">
+<head>
+<meta charset="utf-8">
+<title>Short — stat-hero</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=JetBrains+Mono:wght@500;700;800&display=swap');
+  {{ dna_css|safe }}
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1080px; height: 1920px; overflow: hidden; background: #000;
+    font-family: 'Inter', -apple-system, sans-serif; color: #fff; }
+
+  .stage { position: relative; width: 1080px; height: 1920px;
+    display: flex; flex-direction: column;
+    background: linear-gradient(180deg, {{ colors.bg_gradient[0] }}, {{ colors.bg_gradient[1] }}); }
+
+  /* STAGE-LEVEL BADGE */
+  .stage-badge {
+    position: absolute; top: 14px; right: 14px;
+    background: {{ colors.primary }}; color: #fff;
+    font-size: 20px; font-weight: 800; letter-spacing: 1px;
+    padding: 8px 16px; border-radius: 6px; z-index: 30;
+  }
+
+  /* HEADER */
+  .header {
+    background: linear-gradient(135deg, {{ colors.primary }}, rgba(6,182,212,0.4));
+    padding: 70px 60px 36px;
+    text-align: center;
+    font-weight: 900;
+    font-size: 80px;
+    line-height: 1.05;
+    letter-spacing: 0.3px;
+    border-bottom: 4px solid {{ colors.accent }};
+  }
+  .header .top {
+    display: block; white-space: nowrap;
+    color: {{ colors.accent }};
+    text-shadow: 0 2px 8px rgba(0,0,0,.5);
+  }
+  .header .bot {
+    display: block; white-space: nowrap;
+    margin-top: 6px;
+    font-size: 56px;
+    color: #fff;
+    opacity: 0.92;
+  }
+
+  /* PHOTO band — shorter than newscast so the stat gets more room */
+  .photo {
+    position: relative;
+    height: 420px;
+    background: linear-gradient(135deg, {{ colors.bg_gradient[0] }}, {{ colors.bg_gradient[1] }});
+    overflow: hidden;
+  }
+  .photo .bg-img {
+    position: absolute; inset: 0;
+    background-image: url('{{ bg_image_url|default("") }}');
+    background-size: cover; background-position: center;
+    filter: blur(0.5px) brightness(0.6);
+    {% if not bg_image_url %}display: none;{% endif %}
+  }
+  .photo .vignette { position: absolute; inset: 0;
+    background: radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,.7) 100%); }
+  .photo .corner {
+    position: absolute; top: 24px; left: 24px;
+    background: rgba(0,0,0,.8); color: {{ colors.accent }};
+    font-size: 28px; padding: 8px 16px; border-radius: 6px;
+    font-weight: 700; letter-spacing: 1px;
+  }
+  .photo .yellow {
+    position: absolute; bottom: 24px; left: 24px; right: 24px;
+    background: {{ colors.accent }};
+    color: #0f172a;
+    font-size: 38px; font-weight: 900;
+    padding: 14px 22px;
+    text-align: center;
+    letter-spacing: 0.5px;
+  }
+
+  /* BODY: HERO STAT — the giant number is the visual centerpiece. JS
+     extracts the first prominent number from the body_paragraph and lifts
+     it into .stat-number; the rest of the text becomes the caption below.
+     Falls back gracefully if no number is found (renders body as small
+     caption only). */
+  .body {
+    flex: 1;
+    min-height: 0;
+    margin-bottom: 240px;
+    padding: 40px 60px 30px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    overflow: hidden;
+  }
+  .stat-number {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 800;
+    font-size: 280px;
+    line-height: 0.95;
+    color: {{ colors.accent }};
+    letter-spacing: -4px;
+    text-shadow: 0 4px 24px rgba(250,204,21,0.35);
+    margin-bottom: 12px;
+    white-space: nowrap;
+  }
+  .stat-number.is-fallback {
+    /* When no number found: shrink to a label badge, give the caption room */
+    font-size: 60px;
+    color: {{ colors.text_muted }};
+    opacity: 0.5;
+  }
+  .stat-caption {
+    font-size: 38px;
+    line-height: 1.35;
+    font-weight: 500;
+    color: #fff;
+    max-width: 100%;
+  }
+  .stat-caption .hl-r { background: {{ colors.primary }}; color: #fff;
+    padding: 2px 10px; border-radius: 4px; font-weight: 700; }
+  .stat-caption .hl-y { background: {{ colors.accent }}; color: #0f172a;
+    padding: 2px 10px; border-radius: 4px; font-weight: 700; }
+
+  /* PROGRESS bar */
+  .progress {
+    position: absolute; left: 0; right: 0; bottom: 84px; height: 6px;
+    background: rgba(255,255,255,.12);
+  }
+  .progress::after {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+    background: linear-gradient(90deg, {{ colors.accent }}, {{ colors.primary }});
+    animation: fill {{ duration_s }}s linear forwards;
+  }
+  @keyframes fill { from { width: 0; } to { width: 100%; } }
+
+  .handle {
+    position: absolute; left: 0; right: 0; bottom: 32px;
+    text-align: center;
+    font-size: 28px; font-weight: 700;
+    color: {{ colors.accent }};
+    letter-spacing: 1px;
+  }
+
+  /* RSS source corner stamp */
+  {% if rss_source %}
+  .rss-source {
+    position: absolute; bottom: 6px; left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.55);
+    color: rgba(255,255,255,0.82);
+    font-size: 14px; font-weight: 500;
+    padding: 3px 10px; border-radius: 3px;
+    z-index: 50;
+    white-space: nowrap;
+  }
+  {% endif %}
+</style>
+</head>
+<body>
+<div class="stage dna-anim-{{ animation_style|default('none') }}">
+  <div class="stage-badge">{{ ui_breaking }}</div>
+  <div class="header">
+    <span class="top" data-fit-min="44" data-fit-max="80" data-fit-width="100">{{ script.header_top }}</span>
+    <span class="bot" data-fit-min="36" data-fit-max="56" data-fit-width="100">{{ script.header_bottom }}</span>
+  </div>
+
+  <div class="photo">
+    <div class="bg-img"></div>
+    <div class="vignette"></div>
+    <div class="corner">{{ script.category }}</div>
+    <div class="yellow">{{ script.photo_overlay }}</div>
+  </div>
+
+  <div class="body">
+    <div class="stat-number" id="statNumber" data-fit-min="120" data-fit-max="280" data-fit-width="60">—</div>
+    <div class="stat-caption" id="statCaption" data-fit-min="24" data-fit-max="42" data-fit-pad="20">{{ body_html|safe }}</div>
+  </div>
+
+  <div class="progress"></div>
+  <div class="handle">{{ handle }}</div>
+
+  {% if rss_source %}
+  <div class="rss-source">{{ ui_source }}: {{ rss_source }}</div>
+  {% endif %}
+</div>
+
+<script>
+/* Extract the first prominent stat from the body paragraph and lift it
+   into .stat-number. Match priority:
+     1. Percent: "%54", "%54,3", "yüzde 25" → "%54", "%54,3", "%25"
+     2. Currency: "₺250 milyon", "$1,2 milyar"
+     3. Multi-digit number: "1500", "2.500", "25,3"
+   The matched substring is REMOVED from .stat-caption so it isn't shown
+   twice. When nothing matches, .stat-number renders a placeholder dash
+   and the caption gets all the text (graceful degradation). */
+(function() {
+  var captionEl = document.getElementById('statCaption');
+  var numberEl = document.getElementById('statNumber');
+  if (!captionEl || !numberEl) return;
+
+  var text = captionEl.innerText || '';
+  // Strategy: try yüzde-prefix first ("yüzde 54,3"), then "%XX", then currency, then plain large numbers
+  var matched = null;
+
+  // 1. "yüzde 54,3" or "yüzde 25"
+  var m = text.match(/y[üu]zde\s+(\d{1,3}(?:[,\.]\d+)?)/i);
+  if (m) {
+    matched = '%' + m[1].replace('.', ',');
+  }
+  // 2. "%54" or "%54,3" or "%54.3"
+  if (!matched) {
+    m = text.match(/%\s*(\d{1,3}(?:[,\.]\d+)?)/);
+    if (m) matched = '%' + m[1].replace('.', ',');
+  }
+  // 3. Currency "₺250 milyon" / "$1,2 milyar" / "TL 1.5 milyon"
+  if (!matched) {
+    m = text.match(/([₺$€£]\s*\d+(?:[,\.]\d+)?(?:\s*(?:milyon|milyar|bin))?)/i);
+    if (m) matched = m[1].replace(/\s+/g, ' ').trim();
+  }
+  // 4. Plain large number (≥3 digits) like "1500", "2.500", "25,3 milyon"
+  if (!matched) {
+    m = text.match(/(\b\d{1,3}(?:[\.,]\d{3})+\b|\b\d{3,}\b)(?:\s*(milyon|milyar|bin))?/i);
+    if (m) {
+      matched = m[1] + (m[2] ? ' ' + m[2] : '');
+    }
+  }
+
+  if (matched) {
+    numberEl.innerText = matched;
+    // Strip the matched original substring from caption text (work on innerText
+    // to avoid breaking HTML highlights — accept that <span class="hl-..."> with
+    // the number inside will keep the wrapper but lose the number text).
+    var stripped = text.replace(m[0], '').replace(/\s+/g, ' ').replace(/^[\s,\.;:]+/, '').trim();
+    if (stripped.length > 6) {
+      // Rebuild caption text only (loses any highlight markup; acceptable for v1)
+      captionEl.innerText = stripped;
+    }
+  } else {
+    // No number found — hide the giant slot, let the caption fill
+    numberEl.classList.add('is-fallback');
+    numberEl.innerText = '◆';
+  }
+})();
+</script>
+{% include "_auto_fit.js.j2" %}
+</body>
+</html>

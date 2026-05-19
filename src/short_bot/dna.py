@@ -14,6 +14,10 @@ ARCHETYPES = [
     "newscast", "tabloid", "magazine", "kinetic", "dark-tech", "stadium", "meme",
     "politika", "ekonomi", "spor-haber", "tech-haber",
     "hava-durumu", "yerel", "gundem", "dosya",
+    # Phase-1 compositional addition: stat-hero focuses the body around a single
+    # large number + tight caption. Best for economy / poll / statistic stories
+    # where Claude's body paragraph naturally contains a headline figure.
+    "stat-hero",
 ]
 
 _ANIMATIONS_CSS_PATH = Path(__file__).resolve().parent.parent.parent / "templates" / "css" / "_animations.css"
@@ -129,6 +133,16 @@ ARCHETYPE_DEFAULTS: dict[str, dict] = {
         "text_main": "#2a1a08", "text_muted": "#6a4a25",
         "font_headline": "Source Serif 4", "font_body": "Source Serif 4",
     },
+    "stat-hero": {
+        # Dark backdrop + cyan/yellow stat colors — designed so the giant
+        # number in the body is visually dominant (data-viz dashboard feel,
+        # not newsroom feel). Works for economy / poll / statistic stories.
+        "primary": "#06b6d4", "accent": "#facc15",
+        "bg_grad_1": "#0f172a", "bg_grad_2": "#020617",
+        "body_bg_1": "#020617", "body_bg_2": "#0f172a",
+        "text_main": "#ffffff", "text_muted": "#94a3b8",
+        "font_headline": "Inter", "font_body": "JetBrains Mono",
+    },
 }
 
 
@@ -243,6 +257,7 @@ ARCHETYPE SEÇİMİ (1 tane seç):
 - yerel → şehir/mahalle haberleri (sıcak, küçük-ölçekli)
 - gundem → günün top 3-4 haberi liste halinde
 - dosya → soruşturma/araştırmacı gazetecilik (sepia eski-belge estetik)
+- stat-hero → sayı/oran/istatistik haberleri (büyük rakam vurgulu, ekonomi/anket — body'de TEK büyük sayı + kısa açıklama)
 
 DİL UYUMU:
 - voice/style/forbidden alanlarını {lang_name} dilinde yaz

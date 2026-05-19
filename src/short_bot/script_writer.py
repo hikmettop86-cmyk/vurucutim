@@ -63,6 +63,22 @@ ARCHETYPE_PROMPTS = {
 - highlights: 0-1, edgy
 - mood: usually upbeat
 """,
+    "stat-hero": """ARCHETYPE: stat-hero — single hero number + tight caption
+- header_top: 2-4 words context label ("ENFLASYON", "ANKET SONUCU")
+- header_bottom: 2-4 words specifier ("MAYIS 2026", "SEÇİME 3 GÜN")
+- photo_overlay: 3-7 words context tag — usually a category clue
+- body_paragraph: MUST contain ONE prominent number in the first 80
+  characters; rest of the paragraph (≤180 chars total) explains what the
+  number means. The template extracts the first number it sees and
+  renders it as a giant hero stat, with the rest as caption beneath.
+  Valid number forms (in priority order):
+    "%54", "%54,3", "yüzde 25", "₺250 milyon", "1.500", "25 bin"
+  EXAMPLE body: "%54,3 oran açıklandı; bütçe gelirleri rekor seviyede,
+  vergi tahsilatı yıllık bazda artış gösterdi."
+- highlights: red=düşüş/risk/eksi, yellow=artış/önemli sayı (NOT the
+  hero number itself; highlight CONTEXT words around it)
+- mood: usually neutral (analytical), breaking only on rekor / sürpriz
+""",
 }
 
 

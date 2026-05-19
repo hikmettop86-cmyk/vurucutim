@@ -47,6 +47,8 @@ ARCHETYPE_BG_QUERIES: dict[str, list[str]] = {
     "dark-tech": ["circuit board glow", "matrix code rain", "server room cyan"],
     "stadium":   ["stadium lights night", "crowd cheering blur", "grass pitch zoom"],
     "meme":      ["confetti pop", "colorful gradient swirl", "cartoon background"],
+    "stat-hero": ["data dashboard blur", "stock chart abstract",
+                   "financial graph motion", "analytics screen glow"],
 }
 
 

@@ -9,9 +9,9 @@ from short_bot.dna import (
 )
 
 
-def test_archetypes_list_has_fifteen():
-    # 7 original + 8 news-themed (added 2026-05-08)
-    assert len(ARCHETYPES) == 15
+def test_archetypes_list_has_sixteen():
+    # 7 original + 8 news-themed (added 2026-05-08) + 1 compositional (stat-hero, 2026-05-16)
+    assert len(ARCHETYPES) == 16
     # Original 7
     assert "newscast" in ARCHETYPES
     assert "tabloid" in ARCHETYPES
