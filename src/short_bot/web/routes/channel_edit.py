@@ -337,6 +337,10 @@ def save(slug):
         youtube=new_youtube,
         bg_video=new_bg_video,
         trend_boost=new_trend_boost,
+        renderer=(request.form.get("renderer") if request.form.get("renderer")
+                  in ("html", "remotion") else cfg.renderer),
+        remotion_template=(request.form.get("remotion_template", "").strip()
+                            or None),
     )
     save_channel(path, new_cfg)
     flash("Kanal güncellendi.", "success")

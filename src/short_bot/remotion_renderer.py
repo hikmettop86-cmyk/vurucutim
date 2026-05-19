@@ -204,3 +204,46 @@ def render(
 def list_templates() -> list[str]:
     """Phase 1+ will read these from disk by scanning remotion/src/templates/."""
     return sorted(_AVAILABLE_TEMPLATES)
+
+
+def render_job_from_pipeline(
+    *,
+    script: Any,
+    channel_colors: dict[str, Any],
+    handle: str,
+    duration_s: int,
+    template: str,
+    bg_image_path: Path | None,
+    ui_breaking: str = "SON DAKİKA",
+) -> RemotionRenderJob:
+    """Build a RemotionRenderJob from the pipeline's Script + Channel state.
+
+    Mirrors the field mapping the HTML renderer does. The `bg_image_path`
+    becomes a file:// URL (or empty when None) so Remotion's <Img> can load it.
+    """
+    bg_url = ""
+    if bg_image_path is not None and Path(bg_image_path).exists():
+        bg_url = Path(bg_image_path).resolve().as_uri()
+
+    bg_gradient = channel_colors.get("bg_gradient") or ["#0a1733", "#1a2a4f"]
+    if isinstance(bg_gradient, (list, tuple)) and len(bg_gradient) >= 2:
+        bg1, bg2 = bg_gradient[0], bg_gradient[1]
+    else:
+        bg1, bg2 = "#0a1733", "#1a2a4f"
+
+    return RemotionRenderJob(
+        template=template,
+        header_top=script.header_top,
+        header_bottom=script.header_bottom,
+        photo_overlay=script.photo_overlay,
+        body_paragraph=script.body_paragraph,
+        category=getattr(script, "category", ""),
+        handle=handle,
+        duration_seconds=int(duration_s),
+        bg_image_url=bg_url,
+        ui_breaking=ui_breaking,
+        primary=channel_colors.get("primary", "#c8102e"),
+        accent=channel_colors.get("accent", "#ffb81c"),
+        bg_grad_1=bg1,
+        bg_grad_2=bg2,
+    )

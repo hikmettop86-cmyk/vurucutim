@@ -273,7 +273,7 @@ output_dir: x
 enabled: true
 cta: {enabled: false, text: '', icons: [], duration_s: 0, show_handle: false}
 dna:
-  archetype: tabloid
+  archetype: stadium
   palette:
     primary: '#ffea3b'
     accent: '#c81e1e'
@@ -650,3 +650,124 @@ def test_channel_config_negative_keywords_empty_not_written(tmp_path):
     save_channel(p, cfg)
     text = p.read_text(encoding="utf-8")
     assert "negative_keywords" not in text
+
+
+# --- Phase 2: renderer / remotion_template fields --------------------------
+
+def _minimal_channel_yaml(extra: str = "") -> str:
+    return (
+        "slug: r-test\nname: Renderer Test\nkeywords: [a]\nlanguage: tr\n"
+        "schedule_cron: '0 * * * *'\nduration_s: 30\nmin_score: 8.0\n"
+        "max_candidates_per_run: 10\ntemplate: newscast\n"
+        "colors: {primary: '#c81e1e', accent: '#ffea3b', "
+        "bg_gradient: ['#1a3b6b', '#0a1a3b']}\n"
+        "handle: '@x'\noutput_dir: output/r\nenabled: true\n"
+        "cta: {enabled: true, text: 'a · b · c', icons: ['❤️'], "
+        "duration_s: 4, show_handle: true}\n"
+        + extra
+    )
+
+
+def test_renderer_defaults_to_html(tmp_path):
+    p = tmp_path / "ch.yaml"
+    p.write_text(_minimal_channel_yaml(), encoding="utf-8")
+    c = load_channel(p)
+    assert c.renderer == "html"
+    assert c.remotion_template is None
+
+
+def test_renderer_explicit_remotion(tmp_path):
+    p = tmp_path / "ch.yaml"
+    p.write_text(
+        _minimal_channel_yaml("renderer: remotion\n"),
+        encoding="utf-8",
+    )
+    c = load_channel(p)
+    assert c.renderer == "remotion"
+    # When unset, auto-derived from template
+    assert c.resolved_remotion_template == "newscast-basic"
+
+
+def test_renderer_invalid_rejected(tmp_path):
+    p = tmp_path / "ch.yaml"
+    p.write_text(
+        _minimal_channel_yaml("renderer: webgl\n"),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="renderer must be"):
+        load_channel(p)
+
+
+def test_remotion_template_explicit_override(tmp_path):
+    p = tmp_path / "ch.yaml"
+    p.write_text(
+        _minimal_channel_yaml(
+            "renderer: remotion\nremotion_template: stat-hero\n"
+        ),
+        encoding="utf-8",
+    )
+    c = load_channel(p)
+    assert c.remotion_template == "stat-hero"
+    assert c.resolved_remotion_template == "stat-hero"
+
+
+def test_resolved_remotion_template_falls_back_to_newscast(tmp_path):
+    """Channels with deprecated archetypes (kinetic, ekonomi, etc.) still
+    resolve to a valid Remotion composition — never crash on legacy YAMLs."""
+    p = tmp_path / "ch.yaml"
+    p.write_text(
+        _minimal_channel_yaml().replace(
+            "template: newscast", "template: kinetic-fancy-old"
+        ),
+        encoding="utf-8",
+    )
+    c = load_channel(p)
+    assert c.resolved_remotion_template == "newscast-basic"
+
+
+def test_resolved_remotion_template_for_stadium(tmp_path):
+    p = tmp_path / "ch.yaml"
+    p.write_text(
+        _minimal_channel_yaml().replace(
+            "template: newscast", "template: stadium"
+        ),
+        encoding="utf-8",
+    )
+    c = load_channel(p)
+    assert c.resolved_remotion_template == "stadium-basic"
+
+
+def test_save_channel_omits_renderer_when_html_default(tmp_path):
+    """html is the default — don't pollute legacy YAMLs by writing it."""
+    from short_bot.config import ChannelConfig, save_channel
+    cfg = ChannelConfig(
+        slug="t", name="t", keywords=["a"], rss_locale="tr-TR",
+        schedule_cron="0 * * * *", duration_s=25, min_score=6.0,
+        max_candidates_per_run=3, template="newscast",
+        colors={"primary": "#fff"}, handle="@t", output_dir="o",
+        enabled=True, cta_enabled=True, cta_text="x", cta_icons=[],
+        cta_duration_s=4, cta_show_handle=True, language="tr",
+    )
+    p = tmp_path / "ch.yaml"
+    save_channel(p, cfg)
+    text = p.read_text(encoding="utf-8")
+    assert "renderer" not in text
+    assert "remotion_template" not in text
+
+
+def test_save_channel_writes_renderer_when_remotion(tmp_path):
+    from short_bot.config import ChannelConfig, save_channel
+    cfg = ChannelConfig(
+        slug="t", name="t", keywords=["a"], rss_locale="tr-TR",
+        schedule_cron="0 * * * *", duration_s=25, min_score=6.0,
+        max_candidates_per_run=3, template="newscast",
+        colors={"primary": "#fff"}, handle="@t", output_dir="o",
+        enabled=True, cta_enabled=True, cta_text="x", cta_icons=[],
+        cta_duration_s=4, cta_show_handle=True, language="tr",
+        renderer="remotion", remotion_template="stat-hero",
+    )
+    p = tmp_path / "ch.yaml"
+    save_channel(p, cfg)
+    cfg2 = load_channel(p)
+    assert cfg2.renderer == "remotion"
+    assert cfg2.remotion_template == "stat-hero"

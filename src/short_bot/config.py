@@ -84,6 +84,13 @@ class TrendBoostConfig(BaseModel):
     region_override: str | None = None
 
 
+HTML_TO_REMOTION_TEMPLATE: dict[str, str] = {
+    "newscast": "newscast-basic",
+    "stadium": "stadium-basic",
+    "stat-hero": "stat-hero",
+}
+
+
 @dataclass(frozen=True)
 class ChannelConfig:
     slug: str
@@ -118,6 +125,16 @@ class ChannelConfig:
     youtube: YoutubeChannelConfig | None = None
     bg_video: BgVideoConfig | None = None
     trend_boost: TrendBoostConfig | None = None
+    renderer: Literal["html", "remotion"] = "html"
+    # If None, auto-derived from `template` via HTML_TO_REMOTION_TEMPLATE.
+    remotion_template: str | None = None
+
+    @property
+    def resolved_remotion_template(self) -> str:
+        """Return the Remotion composition id to render for this channel."""
+        return self.remotion_template or HTML_TO_REMOTION_TEMPLATE.get(
+            self.template, "newscast-basic"
+        )
 
 
 def load_settings(path: Path) -> Settings:
@@ -214,6 +231,13 @@ def load_channel(path: Path) -> ChannelConfig:
     trend_boost = (TrendBoostConfig.model_validate(trend_boost_data)
                    if trend_boost_data else None)
 
+    renderer = data.get("renderer", "html")
+    if renderer not in ("html", "remotion"):
+        raise ValueError(
+            f"renderer must be 'html' or 'remotion', got {renderer!r}"
+        )
+    remotion_template = data.get("remotion_template")
+
     cta = data.get("cta", {})
     return ChannelConfig(
         slug=slug,
@@ -245,6 +269,8 @@ def load_channel(path: Path) -> ChannelConfig:
         youtube=youtube,
         bg_video=bg_video,
         trend_boost=trend_boost,
+        renderer=renderer,
+        remotion_template=remotion_template,
     )
 
 
@@ -324,6 +350,10 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
     if cfg.dna is not None:
         # mode='json' → tuple becomes list, ready for YAML round-trip
         data["dna"] = cfg.dna.model_dump(mode="json")
+    if cfg.renderer != "html":
+        data["renderer"] = cfg.renderer
+    if cfg.remotion_template is not None:
+        data["remotion_template"] = cfg.remotion_template
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     Path(path).write_text(
         yaml.safe_dump(data, allow_unicode=True, sort_keys=False, default_flow_style=False),

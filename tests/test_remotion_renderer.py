@@ -15,7 +15,7 @@ import pytest
 from short_bot.remotion_renderer import (
     RemotionRenderError, RemotionRenderJob,
     _npx_command, _resolve_remotion_root, is_available,
-    list_templates, render,
+    list_templates, render, render_job_from_pipeline,
 )
 
 
@@ -205,3 +205,91 @@ def test_render_writes_props_json_before_subprocess(tmp_path):
     assert captured["props_payload"]["headerTop"] == "A"
     assert captured["props_payload"]["durationSeconds"] == 4
     assert captured["props_payload"]["colors"]["primary"] == "#c8102e"
+
+
+# --- render_job_from_pipeline mapper --------------------------------------
+
+class _FakeScript:
+    """Minimal stand-in for short_bot.models.Script — keep this test independent
+    of the Script Pydantic schema so renames there don't cascade here."""
+    def __init__(self, **kw):
+        self.header_top = kw.get("header_top", "TOP")
+        self.header_bottom = kw.get("header_bottom", "BOTTOM")
+        self.photo_overlay = kw.get("photo_overlay", "OVERLAY")
+        self.body_paragraph = kw.get("body_paragraph", "Body text here.")
+        self.category = kw.get("category", "GENERAL")
+
+
+def test_render_job_from_pipeline_copies_script_fields():
+    job = render_job_from_pipeline(
+        script=_FakeScript(),
+        channel_colors={"primary": "#111", "accent": "#222",
+                        "bg_gradient": ["#aaa", "#bbb"]},
+        handle="@x", duration_s=8,
+        template="stadium-basic", bg_image_path=None,
+    )
+    assert job.template == "stadium-basic"
+    assert job.header_top == "TOP"
+    assert job.header_bottom == "BOTTOM"
+    assert job.body_paragraph == "Body text here."
+    assert job.category == "GENERAL"
+    assert job.handle == "@x"
+    assert job.duration_seconds == 8
+
+
+def test_render_job_from_pipeline_threads_channel_colors():
+    job = render_job_from_pipeline(
+        script=_FakeScript(),
+        channel_colors={"primary": "#abcdef", "accent": "#fedcba",
+                        "bg_gradient": ["#111111", "#222222"]},
+        handle="@h", duration_s=6,
+        template="newscast-basic", bg_image_path=None,
+    )
+    assert job.primary == "#abcdef"
+    assert job.accent == "#fedcba"
+    assert job.bg_grad_1 == "#111111"
+    assert job.bg_grad_2 == "#222222"
+
+
+def test_render_job_from_pipeline_bg_path_becomes_file_uri(tmp_path):
+    bg = tmp_path / "thumb.jpg"
+    bg.write_bytes(b"\xff\xd8\xff")  # JPEG SOI marker
+
+    job = render_job_from_pipeline(
+        script=_FakeScript(),
+        channel_colors={"primary": "#c8102e", "accent": "#ffb81c",
+                        "bg_gradient": ["#0a1733", "#1a2a4f"]},
+        handle="@x", duration_s=6,
+        template="newscast-basic", bg_image_path=bg,
+    )
+    # file:// URI lets Remotion's <Img src=...> load the local file
+    assert job.bg_image_url.startswith("file://")
+    assert "thumb.jpg" in job.bg_image_url
+
+
+def test_render_job_from_pipeline_missing_bg_yields_empty_url(tmp_path):
+    """Caller may pass a path that no longer exists (race with cleanup) —
+    the mapper must gracefully degrade to '' (empty src) so Remotion just
+    renders without a photo rather than crashing the pipeline."""
+    job = render_job_from_pipeline(
+        script=_FakeScript(),
+        channel_colors={"primary": "#000", "accent": "#fff",
+                        "bg_gradient": ["#111", "#222"]},
+        handle="@h", duration_s=6,
+        template="newscast-basic",
+        bg_image_path=tmp_path / "no-such-thumb.jpg",
+    )
+    assert job.bg_image_url == ""
+
+
+def test_render_job_from_pipeline_falls_back_on_missing_gradient():
+    """Defensive: legacy channels without bg_gradient (key absent) must
+    still produce a valid RemotionRenderJob — Zod would fail on missing
+    colors otherwise."""
+    job = render_job_from_pipeline(
+        script=_FakeScript(),
+        channel_colors={"primary": "#abc", "accent": "#def"},  # no gradient
+        handle="@h", duration_s=6,
+        template="newscast-basic", bg_image_path=None,
+    )
+    assert job.bg_grad_1 and job.bg_grad_2  # defaults filled in

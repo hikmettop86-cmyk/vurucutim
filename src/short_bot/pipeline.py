@@ -42,7 +42,7 @@ from short_bot.overflow import (
     truncate_to_fit,
 )
 from short_bot.templates_config import ARCHETYPE_OVERFLOW_FIELDS
-from short_bot.composer import compose_video
+from short_bot.composer import compose_video, compose_video_from_silent_video
 from short_bot.locale import ui_labels_for
 from short_bot.generator import (
     GeneratorRetryExhausted, check_duplicate, generate_quote,
@@ -832,12 +832,6 @@ def _run_rss(*, channel, run_id, log, eng, settings,
         else:
             dna_css = build_css_override(channel.dna) if channel.dna else ""
         archetype = effective_dna.archetype if effective_dna is not None else channel.template
-        template_path = templates_dir / f"{archetype}.html.j2"
-        render_frames(job, template_path, frames_dir,
-                      fps=30, browser=settings.playwright_browser,
-                      ui_labels=ui_labels, dna_css=dna_css,
-                      animation_style=(effective_dna.animation_style
-                                        if effective_dna is not None else "none"))
 
         log.info("[8/8] compose_video")
         out_dir = Path(channel.output_dir)
@@ -845,27 +839,69 @@ def _run_rss(*, channel, run_id, log, eng, settings,
         slug = _slugify(picked.item.title)
         out_path = out_dir / f"{datetime.now(timezone.utc):%Y-%m-%d}_{slug}.mp4"
 
-        # Build SFX schedule for CTA window
         sfx_overlays = _build_cta_sfx(channel)
-
         bg_video_path = _resolve_pexels_bg(
             channel=channel, cache_dir=cache_dir,
             secrets_path=secrets_path, log=log,
         )
-
         bv = channel.bg_video
-        compose_video(
-            frames_dir, music, out_path,
-            fps=30, ffmpeg_path=settings.ffmpeg_path,
-            sfx_overlays=sfx_overlays,
-            bg_video_path=bg_video_path,
-            bg_blur_px=bv.blur_px if bv else 30,
-            bg_dim=bv.dim if bv else 0.4,
-            fg_scale=bv.scale if (bv and bg_video_path) else 1.0,
-            duration_s=channel.duration_s,
-        )
+
+        if channel.renderer == "remotion":
+            from short_bot.remotion_renderer import (
+                render as remotion_render,
+                render_job_from_pipeline,
+                is_available as remotion_available,
+                RemotionRenderError,
+            )
+            if not remotion_available():
+                raise RuntimeError(
+                    "channel.renderer='remotion' but Remotion is not available. "
+                    "Run `npm install` inside the remotion/ directory and ensure "
+                    "node is on PATH."
+                )
+            silent_path = Path(tmpd) / "remotion-silent.mp4"
+            remotion_job = render_job_from_pipeline(
+                script=script,
+                channel_colors=channel.colors,
+                handle=channel.handle,
+                duration_s=channel.duration_s,
+                template=channel.resolved_remotion_template,
+                bg_image_path=bg,
+            )
+            log.info(f"  → remotion render {remotion_job.template}")
+            try:
+                remotion_render(remotion_job, silent_path)
+            except RemotionRenderError as e:
+                raise RuntimeError(f"Remotion render failed: {e}") from e
+            compose_video_from_silent_video(
+                silent_path, music, out_path,
+                ffmpeg_path=settings.ffmpeg_path,
+                sfx_overlays=sfx_overlays,
+                bg_video_path=bg_video_path,
+                bg_blur_px=bv.blur_px if bv else 30,
+                bg_dim=bv.dim if bv else 0.4,
+                fg_scale=bv.scale if (bv and bg_video_path) else 1.0,
+                duration_s=channel.duration_s,
+            )
+        else:
+            template_path = templates_dir / f"{archetype}.html.j2"
+            render_frames(job, template_path, frames_dir,
+                          fps=30, browser=settings.playwright_browser,
+                          ui_labels=ui_labels, dna_css=dna_css,
+                          animation_style=(effective_dna.animation_style
+                                            if effective_dna is not None else "none"))
+            compose_video(
+                frames_dir, music, out_path,
+                fps=30, ffmpeg_path=settings.ffmpeg_path,
+                sfx_overlays=sfx_overlays,
+                bg_video_path=bg_video_path,
+                bg_blur_px=bv.blur_px if bv else 30,
+                bg_dim=bv.dim if bv else 0.4,
+                fg_scale=bv.scale if (bv and bg_video_path) else 1.0,
+                duration_s=channel.duration_s,
+            )
         render_ms = int((time.perf_counter() - t0) * 1000)
-        log.info(f"  → {out_path.name} ({render_ms}ms)")
+        log.info(f"  → {out_path.name} ({render_ms}ms) renderer={channel.renderer}")
 
     # Compute embedding of the Claude-PRODUCED headline too — drives the new
     # "produced-headline dedup" layer in dedup.filter_new on future runs.
