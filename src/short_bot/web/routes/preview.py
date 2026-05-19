@@ -41,10 +41,9 @@ def _load_sample_script(language: str) -> Script:
 
 def _default_dna_for(template: str, channel) -> DnaSpec:
     """Stub DnaSpec when channel has no DNA — uses channel.colors."""
+    from short_bot.dna import ARCHETYPES
     return DnaSpec(
-        archetype=template if template in [
-            "newscast", "tabloid", "magazine", "kinetic", "dark-tech", "stadium", "meme"
-        ] else "newscast",
+        archetype=template if template in ARCHETYPES else "newscast",
         palette=DnaPalette(
             primary=channel.colors["primary"],
             accent=channel.colors["accent"],

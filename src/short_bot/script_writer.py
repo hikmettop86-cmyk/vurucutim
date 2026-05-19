@@ -15,38 +15,6 @@ ARCHETYPE_PROMPTS = {
 - highlights: red=warning/risk/casualty, yellow=stat/decision/key actor
 - mood: breaking for crisis, neutral default, upbeat for positive resolution
 """,
-    "tabloid": """ARCHETYPE: tabloid — provocative, sensational
-- header_top: provocative question or exclamation
-- header_bottom: short follow-up phrase
-- photo_overlay: gossip-style claim ("EXPOSED!" / "SHOCK!")
-- body_paragraph: 2-3 punchy sentences, sensational tone
-- highlights: red=scandal, yellow=name/place
-- mood: usually breaking
-""",
-    "magazine": """ARCHETYPE: magazine — elegant, longform
-- header_top: poetic 2-4 word title
-- header_bottom: subtitle phrase or attribution
-- photo_overlay: thoughtful sub-tagline
-- body_paragraph: 5-7 sentences, elegant, descriptive
-- highlights: yellow=key idea, red sparingly
-- mood: usually neutral or upbeat
-""",
-    "kinetic": """ARCHETYPE: kinetic — typography-led, single-focus
-- header_top: 1-2 PUNCHY words OR a number
-- header_bottom: 1 short phrase OR empty
-- photo_overlay: brief context (≤5 words)
-- body_paragraph: 1-2 short sentences (max 80 chars total)
-- highlights: 0-1, neon style
-- mood: any, often upbeat for stat/insight
-""",
-    "dark-tech": """ARCHETYPE: dark-tech — terminal, codified
-- header_top: codified-style "> NEWS_DROP" or "[ALERT]"
-- header_bottom: tech topic descriptor
-- photo_overlay: 3-6 words technical claim
-- body_paragraph: 3-4 sentences, factual, can include code-flavored terms
-- highlights: green/cyan=key tech, red=vulnerability/risk
-- mood: usually breaking for vulnerabilities, upbeat for releases
-""",
     "stadium": """ARCHETYPE: stadium — sports broadcast energy
 - header_top: SCORE format ("TEAM 2-1 TEAM") OR action word
 - header_bottom: event/stage ("90+3", "FINAL")
@@ -54,14 +22,6 @@ ARCHETYPE_PROMPTS = {
 - body_paragraph: 3-4 sentences, energetic sports-broadcast tone
 - highlights: red=goal/critical event, yellow=player name/stat
 - mood: breaking for last-minute, upbeat for victory
-""",
-    "meme": """ARCHETYPE: meme — Impact-style top/bottom text
-- header_top: TOP TEXT (Impact-meme, ALL CAPS, ≤5 words)
-- header_bottom: BOTTOM TEXT (≤5 words, punchline)
-- photo_overlay: empty OR a short tag
-- body_paragraph: 1 short caption (≤60 chars)
-- highlights: 0-1, edgy
-- mood: usually upbeat
 """,
     "stat-hero": """ARCHETYPE: stat-hero — single hero number + tight caption
 - header_top: 2-4 words context label ("ENFLASYON", "ANKET SONUCU")

@@ -10,14 +10,16 @@ from short_bot.claude_cli import run_json
 from short_bot.locale import LANGUAGE_NAMES
 
 
+# Active archetype catalog. 13 legacy archetypes (tabloid, magazine, kinetic,
+# dark-tech, meme, politika, ekonomi, spor-haber, tech-haber, hava-durumu,
+# yerel, gundem, dosya) were retired 2026-05-19 — they had unused CSS, missing
+# script_writer prompts, and zero live channels. The compositional system
+# (Phase 2+) will reintroduce variety via dimensions rather than parallel
+# fixed templates.
 ARCHETYPES = [
-    "newscast", "tabloid", "magazine", "kinetic", "dark-tech", "stadium", "meme",
-    "politika", "ekonomi", "spor-haber", "tech-haber",
-    "hava-durumu", "yerel", "gundem", "dosya",
-    # Phase-1 compositional addition: stat-hero focuses the body around a single
-    # large number + tight caption. Best for economy / poll / statistic stories
-    # where Claude's body paragraph naturally contains a headline figure.
-    "stat-hero",
+    "newscast",   # general breaking news (battle-tested, son-dakika lives here)
+    "stadium",    # sports/team broadcast (battle-tested, galatasaray lives here)
+    "stat-hero",  # number-driven body (economy/polls — added 2026-05-19)
 ]
 
 _ANIMATIONS_CSS_PATH = Path(__file__).resolve().parent.parent.parent / "templates" / "css" / "_animations.css"
@@ -34,104 +36,12 @@ ARCHETYPE_DEFAULTS: dict[str, dict] = {
         "text_main": "#ffffff", "text_muted": "#cccccc",
         "font_headline": "Inter", "font_body": "Inter",
     },
-    "tabloid": {
-        "primary": "#e8141a", "accent": "#fff100",
-        "bg_grad_1": "#000000", "bg_grad_2": "#2a0000",
-        "body_bg_1": "#0a0000", "body_bg_2": "#220000",
-        "text_main": "#ffffff", "text_muted": "#ffd1d1",
-        "font_headline": "Bebas Neue", "font_body": "Inter",
-    },
-    "magazine": {
-        "primary": "#1a1a1a", "accent": "#c2185b",
-        "bg_grad_1": "#f7f3ee", "bg_grad_2": "#e8e0d4",
-        "body_bg_1": "#f7f3ee", "body_bg_2": "#ffffff",
-        "text_main": "#1a1a1a", "text_muted": "#5b5249",
-        "font_headline": "Playfair Display", "font_body": "Lora",
-    },
-    "kinetic": {
-        "primary": "#ff3366", "accent": "#00f0ff",
-        "bg_grad_1": "#1b1340", "bg_grad_2": "#0d0820",
-        "body_bg_1": "#1b1340", "body_bg_2": "#0d0820",
-        "text_main": "#ffffff", "text_muted": "#b8a8f0",
-        "font_headline": "Anton", "font_body": "Inter",
-    },
-    "dark-tech": {
-        "primary": "#00d4ff", "accent": "#7c4dff",
-        "bg_grad_1": "#0a0e1a", "bg_grad_2": "#141a2e",
-        "body_bg_1": "#0e1322", "body_bg_2": "#1a2138",
-        "text_main": "#e6f0ff", "text_muted": "#7a8bb0",
-        "font_headline": "JetBrains Mono", "font_body": "Inter",
-    },
     "stadium": {
         "primary": "#a30d2d", "accent": "#ffb81c",
         "bg_grad_1": "#0a0a0a", "bg_grad_2": "#3d0712",
         "body_bg_1": "#12060a", "body_bg_2": "#1f0810",
         "text_main": "#fff8e7", "text_muted": "#e8c56a",
         "font_headline": "Oswald", "font_body": "Inter",
-    },
-    "meme": {
-        "primary": "#ff4500", "accent": "#ffeb3b",
-        "bg_grad_1": "#1a1a1a", "bg_grad_2": "#0a0a0a",
-        "body_bg_1": "#ffffff", "body_bg_2": "#f0f0f0",
-        "text_main": "#000000", "text_muted": "#444444",
-        "font_headline": "Impact", "font_body": "Inter",
-    },
-    # ── New archetypes ──────────────────────────────────────────────────
-    "politika": {
-        "primary": "#0a1c4a", "accent": "#d4a937",
-        "bg_grad_1": "#0a1c4a", "bg_grad_2": "#05102a",
-        "body_bg_1": "#0a1c4a", "body_bg_2": "#0e2358",
-        "text_main": "#f5ecd6", "text_muted": "#c9a850",
-        "font_headline": "Source Serif 4", "font_body": "Source Serif 4",
-    },
-    "ekonomi": {
-        "primary": "#003b2a", "accent": "#00c853",
-        "bg_grad_1": "#001f17", "bg_grad_2": "#003b2a",
-        "body_bg_1": "#001f17", "body_bg_2": "#002c1f",
-        "text_main": "#ffffff", "text_muted": "#9ad9b5",
-        "font_headline": "Inter", "font_body": "JetBrains Mono",
-    },
-    "spor-haber": {
-        "primary": "#0a0a0a", "accent": "#39ff14",
-        "bg_grad_1": "#0a0a0a", "bg_grad_2": "#1a0a0a",
-        "body_bg_1": "#0a0a0a", "body_bg_2": "#141414",
-        "text_main": "#ffffff", "text_muted": "#a8ffa8",
-        "font_headline": "Oswald", "font_body": "Inter",
-    },
-    "tech-haber": {
-        "primary": "#1d1d1f", "accent": "#0066cc",
-        "bg_grad_1": "#fbfbfd", "bg_grad_2": "#f5f5f7",
-        "body_bg_1": "#ffffff", "body_bg_2": "#f5f5f7",
-        "text_main": "#1d1d1f", "text_muted": "#86868b",
-        "font_headline": "Inter", "font_body": "Inter",
-    },
-    "hava-durumu": {
-        "primary": "#3a7bd5", "accent": "#ffd23f",
-        "bg_grad_1": "#3a7bd5", "bg_grad_2": "#00d2ff",
-        "body_bg_1": "#3a7bd5", "body_bg_2": "#5dabec",
-        "text_main": "#ffffff", "text_muted": "#e6f4ff",
-        "font_headline": "Inter", "font_body": "Inter",
-    },
-    "yerel": {
-        "primary": "#8b4513", "accent": "#d2691e",
-        "bg_grad_1": "#faf0e0", "bg_grad_2": "#f0d9b5",
-        "body_bg_1": "#faf0e0", "body_bg_2": "#fff8eb",
-        "text_main": "#3a2810", "text_muted": "#7a5a35",
-        "font_headline": "Playfair Display", "font_body": "Lora",
-    },
-    "gundem": {
-        "primary": "#1e1645", "accent": "#ffeb3b",
-        "bg_grad_1": "#1e1645", "bg_grad_2": "#0e0a25",
-        "body_bg_1": "#1e1645", "body_bg_2": "#28194e",
-        "text_main": "#ffffff", "text_muted": "#ffeb3b",
-        "font_headline": "Anton", "font_body": "Inter",
-    },
-    "dosya": {
-        "primary": "#5a3a20", "accent": "#a52a2a",
-        "bg_grad_1": "#f4ecd8", "bg_grad_2": "#e8d8b0",
-        "body_bg_1": "#f4ecd8", "body_bg_2": "#fff7e0",
-        "text_main": "#2a1a08", "text_muted": "#6a4a25",
-        "font_headline": "Source Serif 4", "font_body": "Source Serif 4",
     },
     "stat-hero": {
         # Dark backdrop + cyan/yellow stat colors — designed so the giant
@@ -201,10 +111,9 @@ class DnaTone(BaseModel):
 
 class DnaSpec(BaseModel):
     archetype: Literal[
-        "newscast", "tabloid", "magazine", "kinetic", "dark-tech", "stadium", "meme",
-        "politika", "ekonomi", "spor-haber", "tech-haber",
-        "hava-durumu", "yerel", "gundem", "dosya",
-        "stat-hero",  # 2026-05-19: Phase-1 compositional archetype (number-driven body)
+        "newscast",   # general breaking news
+        "stadium",    # sports/team broadcast
+        "stat-hero",  # number-driven body (2026-05-19 onwards)
     ]
     palette: DnaPalette
     fonts: DnaFonts
@@ -244,20 +153,7 @@ kültürel bağlamına göre yap.
 
 ARCHETYPE SEÇİMİ (1 tane seç):
 - newscast → resmi haber, politika, ekonomi, son dakika kritik
-- tabloid → magazin, sansasyon, ünlü, skandal, viral dedikodu
-- magazine → kültür, sanat, lifestyle, weekend, romantik, zarif
-- kinetic → istatistik, alıntı, motivasyon, tek-vurgu, özlü söz
-- dark-tech → teknoloji, AI, oyun, hacker, fütürist, cyber
 - stadium → spor (futbol/basketbol/F1/...), heyecan, dinamik
-- meme → mizah, komedi, troll, viral video, gençlik
-- politika → resmi siyaset, parlamento, hükümet açıklamaları (formal/oturmuş)
-- ekonomi → borsa, döviz, zam, ekonomik göstergeler (sayısal callout)
-- spor-haber → transfer/sakatlık/fikstür/taktik (jurnalistik, stadium'dan farklı)
-- tech-haber → Apple/Google/AI/bilim haberleri (clean Apple-keynote, dark-tech'ten farklı)
-- hava-durumu → günlük hava raporu (sıcaklık+emoji ön planda)
-- yerel → şehir/mahalle haberleri (sıcak, küçük-ölçekli)
-- gundem → günün top 3-4 haberi liste halinde
-- dosya → soruşturma/araştırmacı gazetecilik (sepia eski-belge estetik)
 - stat-hero → sayı/oran/istatistik haberleri (büyük rakam vurgulu, ekonomi/anket — body'de TEK büyük sayı + kısa açıklama)
 
 DİL UYUMU:
@@ -267,47 +163,22 @@ DİL UYUMU:
 
 PALETTE KARARLARI (archetype'a uygun ama kanala özgü override yapabilirsin):
 - newscast: kırmızı/lacivert/altın
-- tabloid: sarı/kırmızı/siyah, yüksek kontrast
-- magazine: bej/krem/burgundy/altın, sıcak
-- kinetic: tek vurgu rengi (neon yeşil/mor/mavi) + siyah
-- dark-tech: cyan/magenta/yeşil neon + koyu mor/siyah
 - stadium: takım/spor renkleri (yeşil/sarı, kırmızı/lacivert vb.)
-- meme: parlak mavi/sarı/pembe, Impact-vibe
-- politika: lacivert (#0a1c4a) + altın (#d4a937), formal
-- ekonomi: koyu mavi-yeşil + market yeşili (#00c853) + market kırmızı (#d50000) + altın
-- spor-haber: charcoal + soft-red (#e63946) + cool-gray (stadium'dan daha yumuşak)
-- tech-haber: BEYAZ arkaplan + electric blue (#0066cc) + Apple charcoal (#1d1d1f)
-- hava-durumu: gökyüzü mavi gradient (#3a7bd5 → #00d2ff) + güneş sarısı
-- yerel: krem (#fef3e2) + terracotta (#c9663b) + zeytin (#6b7d3a)
-- gundem: deep purple (#1e1645) + bright yellow (#ffeb3b)
-- dosya: sepia paper (#f4ecd8) + rust red (#a52a2a) + ink black
+- stat-hero: dark navy/cyan/yellow, data-viz dashboard hissi
 
 FONT KARARLARI:
-- headline: archetype'a uygun (newscast→Inter, tabloid→Bebas Neue,
-  magazine→Playfair Display, kinetic→Anton, dark-tech→JetBrains Mono,
-  stadium→Oswald, meme→Impact, politika→Source Serif 4, ekonomi→Inter,
-  spor-haber→Oswald, tech-haber→Inter, hava-durumu→Inter Display,
-  yerel→Playfair Display, gundem→Anton, dosya→Source Serif 4)
+- headline: archetype'a uygun (newscast→Inter, stadium→Oswald, stat-hero→Inter)
 - body: okunabilir genelci (Inter veya Roboto)
-- google_imports: Google Fonts URL fragment formatında ("Inter:wght@400;700;900",
-  "Bebas+Neue", "Playfair+Display:ital@1")
+- google_imports: Google Fonts URL fragment formatında ("Inter:wght@400;700;900")
 
 TONE KARARLARI:
 - voice: 2-5 sıfat dizisi
 - style: 2-4 sıfat dizisi
 - forbidden: bu kanalda ASLA olmayacak 3-7 yaklaşım
 - sentence_max_words: archetype'a göre 8-22 arası
-- paragraph_sentences: [min, max], magazine için (5,7), tabloid için (2,3) gibi
-- body_max_chars: 50 (kinetic) — 600 (magazine) arası
+- paragraph_sentences: [min, max]
+- body_max_chars: 150-400 (kanal tonuna göre)
 - headline_style_hint: bu kanalın tipik başlık formatı (1 cümle açıklama)
-
-ARCHETYPE-SPESİFİK FORMAT KURALLARI:
-- gundem: body_paragraph'ı şu formatta yaz: "1. <başlık>\n2. <başlık>\n3. <başlık>"
-  (3-4 madde, her madde 8-15 kelime). \n karakteri gerçek satırbaşı (Python'da yeni
-  satır), markup değil.
-- hava-durumu: header_top = sıcaklık (örn. "23°"), header_bottom = hava emojisi
-  veya kısa açıklama (örn. "GÜNEŞLİ"), photo_overlay = şehir adı (örn. "İSTANBUL"),
-  body_paragraph = kısa hava özeti (50-100 karakter).
 
 BANNER/HIGHLIGHT/CHIP:
 - banner_shape: flat | ribbon | slanted | sharp

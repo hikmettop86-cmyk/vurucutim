@@ -26,14 +26,14 @@ def _channel(dynamic: bool = True) -> ChannelConfig:
 
 def _sample_dna() -> DnaSpec:
     return DnaSpec.model_validate({
-        "archetype": "tabloid",
+        "archetype": "newscast",
         "palette": {
             "primary": "#e8141a", "accent": "#fff100",
             "bg_gradient": ["#000000", "#2a0000"],
             "body_bg": ["#0a0000", "#220000"],
             "text_main": "#ffffff", "text_muted": "#ffd1d1",
         },
-        "fonts": {"headline": "Bebas Neue", "body": "Inter", "google_imports": []},
+        "fonts": {"headline": "Inter", "body": "Inter", "google_imports": []},
         "tone": {
             "voice": "x", "style": "x", "forbidden": [],
             "sentence_max_words": 10, "paragraph_sentences": [2, 3],
@@ -102,7 +102,7 @@ def test_cache_miss_generates_and_saves(eng, templates_dir, secrets_path):
         )
     assert result is not None
     dna, css_path = result
-    assert dna.archetype == "tabloid"
+    assert dna.archetype == "newscast"
     assert css_path.exists()
     assert css_path.parent == templates_dir / "css"
     assert css_path.name.startswith("dynamic-test-")

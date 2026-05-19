@@ -41,12 +41,7 @@ def resolve_youtube_api_key(secrets: dict) -> str:
 
 ARCHETYPE_BG_QUERIES: dict[str, list[str]] = {
     "newscast":  ["newsroom blur", "studio lights motion", "news ticker abstract"],
-    "tabloid":   ["paparazzi flash", "neon city night", "magazine pages turning"],
-    "magazine":  ["soft fabric texture", "ink water swirl", "warm bokeh"],
-    "kinetic":   ["geometric motion", "abstract neon lines", "particle wave"],
-    "dark-tech": ["circuit board glow", "matrix code rain", "server room cyan"],
     "stadium":   ["stadium lights night", "crowd cheering blur", "grass pitch zoom"],
-    "meme":      ["confetti pop", "colorful gradient swirl", "cartoon background"],
     "stat-hero": ["data dashboard blur", "stock chart abstract",
                    "financial graph motion", "analytics screen glow"],
 }
