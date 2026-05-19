@@ -1,0 +1,59 @@
+{% extends "base.html.j2" %}
+{% block title %}Hata {{ code }} — Vurucu TİM{% endblock %}
+{% block content %}
+
+<div class="max-w-3xl mx-auto py-12">
+  <div class="bg-white border border-claude-border rounded-xl shadow-soft p-8">
+    <div class="flex items-start gap-5">
+      <div class="flex-shrink-0">
+        {% if code == 404 %}
+          <div class="w-16 h-16 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center text-3xl">
+            ?
+          </div>
+        {% else %}
+          <div class="w-16 h-16 rounded-full bg-red-100 text-red-700 flex items-center justify-center text-3xl">
+            ⚠
+          </div>
+        {% endif %}
+      </div>
+      <div class="flex-1 min-w-0">
+        <h1 class="font-serif text-3xl font-bold mb-1">
+          Hata {{ code }}
+        </h1>
+        <p class="text-claude-muted text-base">{{ message }}</p>
+      </div>
+    </div>
+
+    <div class="mt-6 flex flex-wrap gap-3">
+      <button onclick="history.back()"
+              class="bg-claude-accent hover:bg-claude-accent-hover text-white px-4 py-2 rounded-lg text-sm font-semibold">
+        ← Geri dön
+      </button>
+      <a href="/"
+         class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border px-4 py-2 rounded-lg text-sm">
+        🏠 Dashboard
+      </a>
+      <a href="/channels"
+         class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border px-4 py-2 rounded-lg text-sm">
+        Kanallar
+      </a>
+      {% if code >= 500 %}
+      <a href="/logs?level=ERROR"
+         class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border px-4 py-2 rounded-lg text-sm">
+        Loglar
+      </a>
+      {% endif %}
+    </div>
+
+    {% if detail and code >= 500 %}
+    <details class="mt-6 bg-claude-surface border border-claude-border rounded-lg">
+      <summary class="px-4 py-2 cursor-pointer text-sm font-medium">
+        🔍 Teknik detay (geliştirici için)
+      </summary>
+      <pre class="px-4 pb-4 pt-2 text-xs overflow-x-auto whitespace-pre-wrap font-mono text-claude-muted">{{ detail }}</pre>
+    </details>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}

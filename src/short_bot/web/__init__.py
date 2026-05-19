@@ -99,6 +99,36 @@ def create_app(
     from short_bot.web.routes import register_blueprints
     register_blueprints(app)
 
+    # Friendly error pages — default Flask 404/500 don't have a back button.
+    import traceback as _tb
+    from flask import render_template as _render
+
+    @app.errorhandler(404)
+    def _on_404(e):
+        return _render("_error.html.j2", code=404,
+                       message="Aradığınız sayfa bulunamadı.",
+                       detail=str(e)), 404
+
+    @app.errorhandler(500)
+    def _on_500(e):
+        # Capture the traceback so users can paste it into a bug report.
+        tb = _tb.format_exc()
+        return _render("_error.html.j2", code=500,
+                       message="Sunucuda beklenmeyen bir hata oluştu.",
+                       detail=tb), 500
+
+    @app.errorhandler(Exception)
+    def _on_unhandled(e):
+        # Catch-all: anything not produced as a Werkzeug HTTPException
+        # (which Flask routes to the 404/500 handlers above) lands here.
+        from werkzeug.exceptions import HTTPException
+        if isinstance(e, HTTPException):
+            return e
+        tb = _tb.format_exc()
+        return _render("_error.html.j2", code=500,
+                       message=f"Beklenmeyen hata: {type(e).__name__}",
+                       detail=tb), 500
+
     # Inject running-run count into all templates for the nav status badge
     from short_bot.web.models import Run
     @app.context_processor

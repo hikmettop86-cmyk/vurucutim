@@ -204,6 +204,7 @@ class DnaSpec(BaseModel):
         "newscast", "tabloid", "magazine", "kinetic", "dark-tech", "stadium", "meme",
         "politika", "ekonomi", "spor-haber", "tech-haber",
         "hava-durumu", "yerel", "gundem", "dosya",
+        "stat-hero",  # 2026-05-19: Phase-1 compositional archetype (number-driven body)
     ]
     palette: DnaPalette
     fonts: DnaFonts
