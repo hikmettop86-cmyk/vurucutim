@@ -109,6 +109,30 @@ function bundledTemplates() {
   return path.join(shortBotRoot(), 'templates');
 }
 
+// --- Bundled Node + Remotion (Phase 3) -------------------------------------
+
+function nodeHome() {
+  // packaged: <resources>/node/   |  dev: rely on system node on PATH
+  return app.isPackaged
+    ? path.join(resourcesDir(), 'node')
+    : '';   // empty → Python falls back to PATH lookup
+}
+
+function bundledRemotionSrc() {
+  // Read-only template source bundled with the installer.
+  // packaged: <resources>/short-bot/remotion/  | dev: <repo>/remotion/
+  return app.isPackaged
+    ? path.join(shortBotRoot(), 'remotion')
+    : path.resolve(__dirname, '..', '..', 'remotion');
+}
+
+function remotionUserDir() {
+  // Writable copy under userData. Bundled remotion/{src,package.json,...}
+  // is copied here on first boot so `npm install` can write node_modules
+  // (resources/ is read-only on Windows installer).
+  return path.join(userData(), 'remotion');
+}
+
 module.exports = {
   APP_NAME,
   userData, configDir, settingsYaml,
@@ -118,4 +142,5 @@ module.exports = {
   preferencesFile, initializedFlag,
   resourcesDir, embeddedPython,
   shortBotRoot, shortBotSrc, settingsExample, bundledMusic, bundledTemplates,
+  nodeHome, bundledRemotionSrc, remotionUserDir,
 };

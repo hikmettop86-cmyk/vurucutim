@@ -10,8 +10,9 @@
     "start": "electron .",
     "test": "node --test test/*.test.js",
     "fetch-python": "node scripts/fetch-python-embed.js",
+    "fetch-node": "node scripts/fetch-node-portable.js",
     "sync-version": "node scripts/sync-version.js",
-    "prebuild": "npm run sync-version && npm run fetch-python",
+    "prebuild": "npm run sync-version && npm run fetch-python && npm run fetch-node",
     "build": "electron-builder --win --x64 --config build/electron-builder.yml",
     "publish": "electron-builder --win --x64 --config build/electron-builder.yml --publish always"
   },

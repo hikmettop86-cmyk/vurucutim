@@ -43,6 +43,19 @@ function buildEnv(port) {
   env.SHORT_BOT_DATA_DIR = paths.dataDir();
   env.SHORT_BOT_LOGS_DIR = paths.logsDir();
   env.SHORT_BOT_OUTPUT_ROOT = paths.outputDir();
+  // Phase 3: point the Python remotion_renderer at the bundled Node + writable
+  // remotion userDir. Both are read at render time; setting them to '' is fine
+  // (Python falls back to PATH / project_root layout).
+  const nodeHome = paths.nodeHome();
+  if (nodeHome && fs.existsSync(nodeHome)) {
+    env.VURUCUTIM_NODE_HOME = nodeHome;
+    // Also prepend to PATH so any nested npm/npx invocations resolve cleanly
+    env.PATH = `${nodeHome};${env.PATH ?? ''}`;
+  }
+  const remotionDir = paths.remotionUserDir();
+  if (fs.existsSync(remotionDir)) {
+    env.VURUCUTIM_REMOTION_HOME = remotionDir;
+  }
   return env;
 }
 

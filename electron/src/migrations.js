@@ -18,10 +18,56 @@ function writeLastVersion(v) {
   fs.writeFileSync(lastInstalledVersionFile(), v, 'utf-8');
 }
 
+function copyDirRecursive(src, dest) {
+  fs.mkdirSync(dest, { recursive: true });
+  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    if (entry.name === 'node_modules') continue;  // never copy the 500 MB tree
+    const s = path.join(src, entry.name);
+    const d = path.join(dest, entry.name);
+    if (entry.isDirectory()) copyDirRecursive(s, d);
+    else fs.copyFileSync(s, d);
+  }
+}
+
+function syncRemotionUserDir() {
+  // Bundled remotion is read-only inside the installer; user-side npm install
+  // needs a writable copy. Copy src/, package.json, etc. (NOT node_modules)
+  // to userData/remotion/ on every boot so app updates that touch the templates
+  // propagate to existing installs.
+  const bundled = paths.bundledRemotionSrc();
+  const userDir = paths.remotionUserDir();
+  if (!fs.existsSync(bundled)) {
+    log.info('migration: bundled remotion not found at', bundled, '(skipping)');
+    return;
+  }
+  // Strategy: rsync-style overwrite of src/, package.json, package-lock.json,
+  // tsconfig.json, remotion.config.ts. Leave node_modules in place.
+  for (const name of ['src', 'package.json', 'package-lock.json',
+                       'tsconfig.json', 'remotion.config.ts']) {
+    const s = path.join(bundled, name);
+    const d = path.join(userDir, name);
+    if (!fs.existsSync(s)) continue;
+    if (fs.statSync(s).isDirectory()) {
+      // Wipe destination subtree first so deleted files in upstream don't linger
+      fs.rmSync(d, { recursive: true, force: true });
+      copyDirRecursive(s, d);
+    } else {
+      fs.mkdirSync(path.dirname(d), { recursive: true });
+      fs.copyFileSync(s, d);
+    }
+  }
+  log.info('migration: remotion userdir synced at', userDir);
+}
+
 async function maybeMigrate(onProgress) {
   const current = app.getVersion();
   const last = readLastVersion();
-  if (last === current) return { migrated: false };
+  if (last === current) {
+    // Even on no-op version, ensure remotion userdir reflects current install
+    // (catches the case where the user upgraded the app outside our normal flow)
+    try { syncRemotionUserDir(); } catch (e) { log.warn('remotion sync skipped:', e.message); }
+    return { migrated: false };
+  }
   log.info(`migration: ${last ?? '(none)'} → ${current}`);
 
   // Re-run pip install -e (idempotent, fast if no changes)
@@ -42,6 +88,12 @@ async function maybeMigrate(onProgress) {
   } else {
     log.info('migration: no venv yet — skipping (wizard will install)');
   }
+
+  // Sync the remotion userdir so the channel.renderer='remotion' path works
+  // immediately after an app update (node_modules install still lazy).
+  onProgress?.('Remotion şablonları senkronize ediliyor…');
+  try { syncRemotionUserDir(); }
+  catch (e) { log.warn('migration: remotion sync failed (non-fatal):', e.message); }
 
   writeLastVersion(current);
   return { migrated: true, from: last, to: current };

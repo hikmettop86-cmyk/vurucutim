@@ -14,8 +14,9 @@ import pytest
 
 from short_bot.remotion_renderer import (
     RemotionRenderError, RemotionRenderJob,
-    _npx_command, _resolve_remotion_root, is_available,
-    list_templates, render, render_job_from_pipeline,
+    _node_command, _npm_command_for_install, _npx_command,
+    _resolve_remotion_root, ensure_remotion_installed,
+    is_available, list_templates, render, render_job_from_pipeline,
 )
 
 
@@ -151,11 +152,16 @@ def test_render_fails_when_remotion_root_missing(tmp_path):
                remotion_root=tmp_path / "no-such")
 
 
-def test_render_fails_when_node_modules_missing(tmp_path):
+def test_render_fails_when_node_modules_and_node_both_missing(tmp_path, monkeypatch):
+    """With Phase 3, missing node_modules triggers a lazy install — that
+    install itself fails with a clear 'node executable' message when node
+    is not bundled or on PATH. Replaces the pre-Phase-3 'not installed' check.
+    """
     (tmp_path / "package.json").write_text("{}", encoding="utf-8")
-    # No node_modules → should error before subprocess
-    with pytest.raises(RemotionRenderError, match="not installed"):
-        render(_basic_job(), tmp_path / "out.mp4", remotion_root=tmp_path)
+    monkeypatch.delenv("VURUCUTIM_NODE_HOME", raising=False)
+    with patch("short_bot.remotion_renderer.shutil.which", return_value=None):
+        with pytest.raises(RemotionRenderError, match="node executable"):
+            render(_basic_job(), tmp_path / "out.mp4", remotion_root=tmp_path)
 
 
 def test_render_surfaces_subprocess_failure(tmp_path):
@@ -293,3 +299,178 @@ def test_render_job_from_pipeline_falls_back_on_missing_gradient():
         template="newscast-basic", bg_image_path=None,
     )
     assert job.bg_grad_1 and job.bg_grad_2  # defaults filled in
+
+
+# --- VURUCUTIM_NODE_HOME bundled-Node resolution (Phase 3) -----------------
+
+@pytest.mark.skipif(
+    __import__("sys").platform != "win32", reason="Windows-specific resolution"
+)
+def test_npx_command_prefers_bundled_node_home(tmp_path, monkeypatch):
+    bundled_npx = tmp_path / "npx.cmd"
+    bundled_npx.write_text("@echo off\n", encoding="utf-8")
+    monkeypatch.setenv("VURUCUTIM_NODE_HOME", str(tmp_path))
+    out = _npx_command()
+    assert out == str(bundled_npx), (
+        f"expected bundled npx at {bundled_npx}, got {out}"
+    )
+
+
+def test_npx_command_falls_back_to_path_when_env_unset(monkeypatch):
+    monkeypatch.delenv("VURUCUTIM_NODE_HOME", raising=False)
+    # Should still return a string (PATH lookup or "npx" fallback)
+    out = _npx_command()
+    assert isinstance(out, str) and len(out) > 0
+
+
+def test_npx_command_falls_back_when_bundled_missing(tmp_path, monkeypatch):
+    """If VURUCUTIM_NODE_HOME points at a non-existent dir, we still
+    fall through to PATH instead of crashing."""
+    monkeypatch.setenv("VURUCUTIM_NODE_HOME", str(tmp_path / "no-such"))
+    out = _npx_command()
+    assert isinstance(out, str) and len(out) > 0
+    assert "no-such" not in out
+
+
+@pytest.mark.skipif(
+    __import__("sys").platform != "win32", reason="Windows-specific resolution"
+)
+def test_node_command_resolves_bundled(tmp_path, monkeypatch):
+    bundled = tmp_path / "node.exe"
+    bundled.write_bytes(b"")
+    monkeypatch.setenv("VURUCUTIM_NODE_HOME", str(tmp_path))
+    out = _node_command()
+    assert out == str(bundled)
+
+
+def test_node_command_returns_none_when_neither_present(monkeypatch):
+    """When env var unset and PATH has no node, returns None (so callers can
+    surface a clean 'install Node' error instead of trying to spawn nothing)."""
+    monkeypatch.delenv("VURUCUTIM_NODE_HOME", raising=False)
+    with patch("short_bot.remotion_renderer.shutil.which", return_value=None):
+        assert _node_command() is None
+
+
+# --- VURUCUTIM_REMOTION_HOME env override ---------------------------------
+
+def test_resolve_remotion_root_uses_env_var(tmp_path, monkeypatch):
+    monkeypatch.setenv("VURUCUTIM_REMOTION_HOME", str(tmp_path))
+    out = _resolve_remotion_root()
+    assert out == tmp_path.resolve()
+
+
+def test_resolve_remotion_root_env_var_overridden_by_explicit_arg(tmp_path, monkeypatch):
+    """Explicit argument always wins — tests / wizard flows depend on it."""
+    other = tmp_path / "other"
+    other.mkdir()
+    monkeypatch.setenv("VURUCUTIM_REMOTION_HOME", str(tmp_path / "from-env"))
+    out = _resolve_remotion_root(other)
+    assert out == other.resolve()
+
+
+def test_resolve_remotion_root_empty_env_falls_through(tmp_path, monkeypatch):
+    """Empty string env var should be treated as unset (Electron may set
+    it to '' when bundled Node is not yet downloaded)."""
+    monkeypatch.setenv("VURUCUTIM_REMOTION_HOME", "")
+    out = _resolve_remotion_root()
+    # Falls through to project_root/remotion default
+    assert out.name == "remotion"
+
+
+# --- ensure_remotion_installed --------------------------------------------
+
+def test_ensure_remotion_installed_noop_when_already_installed(tmp_path):
+    (tmp_path / "package.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "node_modules").mkdir()
+    # Should NOT spawn npm install — node_modules already there
+    with patch("short_bot.remotion_renderer.subprocess.run") as mock_run:
+        out = ensure_remotion_installed(remotion_root=tmp_path)
+    assert out == tmp_path.resolve()
+    assert not mock_run.called
+
+
+def test_ensure_remotion_installed_raises_when_no_package_json(tmp_path):
+    with pytest.raises(RemotionRenderError, match="package.json"):
+        ensure_remotion_installed(remotion_root=tmp_path)
+
+
+def test_ensure_remotion_installed_runs_npm_install(tmp_path, monkeypatch):
+    (tmp_path / "package.json").write_text("{}", encoding="utf-8")
+    # Pretend node is available via env (bundled)
+    monkeypatch.setenv("VURUCUTIM_NODE_HOME", str(tmp_path))
+    # Need node executable for _node_command to return something
+    node_exe = tmp_path / ("node.exe" if __import__("sys").platform == "win32" else "node")
+    node_exe.write_bytes(b"")
+    npm_exe = tmp_path / ("npm.cmd" if __import__("sys").platform == "win32" else "npm")
+    npm_exe.write_bytes(b"")
+
+    captured = {}
+
+    def fake_run(cmd, **kw):
+        captured["cmd"] = cmd
+        captured["cwd"] = kw.get("cwd")
+        # Simulate successful install
+        (tmp_path / "node_modules").mkdir()
+        return MagicMock(returncode=0, stderr="")
+
+    with patch("short_bot.remotion_renderer.subprocess.run", side_effect=fake_run):
+        ensure_remotion_installed(remotion_root=tmp_path)
+    assert captured["cmd"][1] == "install"
+    assert captured["cwd"] == str(tmp_path)
+
+
+def test_ensure_remotion_installed_surfaces_install_failure(tmp_path, monkeypatch):
+    (tmp_path / "package.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("VURUCUTIM_NODE_HOME", str(tmp_path))
+    node_exe = tmp_path / ("node.exe" if __import__("sys").platform == "win32" else "node")
+    node_exe.write_bytes(b"")
+    npm_exe = tmp_path / ("npm.cmd" if __import__("sys").platform == "win32" else "npm")
+    npm_exe.write_bytes(b"")
+    with patch("short_bot.remotion_renderer.subprocess.run",
+               return_value=MagicMock(returncode=1, stderr="network error")):
+        with pytest.raises(RemotionRenderError, match="exit 1"):
+            ensure_remotion_installed(remotion_root=tmp_path)
+
+
+def test_ensure_remotion_installed_errors_when_node_missing(tmp_path, monkeypatch):
+    """Clean error message when bundled node hasn't been fetched yet."""
+    (tmp_path / "package.json").write_text("{}", encoding="utf-8")
+    monkeypatch.delenv("VURUCUTIM_NODE_HOME", raising=False)
+    with patch("short_bot.remotion_renderer.shutil.which", return_value=None):
+        with pytest.raises(RemotionRenderError, match="node executable"):
+            ensure_remotion_installed(remotion_root=tmp_path)
+
+
+def test_render_triggers_ensure_install_when_node_modules_missing(tmp_path, monkeypatch):
+    """End-to-end: missing node_modules should trigger install via render()."""
+    (tmp_path / "package.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("VURUCUTIM_NODE_HOME", str(tmp_path))
+    node_exe = tmp_path / ("node.exe" if __import__("sys").platform == "win32" else "node")
+    node_exe.write_bytes(b"")
+    npm_exe = tmp_path / ("npm.cmd" if __import__("sys").platform == "win32" else "npm")
+    npm_exe.write_bytes(b"")
+    npx_exe = tmp_path / ("npx.cmd" if __import__("sys").platform == "win32" else "npx")
+    npx_exe.write_bytes(b"")
+
+    call_log = []
+
+    def fake_run(cmd, **kw):
+        call_log.append(cmd[:2])  # [exe, first-arg]
+        if cmd[1] == "install":
+            (tmp_path / "node_modules").mkdir()
+            return MagicMock(returncode=0, stderr="")
+        else:  # remotion render
+            out_path = Path([a for a in cmd if str(a).endswith(".mp4")][-1])
+            out_path.write_bytes(b"\x00" * 2048)
+            return MagicMock(returncode=0, stderr="")
+
+    job = RemotionRenderJob(
+        template="newscast-basic", header_top="A", header_bottom="B",
+        photo_overlay="C", body_paragraph="D body", category="E",
+        handle="@h", duration_seconds=4,
+    )
+    with patch("short_bot.remotion_renderer.subprocess.run", side_effect=fake_run):
+        render(job, tmp_path / "out.mp4", remotion_root=tmp_path)
+    # First call should have been npm install, then npx remotion
+    assert call_log[0][1] == "install"
+    assert call_log[1][1] == "remotion"

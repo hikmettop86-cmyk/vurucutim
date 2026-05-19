@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import shutil
 import subprocess
 import sys
@@ -32,14 +33,45 @@ from typing import Any
 
 
 def _npx_command() -> str:
-    """Resolve the npx executable. On Windows npx is a .cmd shim that Python's
-    subprocess doesn't auto-suffix; we look for npx.cmd explicitly. On
-    posix systems plain `npx` works."""
+    """Resolve the npx executable.
+
+    Resolution order:
+      1. $VURUCUTIM_NODE_HOME/npx.cmd (Electron-bundled portable Node)
+      2. PATH lookup (npx.cmd on Windows, npx elsewhere)
+
+    On Windows npx is a .cmd shim that Python's subprocess doesn't
+    auto-suffix; we look for npx.cmd explicitly.
+    """
+    node_home = os.environ.get("VURUCUTIM_NODE_HOME", "").strip()
+    if node_home:
+        candidate = Path(node_home)
+        if sys.platform == "win32":
+            for name in ("npx.cmd", "npx.exe", "npx"):
+                bundled = candidate / name
+                if bundled.is_file():
+                    return str(bundled)
+        else:
+            bundled = candidate / "npx"
+            if bundled.is_file():
+                return str(bundled)
+
     if sys.platform == "win32":
         path = shutil.which("npx.cmd") or shutil.which("npx")
     else:
         path = shutil.which("npx")
     return path or "npx"
+
+
+def _node_command() -> str | None:
+    """Resolve the node executable. Mirrors _npx_command order."""
+    node_home = os.environ.get("VURUCUTIM_NODE_HOME", "").strip()
+    if node_home:
+        candidate = Path(node_home)
+        for name in ("node.exe", "node"):
+            bundled = candidate / name
+            if bundled.is_file():
+                return str(bundled)
+    return shutil.which("node")
 
 logger = logging.getLogger(__name__)
 
@@ -106,9 +138,19 @@ class RemotionRenderJob:
 
 
 def _resolve_remotion_root(explicit: Path | None = None) -> Path:
-    """Find the remotion/ subproject. Override via env or arg."""
+    """Find the remotion/ subproject.
+
+    Resolution order:
+      1. `explicit` argument (test override)
+      2. $VURUCUTIM_REMOTION_HOME (Electron-bundled — points to userData copy
+         where `npm install` writes node_modules)
+      3. <project_root>/remotion (dev mode)
+    """
     if explicit is not None:
         return Path(explicit).resolve()
+    env_root = os.environ.get("VURUCUTIM_REMOTION_HOME", "").strip()
+    if env_root:
+        return Path(env_root).resolve()
     # Project structure: src/short_bot/remotion_renderer.py → up 3 → project root
     project_root = Path(__file__).resolve().parents[2]
     return project_root / "remotion"
@@ -116,15 +158,91 @@ def _resolve_remotion_root(explicit: Path | None = None) -> Path:
 
 def is_available(remotion_root: Path | None = None) -> bool:
     """Quick health check. Returns True when:
-      - `node` is on PATH
+      - node is resolvable (bundled or on PATH)
       - remotion/ exists with node_modules already installed (npm install ran)
 
     Use this before offering the Remotion renderer in the channel-config UI.
     """
-    if shutil.which("node") is None:
+    if _node_command() is None:
         return False
     root = _resolve_remotion_root(remotion_root)
     return (root / "package.json").is_file() and (root / "node_modules").is_dir()
+
+
+def ensure_remotion_installed(
+    *,
+    remotion_root: Path | None = None,
+    timeout_s: int = 900,
+    log: logging.Logger | None = None,
+) -> Path:
+    """Install Remotion deps if missing — runs `npm install` once.
+
+    Designed for Electron-bundled mode: the installer ships remotion/src and
+    package.json but NOT node_modules (which would bloat the installer by
+    ~500 MB). First Remotion render triggers this function to do the install
+    against the bundled portable Node.
+
+    Returns the resolved remotion root. Raises RemotionRenderError when
+    install fails so the caller can surface the failure to the run log.
+    """
+    log = log or logger
+    root = _resolve_remotion_root(remotion_root)
+    if not (root / "package.json").is_file():
+        raise RemotionRenderError(
+            f"remotion root has no package.json: {root}"
+        )
+    if (root / "node_modules").is_dir():
+        return root  # already installed
+    node = _node_command()
+    if node is None:
+        raise RemotionRenderError(
+            "node executable not found — bundle Node via fetch-node-portable "
+            "or install Node.js manually."
+        )
+    npm = _npm_command_for_install()
+    log.info(f"[remotion] installing node_modules in {root} (one-time, ~2 min)")
+    try:
+        proc = subprocess.run(
+            [npm, "install", "--no-audit", "--no-fund", "--loglevel=error"],
+            cwd=str(root), timeout=timeout_s,
+            capture_output=True, text=True, shell=False,
+        )
+    except subprocess.TimeoutExpired as e:
+        raise RemotionRenderError(
+            f"npm install timed out after {timeout_s}s"
+        ) from e
+    if proc.returncode != 0:
+        tail = (proc.stderr or "")[-1500:]
+        raise RemotionRenderError(
+            f"npm install failed (exit {proc.returncode})\n{tail}"
+        )
+    if not (root / "node_modules").is_dir():
+        raise RemotionRenderError(
+            "npm install reported success but node_modules missing"
+        )
+    log.info(f"[remotion] node_modules installed at {root / 'node_modules'}")
+    return root
+
+
+def _npm_command_for_install() -> str:
+    """Resolve npm executable for `npm install`. Same precedence as _npx_command."""
+    node_home = os.environ.get("VURUCUTIM_NODE_HOME", "").strip()
+    if node_home:
+        candidate = Path(node_home)
+        if sys.platform == "win32":
+            for name in ("npm.cmd", "npm.exe", "npm"):
+                bundled = candidate / name
+                if bundled.is_file():
+                    return str(bundled)
+        else:
+            bundled = candidate / "npm"
+            if bundled.is_file():
+                return str(bundled)
+    if sys.platform == "win32":
+        path = shutil.which("npm.cmd") or shutil.which("npm")
+    else:
+        path = shutil.which("npm")
+    return path or "npm"
 
 
 def render(
@@ -149,10 +267,11 @@ def render(
     root = _resolve_remotion_root(remotion_root)
     if not root.is_dir():
         raise RemotionRenderError(f"remotion root not found: {root}")
+    # Lazy-install node_modules on first use (Electron-bundled mode ships
+    # src/ + package.json but not the 500 MB node_modules — install runs
+    # once on first Remotion render, ~2 minutes).
     if not (root / "node_modules").is_dir():
-        raise RemotionRenderError(
-            f"remotion not installed — run `npm install` inside {root}"
-        )
+        ensure_remotion_installed(remotion_root=root)
 
     out_path = Path(out_path).resolve()
     out_path.parent.mkdir(parents=True, exist_ok=True)
