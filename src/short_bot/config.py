@@ -135,6 +135,12 @@ class ChannelConfig:
     # full-bleed / paragraph). Unknown keys/values silently dropped by the
     # Zod schema so partial configs are safe.
     remotion_dimensions: dict[str, str] | None = None
+    # When True, the pipeline calls auto_dimensions(script) per video and
+    # MERGES the result over remotion_dimensions (auto wins for the axes
+    # it picks: motionPreset + bodyStyle). The channel-level recipe still
+    # controls headerStyle/photoTreatment/typography so brand identity
+    # holds while motion + body adapt to content.
+    remotion_auto_dimensions: bool = False
 
     @property
     def resolved_remotion_template(self) -> str:
@@ -259,6 +265,7 @@ def load_channel(path: Path) -> ChannelConfig:
             str(k): str(v) for k, v in remotion_dimensions_raw.items()
             if v not in (None, "")
         } or None
+    remotion_auto_dimensions = bool(data.get("remotion_auto_dimensions", False))
 
     cta = data.get("cta", {})
     return ChannelConfig(
@@ -294,6 +301,7 @@ def load_channel(path: Path) -> ChannelConfig:
         renderer=renderer,
         remotion_template=remotion_template,
         remotion_dimensions=remotion_dimensions,
+        remotion_auto_dimensions=remotion_auto_dimensions,
     )
 
 
@@ -379,6 +387,8 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
         data["remotion_template"] = cfg.remotion_template
     if cfg.remotion_dimensions:
         data["remotion_dimensions"] = dict(cfg.remotion_dimensions)
+    if cfg.remotion_auto_dimensions:
+        data["remotion_auto_dimensions"] = True
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     Path(path).write_text(
         yaml.safe_dump(data, allow_unicode=True, sort_keys=False, default_flow_style=False),

@@ -1321,7 +1321,38 @@
 
         <div x-show="effectiveRemotionTemplate === 'adaptive'"
              class="pt-3 border-t border-claude-border">
-          <div class="text-xs text-claude-muted uppercase mb-2">Adaptive boyutlar</div>
+
+          {# Preset shortcuts — one click fills the recipe #}
+          <div class="mb-3">
+            <div class="text-xs text-claude-muted uppercase mb-2">Hızlı preset</div>
+            <div class="flex flex-wrap gap-2"
+                 x-data="{
+                   applyPreset(p) {
+                     dimHeaderStyle    = p.headerStyle;
+                     dimPhotoTreatment = p.photoTreatment;
+                     dimBodyStyle      = p.bodyStyle;
+                     dimMotionPreset   = p.motionPreset;
+                     dimTypography     = p.typography;
+                   }
+                 }">
+              <template x-for="p in [
+                {name: '🏟 Spor Yayın',     headerStyle: 'banner-skewed', photoTreatment: 'full-bleed',    bodyStyle: 'paragraph', motionPreset: 'sport',     typography: 'sport-bold'},
+                {name: '⚖ Asayiş Ciddi',  headerStyle: 'banner-flat',   photoTreatment: 'full-bleed',    bodyStyle: 'paragraph', motionPreset: 'news',      typography: 'authoritative'},
+                {name: '🎙 Politik Açıklama', headerStyle: 'hero-overlay', photoTreatment: 'blur-bg',     bodyStyle: 'quote',     motionPreset: 'dramatic',  typography: 'editorial'},
+                {name: '📊 Ekonomi Sayı',  headerStyle: 'banner-flat',   photoTreatment: 'banded',        bodyStyle: 'stat-hero', motionPreset: 'cinematic', typography: 'tech'},
+                {name: '✨ Magazin Kart',   headerStyle: 'hero-overlay',  photoTreatment: 'polaroid-tilt', bodyStyle: 'quote',     motionPreset: 'cinematic', typography: 'cinematic-serif'}
+              ]" :key="p.name">
+                <button type="button" @click="applyPreset(p)"
+                        class="text-xs bg-claude-surface hover:bg-claude-accent hover:text-white border border-claude-border px-3 py-1.5 rounded-lg transition-colors"
+                        x-text="p.name"></button>
+              </template>
+            </div>
+            <p class="text-xs text-claude-subtle mt-2">
+              Tıklayınca 5 dropdown da otomatik dolar. Sonra elle ince ayar yapabilirsin.
+            </p>
+          </div>
+
+          <div class="text-xs text-claude-muted uppercase mb-2 pt-3 border-t border-claude-border/40">Adaptive boyutlar</div>
           <div class="grid grid-cols-3 gap-3 mb-3">
             <label class="text-xs">
               <span class="block text-claude-muted mb-1">Header</span>
@@ -1387,6 +1418,91 @@
             3 × 5 × 3 × 5 × 7 = <strong>1575 kombinasyon</strong>. Eksik akslar Zod default'una düşer.
             Tipografi seçince Google Fonts CSS otomatik yüklenir.
           </p>
+
+          {# Content-aware auto-pick toggle #}
+          <label class="flex items-start gap-2 mt-4 pt-3 border-t border-claude-border/40 cursor-pointer">
+            <input type="checkbox" name="remotion_auto_dimensions" value="1"
+                   class="mt-0.5"
+                   {% if c.remotion_auto_dimensions %}checked{% endif %}>
+            <span>
+              <span class="text-sm font-semibold text-claude-text">🧠 İçerik-uyumlu otomatik seçim</span>
+              <span class="block text-[11px] text-claude-subtle mt-0.5">
+                Açıkken her video için pipeline <code>script.mood</code> + body metnine göre
+                <strong>motionPreset</strong> ve <strong>bodyStyle</strong> akslarını otomatik seçer
+                (örn. breaking → news motion, sayı içeriği → stat-hero). Üstteki recipe diğer akslari
+                (header / photo / tipografi) kontrol eder — kanal kimliği korunur, motion+body içerikle değişir.
+              </span>
+            </span>
+          </label>
+        </div>
+      </div>
+
+      {# Shuffle: 6 rastgele kombinasyon thumbnail grid #}
+      <div x-show="effectiveRemotionTemplate === 'adaptive'"
+           x-data='{
+             shuffles: [],
+             buildShuffles() {
+               const heads = ["banner-flat","banner-skewed","hero-overlay"];
+               const photos = ["full-bleed","banded","blur-bg","polaroid-tilt","cutout-float"];
+               const bodies = ["paragraph","quote","stat-hero"];
+               const motions = ["subtle","dramatic","sport","news","cinematic"];
+               const types = ["default","authoritative","tabloid","editorial","tech","sport-bold","cinematic-serif"];
+               const pick = (a) => a[Math.floor(Math.random() * a.length)];
+               this.shuffles = [];
+               for (let i = 0; i < 6; i++) {
+                 this.shuffles.push({
+                   headerStyle: pick(heads),
+                   photoTreatment: pick(photos),
+                   bodyStyle: pick(bodies),
+                   motionPreset: pick(motions),
+                   typography: pick(types),
+                 });
+               }
+             },
+             previewUrl(s) {
+               const p = new URLSearchParams({
+                 primary: this.primary, accent: this.accent,
+                 bg_grad_1: this.bgGrad1, bg_grad_2: this.bgGrad2,
+                 remotion_template: "adaptive",
+                 dim_headerStyle: s.headerStyle,
+                 dim_photoTreatment: s.photoTreatment,
+                 dim_bodyStyle: s.bodyStyle,
+                 dim_motionPreset: s.motionPreset,
+                 dim_typography: s.typography,
+               });
+               return `/preview/{{ c.slug }}/remotion-frame?${p.toString()}`;
+             },
+             applyShuffle(s) {
+               this.dimHeaderStyle    = s.headerStyle;
+               this.dimPhotoTreatment = s.photoTreatment;
+               this.dimBodyStyle      = s.bodyStyle;
+               this.dimMotionPreset   = s.motionPreset;
+               this.dimTypography     = s.typography;
+             }
+           }'
+           class="bg-claude-surface border border-claude-border rounded-lg p-4 mt-4">
+        <div class="flex items-center justify-between mb-3">
+          <div class="text-xs text-claude-muted uppercase tracking-wider">🎲 Rastgele 6 stil</div>
+          <button type="button" @click="buildShuffles()"
+                  class="text-xs bg-claude-text text-white hover:bg-claude-muted px-3 py-1.5 rounded-lg">
+            <span x-text="shuffles.length === 0 ? '🎲 Üret' : '↻ Yenile'"></span>
+          </button>
+        </div>
+        <p class="text-xs text-claude-muted mb-3" x-show="shuffles.length === 0">
+          Tek tıkla 6 rastgele kombinasyon thumbnail olarak render edilir (~3s × 6 paralel).
+          Beğendiğine tıkla → o kombinasyon recipe'in olur.
+        </p>
+        <div x-show="shuffles.length > 0" class="grid grid-cols-3 gap-2">
+          <template x-for="(s, i) in shuffles" :key="i">
+            <button type="button" @click="applyShuffle(s)"
+                    class="relative aspect-[9/16] bg-black rounded overflow-hidden group ring-1 ring-claude-border hover:ring-claude-accent transition-all">
+              <img :src="previewUrl(s)" loading="lazy"
+                   class="w-full h-full object-cover" alt="" />
+              <div class="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[9px] px-1 py-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                <span x-text="`${s.headerStyle.slice(0,4)}/${s.photoTreatment.slice(0,4)}/${s.bodyStyle.slice(0,4)}`"></span>
+              </div>
+            </button>
+          </template>
         </div>
       </div>
 

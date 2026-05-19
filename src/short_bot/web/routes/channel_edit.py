@@ -363,6 +363,7 @@ def save(slug):
         remotion_template=(request.form.get("remotion_template", "").strip()
                             or None),
         remotion_dimensions=_collect_adaptive_dimensions(request.form, cfg),
+        remotion_auto_dimensions=request.form.get("remotion_auto_dimensions") == "1",
     )
     save_channel(path, new_cfg)
     flash("Kanal güncellendi.", "success")

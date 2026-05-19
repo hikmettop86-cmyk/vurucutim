@@ -478,6 +478,44 @@ def render_still(
     return out_path
 
 
+def auto_dimensions(script: Any) -> dict[str, str]:
+    """Pick Adaptive dimensions per-video based on script content.
+
+    Heuristics:
+      - motionPreset: script.mood → news (breaking) / sport (upbeat) / subtle (neutral)
+      - bodyStyle:    digits or % in body → stat-hero; very short body → quote; else paragraph
+      - headerStyle / photoTreatment / typography: kept neutral defaults
+        (intentionally NOT auto-picked — the channel-level recipe controls
+        visual identity, only the per-video signal axes change)
+    """
+    import re
+    mood = getattr(script, "mood", "neutral") or "neutral"
+    body = getattr(script, "body_paragraph", "") or ""
+
+    if mood == "breaking":
+        motion = "news"
+    elif mood == "upbeat":
+        motion = "sport"
+    else:
+        motion = "subtle"
+
+    # Detect prominent numeric content (e.g. %54,3 / ₺250 milyon / 1500).
+    # Case-insensitive so "Yüzde 25" at sentence start matches.
+    has_stat = bool(re.search(
+        r"%\s*\d|y[üu]zde\s+\d|[₺$€£]\s*\d|\b\d{3,}\b",
+        body, re.IGNORECASE,
+    ))
+    body_len = len(body)
+    if has_stat:
+        body_style = "stat-hero"
+    elif body_len < 200:
+        body_style = "quote"
+    else:
+        body_style = "paragraph"
+
+    return {"motionPreset": motion, "bodyStyle": body_style}
+
+
 def render_job_from_pipeline(
     *,
     script: Any,

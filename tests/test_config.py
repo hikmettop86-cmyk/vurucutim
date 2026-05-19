@@ -852,3 +852,57 @@ def test_save_channel_writes_remotion_dimensions(tmp_path):
     assert cfg2.remotion_dimensions == {
         "headerStyle": "hero-overlay", "bodyStyle": "quote"
     }
+
+
+def test_remotion_auto_dimensions_default_false(tmp_path):
+    p = tmp_path / "ch.yaml"
+    p.write_text(_minimal_channel_yaml(), encoding="utf-8")
+    c = load_channel(p)
+    assert c.remotion_auto_dimensions is False
+
+
+def test_remotion_auto_dimensions_load_true(tmp_path):
+    p = tmp_path / "ch.yaml"
+    p.write_text(
+        _minimal_channel_yaml("remotion_auto_dimensions: true\n"),
+        encoding="utf-8",
+    )
+    c = load_channel(p)
+    assert c.remotion_auto_dimensions is True
+
+
+def test_remotion_auto_dimensions_roundtrip(tmp_path):
+    from short_bot.config import ChannelConfig, save_channel
+    cfg = ChannelConfig(
+        slug="t", name="t", keywords=["a"], rss_locale="tr-TR",
+        schedule_cron="0 * * * *", duration_s=25, min_score=6.0,
+        max_candidates_per_run=3, template="newscast",
+        colors={"primary": "#fff"}, handle="@t", output_dir="o",
+        enabled=True, cta_enabled=True, cta_text="x", cta_icons=[],
+        cta_duration_s=4, cta_show_handle=True, language="tr",
+        renderer="remotion", remotion_template="adaptive",
+        remotion_auto_dimensions=True,
+    )
+    p = tmp_path / "ch.yaml"
+    save_channel(p, cfg)
+    text = p.read_text(encoding="utf-8")
+    assert "remotion_auto_dimensions: true" in text
+    cfg2 = load_channel(p)
+    assert cfg2.remotion_auto_dimensions is True
+
+
+def test_remotion_auto_dimensions_omitted_when_false(tmp_path):
+    """Avoid YAML pollution for the common case (off by default)."""
+    from short_bot.config import ChannelConfig, save_channel
+    cfg = ChannelConfig(
+        slug="t", name="t", keywords=["a"], rss_locale="tr-TR",
+        schedule_cron="0 * * * *", duration_s=25, min_score=6.0,
+        max_candidates_per_run=3, template="newscast",
+        colors={"primary": "#fff"}, handle="@t", output_dir="o",
+        enabled=True, cta_enabled=True, cta_text="x", cta_icons=[],
+        cta_duration_s=4, cta_show_handle=True, language="tr",
+        remotion_auto_dimensions=False,
+    )
+    p = tmp_path / "ch.yaml"
+    save_channel(p, cfg)
+    assert "remotion_auto_dimensions" not in p.read_text(encoding="utf-8")

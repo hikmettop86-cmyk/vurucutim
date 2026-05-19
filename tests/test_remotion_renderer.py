@@ -164,6 +164,87 @@ def test_adaptive_dimensions_total_combinations():
     assert total == 1575, f"expected 1575 combos, got {total}"
 
 
+# ── auto_dimensions content-aware picker (Phase 6c) ────────────────────────
+
+class _ScriptStub:
+    def __init__(self, mood="neutral", body_paragraph=""):
+        self.mood = mood
+        self.body_paragraph = body_paragraph
+
+
+def test_auto_dimensions_breaking_mood_picks_news_motion():
+    from short_bot.remotion_renderer import auto_dimensions
+    d = auto_dimensions(_ScriptStub(mood="breaking", body_paragraph="Bir gelişme oldu, " * 30))
+    assert d["motionPreset"] == "news"
+
+
+def test_auto_dimensions_upbeat_mood_picks_sport_motion():
+    from short_bot.remotion_renderer import auto_dimensions
+    d = auto_dimensions(_ScriptStub(mood="upbeat", body_paragraph="Kazandık, " * 30))
+    assert d["motionPreset"] == "sport"
+
+
+def test_auto_dimensions_neutral_mood_picks_subtle_motion():
+    from short_bot.remotion_renderer import auto_dimensions
+    d = auto_dimensions(_ScriptStub(mood="neutral", body_paragraph="Olağan haber, " * 30))
+    assert d["motionPreset"] == "subtle"
+
+
+def test_auto_dimensions_percent_detected_picks_stat_hero():
+    from short_bot.remotion_renderer import auto_dimensions
+    d = auto_dimensions(_ScriptStub(
+        mood="neutral",
+        body_paragraph="Enflasyon %54,3 olarak açıklandı. Bütçe denk olarak kapanacak.",
+    ))
+    assert d["bodyStyle"] == "stat-hero"
+
+
+def test_auto_dimensions_yuzde_word_detected_picks_stat_hero():
+    from short_bot.remotion_renderer import auto_dimensions
+    d = auto_dimensions(_ScriptStub(
+        mood="neutral",
+        body_paragraph="Yüzde 25 oranında artış kayda geçti, bütçe rekor seviyede.",
+    ))
+    assert d["bodyStyle"] == "stat-hero"
+
+
+def test_auto_dimensions_short_body_picks_quote():
+    from short_bot.remotion_renderer import auto_dimensions
+    d = auto_dimensions(_ScriptStub(
+        mood="neutral",
+        body_paragraph="Şampiyonluk hakkımızdır. Maç fiyaskoydu.",  # < 200 chars
+    ))
+    assert d["bodyStyle"] == "quote"
+
+
+def test_auto_dimensions_long_body_picks_paragraph():
+    from short_bot.remotion_renderer import auto_dimensions
+    d = auto_dimensions(_ScriptStub(
+        mood="neutral",
+        body_paragraph="Uzun haber metni " * 30,  # long, no digits
+    ))
+    assert d["bodyStyle"] == "paragraph"
+
+
+def test_auto_dimensions_only_picks_motion_and_body_axes():
+    """auto_dimensions should NOT pick headerStyle/photoTreatment/typography —
+    those are channel-identity axes the recipe controls."""
+    from short_bot.remotion_renderer import auto_dimensions
+    d = auto_dimensions(_ScriptStub(mood="breaking", body_paragraph="Test " * 50))
+    assert set(d.keys()) == {"motionPreset", "bodyStyle"}, (
+        f"auto_dimensions leaked unwanted axes: {set(d.keys())}"
+    )
+
+
+def test_auto_dimensions_handles_missing_attrs():
+    """Best-effort: if script doesn't have mood or body, still returns a
+    valid dict — no AttributeError."""
+    from short_bot.remotion_renderer import auto_dimensions
+    class _Empty: ...
+    d = auto_dimensions(_Empty())
+    assert "motionPreset" in d and "bodyStyle" in d
+
+
 def test_render_still_uses_remotion_still_command(tmp_path):
     """Phase 6a: snapshot path must call `remotion still` (not `render`)
     so we hit the optimized single-frame codepath."""

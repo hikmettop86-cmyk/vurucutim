@@ -851,6 +851,7 @@ def _run_rss(*, channel, run_id, log, eng, settings,
                 render as remotion_render,
                 render_job_from_pipeline,
                 ensure_remotion_installed,
+                auto_dimensions,
                 RemotionRenderError,
             )
             # ensure_remotion_installed is idempotent: no-op when node_modules
@@ -864,6 +865,14 @@ def _run_rss(*, channel, run_id, log, eng, settings,
                     f"channel.renderer='remotion' but install failed: {e}"
                 ) from e
             silent_path = Path(tmpd) / "remotion-silent.mp4"
+            # Merge channel recipe with auto-picked per-video dimensions when
+            # the channel opts in. Auto wins on the axes it picks (motion +
+            # body), recipe controls visual identity (header/photo/typo).
+            merged_dimensions: dict[str, str] = dict(channel.remotion_dimensions or {})
+            if channel.remotion_auto_dimensions:
+                auto = auto_dimensions(script)
+                merged_dimensions.update(auto)
+                log.info(f"  remotion auto-dimensions: {auto}")
             remotion_job = render_job_from_pipeline(
                 script=script,
                 channel_colors=channel.colors,
@@ -871,7 +880,7 @@ def _run_rss(*, channel, run_id, log, eng, settings,
                 duration_s=channel.duration_s,
                 template=channel.resolved_remotion_template,
                 bg_image_path=bg,
-                dimensions=channel.remotion_dimensions,
+                dimensions=merged_dimensions or None,
             )
             log.info(f"  → remotion render {remotion_job.template}")
             try:
