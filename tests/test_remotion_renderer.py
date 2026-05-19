@@ -76,6 +76,20 @@ def test_list_templates_includes_newscast_basic():
     assert "newscast-basic" in list_templates()
 
 
+def test_list_templates_includes_stadium_basic():
+    assert "stadium-basic" in list_templates()
+
+
+def test_list_templates_includes_stat_hero():
+    assert "stat-hero" in list_templates()
+
+
+def test_list_templates_returns_sorted():
+    """Stable ordering matters when surfacing the list in the UI dropdown."""
+    out = list_templates()
+    assert out == sorted(out)
+
+
 # --- is_available ----------------------------------------------------------
 
 def test_is_available_false_when_node_missing(tmp_path):
@@ -114,6 +128,21 @@ def test_render_rejects_unknown_template(tmp_path):
     )
     with pytest.raises(RemotionRenderError, match="unknown"):
         render(job, tmp_path / "out.mp4", remotion_root=tmp_path)
+
+
+@pytest.mark.parametrize("template", ["newscast-basic", "stadium-basic", "stat-hero"])
+def test_render_accepts_known_template_passes_to_root_check(tmp_path, template):
+    """All 3 registered templates pass the whitelist check — proves that
+    template name typos in _AVAILABLE_TEMPLATES would be caught here. We
+    block at the remotion root step rather than the template step."""
+    job = RemotionRenderJob(
+        template=template, header_top="A", header_bottom="B",
+        photo_overlay="C", body_paragraph="D", category="E",
+        handle="@h", duration_seconds=4,
+    )
+    with pytest.raises(RemotionRenderError, match="not found"):
+        render(job, tmp_path / "out.mp4",
+               remotion_root=tmp_path / "no-such-dir")
 
 
 def test_render_fails_when_remotion_root_missing(tmp_path):

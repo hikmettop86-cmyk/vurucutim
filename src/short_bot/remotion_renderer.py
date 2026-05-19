@@ -43,9 +43,10 @@ def _npx_command() -> str:
 
 logger = logging.getLogger(__name__)
 
-# Hardcoded for Phase 0. Phase 1+ will discover templates from
-# remotion/src/templates/ at module load time.
-_AVAILABLE_TEMPLATES = {"newscast-basic"}
+# Hardcoded list — kept in sync with remotion/src/Root.tsx Compositions.
+# Phase 1 (2026-05-19): stadium-basic + stat-hero added. Future phases
+# can move this to runtime discovery by scanning remotion/src/templates/.
+_AVAILABLE_TEMPLATES = {"newscast-basic", "stadium-basic", "stat-hero"}
 
 _REMOTION_PORT = 3210   # avoid colliding with default 3000
 
