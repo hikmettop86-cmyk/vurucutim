@@ -22,9 +22,13 @@ async function _autoFit() {
     var parent = el.parentElement;
     if (!parent) return;
     var wmin = parseFloat(el.getAttribute('data-fit-min') || '36');
-    var wmax = parseFloat(el.getAttribute('data-fit-max') || '120');
+    var attrMax = parseFloat(el.getAttribute('data-fit-max') || '120');
     var wpad = parseFloat(el.getAttribute('data-fit-width') || '0');
-    var wsize = wmax;
+    /* Respect user-set font-size (e.g. --size-headline-top): use min(attrMax,
+       computed). Without this, a user choosing 100px gets overridden back to
+       attrMax=200 on each auto-fit pass. */
+    var computed = parseFloat(getComputedStyle(el).fontSize || attrMax);
+    var wsize = Math.min(attrMax, computed || attrMax);
     el.style.fontSize = wsize + 'px';
     void el.offsetHeight;
     while (wsize > wmin && el.scrollWidth > parent.clientWidth - wpad) {

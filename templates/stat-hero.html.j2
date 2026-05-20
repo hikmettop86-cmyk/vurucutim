@@ -28,20 +28,20 @@
     padding: 70px 60px 36px;
     text-align: center;
     font-weight: 900;
-    font-size: 80px;
     line-height: 1.05;
     letter-spacing: 0.3px;
     border-bottom: 4px solid {{ colors.accent }};
   }
   .header .top {
     display: block; white-space: nowrap;
+    font-size: var(--size-headline-top, 80px);
     color: {{ colors.accent }};
     text-shadow: 0 2px 8px rgba(0,0,0,.5);
   }
   .header .bot {
     display: block; white-space: nowrap;
     margin-top: 6px;
-    font-size: 56px;
+    font-size: var(--size-headline-bot, 56px);
     color: var(--text-main, #fff);
     opacity: 0.92;
   }

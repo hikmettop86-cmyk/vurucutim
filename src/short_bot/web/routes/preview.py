@@ -102,6 +102,19 @@ def preview(slug):
         fonts_update["headline"] = request.args["font_headline"]
     if request.args.get("font_body"):
         fonts_update["body"] = request.args["font_body"]
+    # Optional size overrides — empty/None means "use template default"
+    size_top = request.args.get("size_headline_top", "").strip()
+    if size_top:
+        try:
+            fonts_update["size_headline_top"] = int(size_top)
+        except ValueError:
+            pass
+    size_bot = request.args.get("size_headline_bot", "").strip()
+    if size_bot:
+        try:
+            fonts_update["size_headline_bottom"] = int(size_bot)
+        except ValueError:
+            pass
     if fonts_update:
         dna = dna.model_copy(update={"fonts": dna.fonts.model_copy(update=fonts_update)})
 

@@ -79,6 +79,8 @@
         headerBottomColor: "{{ (c.dna.palette.header_bottom_color if c.dna else "") }}",
         fontHeadline: "{{ (c.dna.fonts.headline if c.dna else "Inter") }}",
         fontBody: "{{ (c.dna.fonts.body if c.dna else "Inter") }}",
+        sizeHeadlineTop: "{{ (c.dna.fonts.size_headline_top if c.dna and c.dna.fonts.size_headline_top else '') }}",
+        sizeHeadlineBot: "{{ (c.dna.fonts.size_headline_bottom if c.dna and c.dna.fonts.size_headline_bottom else '') }}",
         bannerShape: "{{ (c.dna.banner_shape if c.dna else "flat") }}",
         highlightStyle: "{{ (c.dna.highlight_style if c.dna else "bg-flat") }}",
         chipStyle: "{{ (c.dna.chip_style if c.dna else "rounded") }}",
@@ -105,7 +107,7 @@
         <div class="p-5">
           <div class="relative bg-black rounded-lg overflow-hidden mx-auto"
                style="width: 100%; max-width: 360px; aspect-ratio: 9/16;">
-            <iframe x-bind:src="`/preview/{{ c.slug }}?archetype=${encodeURIComponent(archetype)}&primary=${encodeURIComponent(primary)}&accent=${encodeURIComponent(accent)}&font_headline=${encodeURIComponent(fontHeadline)}&font_body=${encodeURIComponent(fontBody)}&banner_shape=${encodeURIComponent(bannerShape)}&highlight_style=${encodeURIComponent(highlightStyle)}&chip_style=${encodeURIComponent(chipStyle)}&category_icon=${encodeURIComponent(categoryIcon)}&bg_grad_1=${encodeURIComponent(bgGrad1)}&bg_grad_2=${encodeURIComponent(bgGrad2)}&body_bg_1=${encodeURIComponent(bodyBg1)}&body_bg_2=${encodeURIComponent(bodyBg2)}&text_main=${encodeURIComponent(textMain)}&text_muted=${encodeURIComponent(textMuted)}&header_top_color=${encodeURIComponent(headerTopColor)}&header_bottom_color=${encodeURIComponent(headerBottomColor)}&cta_enabled=${ctaEnabled ? '1' : '0'}&cta_text=${encodeURIComponent(ctaText)}&cta_show_handle=${ctaShowHandle ? '1' : '0'}&rss_source=${encodeURIComponent(rssSourceDemo)}`"
+            <iframe x-bind:src="`/preview/{{ c.slug }}?archetype=${encodeURIComponent(archetype)}&primary=${encodeURIComponent(primary)}&accent=${encodeURIComponent(accent)}&font_headline=${encodeURIComponent(fontHeadline)}&font_body=${encodeURIComponent(fontBody)}&banner_shape=${encodeURIComponent(bannerShape)}&highlight_style=${encodeURIComponent(highlightStyle)}&chip_style=${encodeURIComponent(chipStyle)}&category_icon=${encodeURIComponent(categoryIcon)}&bg_grad_1=${encodeURIComponent(bgGrad1)}&bg_grad_2=${encodeURIComponent(bgGrad2)}&body_bg_1=${encodeURIComponent(bodyBg1)}&body_bg_2=${encodeURIComponent(bodyBg2)}&text_main=${encodeURIComponent(textMain)}&text_muted=${encodeURIComponent(textMuted)}&header_top_color=${encodeURIComponent(headerTopColor)}&header_bottom_color=${encodeURIComponent(headerBottomColor)}&cta_enabled=${ctaEnabled ? '1' : '0'}&cta_text=${encodeURIComponent(ctaText)}&cta_show_handle=${ctaShowHandle ? '1' : '0'}&rss_source=${encodeURIComponent(rssSourceDemo)}&size_headline_top=${encodeURIComponent(sizeHeadlineTop)}&size_headline_bot=${encodeURIComponent(sizeHeadlineBot)}`"
                     src="/preview/{{ c.slug }}"
                     scrolling="no"
                     class="absolute top-0 left-0 border-0"
@@ -895,6 +897,23 @@
                 <option value="{{ f }}" {% if c.dna.fonts.body == f %}selected{% endif %}>{{ f }}</option>
               {% endfor %}
             </select>
+          </label>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 pt-2 border-t border-claude-border/50 mt-2">
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase">Başlık üst (px)</span>
+            <input type="number" name="dna_size_headline_top" min="24" max="300"
+                   x-model="sizeHeadlineTop" placeholder="auto"
+                   class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
+            <span class="text-[10px] text-claude-subtle">Boş = template default (newscast 100, stadium 200, stat-hero 80, polaroid 76)</span>
+          </label>
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase">Başlık alt (px)</span>
+            <input type="number" name="dna_size_headline_bot" min="18" max="200"
+                   x-model="sizeHeadlineBot" placeholder="auto"
+                   class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
+            <span class="text-[10px] text-claude-subtle">Boş = template default (newscast 100, stadium 60, stat-hero 56, polaroid 36)</span>
           </label>
         </div>
 

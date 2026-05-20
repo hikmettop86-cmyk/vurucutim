@@ -28,14 +28,15 @@
     padding: 78px 60px 44px;
     text-align: center;
     font-weight: 900;
-    font-size: 100px;
     line-height: 1.02;
     letter-spacing: 0.5px;
     box-shadow: 0 10px 0 rgba(0,0,0,.4);
     position: relative;
   }
-  .header .top { display: block; white-space: nowrap; }
-  .header .bot { display: block; margin-top: 8px; white-space: nowrap; }
+  .header .top { display: block; white-space: nowrap;
+    font-size: var(--size-headline-top, 100px); }
+  .header .bot { display: block; margin-top: 8px; white-space: nowrap;
+    font-size: var(--size-headline-bot, 100px); }
 
   /* PHOTO band */
   .photo {

@@ -119,6 +119,12 @@ class DnaFonts(BaseModel):
     headline: str = "Inter"
     body: str = "Inter"
     google_imports: list[str] = Field(default_factory=list)
+    # Optional per-channel font-size overrides in px. None = inherit
+    # template default (which varies per archetype). When set, written to
+    # :root as --size-headline-top / --size-headline-bot and templates
+    # consume them via var(--size-headline-top, <default>).
+    size_headline_top: int | None = Field(default=None, ge=24, le=300)
+    size_headline_bottom: int | None = Field(default=None, ge=18, le=200)
 
 
 class DnaTone(BaseModel):
@@ -553,6 +559,8 @@ def build_css_override(dna: DnaSpec, *, sanitize_palette: 'DnaPalette | None' = 
   --text-muted: {p.text_muted};
   --font-headline: '{dna.fonts.headline}', sans-serif;
   --font-body: '{dna.fonts.body}', sans-serif;
+  {f"--size-headline-top: {dna.fonts.size_headline_top}px;" if dna.fonts.size_headline_top else ""}
+  {f"--size-headline-bot: {dna.fonts.size_headline_bottom}px;" if dna.fonts.size_headline_bottom else ""}
 }}
 .header {{ {_banner_shape_css(dna.banner_shape)} }}
 .body .hl-r {{ {_highlight_css(dna.highlight_style, p.primary, "#fff")} }}

@@ -109,7 +109,7 @@ def music_open(slug):
     return redirect(url_for("channel_edit.edit", slug=slug) + "#music")
 
 
-def _form_get_int(key: str, default: int) -> int:
+def _form_get_int(key: str, default):
     try:
         return int(request.form.get(key, default))
     except (TypeError, ValueError):
@@ -161,6 +161,8 @@ def save(slug):
             "fonts": cfg.dna.fonts.model_copy(update={
                 "headline": request.form.get("dna_font_headline", cfg.dna.fonts.headline),
                 "body": request.form.get("dna_font_body", cfg.dna.fonts.body),
+                "size_headline_top": _form_get_int("dna_size_headline_top", None),
+                "size_headline_bottom": _form_get_int("dna_size_headline_bot", None),
             }),
             "tone": cfg.dna.tone.model_copy(update={
                 "voice": request.form.get("dna_voice", cfg.dna.tone.voice) or cfg.dna.tone.voice,

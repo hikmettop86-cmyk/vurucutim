@@ -62,7 +62,7 @@
   .header .top {
     display: block;
     font-family: 'Playfair Display', Georgia, serif;
-    font-size: 76px; font-weight: 900;
+    font-size: var(--size-headline-top, 76px); font-weight: 900;
     line-height: 1;
     color: {{ colors.primary }};
     letter-spacing: -1px;
@@ -72,7 +72,7 @@
     display: block;
     margin-top: 10px;
     font-family: 'Lora', Georgia, serif;
-    font-size: 36px; font-style: italic;
+    font-size: var(--size-headline-bot, 36px); font-style: italic;
     font-weight: 500;
     color: {{ colors.text_muted|default('#6b5640') }};
     white-space: nowrap;
