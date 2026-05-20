@@ -127,8 +127,8 @@
   .body {
     position: absolute; left: 60px; right: 60px;
     top: 1450px; bottom: 180px;
-    background: #0a0a0a;
-    color: #fff;
+    background: var(--text-main, #0a0a0a);
+    color: var(--body-bg-1, #fff);
     border: 4px solid #0a0a0a;
     padding: 36px 44px;
     transform: rotate(-0.8deg);
@@ -137,7 +137,7 @@
   .body-text {
     font-family: var(--font-body, 'Inter'), sans-serif;
     font-size: 40px; line-height: 1.35; font-weight: 600;
-    color: #fff;
+    color: var(--body-bg-1, #fff);
     text-wrap: pretty;
   }
   .body-text .hl-y {
