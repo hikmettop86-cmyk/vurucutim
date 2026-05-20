@@ -76,14 +76,18 @@ const server = http.createServer((req, res) => {
       }
       const serveUrl = await getServeUrl();
       const renderer = require('@remotion/renderer');
+      // CRITICAL: pass explicit `port` so Remotion doesn't pick 3000 default.
+      // 3000 is hijacked by many users' Next.js / dev servers (we saw the
+      // same bug back in Phase 0 — Remotion loads the wrong page and fails
+      // with "Tried to go to localhost:3000 ... not a Remotion project").
+      // Use 3221 (within our 3220-3299 range reserved for Remotion).
+      const REMOTION_INTERNAL_PORT = 3221;
       const composition = await renderer.selectComposition({
         serveUrl,
         id: compositionId,
         inputProps: props || {},
+        port: REMOTION_INTERNAL_PORT,
       });
-      // calculateMetadata in Root.tsx reads durationSeconds from props;
-      // override with explicit durationInFrames if supplied (preview is
-      // typically short so we don't care, but support both paths).
       const finalComposition = durationInFrames
         ? {...composition, durationInFrames}
         : composition;
@@ -95,6 +99,7 @@ const server = http.createServer((req, res) => {
         imageFormat: 'jpeg',
         jpegQuality: 80,
         frame: frame ?? 0,
+        port: REMOTION_INTERNAL_PORT,
       });
       const dt = Date.now() - t0;
       log(`rendered ${compositionId} frame=${frame} → ${path.basename(outputPath)} (${dt}ms)`);
