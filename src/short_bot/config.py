@@ -332,9 +332,19 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
 
 
 def list_channels(channels_dir: Path, enabled_only: bool = False) -> list[ChannelConfig]:
+    """List all channels in directory. Invalid channel YAMLs are SKIPPED with a
+    warning instead of crashing the whole scheduler — this protects the panel
+    boot path when a single channel references a stale archetype/setting.
+    """
+    import logging
+    log = logging.getLogger(__name__)
     out = []
     for p in sorted(Path(channels_dir).glob("*.yaml")):
-        c = load_channel(p)
+        try:
+            c = load_channel(p)
+        except Exception as e:
+            log.warning(f"skipping invalid channel {p.name}: {e}")
+            continue
         if enabled_only and not c.enabled:
             continue
         out.append(c)

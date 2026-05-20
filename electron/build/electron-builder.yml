@@ -26,6 +26,8 @@ extraResources:
     to: short-bot/templates
   - from: ../config/settings.yaml.example
     to: short-bot/config/settings.yaml.example
+  - from: ../config/archetypes.json
+    to: short-bot/config/archetypes.json
   - from: ../assets/music
     to: short-bot/assets/music
   - from: ../pyproject.toml
