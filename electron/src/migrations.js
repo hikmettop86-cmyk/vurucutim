@@ -59,6 +59,25 @@ function syncRemotionUserDir() {
     }
   }
   log.info('migration: remotion userdir synced at', userDir);
+
+  // Tell the running render daemon (if any) to exit so the next preview
+  // request respawns it with the freshly-synced render-server.js code.
+  // Without this, the daemon keeps the old bundle + old logic in memory
+  // and renders fail in surprising ways after app updates.
+  try {
+    const req = require('node:http').request({
+      hostname: '127.0.0.1',
+      port: 3219,
+      path: '/shutdown',
+      method: 'POST',
+      timeout: 1000,
+    });
+    req.on('error', () => {});  // daemon not running → no-op
+    req.end();
+    log.info('migration: render daemon shutdown signaled');
+  } catch (e) {
+    /* swallow */
+  }
 }
 
 async function maybeMigrate(onProgress) {

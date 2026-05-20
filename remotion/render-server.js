@@ -52,6 +52,15 @@ const server = http.createServer((req, res) => {
     res.end('ok');
     return;
   }
+  if (req.method === 'POST' && req.url === '/shutdown') {
+    // Called by migrations.js after render-server.js itself is updated;
+    // we exit cleanly so the next preview-request can respawn fresh code.
+    log('shutdown requested — exiting in 200ms');
+    res.writeHead(200, {'Content-Type': 'text/plain'});
+    res.end('bye');
+    setTimeout(() => process.exit(0), 200);
+    return;
+  }
   if (req.method !== 'POST' || req.url !== '/render-still') {
     res.writeHead(404);
     res.end();
