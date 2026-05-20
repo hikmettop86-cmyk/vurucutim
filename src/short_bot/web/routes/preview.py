@@ -264,12 +264,14 @@ def remotion_frame_preview(slug):
 
     if not cached.exists():
         # Pick a random free port in 3220-3299. Shuffle grid renders 6
-        # thumbnails in parallel; if they all targeted port 3220 they'd
-        # collide (port-in-use → exit 1 silent failure). Each call gets
-        # its own port so Remotion can spin up its bundler concurrently.
+        # thumbnails staggered 3.5s apart; if a slow one hasn't released
+        # its port yet, the next call needs a different one. Each call
+        # gets its own port so Remotion can spin up its bundler concurrently.
         port = _pick_free_port_in_range(3220, 3300)
         try:
-            render_still(job, cached, frame=30, port=port, timeout_s=60)
+            # 90s budget — first bundle is ~10s + render ~3s, but under
+            # disk/CPU contention from staggered shuffle this can extend.
+            render_still(job, cached, frame=30, port=port, timeout_s=90)
         except RemotionRenderError as e:
             _log.warning(f"remotion preview failed: {e}")
             return Response(f"preview failed: {e}", status=500, mimetype="text/plain")
