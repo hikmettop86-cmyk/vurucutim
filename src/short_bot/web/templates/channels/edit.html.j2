@@ -88,6 +88,27 @@
         ctaText: "{{ (c.cta_text or '')|e }}",
         ctaShowHandle: {{ 'true' if c.cta_show_handle else 'false' }},
         rssSourceDemo: "",
+        // Style knobs (Phase A2 — Stil Düzenle tab)
+        knobBannerSkew:      "{{ (c.dna.style_knobs.banner_skew_deg    if c.dna else 0.0)  }}",
+        knobHeaderPaddingY:  "{{ (c.dna.style_knobs.header_padding_y   if c.dna else 78)   }}",
+        knobHeaderSizeTop:   "{{ (c.dna.style_knobs.header_size_top    if c.dna else 100)  }}",
+        knobHeaderSizeBot:   "{{ (c.dna.style_knobs.header_size_bot    if c.dna else 70)   }}",
+        knobPhotoHeight:     "{{ (c.dna.style_knobs.photo_height       if c.dna else 640)  }}",
+        knobPhotoBlur:       "{{ (c.dna.style_knobs.photo_blur_px      if c.dna else 0.0)  }}",
+        knobPhotoSaturation: "{{ (c.dna.style_knobs.photo_saturation   if c.dna else 1.0)  }}",
+        knobBodyFontSize:    "{{ (c.dna.style_knobs.body_font_size     if c.dna else 48)   }}",
+        knobBodyLineHeight:  "{{ (c.dna.style_knobs.body_line_height   if c.dna else 1.42) }}",
+        knobCornerRadius:    "{{ (c.dna.style_knobs.corner_radius      if c.dna else 6)    }}",
+        knobLetterSpacing:   "{{ (c.dna.style_knobs.letter_spacing     if c.dna else 0.5)  }}",
+        knobShadowIntensity: "{{ (c.dna.style_knobs.shadow_intensity   if c.dna else 1.0)  }}",
+        resetKnobs() {
+          this.knobBannerSkew = "0"; this.knobHeaderPaddingY = "78";
+          this.knobHeaderSizeTop = "100"; this.knobHeaderSizeBot = "70";
+          this.knobPhotoHeight = "640"; this.knobPhotoBlur = "0";
+          this.knobPhotoSaturation = "1.0"; this.knobBodyFontSize = "48";
+          this.knobBodyLineHeight = "1.42"; this.knobCornerRadius = "6";
+          this.knobLetterSpacing = "0.5"; this.knobShadowIntensity = "1.0";
+        },
         currentTab: window.location.hash.replace("#", "") || "genel"
       }'>
 
@@ -105,7 +126,7 @@
         <div class="p-5">
           <div class="relative bg-black rounded-lg overflow-hidden mx-auto"
                style="width: 100%; max-width: 360px; aspect-ratio: 9/16;">
-            <iframe x-bind:src="`/preview/{{ c.slug }}?archetype=${encodeURIComponent(archetype)}&primary=${encodeURIComponent(primary)}&accent=${encodeURIComponent(accent)}&font_headline=${encodeURIComponent(fontHeadline)}&font_body=${encodeURIComponent(fontBody)}&banner_shape=${encodeURIComponent(bannerShape)}&highlight_style=${encodeURIComponent(highlightStyle)}&chip_style=${encodeURIComponent(chipStyle)}&category_icon=${encodeURIComponent(categoryIcon)}&bg_grad_1=${encodeURIComponent(bgGrad1)}&bg_grad_2=${encodeURIComponent(bgGrad2)}&body_bg_1=${encodeURIComponent(bodyBg1)}&body_bg_2=${encodeURIComponent(bodyBg2)}&text_main=${encodeURIComponent(textMain)}&text_muted=${encodeURIComponent(textMuted)}&header_top_color=${encodeURIComponent(headerTopColor)}&header_bottom_color=${encodeURIComponent(headerBottomColor)}&cta_enabled=${ctaEnabled ? '1' : '0'}&cta_text=${encodeURIComponent(ctaText)}&cta_show_handle=${ctaShowHandle ? '1' : '0'}&rss_source=${encodeURIComponent(rssSourceDemo)}`"
+            <iframe x-bind:src="`/preview/{{ c.slug }}?archetype=${encodeURIComponent(archetype)}&primary=${encodeURIComponent(primary)}&accent=${encodeURIComponent(accent)}&font_headline=${encodeURIComponent(fontHeadline)}&font_body=${encodeURIComponent(fontBody)}&banner_shape=${encodeURIComponent(bannerShape)}&highlight_style=${encodeURIComponent(highlightStyle)}&chip_style=${encodeURIComponent(chipStyle)}&category_icon=${encodeURIComponent(categoryIcon)}&bg_grad_1=${encodeURIComponent(bgGrad1)}&bg_grad_2=${encodeURIComponent(bgGrad2)}&body_bg_1=${encodeURIComponent(bodyBg1)}&body_bg_2=${encodeURIComponent(bodyBg2)}&text_main=${encodeURIComponent(textMain)}&text_muted=${encodeURIComponent(textMuted)}&header_top_color=${encodeURIComponent(headerTopColor)}&header_bottom_color=${encodeURIComponent(headerBottomColor)}&cta_enabled=${ctaEnabled ? '1' : '0'}&cta_text=${encodeURIComponent(ctaText)}&cta_show_handle=${ctaShowHandle ? '1' : '0'}&rss_source=${encodeURIComponent(rssSourceDemo)}&knob_banner_skew_deg=${knobBannerSkew}&knob_header_padding_y=${knobHeaderPaddingY}&knob_header_size_top=${knobHeaderSizeTop}&knob_header_size_bot=${knobHeaderSizeBot}&knob_photo_height=${knobPhotoHeight}&knob_photo_blur_px=${knobPhotoBlur}&knob_photo_saturation=${knobPhotoSaturation}&knob_body_font_size=${knobBodyFontSize}&knob_body_line_height=${knobBodyLineHeight}&knob_corner_radius=${knobCornerRadius}&knob_letter_spacing=${knobLetterSpacing}&knob_shadow_intensity=${knobShadowIntensity}`"
                     src="/preview/{{ c.slug }}"
                     scrolling="no"
                     class="absolute top-0 left-0 border-0"
@@ -131,6 +152,7 @@
           {id: 'genel', label: 'Genel'},
           {id: 'icerik', label: 'Icerik'},
           {id: 'dna', label: 'DNA / Renkler'},
+          {id: 'stil', label: 'Stil Düzenle'},
           {id: 'youtube', label: 'YouTube'},
         ]" :key="tab.id">
           <button type="button"
@@ -1222,6 +1244,72 @@
 
     </div>{# end TAB: Icerik #}
 
+    {# ── TAB: Stil Düzenle ────────────────────────────────────────────── #}
+    <div x-show="currentTab === 'stil'">
+
+      <div class="bg-white border border-claude-border rounded-xl shadow-soft mb-4 p-5">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="font-serif text-base font-semibold flex items-center gap-2">
+            <span class="text-lg opacity-70">🎚</span> Stil knob'ları
+          </h2>
+          <button type="button" @click="resetKnobs()"
+                  class="text-xs px-3 py-1 bg-claude-surface hover:bg-claude-surface-alt border border-claude-border rounded">
+            ↺ Varsayılana dön
+          </button>
+        </div>
+        <p class="text-xs text-claude-muted mb-4">
+          Slider'ı oynat → soldaki önizleme anında günceller. Mevcut archetype korunur, sadece görsel detaylar değişir.
+        </p>
+
+        {%- macro slider(name, label, knob_var, min, max, step, unit) -%}
+        <label class="block mb-3">
+          <div class="flex justify-between items-baseline mb-1">
+            <span class="text-xs text-claude-muted uppercase">{{ label }}</span>
+            <span class="text-xs font-mono text-claude-text" x-text="`${ {{ knob_var }} }{{ unit }}`"></span>
+          </div>
+          <input type="range" name="dna_knob_{{ name }}"
+                 min="{{ min }}" max="{{ max }}" step="{{ step }}"
+                 x-model="{{ knob_var }}"
+                 class="w-full">
+        </label>
+        {%- endmacro -%}
+
+        <div class="border-t border-claude-border/40 pt-3 mb-3">
+          <div class="text-[11px] text-claude-subtle uppercase tracking-wider mb-2">Header (üst banner)</div>
+          {{ slider("banner_skew_deg",  "Eğim açısı",       "knobBannerSkew",       -5, 5, 0.5, "°") }}
+          {{ slider("header_padding_y", "Üst-alt boşluk",   "knobHeaderPaddingY",   30, 120, 2, "px") }}
+          {{ slider("header_size_top",  "Üst yazı boyutu",  "knobHeaderSizeTop",    60, 140, 2, "px") }}
+          {{ slider("header_size_bot",  "Alt yazı boyutu",  "knobHeaderSizeBot",    40, 120, 2, "px") }}
+        </div>
+
+        <div class="border-t border-claude-border/40 pt-3 mb-3">
+          <div class="text-[11px] text-claude-subtle uppercase tracking-wider mb-2">Foto bandı</div>
+          {{ slider("photo_height",     "Yükseklik",        "knobPhotoHeight",      300, 900, 10, "px") }}
+          {{ slider("photo_blur_px",    "Bulanıklık",       "knobPhotoBlur",        0, 8, 0.2, "px") }}
+          {{ slider("photo_saturation", "Doygunluk",        "knobPhotoSaturation",  0.3, 1.8, 0.05, "x") }}
+        </div>
+
+        <div class="border-t border-claude-border/40 pt-3 mb-3">
+          <div class="text-[11px] text-claude-subtle uppercase tracking-wider mb-2">Body / paragraf</div>
+          {{ slider("body_font_size",   "Yazı boyutu",      "knobBodyFontSize",     28, 72, 1, "px") }}
+          {{ slider("body_line_height", "Satır yüksekliği", "knobBodyLineHeight",   1.0, 1.8, 0.02, "") }}
+        </div>
+
+        <div class="border-t border-claude-border/40 pt-3">
+          <div class="text-[11px] text-claude-subtle uppercase tracking-wider mb-2">Genel detay</div>
+          {{ slider("corner_radius",    "Köşe yuvarlama",   "knobCornerRadius",     0, 24, 1, "px") }}
+          {{ slider("letter_spacing",   "Harf aralığı",     "knobLetterSpacing",    -1, 4, 0.1, "px") }}
+          {{ slider("shadow_intensity", "Gölge yoğunluğu",  "knobShadowIntensity",  0, 2, 0.1, "x") }}
+        </div>
+      </div>
+
+      <div class="bg-blue-50 border border-blue-200 text-blue-900 text-xs rounded-lg p-3">
+        💡 Knob'lar mevcut archetype CSS'ine <code>var(--knob, default)</code> üzerinden enjekte edilir.
+        Layout yapısı aynı kalır, sadece boyut/renk/animasyon detayları. Daha radikal için
+        <strong>DNA / Renkler</strong> tab'ında archetype seç.
+      </div>
+
+    </div>{# end TAB: Stil Düzenle #}
 
     {# ── Sticky save bar — always visible at bottom of right column #}
     <div class="sticky bottom-0 bg-claude-bg/95 backdrop-blur border-t border-claude-border pt-3 pb-3 mt-4 -mx-1 px-1 z-20">

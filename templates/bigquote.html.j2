@@ -58,11 +58,13 @@
   .quote-mark-open { margin-bottom: -20px; }
   .quote-mark-close { margin-top: 4px; text-align: right; }
   .quote-text {
-    font-size: 72px; line-height: 1.2;
+    font-size: var(--body-font-size, 72px);
+    line-height: var(--body-line-height, 1.2);
     font-weight: 700;
     color: #fff;
     padding-left: 16px;
-    text-shadow: 0 4px 18px rgba(0,0,0,.45);
+    text-shadow: 0 calc(4px * var(--shadow-intensity, 1)) 18px rgba(0,0,0,.45);
+    letter-spacing: var(--letter-spacing, 0px);
   }
   /* Auto-fit hook — _auto_fit.js shrinks if text overflows container height */
   .quote-text[data-fit-min] {}

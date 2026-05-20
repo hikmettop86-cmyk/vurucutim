@@ -120,6 +120,30 @@ class DnaTone(BaseModel):
     headline_style_hint: str = Field(default="", max_length=200)
 
 
+class DnaStyleKnobs(BaseModel):
+    """Per-channel CSS variable overrides (Phase A2 'Stil Düzenle').
+
+    These are rendered as `--knob: value;` declarations inside the
+    `:root` block of `build_css_override`. Templates read them via
+    `var(--knob, <default>)`. All knobs have safe defaults so older
+    DNA records without this block render identically to before.
+
+    Order in the UI follows declaration order here.
+    """
+    banner_skew_deg: float    = Field(default=0.0,  ge=-5.0, le=5.0)
+    header_padding_y: int     = Field(default=78,   ge=30,   le=120)
+    header_size_top: int      = Field(default=100,  ge=60,   le=140)
+    header_size_bot: int      = Field(default=70,   ge=40,   le=120)
+    photo_height: int         = Field(default=640,  ge=300,  le=900)
+    photo_blur_px: float      = Field(default=0.0,  ge=0.0,  le=8.0)
+    photo_saturation: float   = Field(default=1.0,  ge=0.3,  le=1.8)
+    body_font_size: int       = Field(default=48,   ge=28,   le=72)
+    body_line_height: float   = Field(default=1.42, ge=1.0,  le=1.8)
+    corner_radius: int        = Field(default=6,    ge=0,    le=24)
+    letter_spacing: float     = Field(default=0.5,  ge=-1.0, le=4.0)
+    shadow_intensity: float   = Field(default=1.0,  ge=0.0,  le=2.0)
+
+
 class DnaSpec(BaseModel):
     archetype: Literal[
         "newscast",   # general breaking news
@@ -141,6 +165,9 @@ class DnaSpec(BaseModel):
     animation_style: Literal[
         "none", "fade-up", "slide-in", "stagger-reveal", "typewriter", "zoom-in",
     ] = "none"
+    # Phase A2 (2026-05-20): user-tunable CSS variables, rendered into
+    # build_css_override's :root block. Templates read with var(--knob, default).
+    style_knobs: DnaStyleKnobs = Field(default_factory=DnaStyleKnobs)
 
 
 def build_dna_prompt(
@@ -529,6 +556,7 @@ def build_css_override(dna: DnaSpec, *, sanitize_palette: 'DnaPalette | None' = 
         animations_css = _ANIMATIONS_CSS_PATH.read_text(encoding="utf-8")
     except OSError:
         animations_css = ""
+    k = dna.style_knobs
     css = f"""{google}{animations_css}
 :root {{
   --primary: {p.primary};
@@ -541,6 +569,19 @@ def build_css_override(dna: DnaSpec, *, sanitize_palette: 'DnaPalette | None' = 
   --text-muted: {p.text_muted};
   --font-headline: '{dna.fonts.headline}', sans-serif;
   --font-body: '{dna.fonts.body}', sans-serif;
+  /* Phase A2 style knobs — sliders in 'Stil Düzenle' tab */
+  --banner-skew-deg: {k.banner_skew_deg}deg;
+  --header-padding-y: {k.header_padding_y}px;
+  --header-size-top: {k.header_size_top}px;
+  --header-size-bot: {k.header_size_bot}px;
+  --photo-height: {k.photo_height}px;
+  --photo-blur-px: {k.photo_blur_px}px;
+  --photo-saturation: {k.photo_saturation};
+  --body-font-size: {k.body_font_size}px;
+  --body-line-height: {k.body_line_height};
+  --corner-radius: {k.corner_radius}px;
+  --letter-spacing: {k.letter_spacing}px;
+  --shadow-intensity: {k.shadow_intensity};
 }}
 .header {{ {_banner_shape_css(dna.banner_shape)} }}
 .body .hl-r {{ {_highlight_css(dna.highlight_style, p.primary, "#fff")} }}

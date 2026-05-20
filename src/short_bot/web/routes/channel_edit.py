@@ -127,6 +127,32 @@ def _form_get_list(key: str) -> list[str]:
     return [x.strip() for x in request.form.get(key, "").split(",") if x.strip()]
 
 
+def _collect_style_knobs(form, current_knobs) -> dict:
+    """Read dna_knob_<axis> form fields. Each axis is numeric (int or float);
+    we coerce based on the current_knobs field's type. Invalid → keep current.
+    Pydantic's Field(ge=, le=) clamps at validation time, so out-of-range
+    submissions raise a 422; callers may want to clamp client-side.
+    """
+    out: dict = {}
+    axes = {
+        "banner_skew_deg": float, "header_padding_y": int,
+        "header_size_top": int,   "header_size_bot": int,
+        "photo_height": int,      "photo_blur_px": float,
+        "photo_saturation": float, "body_font_size": int,
+        "body_line_height": float, "corner_radius": int,
+        "letter_spacing": float,  "shadow_intensity": float,
+    }
+    for axis, kind in axes.items():
+        raw = form.get(f"dna_knob_{axis}", "").strip()
+        if not raw:
+            continue
+        try:
+            out[axis] = kind(raw)
+        except (TypeError, ValueError):
+            pass
+    return out
+
+
 @bp.route("/channels/<slug>/edit", methods=["POST"])
 def save(slug):
     path = _yaml_path(slug)
@@ -179,6 +205,7 @@ def save(slug):
             "search_query_template": request.form.get("dna_search_query_template",
                                                        cfg.dna.search_query_template),
             "ui_badge": request.form.get("dna_ui_badge", cfg.dna.ui_badge),
+            "style_knobs": cfg.dna.style_knobs.model_copy(update=_collect_style_knobs(request.form, cfg.dna.style_knobs)),
         })
         # Rebuild CSS
         templates_dir = current_app.config["SHORTBOT_TEMPLATES_DIR"]

@@ -25,22 +25,24 @@
   /* HEADER (top banner) */
   .header {
     background: linear-gradient(90deg, {{ colors.primary }}, {{ colors.primary_light }});
-    padding: 78px 60px 44px;
+    padding: var(--header-padding-y, 78px) 60px 44px;
     text-align: center;
     font-weight: 900;
-    font-size: 100px;
+    font-size: var(--header-size-top, 100px);
     line-height: 1.02;
-    letter-spacing: 0.5px;
-    box-shadow: 0 10px 0 rgba(0,0,0,.4);
+    letter-spacing: var(--letter-spacing, 0.5px);
+    box-shadow: 0 calc(10px * var(--shadow-intensity, 1)) 0 rgba(0,0,0,calc(.4 * var(--shadow-intensity, 1)));
+    border-radius: var(--corner-radius, 0px);
+    transform: skewY(calc(var(--banner-skew-deg, 0deg) * -1));
     position: relative;
   }
-  .header .top { display: block; white-space: nowrap; }
-  .header .bot { display: block; margin-top: 8px; white-space: nowrap; }
+  .header .top { display: block; white-space: nowrap; font-size: var(--header-size-top, 100px); }
+  .header .bot { display: block; margin-top: 8px; white-space: nowrap; font-size: var(--header-size-bot, 70px); }
 
   /* PHOTO band */
   .photo {
     position: relative;
-    height: 640px;
+    height: var(--photo-height, 640px);
     background: linear-gradient(135deg, {{ colors.bg_gradient[0] }}, {{ colors.bg_gradient[1] }});
     overflow: hidden;
   }
@@ -48,6 +50,7 @@
     position: absolute; inset: 0;
     background-image: url('{{ bg_image_url|default("") }}');
     background-size: cover; background-position: center;
+    filter: blur(var(--photo-blur-px, 0px)) saturate(var(--photo-saturation, 1));
     {% if not bg_image_url %}display: none;{% endif %}
   }
   .photo .vignette { position: absolute; inset: 0;
@@ -89,8 +92,8 @@
   }
   .body-text {
     width: 100%;
-    font-size: 48px;
-    line-height: 1.42;
+    font-size: var(--body-font-size, 48px);
+    line-height: var(--body-line-height, 1.42);
     font-weight: 600;
     display: -webkit-box;
     -webkit-line-clamp: 9;
