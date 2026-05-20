@@ -17,11 +17,15 @@ from short_bot.locale import LANGUAGE_NAMES
 # (Phase 2+) will reintroduce variety via dimensions rather than parallel
 # fixed templates.
 ARCHETYPES = [
-    "newscast",   # general breaking news (battle-tested, son-dakika lives here)
-    "stadium",    # sports/team broadcast (battle-tested, galatasaray lives here)
-    "stat-hero",  # number-driven body (economy/polls — added 2026-05-19)
-    "bigquote",   # fullscreen quote with attribution (politician/athlete statements — added 2026-05-20)
-    "polaroid",   # magazine/feature with tilted photo card (lifestyle/nostalji — added 2026-05-20)
+    "newscast",            # general breaking news (battle-tested, son-dakika lives here)
+    "newscast-magazine",   # editorial/serif/white-bg newscast variant (added 2026-05-20)
+    "newscast-ticker",     # photo-dominant + bottom red ticker variant (added 2026-05-20)
+    "stadium",             # sports/team broadcast (battle-tested, galatasaray lives here)
+    "stadium-scoreboard",  # two-team VS layout with prominent scores (added 2026-05-20)
+    "stadium-spotlight",   # single-player/event hero with massive number callout (added 2026-05-20)
+    "stat-hero",           # number-driven body (economy/polls — added 2026-05-19)
+    "bigquote",            # fullscreen quote with attribution (added 2026-05-20)
+    "polaroid",            # magazine/feature with tilted photo card (added 2026-05-20)
 ]
 
 _ANIMATIONS_CSS_PATH = Path(__file__).resolve().parent.parent.parent / "templates" / "css" / "_animations.css"
@@ -74,6 +78,38 @@ ARCHETYPE_DEFAULTS: dict[str, dict] = {
         "body_bg_1": "#f5f1e6", "body_bg_2": "#e0d4b8",
         "text_main": "#2a1f15", "text_muted": "#6b5640",
         "font_headline": "Playfair Display", "font_body": "Lora",
+    },
+    "newscast-magazine": {
+        # NYT/editorial feel — light bg, dark serif, no decorative banners.
+        "primary": "#0a1733", "accent": "#bb1f1f",
+        "bg_grad_1": "#fafaf7", "bg_grad_2": "#ededea",
+        "body_bg_1": "#fafaf7", "body_bg_2": "#ededea",
+        "text_main": "#0a1733", "text_muted": "#5a6478",
+        "font_headline": "Playfair Display", "font_body": "Lora",
+    },
+    "newscast-ticker": {
+        # Photo dominates top, red ticker stripe bottom — broadcast lower-third feel.
+        "primary": "#c8102e", "accent": "#ffd700",
+        "bg_grad_1": "#0a0a0a", "bg_grad_2": "#1a1a1a",
+        "body_bg_1": "#101010", "body_bg_2": "#1f1f1f",
+        "text_main": "#ffffff", "text_muted": "#cccccc",
+        "font_headline": "Oswald", "font_body": "Inter",
+    },
+    "stadium-scoreboard": {
+        # Two-team VS layout — big scores center, team names left/right.
+        "primary": "#a30d2d", "accent": "#ffb81c",
+        "bg_grad_1": "#0a0a0a", "bg_grad_2": "#2d0712",
+        "body_bg_1": "#12060a", "body_bg_2": "#1f0810",
+        "text_main": "#fff8e7", "text_muted": "#e8c56a",
+        "font_headline": "Oswald", "font_body": "Inter",
+    },
+    "stadium-spotlight": {
+        # Single hero player/event — huge minute/number, name underneath.
+        "primary": "#ffb81c", "accent": "#a30d2d",
+        "bg_grad_1": "#0a0a0a", "bg_grad_2": "#2d0712",
+        "body_bg_1": "#12060a", "body_bg_2": "#1f0810",
+        "text_main": "#fff8e7", "text_muted": "#e8c56a",
+        "font_headline": "Oswald", "font_body": "Inter",
     },
 }
 
@@ -139,11 +175,15 @@ class DnaTone(BaseModel):
 
 class DnaSpec(BaseModel):
     archetype: Literal[
-        "newscast",   # general breaking news
-        "stadium",    # sports/team broadcast
-        "stat-hero",  # number-driven body (2026-05-19 onwards)
-        "bigquote",   # fullscreen attributed quote (2026-05-20 onwards)
-        "polaroid",   # magazine/feature tilted photo card (2026-05-20 onwards)
+        "newscast",            # general breaking news
+        "newscast-magazine",   # editorial/serif white-bg newscast variant
+        "newscast-ticker",     # photo top + red ticker stripe bottom
+        "stadium",             # sports/team broadcast
+        "stadium-scoreboard",  # two-team VS layout with prominent scores
+        "stadium-spotlight",   # single-player/event hero with massive number
+        "stat-hero",           # number-driven body (2026-05-19 onwards)
+        "bigquote",            # fullscreen attributed quote (2026-05-20 onwards)
+        "polaroid",            # magazine/feature tilted photo card (2026-05-20 onwards)
     ]
     palette: DnaPalette
     fonts: DnaFonts

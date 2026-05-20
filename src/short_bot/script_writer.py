@@ -73,6 +73,57 @@ ARCHETYPE_PROMPTS = {
 - highlights: red=key person/place name, yellow=year/era/cultural marker
 - mood: usually neutral (reflective), upbeat for celebratory stories
 """,
+    "newscast-magazine": """ARCHETYPE: newscast-magazine — editorial/serif feature
+- Reads like a print magazine front page (NYT/Atlantic feel), not breaking TV news.
+- header_top: 3-6 words BIG serif headline; declarative, not sensational.
+- header_bottom: 5-9 words italic subtitle elaborating the headline.
+- photo_overlay: 2-4 words section/topic tag in small caps
+  ("ECONOMY", "POLITICS", "INVESTIGATION").
+- body_paragraph: 3-5 sentences, longer-form journalism tone. Treat the
+  reader as informed; nuance + context > urgency.
+- highlights: red=key figure, yellow=key number/date
+- mood: usually neutral; breaking only for genuine front-page-worthy events.
+""",
+    "newscast-ticker": """ARCHETYPE: newscast-ticker — lower-third broadcast banner
+- Photo dominates upper 2/3; red ticker stripe holds the headline + lead.
+- header_top: 4-7 words punchy, all-caps-friendly news headline.
+- header_bottom: 3-5 words follow-up clause (impact / subject / when).
+- photo_overlay: 2-5 words key fact stamped over the photo
+  ("250 BAZ PUAN", "92. DAKİKA", "AĞUSTOS VERİLERİ").
+- body_paragraph: 1-2 SHORT sentences — only 2 lines fit. Lead with the
+  impact, not the background.
+- highlights: red=key figure, yellow=key number/decision
+- mood: breaking by default
+""",
+    "stadium-scoreboard": """ARCHETYPE: stadium-scoreboard — two-team score callout
+- header_top: HOME team name (1-2 words, ALLCAPS). Short league abbreviation
+  also works (e.g. "GS", "FB", "RM", "BAR").
+- header_bottom: AWAY team name (same format).
+- photo_overlay: THE SCORE itself — "3-2", "1-1", "OT", "PEN 5-4". 1-6 chars.
+  This is the dominant visual element on screen.
+- category: tournament / round / matchday context — "SÜPER LİG", "DERBİ",
+  "ÇEYREK FİNAL". 1-3 words, ALLCAPS.
+- body_paragraph: 2-4 sentences recapping the match — key moment, scorer(s),
+  context. Past tense.
+- highlights: red=winning team / scorer name, yellow=minute / decisive moment
+- mood: energetic; breaking if upset/last-minute
+""",
+    "stadium-spotlight": """ARCHETYPE: stadium-spotlight — single hero moment
+- ONE player or moment dominates the screen. Use when a single name/figure
+  drives the story (a goal, a record, a milestone).
+- header_top: team / competition context, 1-3 words ("GALATASARAY", "DEVRE
+  ARASI", "SÜPER LİG").
+- header_bottom: 2-5 words secondary context ("Süper Lig 12. Hafta",
+  "Şampiyonlar Ligi gecesi").
+- photo_overlay: THE HERO NUMBER — minute, goal count, record number,
+  ranking. SHORT (1-4 chars). Examples: "92'", "3", "100", "1.".
+  This becomes a massive screen-dominating display.
+- category: PLAYER / EVENT NAME — 1-2 words, ALLCAPS.
+  ("ICARDI", "MERIH DEMİRAL", "REKOR").
+- body_paragraph: 1-3 sentences explaining the moment. Punchy, not analytical.
+- highlights: red=team name, yellow=stat/milestone
+- mood: energetic / breaking
+""",
 }
 
 

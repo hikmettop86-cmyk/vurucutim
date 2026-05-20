@@ -53,6 +53,19 @@ ARCHETYPE_BG_QUERIES: dict[str, list[str]] = {
     "polaroid":  ["vintage portrait warm", "street scene golden hour",
                   "old istanbul nostalgia", "craftsman workshop natural light",
                   "marketplace daily life"],
+    # newscast-magazine: editorial portraits + cityscapes, daylight, neutral.
+    "newscast-magazine": ["editorial portrait daylight", "city skyline cinematic",
+                          "newspaper printing press", "library books bokeh",
+                          "office building modern"],
+    # newscast-ticker: bg is dominant — broadcast newsroom / busy city / podium.
+    "newscast-ticker": ["newsroom busy lights", "city night traffic blur",
+                        "press conference podium", "broadcast studio lights"],
+    # stadium-scoreboard: bg is faint — keep generic stadium / pitch.
+    "stadium-scoreboard": ["stadium lights night", "crowd cheering blur",
+                            "scoreboard close up", "stadium tunnel"],
+    # stadium-spotlight: hero player feel — single-subject sport portraits.
+    "stadium-spotlight": ["football player closeup", "athlete celebration goal",
+                           "trophy ceremony confetti", "locker room intensity"],
 }
 
 

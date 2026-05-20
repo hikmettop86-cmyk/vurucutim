@@ -69,4 +69,33 @@ ARCHETYPE_OVERFLOW_FIELDS: dict[str, list[OverflowField]] = {
         OverflowField("photo_overlay",  ".polaroid .caption", 2),
         OverflowField("body_paragraph", ".body-text",       99),
     ],
+    # newscast-magazine: editorial serif feel; bigger headline + longer body.
+    "newscast-magazine": [
+        OverflowField("header_top",     ".header .top",   3),
+        OverflowField("header_bottom",  ".header .bot",   3),
+        OverflowField("photo_overlay",  ".photo-overlay", 1),
+        OverflowField("body_paragraph", ".body-text",     99),
+    ],
+    # newscast-ticker: photo top + tight ticker bottom; body limited to 2 lines.
+    "newscast-ticker": [
+        OverflowField("header_top",     ".ticker .header .top",   2),
+        OverflowField("header_bottom",  ".ticker .header .bot",   2),
+        OverflowField("photo_overlay",  ".photo-overlay",         1),
+        OverflowField("body_paragraph", ".body-text",             2),
+    ],
+    # stadium-scoreboard: team names short (TL/TR), score (photo_overlay) tiny,
+    # body in lower third.
+    "stadium-scoreboard": [
+        OverflowField("header_top",     ".team-top",  1),
+        OverflowField("header_bottom",  ".team-bot",  1),
+        OverflowField("photo_overlay",  ".vs-score",  1),
+        OverflowField("body_paragraph", ".body-text", 99),
+    ],
+    # stadium-spotlight: tiny header, massive hero number, short body.
+    "stadium-spotlight": [
+        OverflowField("header_top",     ".header .top", 2),
+        OverflowField("header_bottom",  ".header .bot", 2),
+        OverflowField("photo_overlay",  ".hero-number", 1),
+        OverflowField("body_paragraph", ".body-text",   99),
+    ],
 }

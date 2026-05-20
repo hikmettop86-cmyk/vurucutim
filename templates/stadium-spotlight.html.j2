@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="{{ language }}">
+<head>
+<meta charset="utf-8">
+<title>Short — stadium-spotlight</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;700;900&family=Inter:wght@400;600;700;800;900&display=swap');
+  {{ dna_css|safe }}
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1080px; height: 1920px; overflow: hidden;
+    background: linear-gradient(180deg, {{ colors.bg_gradient[0] }}, {{ colors.bg_gradient[1] }});
+    font-family: 'Inter', sans-serif;
+    color: var(--text-main, #fff8e7); }
+
+  .stage { position: relative; width: 1080px; height: 1920px;
+    display: flex; flex-direction: column; }
+
+  .stage-badge {
+    position: absolute; top: 30px; right: 30px;
+    background: {{ colors.primary }}; color: {{ colors.accent }};
+    font-family: 'Oswald', sans-serif;
+    font-size: 22px; font-weight: 700; letter-spacing: 2px;
+    padding: 6px 14px;
+    z-index: 10;
+  }
+
+  /* Top label — team / context */
+  .header {
+    padding: 60px 60px 0;
+    text-align: center;
+  }
+  .header .top {
+    display: block;
+    font-family: 'Oswald', sans-serif;
+    font-size: var(--size-headline-top, 64px);
+    font-weight: 700;
+    letter-spacing: 4px;
+    color: var(--text-main, #fff8e7);
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .header .bot {
+    display: block;
+    margin-top: 4px;
+    font-family: 'Oswald', sans-serif;
+    font-size: var(--size-headline-bot, 32px);
+    font-weight: 500;
+    letter-spacing: 3px;
+    color: {{ colors.accent }};
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  /* HERO — massive number + player/event name */
+  .hero {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 0 40px;
+  }
+  .hero-number {
+    font-family: 'Oswald', sans-serif;
+    font-size: 480px;
+    font-weight: 900;
+    line-height: 0.85;
+    color: {{ colors.primary }};
+    text-shadow:
+      0 0 60px rgba(255,184,28,.4),
+      8px 8px 0 #000;
+    -webkit-text-stroke: 4px #000;
+    letter-spacing: -10px;
+  }
+  .hero-name {
+    margin-top: 40px;
+    font-family: 'Oswald', sans-serif;
+    font-size: 96px;
+    font-weight: 700;
+    letter-spacing: 4px;
+    line-height: 1;
+    color: var(--text-main, #fff8e7);
+    text-shadow: 4px 4px 0 #000;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .hero-tag {
+    margin-top: 20px;
+    background: {{ colors.accent }};
+    color: {{ colors.primary }};
+    font-family: 'Oswald', sans-serif;
+    font-size: 36px; font-weight: 700;
+    letter-spacing: 3px;
+    padding: 10px 24px;
+    text-transform: uppercase;
+    transform: skewX(-6deg);
+    box-shadow: 0 6px 0 #000;
+  }
+  .hero-tag > span { display: inline-block; transform: skewX(6deg); }
+
+  /* BODY paragraph at bottom */
+  .body {
+    padding: 0 60px;
+    margin-bottom: 200px;
+    overflow: hidden;
+  }
+  .body-text {
+    font-size: 38px;
+    font-weight: 500;
+    line-height: 1.32;
+    color: var(--text-main, #fff8e7);
+    text-align: center;
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 88%, transparent 100%);
+            mask-image: linear-gradient(180deg, #000 0%, #000 88%, transparent 100%);
+  }
+  .body-text .hl-r { background: {{ colors.primary }}; color: #fff;
+    padding: 2px 10px; font-weight: 700; }
+  .body-text .hl-y { background: {{ colors.accent }}; color: {{ colors.primary }};
+    padding: 2px 10px; font-weight: 700; }
+
+  .progress {
+    position: absolute; left: 0; right: 0; bottom: 110px; height: 6px;
+    background: rgba(255,255,255,.18);
+  }
+  .progress::after {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+    background: {{ colors.accent }};
+    animation: fill {{ duration_s }}s linear forwards;
+  }
+  @keyframes fill { from { width: 0; } to { width: 100%; } }
+
+  .handle {
+    position: absolute; left: 0; right: 0; bottom: 50px;
+    text-align: center;
+    font-family: 'Oswald', sans-serif;
+    font-size: 32px; font-weight: 500; letter-spacing: 4px;
+    color: {{ colors.accent }};
+  }
+
+  .source-credit {
+    position: absolute;
+    bottom: 16px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,.6); color: rgba(255,255,255,.85);
+    font-size: 14px; font-weight: 500; letter-spacing: 0.5px;
+    padding: 3px 10px; border-radius: 3px;
+    z-index: 50; white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+<div class="stage dna-anim-{{ animation_style|default('none') }}">
+  <div class="stage-badge">{{ ui_breaking }}</div>
+
+  <div class="header">
+    <span class="top">{{ script.header_top }}</span>
+    <span class="bot">{{ script.header_bottom }}</span>
+  </div>
+
+  <div class="hero">
+    <div class="hero-number">{{ script.photo_overlay or '?' }}</div>
+    {% if script.category %}<div class="hero-name">{{ script.category }}</div>{% endif %}
+    <div class="hero-tag"><span>{{ ui_breaking }}</span></div>
+  </div>
+
+  <div class="body"><div class="body-text" data-fit-min="28" data-fit-max="40" data-fit-pad="20">{{ body_html|safe }}</div></div>
+
+  <div class="progress"></div>
+  <div class="handle">{{ handle }}</div>
+
+  {% if rss_source %}
+  <div class="source-credit">{{ ui_source }}: {{ rss_source }}</div>
+  {% endif %}
+</div>
+{% include "_auto_fit.js.j2" %}
+</body>
+</html>

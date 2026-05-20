@@ -54,10 +54,14 @@ def test_write_script_returns_script_model():
     assert result.header_top == "FAİZ ŞOKU"
 
 
-def test_archetype_prompts_cover_five_active():
+def test_archetype_prompts_cover_nine_active():
     """2026-05-19: cut from 7 → 3 (newscast + stadium + stat-hero).
-    2026-05-20: added bigquote + polaroid."""
-    expected = {"newscast", "stadium", "stat-hero", "bigquote", "polaroid"}
+    2026-05-20: added bigquote + polaroid + 4 variants."""
+    expected = {
+        "newscast", "newscast-magazine", "newscast-ticker",
+        "stadium", "stadium-scoreboard", "stadium-spotlight",
+        "stat-hero", "bigquote", "polaroid",
+    }
     assert set(ARCHETYPE_PROMPTS.keys()) == expected
 
 
