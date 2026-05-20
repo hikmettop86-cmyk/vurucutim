@@ -8,7 +8,7 @@
   {{ dna_css|safe }}
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { width: 1080px; height: 1920px; overflow: hidden; background: #000;
-    font-family: 'Inter', -apple-system, sans-serif; color: #fff; }
+    font-family: 'Inter', -apple-system, sans-serif; color: var(--text-main, #fff); }
 
   .stage { position: relative; width: 1080px; height: 1920px;
     display: flex; flex-direction: column;
@@ -42,7 +42,7 @@
     display: block; white-space: nowrap;
     margin-top: 6px;
     font-size: 56px;
-    color: #fff;
+    color: var(--text-main, #fff);
     opacity: 0.92;
   }
 
@@ -121,7 +121,7 @@
     font-size: 38px;
     line-height: 1.35;
     font-weight: 500;
-    color: #fff;
+    color: var(--text-main, #fff);
     max-width: 100%;
   }
   .stat-caption .hl-r { background: {{ colors.primary }}; color: #fff;

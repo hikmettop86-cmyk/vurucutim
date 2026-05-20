@@ -8,7 +8,7 @@
   {{ dna_css|safe }}
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { width: 1080px; height: 1920px; overflow: hidden; background: #000;
-    font-family: 'Inter', -apple-system, sans-serif; color: #fff; }
+    font-family: 'Inter', -apple-system, sans-serif; color: var(--text-main, #fff); }
 
   .stage { position: relative; width: 1080px; height: 1920px;
     background: linear-gradient(155deg, {{ colors.bg_gradient[0] }}, {{ colors.bg_gradient[1] }});
@@ -61,7 +61,7 @@
   .quote-text {
     font-size: 72px; line-height: 1.25;
     font-weight: 700;
-    color: #fff;
+    color: var(--text-main, #fff);
     text-align: center;
     text-shadow: 0 4px 18px rgba(0,0,0,.45);
   }
