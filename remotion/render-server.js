@@ -119,11 +119,19 @@ const server = http.createServer((req, res) => {
       // consecutive renders (the previous server hasn't released its socket
       // before the next call tries to bind).
       const remotionPort = await pickFreePort();
+      // Aggressive timeout knobs:
+      //  - chromiumOptions.timeoutInMilliseconds: 60s (default 30s) — slow
+      //    Windows machines sometimes need >30s for first Chromium spawn.
+      //  - delayRenderTimeoutInMilliseconds: 3000 (default 30000) — if any
+      //    network resource (font, image) doesn't load in 3s, just render
+      //    with fallback. Previews don't need pixel-perfect resources.
       const composition = await renderer.selectComposition({
         serveUrl,
         id: compositionId,
         inputProps: props || {},
         port: remotionPort,
+        chromiumOptions: {timeoutInMilliseconds: 60000},
+        delayRenderTimeoutInMilliseconds: 3000,
       });
       const finalComposition = durationInFrames
         ? {...composition, durationInFrames}
@@ -137,6 +145,8 @@ const server = http.createServer((req, res) => {
         jpegQuality: 80,
         frame: frame ?? 0,
         port: remotionPort,
+        chromiumOptions: {timeoutInMilliseconds: 60000},
+        delayRenderTimeoutInMilliseconds: 3000,
       });
       const dt = Date.now() - t0;
       log(`rendered ${compositionId} frame=${frame} → ${path.basename(outputPath)} (${dt}ms)`);

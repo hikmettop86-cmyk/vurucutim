@@ -963,10 +963,14 @@ export const Adaptive: React.FC<AdaptiveProps> = ({
   // hero-overlay header sits ON the photo — render photo first, then header on top
   const heroOverlayMode = dimensions.headerStyle === 'hero-overlay';
 
-  // Google Fonts URL for the selected typography pair. Headless Chromium
-  // fetches at render time; first frame may use fallback while font loads.
-  // For production fidelity bundle the fonts; this is the lightweight path.
-  const googleFontsHref = buildGoogleFontsHref(dimensions.typography);
+  // NOTE: previously we injected a <style>@import url(google-fonts)</style>
+  // here for custom typography pairs. That caused EVERY render to wait
+  // for Chromium's network roundtrip to Google Fonts — 30s timeout on
+  // slow networks, 3-4 min total renders observed. Removed. Typography
+  // now falls back to the system font stack listed in FONT_PAIRS (most
+  // browsers ship reasonable substitutes for Impact / Georgia / etc).
+  // For production fidelity, bundle the font files into remotion/public/
+  // and use loadFont() — a future improvement.
 
   return (
     <AbsoluteFill
@@ -978,9 +982,6 @@ export const Adaptive: React.FC<AdaptiveProps> = ({
         flexDirection: 'column',
       }}
     >
-      {googleFontsHref && (
-        <style>{`@import url("${googleFontsHref}");`}</style>
-      )}
 
       {/* When blur-bg is selected, the image fills the entire frame underneath everything */}
       {dimensions.photoTreatment === 'blur-bg' && <PhotoBlurBg {...photoCommon} />}
