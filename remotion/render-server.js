@@ -26,11 +26,16 @@ let bundlePromise = null;
 let log = (msg) => console.log(`[render-server] ${msg}`);
 
 async function pickFreePort() {
-  // Try ports in 3221-3299 — first free wins. Each render needs its own
-  // port for Remotion's internal HTTP server; reusing across rapid calls
-  // hits EADDRINUSE because the previous socket lingers briefly.
+  // Random port in 3221-3299 — avoids the "always 3221" problem of an
+  // incremental scan when multiple renders fire concurrently (each
+  // pickFreePort call returns 3221, they all collide). Random picks
+  // 6-12 trials before falling back to letting the OS choose.
   const net = require('node:net');
-  for (let p = 3221; p < 3300; p++) {
+  const tried = new Set();
+  for (let attempt = 0; attempt < 12; attempt++) {
+    let p;
+    do { p = 3221 + Math.floor(Math.random() * 79); } while (tried.has(p));
+    tried.add(p);
     const free = await new Promise((resolve) => {
       const s = net.createServer();
       s.unref();
@@ -41,7 +46,8 @@ async function pickFreePort() {
     });
     if (free) return p;
   }
-  // Last resort — let Remotion pick. Risk: it picks 3000 → Next.js collision.
+  // Last resort — OS-assigned free port (Remotion may also accept 0
+  // meaning "any free port", but it depends on internal handling).
   return null;
 }
 
