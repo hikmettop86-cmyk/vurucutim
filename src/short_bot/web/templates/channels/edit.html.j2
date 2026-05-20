@@ -88,26 +88,28 @@
         ctaText: "{{ (c.cta_text or '')|e }}",
         ctaShowHandle: {{ 'true' if c.cta_show_handle else 'false' }},
         rssSourceDemo: "",
-        // Style knobs (Phase A2 — Stil Düzenle tab)
-        knobBannerSkew:      "{{ (c.dna.style_knobs.banner_skew_deg    if c.dna else 0.0)  }}",
-        knobHeaderPaddingY:  "{{ (c.dna.style_knobs.header_padding_y   if c.dna else 78)   }}",
-        knobHeaderSizeTop:   "{{ (c.dna.style_knobs.header_size_top    if c.dna else 100)  }}",
-        knobHeaderSizeBot:   "{{ (c.dna.style_knobs.header_size_bot    if c.dna else 70)   }}",
-        knobPhotoHeight:     "{{ (c.dna.style_knobs.photo_height       if c.dna else 640)  }}",
-        knobPhotoBlur:       "{{ (c.dna.style_knobs.photo_blur_px      if c.dna else 0.0)  }}",
-        knobPhotoSaturation: "{{ (c.dna.style_knobs.photo_saturation   if c.dna else 1.0)  }}",
-        knobBodyFontSize:    "{{ (c.dna.style_knobs.body_font_size     if c.dna else 48)   }}",
-        knobBodyLineHeight:  "{{ (c.dna.style_knobs.body_line_height   if c.dna else 1.42) }}",
-        knobCornerRadius:    "{{ (c.dna.style_knobs.corner_radius      if c.dna else 6)    }}",
-        knobLetterSpacing:   "{{ (c.dna.style_knobs.letter_spacing     if c.dna else 0.5)  }}",
-        knobShadowIntensity: "{{ (c.dna.style_knobs.shadow_intensity   if c.dna else 1.0)  }}",
+        // Style knobs (Phase A2 — Stil Düzenle tab). Numeric init (not strings)
+        // so x-model.number on the slider stays numeric end-to-end and the
+        // iframe x-bind:src dependency tracking fires on every change.
+        knobBannerSkew:      {{ (c.dna.style_knobs.banner_skew_deg    if c.dna else 0.0)  }},
+        knobHeaderPaddingY:  {{ (c.dna.style_knobs.header_padding_y   if c.dna else 78)   }},
+        knobHeaderSizeTop:   {{ (c.dna.style_knobs.header_size_top    if c.dna else 100)  }},
+        knobHeaderSizeBot:   {{ (c.dna.style_knobs.header_size_bot    if c.dna else 70)   }},
+        knobPhotoHeight:     {{ (c.dna.style_knobs.photo_height       if c.dna else 640)  }},
+        knobPhotoBlur:       {{ (c.dna.style_knobs.photo_blur_px      if c.dna else 0.0)  }},
+        knobPhotoSaturation: {{ (c.dna.style_knobs.photo_saturation   if c.dna else 1.0)  }},
+        knobBodyFontSize:    {{ (c.dna.style_knobs.body_font_size     if c.dna else 48)   }},
+        knobBodyLineHeight:  {{ (c.dna.style_knobs.body_line_height   if c.dna else 1.42) }},
+        knobCornerRadius:    {{ (c.dna.style_knobs.corner_radius      if c.dna else 6)    }},
+        knobLetterSpacing:   {{ (c.dna.style_knobs.letter_spacing     if c.dna else 0.5)  }},
+        knobShadowIntensity: {{ (c.dna.style_knobs.shadow_intensity   if c.dna else 1.0)  }},
         resetKnobs() {
-          this.knobBannerSkew = "0"; this.knobHeaderPaddingY = "78";
-          this.knobHeaderSizeTop = "100"; this.knobHeaderSizeBot = "70";
-          this.knobPhotoHeight = "640"; this.knobPhotoBlur = "0";
-          this.knobPhotoSaturation = "1.0"; this.knobBodyFontSize = "48";
-          this.knobBodyLineHeight = "1.42"; this.knobCornerRadius = "6";
-          this.knobLetterSpacing = "0.5"; this.knobShadowIntensity = "1.0";
+          this.knobBannerSkew = 0; this.knobHeaderPaddingY = 78;
+          this.knobHeaderSizeTop = 100; this.knobHeaderSizeBot = 70;
+          this.knobPhotoHeight = 640; this.knobPhotoBlur = 0;
+          this.knobPhotoSaturation = 1.0; this.knobBodyFontSize = 48;
+          this.knobBodyLineHeight = 1.42; this.knobCornerRadius = 6;
+          this.knobLetterSpacing = 0.5; this.knobShadowIntensity = 1.0;
         },
         currentTab: window.location.hash.replace("#", "") || "genel"
       }'>
@@ -1269,7 +1271,7 @@
           </div>
           <input type="range" name="dna_knob_{{ name }}"
                  min="{{ min }}" max="{{ max }}" step="{{ step }}"
-                 x-model="{{ knob_var }}"
+                 x-model.number="{{ knob_var }}"
                  class="w-full">
         </label>
         {%- endmacro -%}
