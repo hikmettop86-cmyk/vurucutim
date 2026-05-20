@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from short_bot.claude_cli import run_json
 from short_bot.config import ChannelConfig
+from short_bot.dna import _DESIGNED_ARCHETYPES
 from short_bot.locale import LANGUAGE_NAMES
 from short_bot.models import NewsItem, Script
 
@@ -56,31 +57,19 @@ ARCHETYPE_PROMPTS = {
 - highlights: leave empty — quote is presented as-is, no inline highlights
 - mood: usually neutral, breaking for inflammatory statements
 """,
-    # ─── Designed archetypes (from share zip, 2026-05-20) — same content schema
-    # as newscast (header_top + header_bottom + photo_overlay + body_paragraph),
-    # different visual styling. Use the generic newscast prompt with a style hint.
+    # ─── Designed archetypes — auto-generated from config/archetypes.json
+    # Same content schema as newscast (header_top + header_bottom + photo_overlay
+    # + body_paragraph), different visual styling. Generic newscast prompt +
+    # JSON's label+subtitle as style hint.
     **{
-        slug: f"""ARCHETYPE: {slug} — visual style: {desc}
+        a["slug"]: f"""ARCHETYPE: {a["slug"]} — visual style: {a["label"]}, {a["subtitle"]}
 - header_top + header_bottom: 4-6 words total, news headline (ALLCAPS dostu)
 - photo_overlay: 2-5 words, key fact (stat/decision/action), max 60 chars
 - body_paragraph: 3-4 sentences, neutral journalistic tone, max 300 chars
 - highlights: red=warning/risk, yellow=stat/decision/key actor
 - mood: breaking for crisis, neutral default, upbeat for positive resolution
 """
-        for slug, desc in [
-            ("editorial",  "magazine spread, serif headline, krem zemin, editorial feel"),
-            ("neon",       "cyberpunk neon glow, dark bg, magenta/cyan, sharp edges"),
-            ("tabloid",    "60s pulp tabloid, scream type Anton, yellow bg"),
-            ("brutalist",  "Swiss brutalist, massive type, light bg, primary accent block"),
-            ("noir",       "cinematic noir, black bg, cinemascope bars, gold accent"),
-            ("popblock",   "modern social media gradient, magenta-purple, gradient body bg"),
-            ("broadsheet", "editorial gazette, 2-column layout, cream serif body"),
-            ("holo",       "holographic chrome, conic gradient, iridescent neon"),
-            ("extra",      "tabloid EXTRA! aesthetic, torn paper, sepia tones"),
-            ("manifesto",  "brutalist manifesto, vertical stripe, grid division, dark/light split"),
-            ("polaroid",   "noir polaroid photo on kraft paper, warm sepia tones"),
-            ("story",      "Instagram story sticker, pink-purple bg, vibrant social media feel"),
-        ]
+        for a in _DESIGNED_ARCHETYPES
     },
 }
 

@@ -6,12 +6,7 @@ from short_bot.templates_config import (
 )
 
 
-ARCHETYPES = [
-    "newscast", "stadium", "stat-hero", "bigquote",
-    "editorial", "neon", "tabloid", "brutalist",
-    "noir", "popblock", "broadsheet", "holo",
-    "extra", "manifesto", "polaroid", "story",
-]
+from short_bot.dna import ARCHETYPES  # noqa: E402 — load registry dynamically
 
 
 def test_all_archetypes_have_config():

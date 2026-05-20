@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="{{ language }}">
+<head>
+<meta charset="utf-8">
+<title>Short — Riso</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@500;700&display=swap');
+
+  {{ dna_css|safe }}
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 1080px; height: 1920px; overflow: hidden;
+    font-family: var(--font-body, 'Inter'), sans-serif;
+    background: var(--body-bg-1, #fef9e7);
+    color: var(--text-main, #0a0a0a);
+  }
+
+  .stage {
+    position: relative; width: 1080px; height: 1920px;
+    background: var(--body-bg-1, #fef9e7);
+    padding: 80px 70px 140px;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  /* Riso grunge */
+  .stage::before {
+    content: ''; position: absolute; inset: 0;
+    background-image:
+      radial-gradient(rgba(0,0,0,0.12) 1px, transparent 1.5px),
+      radial-gradient(rgba(0,0,0,0.06) 0.5px, transparent 1px);
+    background-size: 24px 24px, 6px 6px;
+    background-position: 0 0, 12px 12px;
+    mix-blend-mode: multiply;
+    opacity: 0.85;
+    pointer-events: none;
+  }
+  /* Off-register tek renk */
+  .stage::after {
+    content: ''; position: absolute;
+    top: 100px; right: 60px;
+    width: 380px; height: 380px;
+    border-radius: 50%;
+    background: var(--primary, #ff4d6a);
+    mix-blend-mode: multiply;
+    opacity: 0.7;
+    filter: blur(2px);
+    z-index: 1;
+  }
+
+  /* Üst meta */
+  .meta {
+    display: flex; justify-content: space-between; align-items: center;
+    border-top: 3px solid #0a0a0a;
+    border-bottom: 3px solid #0a0a0a;
+    padding: 14px 0;
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: 24px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: #0a0a0a;
+    z-index: 2;
+  }
+  .meta .live {
+    background: #0a0a0a;
+    color: var(--body-bg-1, #fef9e7);
+    padding: 6px 14px;
+  }
+
+  /* Manşet */
+  .header {
+    margin-top: 56px;
+    color: #0a0a0a;
+    z-index: 2;
+  }
+  .header .top {
+    display: block;
+    font-family: var(--font-headline, 'Space Grotesk'), sans-serif;
+    font-weight: 700;
+    font-size: var(--size-headline-top, 160px);
+    line-height: 0.9;
+    letter-spacing: -0.035em;
+    color: #0a0a0a;
+    text-wrap: balance;
+  }
+  .header .bot {
+    display: block; margin-top: 22px;
+    font-family: var(--font-body, 'Inter'), sans-serif;
+    font-weight: 500;
+    font-size: var(--size-headline-bot, 44px);
+    line-height: 1.2;
+    color: #0a0a0a;
+    text-wrap: balance;
+  }
+  .header .bot::after {
+    content: ''; display: block;
+    width: 80px; height: 3px;
+    background: var(--primary, #ff4d6a);
+    margin-top: 18px;
+  }
+
+  /* Foto — duotone + off-register */
+  .photo {
+    position: relative;
+    margin-top: 50px;
+    height: 560px;
+    overflow: hidden;
+    background: linear-gradient(135deg, var(--bg-grad-1, #1a1a2a), var(--bg-grad-2, #0a0a1a));
+    z-index: 2;
+  }
+  .photo .bg-img {
+    position: absolute; inset: 0;
+    background-size: cover; background-position: center;
+    filter: contrast(1.3) saturate(0) brightness(0.95);
+    mix-blend-mode: multiply;
+  }
+  /* Off-register magenta */
+  .photo::before {
+    content: ''; position: absolute; inset: 0;
+    background: var(--primary, #ff4d6a);
+    mix-blend-mode: lighten;
+    opacity: 0.45;
+    z-index: 2;
+    transform: translate(6px, 4px);
+  }
+  /* Off-register cyan */
+  .photo::after {
+    content: ''; position: absolute; inset: 0;
+    background: var(--accent, #2bcfcf);
+    mix-blend-mode: multiply;
+    opacity: 0.55;
+    z-index: 3;
+    transform: translate(-4px, -2px);
+  }
+  .photo .yellow {
+    position: absolute; left: 20px; bottom: 20px;
+    background: var(--accent, #2bcfcf);
+    color: #0a0a0a;
+    padding: 12px 22px;
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: 28px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    border: 3px solid #0a0a0a;
+    z-index: 4;
+  }
+
+  /* Gövde */
+  .body {
+    flex: 1; margin-top: 40px;
+    z-index: 2;
+  }
+  .body-text {
+    font-family: var(--font-body, 'Inter'), sans-serif;
+    font-size: 32px; line-height: 1.45; font-weight: 500;
+    color: var(--text-main, #0a0a0a);
+    text-wrap: pretty;
+  }
+  .body-text .hl-y {
+    background: var(--accent, #2bcfcf); color: #0a0a0a;
+    padding: 0 8px;
+    box-decoration-break: clone; -webkit-box-decoration-break: clone;
+    font-weight: 700;
+    mix-blend-mode: multiply;
+  }
+  .body-text .hl-r {
+    background: var(--primary, #ff4d6a); color: #0a0a0a;
+    padding: 0 8px;
+    box-decoration-break: clone; -webkit-box-decoration-break: clone;
+    font-weight: 700;
+    mix-blend-mode: multiply;
+  }
+
+  /* Standart öğeler */
+  .progress {
+    position: absolute; left: 0; right: 0; bottom: 84px;
+    height: 6px; background: rgba(10,10,10,0.12);
+  }
+  .progress::after {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+    background: var(--primary, #ff4d6a);
+    animation: fill {{ duration_s }}s linear forwards;
+  }
+  @keyframes fill { from { width: 0; } to { width: 100%; } }
+
+  .handle {
+    position: absolute; left: 0; right: 0; bottom: 30px;
+    text-align: center;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 28px; font-weight: 700;
+    color: #0a0a0a;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .source-credit {
+    position: absolute; bottom: 6px; left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.7); color: rgba(255,255,255,0.9);
+    font-size: 14px; padding: 3px 10px; border-radius: 3px;
+    z-index: 50; white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+<div class="stage dna-anim-{{ animation_style|default('none') }}">
+
+  <div class="meta">
+    <span>{% if script.category %}{{ script.category }}{% endif %} · {{ language|upper }}</span>
+    <span class="live">{{ ui_breaking }}</span>
+  </div>
+
+  <div class="header">
+    <span class="top">{{ script.header_top }}</span>
+    <span class="bot">{{ script.header_bottom }}</span>
+  </div>
+
+  <div class="photo">
+    <div class="bg-img" style="background-image: url('{{ bg_image_url|default("") }}');
+         {% if not bg_image_url %}display: none;{% endif %}"></div>
+    {% if script.photo_overlay %}<div class="yellow">{{ script.photo_overlay }}</div>{% endif %}
+  </div>
+
+  <div class="body">
+    <div class="body-text" data-fit-min="24" data-fit-max="32" data-fit-pad="20">
+      {{ body_html|safe }}
+    </div>
+  </div>
+
+  <div class="progress"></div>
+  <div class="handle">{{ handle }}</div>
+  {% if rss_source %}<div class="source-credit">{{ ui_source }}: {{ rss_source }}</div>{% endif %}
+</div>
+
+{% include "_auto_fit.js.j2" %}
+</body>
+</html>

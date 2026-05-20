@@ -9,15 +9,22 @@ from short_bot.dna import (
 )
 
 
-def test_archetypes_list_has_sixteen():
-    # 2026-05-19: cut from 16 → 3.
-    # 2026-05-20: added bigquote, then 12 designed archetypes from share zip.
-    assert set(ARCHETYPES) == {
-        "newscast", "stadium", "stat-hero", "bigquote",
-        "editorial", "neon", "tabloid", "brutalist",
-        "noir", "popblock", "broadsheet", "holo",
-        "extra", "manifesto", "polaroid", "story",
-    }
+def test_archetypes_includes_existing_four():
+    """4 hardcoded archetypes must always be present (battle-tested)."""
+    assert {"newscast", "stadium", "stat-hero", "bigquote"}.issubset(set(ARCHETYPES))
+
+
+def test_archetypes_loads_designed_from_json():
+    """All designed archetypes in config/archetypes.json must be in ARCHETYPES."""
+    from short_bot.dna import _DESIGNED_ARCHETYPES
+    designed_slugs = {a["slug"] for a in _DESIGNED_ARCHETYPES}
+    assert designed_slugs.issubset(set(ARCHETYPES))
+
+
+def test_archetypes_count_matches_registry():
+    """ARCHETYPES = 4 existing + N designed (from JSON)."""
+    from short_bot.dna import _DESIGNED_ARCHETYPES
+    assert len(ARCHETYPES) == 4 + len(_DESIGNED_ARCHETYPES)
 
 
 def test_palette_validates_hex():

@@ -34,14 +34,10 @@ def test_resolve_returns_empty_string_when_neither_set(monkeypatch):
 from short_bot.pexels import ARCHETYPE_BG_QUERIES, pick_query_for_archetype
 
 
-def test_archetype_pool_covers_all_sixteen_archetypes():
-    expected = {
-        "newscast", "stadium", "stat-hero", "bigquote",
-        "editorial", "neon", "tabloid", "brutalist",
-        "noir", "popblock", "broadsheet", "holo",
-        "extra", "manifesto", "polaroid", "story",
-    }
-    assert set(ARCHETYPE_BG_QUERIES.keys()) == expected
+def test_archetype_pool_covers_all_archetypes():
+    """BG_QUERIES must have an entry for every archetype in the registry."""
+    from short_bot.dna import ARCHETYPES
+    assert set(ARCHETYPE_BG_QUERIES.keys()) == set(ARCHETYPES)
 
 
 def test_each_archetype_pool_has_at_least_three_queries():

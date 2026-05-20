@@ -1,0 +1,524 @@
+[
+  {
+    "slug": "editorial",
+    "label": "Editorial",
+    "subtitle": "Magazine spread · serif başlık",
+    "defaults": {
+      "colors": {
+        "primary": "#b91c1c",
+        "accent": "#ffea3b",
+        "primary_light": "#ef4444",
+        "bg_gradient": [
+          "#2a3a5e",
+          "#11182f"
+        ]
+      },
+      "body_bg": [
+        "#f4f1ea",
+        "#e9e4d4"
+      ],
+      "text_main": "#111",
+      "text_muted": "#555",
+      "font_headline": "Playfair Display",
+      "font_body": "Inter"
+    },
+    "pexels_queries": [
+      "newspaper",
+      "editorial portrait",
+      "classic architecture"
+    ]
+  },
+  {
+    "slug": "neon",
+    "label": "Neon",
+    "subtitle": "Cyberpunk · neon glow",
+    "defaults": {
+      "colors": {
+        "primary": "#ff2bd6",
+        "accent": "#00fff0",
+        "primary_light": "#ff5ce0",
+        "bg_gradient": [
+          "#2a0a4a",
+          "#0a0118"
+        ]
+      },
+      "body_bg": [
+        "#0a0118",
+        "#04020c"
+      ],
+      "text_main": "#fff",
+      "text_muted": "rgba(255,255,255,0.7)",
+      "font_headline": "Bebas Neue",
+      "font_body": "Inter"
+    },
+    "pexels_queries": [
+      "neon city night",
+      "cyberpunk",
+      "tech abstract"
+    ]
+  },
+  {
+    "slug": "tabloid",
+    "label": "Tabloid",
+    "subtitle": "60s pulp · scream type",
+    "defaults": {
+      "colors": {
+        "primary": "#c81e1e",
+        "accent": "#ffd400",
+        "primary_light": "#e84e3e",
+        "bg_gradient": [
+          "#3a1a1a",
+          "#1a0a0a"
+        ]
+      },
+      "body_bg": [
+        "#ffd400",
+        "#f5b800"
+      ],
+      "text_main": "#0a0a0a",
+      "text_muted": "#0a0a0a",
+      "font_headline": "Anton",
+      "font_body": "Inter"
+    },
+    "pexels_queries": [
+      "vintage portrait",
+      "shocked face",
+      "retro tv"
+    ]
+  },
+  {
+    "slug": "brutalist",
+    "label": "Brutalist",
+    "subtitle": "Swiss · grid · massive type",
+    "defaults": {
+      "colors": {
+        "primary": "#ff4d2e",
+        "accent": "#ffe600",
+        "primary_light": "#ff7654",
+        "bg_gradient": [
+          "#0a0a0a",
+          "#1a1a1a"
+        ]
+      },
+      "body_bg": [
+        "#f5f3ed",
+        "#f5f3ed"
+      ],
+      "text_main": "#0a0a0a",
+      "text_muted": "#0a0a0a",
+      "font_headline": "Inter",
+      "font_body": "Inter"
+    },
+    "pexels_queries": [
+      "brutalist architecture",
+      "concrete wall",
+      "minimal portrait"
+    ]
+  },
+  {
+    "slug": "noir",
+    "label": "Noir",
+    "subtitle": "Cinematic · cinemascope",
+    "defaults": {
+      "colors": {
+        "primary": "#c0392b",
+        "accent": "#d4af37",
+        "primary_light": "#e74c3c",
+        "bg_gradient": [
+          "#1a1a2e",
+          "#0a0a14"
+        ]
+      },
+      "body_bg": [
+        "#000",
+        "#000"
+      ],
+      "text_main": "#fff",
+      "text_muted": "rgba(255,255,255,0.65)",
+      "font_headline": "Source Serif 4",
+      "font_body": "Inter"
+    },
+    "pexels_queries": [
+      "cinematic portrait",
+      "rain street night",
+      "film noir"
+    ]
+  },
+  {
+    "slug": "popblock",
+    "label": "Pop Block",
+    "subtitle": "Modern social · gradient",
+    "defaults": {
+      "colors": {
+        "primary": "#ff2a6d",
+        "accent": "#ffd93d",
+        "primary_light": "#ff5b8a",
+        "bg_gradient": [
+          "#1a1a3a",
+          "#2a0a5a"
+        ]
+      },
+      "body_bg": [
+        "#ff5b8a",
+        "#6b3df4"
+      ],
+      "text_main": "#fff",
+      "text_muted": "rgba(255,255,255,0.9)",
+      "font_headline": "Montserrat",
+      "font_body": "Inter"
+    },
+    "pexels_queries": [
+      "vibrant gradient",
+      "pop culture",
+      "modern fashion"
+    ]
+  },
+  {
+    "slug": "broadsheet",
+    "label": "Broadsheet",
+    "subtitle": "Editorial alt · gazete formatı, 2-sütun",
+    "defaults": {
+      "colors": {
+        "primary": "#b3261e",
+        "accent": "#d4a017",
+        "primary_light": "#cb3a2e",
+        "bg_gradient": [
+          "#2a3a5e",
+          "#11182f"
+        ]
+      },
+      "body_bg": [
+        "#faf6ec",
+        "#efe7d3"
+      ],
+      "text_main": "#1a1410",
+      "text_muted": "#66594a",
+      "font_headline": "Playfair Display",
+      "font_body": "Source Serif 4"
+    },
+    "pexels_queries": [
+      "serious portrait",
+      "newsroom",
+      "historic building"
+    ]
+  },
+  {
+    "slug": "holo",
+    "label": "Holo",
+    "subtitle": "Neon alt · holografik chrome, conic gradient",
+    "defaults": {
+      "colors": {
+        "primary": "#ff00aa",
+        "accent": "#00f0ff",
+        "primary_light": "#ff5cd0",
+        "bg_gradient": [
+          "#2a0a4a",
+          "#0a0118"
+        ]
+      },
+      "body_bg": [
+        "#050208",
+        "#1a0220"
+      ],
+      "text_main": "#fff",
+      "text_muted": "rgba(255,255,255,0.85)",
+      "font_headline": "Anton",
+      "font_body": "Inter"
+    },
+    "pexels_queries": [
+      "holographic abstract",
+      "iridescent",
+      "chrome material"
+    ]
+  },
+  {
+    "slug": "extra",
+    "label": "Extra",
+    "subtitle": "Tabloid alt · gazete extra! yırtık kâğıt",
+    "defaults": {
+      "colors": {
+        "primary": "#c02020",
+        "accent": "#f0c800",
+        "primary_light": "#d84040",
+        "bg_gradient": [
+          "#3a1a1a",
+          "#1a0a0a"
+        ]
+      },
+      "body_bg": [
+        "#f0e6c8",
+        "#d6cba8"
+      ],
+      "text_main": "#1a0a0a",
+      "text_muted": "#4a3020",
+      "font_headline": "Bebas Neue",
+      "font_body": "Inter"
+    },
+    "pexels_queries": [
+      "vintage newspaper",
+      "sepia portrait",
+      "archive photo"
+    ]
+  },
+  {
+    "slug": "manifesto",
+    "label": "Manifesto",
+    "subtitle": "Brutalist alt · dikey şerit, ızgara bölünme",
+    "defaults": {
+      "colors": {
+        "primary": "#1f2937",
+        "accent": "#fde047",
+        "primary_light": "#3b4759",
+        "bg_gradient": [
+          "#1f2937",
+          "#0a1018"
+        ]
+      },
+      "body_bg": [
+        "#ededeb",
+        "#dad5d0"
+      ],
+      "text_main": "#0a0a0a",
+      "text_muted": "#666",
+      "font_headline": "Inter",
+      "font_body": "Inter"
+    },
+    "pexels_queries": [
+      "protest",
+      "urban architecture",
+      "graphic poster"
+    ]
+  },
+  {
+    "slug": "polaroid",
+    "label": "Polaroid",
+    "subtitle": "Noir alt · polaroid foto, kraft kâğıt",
+    "defaults": {
+      "colors": {
+        "primary": "#c93838",
+        "accent": "#d4a017",
+        "primary_light": "#dd5050",
+        "bg_gradient": [
+          "#4a3a2a",
+          "#1a1410"
+        ]
+      },
+      "body_bg": [
+        "#2a2520",
+        "#1a1410"
+      ],
+      "text_main": "#f4ede0",
+      "text_muted": "color-mix(in srgb, #d4a017 70%, transparent)",
+      "font_headline": "Source Serif 4",
+      "font_body": "Inter"
+    },
+    "pexels_queries": [
+      "vintage moment",
+      "travel memory",
+      "film photography"
+    ]
+  },
+  {
+    "slug": "story",
+    "label": "Story",
+    "subtitle": "Popblock alt · Instagram story stili, sticker",
+    "defaults": {
+      "colors": {
+        "primary": "#ff3d6e",
+        "accent": "#ffd93d",
+        "primary_light": "#ff6a92",
+        "bg_gradient": [
+          "#2a0a3a",
+          "#0a1428"
+        ]
+      },
+      "body_bg": [
+        "#ff3d6e",
+        "#c81e5a"
+      ],
+      "text_main": "#fff",
+      "text_muted": "#fff",
+      "font_headline": "Montserrat",
+      "font_body": "Inter"
+    },
+    "pexels_queries": [
+      "vibrant lifestyle",
+      "urban youth",
+      "colorful party"
+    ]
+  },
+  {
+    "slug": "memphis",
+    "label": "Memphis",
+    "subtitle": "80'ler memphis · geometrik blok, sticker hissi",
+    "defaults": {
+      "colors": {
+        "primary": "#ff3d6e",
+        "accent": "#00c4ff",
+        "primary_light": "#ff6a92",
+        "bg_gradient": [
+          "#1a3a6e",
+          "#0a1a3a"
+        ]
+      },
+      "body_bg": [
+        "#f5f0e1",
+        "#ebe4d0"
+      ],
+      "text_main": "#0a0a0a",
+      "text_muted": "#0a0a0a",
+      "font_headline": "Anton",
+      "font_body": "Inter"
+    },
+    "pexels_queries": [
+      "playful design",
+      "colorful objects",
+      "retro 80s"
+    ]
+  },
+  {
+    "slug": "broadcast",
+    "label": "Broadcast",
+    "subtitle": "TV yayın · skor bar, ESPN-tarzı chrome",
+    "defaults": {
+      "colors": {
+        "primary": "#ed1c2e",
+        "accent": "#ffea1c",
+        "primary_light": "#ff3d4d",
+        "bg_gradient": [
+          "#2a3a5e",
+          "#0a1428"
+        ]
+      },
+      "body_bg": [
+        "#0a1428",
+        "#050a1a"
+      ],
+      "text_main": "#fff",
+      "text_muted": "rgba(255,255,255,0.75)",
+      "font_headline": "Roboto Condensed",
+      "font_body": "Inter"
+    },
+    "pexels_queries": [
+      "sports stadium",
+      "arena lights",
+      "broadcast studio"
+    ]
+  },
+  {
+    "slug": "minimal",
+    "label": "Minimal",
+    "subtitle": "Apple-tarzı · bol whitespace, tek font",
+    "defaults": {
+      "colors": {
+        "primary": "#b00020",
+        "accent": "#ffea1c",
+        "primary_light": "#cc1c3a",
+        "bg_gradient": [
+          "#d4d2c8",
+          "#b9b6a7"
+        ]
+      },
+      "body_bg": [
+        "#fafaf7",
+        "#ecebe5"
+      ],
+      "text_main": "#0a0a0a",
+      "text_muted": "#666",
+      "font_headline": "Inter",
+      "font_body": "Inter"
+    },
+    "pexels_queries": [
+      "minimal product",
+      "studio portrait",
+      "clean architecture"
+    ]
+  },
+  {
+    "slug": "comic",
+    "label": "Comic",
+    "subtitle": "Çizgi roman · panel, POW!, halftone",
+    "defaults": {
+      "colors": {
+        "primary": "#e63946",
+        "accent": "#ffd166",
+        "primary_light": "#f56b76",
+        "bg_gradient": [
+          "#1a3a6e",
+          "#0a1a3a"
+        ]
+      },
+      "body_bg": [
+        "#fffcef",
+        "#fff8dd"
+      ],
+      "text_main": "#0a0a0a",
+      "text_muted": "#0a0a0a",
+      "font_headline": "Bangers",
+      "font_body": "Inter"
+    },
+    "pexels_queries": [
+      "action portrait",
+      "dramatic moment",
+      "bold expression"
+    ]
+  },
+  {
+    "slug": "vapor",
+    "label": "Vapor",
+    "subtitle": "Vaporwave · grid floor, chrome, retro-future",
+    "defaults": {
+      "colors": {
+        "primary": "#ff5cd0",
+        "accent": "#00f0ff",
+        "primary_light": "#ff8ae0",
+        "bg_gradient": [
+          "#2a0a4a",
+          "#0a0118"
+        ]
+      },
+      "body_bg": [
+        "#2a0a4a",
+        "#0d0421"
+      ],
+      "text_main": "#fff",
+      "text_muted": "rgba(255,255,255,0.8)",
+      "font_headline": "Audiowide",
+      "font_body": "Inter"
+    },
+    "pexels_queries": [
+      "retro neon",
+      "palm sunset",
+      "aesthetic gradient"
+    ]
+  },
+  {
+    "slug": "riso",
+    "label": "Riso",
+    "subtitle": "2-renk risograph · grain, off-register, duotone",
+    "defaults": {
+      "colors": {
+        "primary": "#ff4d6a",
+        "accent": "#2bcfcf",
+        "primary_light": "#ff7d92",
+        "bg_gradient": [
+          "#1a1a2a",
+          "#0a0a1a"
+        ]
+      },
+      "body_bg": [
+        "#fef9e7",
+        "#fff4c8"
+      ],
+      "text_main": "#0a0a0a",
+      "text_muted": "#0a0a0a",
+      "font_headline": "Space Grotesk",
+      "font_body": "Inter"
+    },
+    "pexels_queries": [
+      "screen print",
+      "protest poster",
+      "editorial illustration"
+    ]
+  }
+]

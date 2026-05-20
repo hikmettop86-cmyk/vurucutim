@@ -12,6 +12,8 @@ import requests
 import yaml
 from pydantic import BaseModel
 
+from short_bot.dna import _DESIGNED_ARCHETYPES
+
 
 def load_secrets(secrets_path: Path) -> dict:
     """Return parsed YAML dict from secrets_path, or {} if file missing/empty."""
@@ -39,28 +41,20 @@ def resolve_youtube_api_key(secrets: dict) -> str:
     return os.environ.get("YOUTUBE_API_KEY") or secrets.get("youtube_api_key") or ""
 
 
-ARCHETYPE_BG_QUERIES: dict[str, list[str]] = {
+# Pexels bg queries. Existing 4 hardcoded (battle-tested); designed
+# archetypes inherit their queries from config/archetypes.json (via dna.py).
+_EXISTING_BG_QUERIES: dict[str, list[str]] = {
     "newscast":  ["newsroom blur", "studio lights motion", "news ticker abstract"],
     "stadium":   ["stadium lights night", "crowd cheering blur", "grass pitch zoom"],
     "stat-hero": ["data dashboard blur", "stock chart abstract",
                    "financial graph motion", "analytics screen glow"],
-    # bigquote: faint blurred bg (the quote dominates) — abstract / press
-    # conference / spotlight aesthetics work well.
     "bigquote":  ["press conference blur", "podium spotlight", "microphone closeup",
                   "abstract gold light", "press room dim"],
-    # ─── Designed archetypes (from share zip, 2026-05-20) ───────────────────
-    "editorial":  ["newspaper", "editorial portrait", "classic architecture"],
-    "neon":       ["neon city night", "cyberpunk", "tech abstract"],
-    "tabloid":    ["vintage portrait", "shocked face", "retro tv"],
-    "brutalist":  ["brutalist architecture", "concrete wall", "minimal portrait"],
-    "noir":       ["cinematic portrait", "rain street night", "film noir"],
-    "popblock":   ["vibrant gradient", "pop culture", "modern fashion"],
-    "broadsheet": ["serious portrait", "newsroom", "historic building"],
-    "holo":       ["holographic abstract", "iridescent", "chrome material"],
-    "extra":      ["vintage newspaper", "sepia portrait", "archive photo"],
-    "manifesto":  ["protest", "urban architecture", "graphic poster"],
-    "polaroid":   ["vintage moment", "travel memory", "film photography"],
-    "story":      ["vibrant lifestyle", "urban youth", "colorful party"],
+}
+
+ARCHETYPE_BG_QUERIES: dict[str, list[str]] = {
+    **_EXISTING_BG_QUERIES,
+    **{a["slug"]: a["pexels_queries"] for a in _DESIGNED_ARCHETYPES},
 }
 
 

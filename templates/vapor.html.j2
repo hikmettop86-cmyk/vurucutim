@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="{{ language }}">
+<head>
+<meta charset="utf-8">
+<title>Short — Vapor</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Audiowide&family=Inter:wght@500;700&display=swap');
+
+  {{ dna_css|safe }}
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 1080px; height: 1920px; overflow: hidden;
+    font-family: var(--font-body, 'Inter'), sans-serif;
+    background: #0d0421;
+    color: var(--text-main, #fff);
+  }
+
+  .stage {
+    position: relative; width: 1080px; height: 1920px;
+    background:
+      linear-gradient(180deg,
+        var(--body-bg-1, #2a0a4a) 0%,
+        color-mix(in srgb, var(--primary, #ff5cd0) 30%, transparent) 35%,
+        color-mix(in srgb, var(--accent, #00f0ff) 25%, transparent) 50%,
+        var(--body-bg-2, #0d0421) 75%,
+        #050018 100%);
+    overflow: hidden;
+  }
+  /* Güneş halkası */
+  .stage::before {
+    content: ''; position: absolute;
+    top: 380px; left: 50%; transform: translateX(-50%);
+    width: 700px; height: 700px;
+    border-radius: 50%;
+    background:
+      linear-gradient(180deg, #ff8a2c 0%, var(--accent, #ffd93d) 50%, var(--primary, #ff5cd0) 100%);
+    box-shadow: 0 0 100px color-mix(in srgb, var(--primary, #ff5cd0) 60%, transparent);
+    z-index: 1;
+  }
+  /* Yatay çizgiler (güneşi keser) */
+  .stage::after {
+    content: ''; position: absolute;
+    top: 720px; left: 0; right: 0;
+    height: 380px;
+    background:
+      repeating-linear-gradient(180deg,
+        transparent 0 22px,
+        #0d0421 22px 32px);
+    z-index: 2;
+    pointer-events: none;
+  }
+  /* Perspective grid */
+  .grid-floor {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    height: 720px;
+    background:
+      repeating-linear-gradient(0deg,
+        transparent 0 38px,
+        color-mix(in srgb, var(--accent, #00f0ff) 70%, transparent) 38px 40px),
+      repeating-linear-gradient(90deg,
+        transparent 0 60px,
+        color-mix(in srgb, var(--accent, #00f0ff) 70%, transparent) 60px 62px);
+    transform: perspective(800px) rotateX(60deg);
+    transform-origin: top center;
+    mask-image: linear-gradient(180deg, transparent 0%, #000 30%, #000 100%);
+    z-index: 2;
+  }
+
+  /* Üst kategori — palmiye yerine simge */
+  .stage-badge {
+    position: absolute; top: 60px; left: 60px;
+    background: color-mix(in srgb, var(--primary, #ff5cd0) 80%, transparent);
+    color: #fff;
+    border: 2px solid #fff;
+    padding: 12px 22px;
+    font-family: var(--font-headline, 'Audiowide'), sans-serif;
+    font-size: 22px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    box-shadow: 0 0 24px color-mix(in srgb, var(--primary, #ff5cd0) 60%, transparent);
+    z-index: 6;
+  }
+  .live-tag {
+    position: absolute; top: 60px; right: 60px;
+    font-family: var(--font-headline, 'Audiowide'), sans-serif;
+    font-size: 22px;
+    color: var(--accent, #00f0ff);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    text-shadow: 0 0 12px var(--accent, #00f0ff);
+    z-index: 6;
+  }
+
+  /* Manşet — chrome glow */
+  .header {
+    position: absolute; top: 200px; left: 60px; right: 60px;
+    text-align: center;
+    z-index: 6;
+  }
+  .header .top {
+    display: block;
+    font-family: var(--font-headline, 'Audiowide'), sans-serif;
+    font-size: var(--size-headline-top, 160px);
+    line-height: 0.9;
+    letter-spacing: 0.04em;
+    color: #fff;
+    text-transform: uppercase;
+    text-shadow:
+      0 0 18px #fff,
+      4px 4px 0 var(--primary, #ff5cd0),
+      8px 8px 0 var(--accent, #00f0ff);
+    text-wrap: balance;
+  }
+  .header .bot {
+    display: block; margin-top: 18px;
+    font-family: var(--font-body, 'Inter'), sans-serif;
+    font-weight: 500;
+    font-size: var(--size-headline-bot, 38px);
+    line-height: 1.2;
+    color: rgba(255,255,255,0.88);
+    letter-spacing: 0.02em;
+    text-wrap: balance;
+  }
+
+  /* Foto — kare frame, kenarı pembe glow */
+  .photo {
+    position: absolute;
+    top: 760px; left: 240px; right: 240px;
+    height: 600px;
+    background: linear-gradient(135deg, var(--bg-grad-1, #2a0a4a), var(--bg-grad-2, #0a0118));
+    border: 4px solid #fff;
+    box-shadow:
+      0 0 0 8px color-mix(in srgb, var(--primary, #ff5cd0) 50%, transparent),
+      0 0 60px color-mix(in srgb, var(--primary, #ff5cd0) 70%, transparent);
+    overflow: hidden;
+    z-index: 5;
+  }
+  .photo .bg-img {
+    position: absolute; inset: 0;
+    background-size: cover; background-position: center;
+    filter: contrast(1.05) saturate(1.2) hue-rotate(15deg);
+  }
+  .photo::after {
+    content: ''; position: absolute; inset: 0;
+    background: linear-gradient(135deg, color-mix(in srgb, var(--primary, #ff5cd0) 15%, transparent), color-mix(in srgb, var(--accent, #00f0ff) 15%, transparent));
+    mix-blend-mode: screen;
+    pointer-events: none;
+  }
+  .photo .yellow {
+    position: absolute; left: 50%; bottom: 24px;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(8px);
+    color: var(--accent, #00f0ff);
+    padding: 10px 20px;
+    font-family: var(--font-headline, 'Audiowide'), sans-serif;
+    font-size: 24px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    text-shadow: 0 0 10px var(--accent, #00f0ff);
+    border: 1px solid var(--accent, #00f0ff);
+    white-space: nowrap;
+  }
+
+  /* Gövde */
+  .body {
+    position: absolute; left: 60px; right: 60px;
+    top: 1430px; bottom: 200px;
+    background: rgba(13, 4, 33, 0.65);
+    backdrop-filter: blur(16px);
+    border: 1.5px solid color-mix(in srgb, var(--accent, #00f0ff) 60%, transparent);
+    padding: 28px 32px;
+    z-index: 6;
+    display: flex; align-items: center;
+  }
+  .body-text {
+    font-family: var(--font-body, 'Inter'), sans-serif;
+    font-size: 32px; line-height: 1.4; font-weight: 500;
+    color: var(--text-main, #fff);
+    text-wrap: pretty;
+  }
+  .body-text .hl-y {
+    background: var(--accent, #00f0ff); color: #0d0421;
+    padding: 0 10px;
+    box-decoration-break: clone; -webkit-box-decoration-break: clone;
+    font-weight: 700;
+  }
+  .body-text .hl-r {
+    background: var(--primary, #ff5cd0); color: #fff;
+    padding: 0 10px;
+    box-decoration-break: clone; -webkit-box-decoration-break: clone;
+    font-weight: 700;
+    text-shadow: 0 0 8px color-mix(in srgb, var(--primary, #ff5cd0) 50%, transparent);
+  }
+
+  /* Standart öğeler */
+  .progress {
+    position: absolute; left: 0; right: 0; bottom: 84px;
+    height: 4px; background: rgba(255,255,255,0.12);
+    z-index: 6;
+  }
+  .progress::after {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+    background: linear-gradient(90deg, var(--primary, #ff5cd0), var(--accent, #00f0ff));
+    box-shadow: 0 0 14px var(--accent, #00f0ff);
+    animation: fill {{ duration_s }}s linear forwards;
+  }
+  @keyframes fill { from { width: 0; } to { width: 100%; } }
+
+  .handle {
+    position: absolute; left: 0; right: 0; bottom: 30px;
+    text-align: center;
+    font-family: var(--font-headline, 'Audiowide'), sans-serif;
+    font-size: 26px;
+    color: var(--accent, #00f0ff);
+    letter-spacing: 0.16em;
+    text-shadow: 0 0 12px var(--accent, #00f0ff);
+    z-index: 6;
+  }
+
+  .source-credit {
+    position: absolute; bottom: 6px; left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.7); color: rgba(255,255,255,0.9);
+    font-size: 14px; padding: 3px 10px; border-radius: 3px;
+    z-index: 50; white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+<div class="stage dna-anim-{{ animation_style|default('none') }}">
+
+  <div class="grid-floor"></div>
+
+  {% if script.category %}<div class="stage-badge">▼ {{ script.category }}</div>{% endif %}
+  <div class="live-tag">{{ ui_breaking }} ▲</div>
+
+  <div class="header">
+    <span class="top">{{ script.header_top }}</span>
+    <span class="bot">{{ script.header_bottom }}</span>
+  </div>
+
+  <div class="photo">
+    <div class="bg-img" style="background-image: url('{{ bg_image_url|default("") }}');
+         {% if not bg_image_url %}display: none;{% endif %}"></div>
+    {% if script.photo_overlay %}<div class="yellow">{{ script.photo_overlay }}</div>{% endif %}
+  </div>
+
+  <div class="body">
+    <div class="body-text" data-fit-min="24" data-fit-max="32" data-fit-pad="16">
+      {{ body_html|safe }}
+    </div>
+  </div>
+
+  <div class="progress"></div>
+  <div class="handle">{{ handle }}</div>
+  {% if rss_source %}<div class="source-credit">{{ ui_source }}: {{ rss_source }}</div>{% endif %}
+</div>
+
+{% include "_auto_fit.js.j2" %}
+</body>
+</html>
