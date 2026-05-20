@@ -34,12 +34,8 @@ def test_resolve_returns_empty_string_when_neither_set(monkeypatch):
 from short_bot.pexels import ARCHETYPE_BG_QUERIES, pick_query_for_archetype
 
 
-def test_archetype_pool_covers_all_twelve_archetypes():
-    expected = {
-        "newscast", "stadium", "stat-hero", "bigquote",
-        "classic-breaking", "bold-quote", "big-stat", "versus",
-        "countdown", "leaked-doc", "cinematic", "modern-news",
-    }
+def test_archetype_pool_covers_all_four_archetypes():
+    expected = {"newscast", "stadium", "stat-hero", "bigquote"}
     assert set(ARCHETYPE_BG_QUERIES.keys()) == expected
 
 

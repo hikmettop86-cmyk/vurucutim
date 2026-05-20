@@ -6,11 +6,7 @@ from short_bot.templates_config import (
 )
 
 
-ARCHETYPES = [
-    "newscast", "stadium", "stat-hero", "bigquote",
-    "classic-breaking", "bold-quote", "big-stat", "versus",
-    "countdown", "leaked-doc", "cinematic", "modern-news",
-]
+ARCHETYPES = ["newscast", "stadium", "stat-hero", "bigquote"]
 
 
 def test_all_archetypes_have_config():

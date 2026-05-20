@@ -17,19 +17,10 @@ from short_bot.locale import LANGUAGE_NAMES
 # (Phase 2+) will reintroduce variety via dimensions rather than parallel
 # fixed templates.
 ARCHETYPES = [
-    "newscast",         # general breaking news (battle-tested, son-dakika lives here)
-    "stadium",          # sports/team broadcast (battle-tested, galatasaray lives here)
-    "stat-hero",        # number-driven body (economy/polls — added 2026-05-19)
-    "bigquote",         # fullscreen quote with attribution (added 2026-05-20)
-    # Designed archetypes (from share design file, added 2026-05-20):
-    "classic-breaking", # T1 — red banner + yellow stat bant + photo
-    "bold-quote",       # T2 — yellow pull-quote card overlapping photo
-    "big-stat",         # T3 — yellow bg, massive 540px number, chart strip, black bottom
-    "versus",           # T4 — two-half VS comparison with metric bars
-    "countdown",        # T5 — Top 5 list with current item highlighted
-    "leaked-doc",       # T6 — rotated redacted document with GIZLI stamp
-    "cinematic",        # T7 — full-screen photo + cinemascope bars + title overlay
-    "modern-news",      # T8 — light cream NYT/gazette feel
+    "newscast",   # general breaking news (battle-tested, son-dakika lives here)
+    "stadium",    # sports/team broadcast (battle-tested, galatasaray lives here)
+    "stat-hero",  # number-driven body (economy/polls — added 2026-05-19)
+    "bigquote",   # fullscreen quote with attribution (politician/athlete statements — added 2026-05-20)
 ]
 
 _ANIMATIONS_CSS_PATH = Path(__file__).resolve().parent.parent.parent / "templates" / "css" / "_animations.css"
@@ -72,63 +63,6 @@ ARCHETYPE_DEFAULTS: dict[str, dict] = {
         "body_bg_1": "#0f0f1e", "body_bg_2": "#1a1a2e",
         "text_main": "#ffffff", "text_muted": "#a0a0b0",
         "font_headline": "Playfair Display", "font_body": "Inter",
-    },
-    # ─── Designed archetypes (T1-T8 from share file) ────────────────────────
-    "classic-breaking": {
-        "primary": "#C8102E", "accent": "#FFD400",
-        "bg_grad_1": "#1a1a1a", "bg_grad_2": "#0a0a0a",
-        "body_bg_1": "#1a1a1a", "body_bg_2": "#0a0a0a",
-        "text_main": "#ffffff", "text_muted": "#cccccc",
-        "font_headline": "Oswald", "font_body": "Inter",
-    },
-    "bold-quote": {
-        "primary": "#E11D2A", "accent": "#FFD400",
-        "bg_grad_1": "#1a1a1a", "bg_grad_2": "#0F0F0F",
-        "body_bg_1": "#0F0F0F", "body_bg_2": "#0a0a0a",
-        "text_main": "#ffffff", "text_muted": "#999999",
-        "font_headline": "Oswald", "font_body": "Inter",
-    },
-    "big-stat": {
-        "primary": "#E11D2A", "accent": "#FFD400",
-        "bg_grad_1": "#FFD400", "bg_grad_2": "#FFD400",
-        "body_bg_1": "#0a0a0a", "body_bg_2": "#0a0a0a",
-        "text_main": "#0a0a0a", "text_muted": "#444444",
-        "font_headline": "Oswald", "font_body": "Inter",
-    },
-    "versus": {
-        "primary": "#E11D2A", "accent": "#FFD400",
-        "bg_grad_1": "#1a1a2a", "bg_grad_2": "#0a0a0a",
-        "body_bg_1": "#0a0a0a", "body_bg_2": "#0a0a0a",
-        "text_main": "#ffffff", "text_muted": "#888888",
-        "font_headline": "Oswald", "font_body": "Inter",
-    },
-    "countdown": {
-        "primary": "#E11D2A", "accent": "#FFD400",
-        "bg_grad_1": "#2A0E1A", "bg_grad_2": "#101418",
-        "body_bg_1": "#101418", "body_bg_2": "#0a0a0a",
-        "text_main": "#ffffff", "text_muted": "#888888",
-        "font_headline": "Oswald", "font_body": "Inter",
-    },
-    "leaked-doc": {
-        "primary": "#E11D2A", "accent": "#FFD400",
-        "bg_grad_1": "#0a0a0a", "bg_grad_2": "#1a1a1a",
-        "body_bg_1": "#0a0a0a", "body_bg_2": "#1a1a1a",
-        "text_main": "#ffffff", "text_muted": "#999999",
-        "font_headline": "Oswald", "font_body": "Inter",
-    },
-    "cinematic": {
-        "primary": "#E11D2A", "accent": "#FFD400",
-        "bg_grad_1": "#1a3a4e", "bg_grad_2": "#000000",
-        "body_bg_1": "#000000", "body_bg_2": "#000000",
-        "text_main": "#ffffff", "text_muted": "#aaaaaa",
-        "font_headline": "Oswald", "font_body": "Inter",
-    },
-    "modern-news": {
-        "primary": "#E11D2A", "accent": "#FFE470",
-        "bg_grad_1": "#FAFAF7", "bg_grad_2": "#ededea",
-        "body_bg_1": "#FAFAF7", "body_bg_2": "#ededea",
-        "text_main": "#0a0a0a", "text_muted": "#666666",
-        "font_headline": "Georgia", "font_body": "Georgia",
     },
 }
 
@@ -194,9 +128,10 @@ class DnaTone(BaseModel):
 
 class DnaSpec(BaseModel):
     archetype: Literal[
-        "newscast", "stadium", "stat-hero", "bigquote",
-        "classic-breaking", "bold-quote", "big-stat", "versus",
-        "countdown", "leaked-doc", "cinematic", "modern-news",
+        "newscast",   # general breaking news
+        "stadium",    # sports/team broadcast
+        "stat-hero",  # number-driven body (2026-05-19 onwards)
+        "bigquote",   # fullscreen attributed quote (2026-05-20 onwards)
     ]
     palette: DnaPalette
     fonts: DnaFonts
