@@ -60,13 +60,4 @@ ARCHETYPE_OVERFLOW_FIELDS: dict[str, list[OverflowField]] = {
         OverflowField("photo_overlay",  ".caption",           3),
         OverflowField("body_paragraph", ".quote-text",        6),
     ],
-    # polaroid: serif header above tilted photo card; handwritten caption
-    # in the card; serif paragraph below. Tighter clamps than newscast since
-    # the photo dominates ~half the frame.
-    "polaroid": [
-        OverflowField("header_top",     ".header .top",     2),
-        OverflowField("header_bottom",  ".header .bot",     2),
-        OverflowField("photo_overlay",  ".polaroid .caption", 2),
-        OverflowField("body_paragraph", ".body-text",       99),
-    ],
 }

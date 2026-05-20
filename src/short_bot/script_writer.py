@@ -56,23 +56,6 @@ ARCHETYPE_PROMPTS = {
 - highlights: leave empty — quote is presented as-is, no inline highlights
 - mood: usually neutral, breaking for inflammatory statements
 """,
-    "polaroid": """ARCHETYPE: polaroid — magazine/feature with tilted photo card
-- Lifestyle / nostalji / culture / human-interest feel — NOT breaking news.
-  Reads like a magazine spread, not a newsroom alert.
-- header_top: 3-5 words feature headline ("ESKİ İSTANBUL'A YOLCULUK",
-  "BİR USTANIN HİKAYESİ", "90'LARIN SES KÜLTÜRÜ")
-- header_bottom: 4-7 words italic subtitle elaborating the headline
-  ("Eski mahallenin son kalan ustası anlatıyor", "Kayıp bir kuşağın izinde")
-- photo_overlay: 2-5 words HANDWRITTEN-style caption inside the polaroid frame.
-  Short, personal, almost diary-like.
-  ("İstanbul, 1987", "Kapalıçarşı sabahı", "Son ustalar")
-- body_paragraph: 3-4 sentences, narrative / feature-writing tone (not
-  breaking-news terse). Past or continuous tense, scene-setting.
-  EXAMPLE: "Halıcıyı 40 yıldır aynı tezgâh ardında buluyorsunuz. Her sabah
-  saat altıda dükkanı açar, müşterilerine kendi demlediği çayı ikram eder."
-- highlights: red=key person/place name, yellow=year/era/cultural marker
-- mood: usually neutral (reflective), upbeat for celebratory stories
-""",
 }
 
 
