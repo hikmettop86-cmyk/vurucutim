@@ -9,10 +9,10 @@ from short_bot.dna import (
 )
 
 
-def test_archetypes_list_has_four():
+def test_archetypes_list_has_five():
     # 2026-05-19: cut from 16 → 3 (legacy 13 deleted).
-    # 2026-05-20: added bigquote (fullscreen attributed quotation).
-    assert set(ARCHETYPES) == {"newscast", "stadium", "stat-hero", "bigquote"}
+    # 2026-05-20: added bigquote (attributed quotation) + polaroid (magazine/feature).
+    assert set(ARCHETYPES) == {"newscast", "stadium", "stat-hero", "bigquote", "polaroid"}
 
 
 def test_palette_validates_hex():

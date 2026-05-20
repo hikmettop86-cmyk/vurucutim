@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="{{ language }}">
+<head>
+<meta charset="utf-8">
+<title>Short — polaroid</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Lora:wght@400;500;600&family=Caveat:wght@500;700&display=swap');
+  {{ dna_css|safe }}
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 1080px; height: 1920px; overflow: hidden;
+    background: linear-gradient(165deg, {{ colors.bg_gradient[0] }}, {{ colors.bg_gradient[1] }});
+    font-family: 'Lora', Georgia, serif;
+    color: #2a1f15;
+  }
+  .stage { position: relative; width: 1080px; height: 1920px; }
+
+  /* Subtle paper-grain background — old magazine feel */
+  .stage::before {
+    content: '';
+    position: absolute; inset: 0;
+    background-image:
+      radial-gradient(rgba(139,69,19,0.04) 1px, transparent 1.5px);
+    background-size: 18px 18px;
+    pointer-events: none;
+  }
+
+  /* TOP — small category chip + breaking badge */
+  .top-row {
+    position: absolute;
+    top: 36px; left: 0; right: 0;
+    display: flex; justify-content: space-between;
+    padding: 0 36px;
+    z-index: 5;
+  }
+  .category {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 22px; font-weight: 700;
+    color: {{ colors.primary }};
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    border-bottom: 2px solid {{ colors.primary }};
+    padding-bottom: 4px;
+  }
+  .stage-badge {
+    background: {{ colors.primary }};
+    color: #fff8e7;
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 18px; font-weight: 700;
+    letter-spacing: 1.5px;
+    padding: 6px 14px;
+    border-radius: 2px;
+  }
+
+  /* HEADER — serif headline above polaroid */
+  .header {
+    position: absolute;
+    top: 110px; left: 60px; right: 60px;
+    text-align: center;
+    z-index: 4;
+  }
+  .header .top {
+    display: block;
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 76px; font-weight: 900;
+    line-height: 1;
+    color: {{ colors.primary }};
+    letter-spacing: -1px;
+    white-space: nowrap;
+  }
+  .header .bot {
+    display: block;
+    margin-top: 10px;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 36px; font-style: italic;
+    font-weight: 500;
+    color: {{ colors.text_muted|default('#6b5640') }};
+    white-space: nowrap;
+  }
+
+  /* POLAROID CARD — centered, tilted */
+  .polaroid {
+    position: absolute;
+    top: 330px; left: 50%;
+    width: 720px; height: 800px;
+    margin-left: -360px;
+    background: #fdfaf4;
+    padding: 24px 24px 110px;
+    box-shadow:
+      0 20px 60px rgba(60,40,20,.35),
+      0 4px 12px rgba(60,40,20,.15);
+    transform: rotate(-2.4deg);
+    transition: transform 200ms ease;
+  }
+  .polaroid::before {
+    /* Decorative tape strip top-left */
+    content: '';
+    position: absolute;
+    top: -18px; left: 40px;
+    width: 110px; height: 36px;
+    background: rgba(212,165,116,.55);
+    box-shadow: 0 2px 4px rgba(0,0,0,.15);
+    transform: rotate(-8deg);
+  }
+
+  .polaroid .photo {
+    width: 100%; height: 100%;
+    background-image: url('{{ bg_image_url|default("") }}');
+    background-size: cover; background-position: center;
+    background-color: {{ colors.bg_gradient[1] }};
+    {% if not bg_image_url %}background-image: linear-gradient(135deg, {{ colors.primary }}, {{ colors.accent }});{% endif %}
+    filter: sepia(0.18) saturate(0.92) contrast(1.05);
+  }
+
+  .polaroid .caption {
+    position: absolute;
+    bottom: 28px; left: 24px; right: 24px;
+    font-family: 'Caveat', cursive;
+    font-size: 48px; font-weight: 700;
+    color: #2a1f15;
+    text-align: center;
+    line-height: 1;
+    transform: rotate(-1.2deg);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* BODY — small serif paragraph below polaroid */
+  .body {
+    position: absolute;
+    left: 80px; right: 80px;
+    top: 1180px;
+    bottom: 200px;
+    overflow: hidden;
+    display: flex;
+    align-items: flex-start;
+  }
+  .body-text {
+    width: 100%;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 38px; line-height: 1.45;
+    font-weight: 500;
+    color: #2a1f15;
+    text-align: left;
+    column-count: 1;
+    -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 88%, transparent 100%);
+            mask-image: linear-gradient(180deg, #000 0%, #000 88%, transparent 100%);
+  }
+  .body .hl-r { background: {{ colors.primary }}; color: #fff8e7;
+    padding: 1px 6px; font-weight: 700; }
+  .body .hl-y { background: {{ colors.accent }}; color: #2a1f15;
+    padding: 1px 6px; font-weight: 700; }
+
+  /* PROGRESS bar — subtle warm-tone instead of glow */
+  .progress {
+    position: absolute; left: 0; right: 0; bottom: 92px; height: 4px;
+    background: rgba(139,69,19,.1);
+  }
+  .progress::after {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+    background: {{ colors.primary }};
+    animation: fill {{ duration_s }}s linear forwards;
+  }
+  @keyframes fill { from { width: 0; } to { width: 100%; } }
+
+  /* HANDLE */
+  .handle {
+    position: absolute; left: 0; right: 0; bottom: 36px;
+    text-align: center;
+    font-family: 'Caveat', cursive;
+    font-size: 38px; font-weight: 700;
+    color: {{ colors.primary }};
+  }
+
+  {% if cta.enabled %}
+  /* Pre-flash + CTA overlay */
+  .preflash {
+    position: absolute; inset: 0;
+    background: #fff; opacity: 0;
+    pointer-events: none; z-index: 50;
+    animation: flash 0.18s ease-out {{ duration_s - cta.duration_s - 0.15 }}s forwards;
+  }
+  @keyframes flash {
+    0% { opacity: 0; } 40% { opacity: 0.9; } 100% { opacity: 0; }
+  }
+  .cta {
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse at center, rgba(245,241,230,.95), rgba(232,223,200,.98));
+    padding: 0 60px;
+    text-align: center;
+    opacity: 0; pointer-events: none; z-index: 40;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    animation: cta-fade-in 0.25s ease-out {{ duration_s - cta.duration_s }}s forwards;
+  }
+  @keyframes cta-fade-in { to { opacity: 1; } }
+  {% if cta.show_handle %}
+  .cta .handle-line {
+    font-family: 'Caveat', cursive;
+    font-size: 80px; font-weight: 700;
+    color: {{ colors.primary }};
+    margin-bottom: 50px;
+  }
+  {% endif %}
+  .cta .sub-btn {
+    background: {{ colors.primary }};
+    color: #fff8e7;
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 76px; font-weight: 900;
+    padding: 36px 60px;
+    border-radius: 8px;
+    box-shadow: 0 12px 0 rgba(60,40,20,.4);
+    display: inline-flex; align-items: center; gap: 24px;
+    margin-bottom: 50px;
+  }
+  .cta .icons-row {
+    display: flex; gap: 40px; margin-top: 24px;
+  }
+  .cta .icon-item {
+    display: flex; flex-direction: column; align-items: center;
+  }
+  .cta .icon-item .ic { font-size: 70px; }
+  .cta .icon-item .lbl {
+    font-family: 'Lora', Georgia, serif;
+    font-size: 22px; color: {{ colors.text_muted|default('#6b5640') }};
+    margin-top: 4px;
+  }
+  {% endif %}
+
+  /* SOURCE CREDIT */
+  .source-credit {
+    position: absolute;
+    bottom: 8px; left: 50%; transform: translateX(-50%);
+    background: rgba(255,248,231,0.7);
+    color: rgba(60,40,20,0.7);
+    font-family: 'Lora', Georgia, serif;
+    font-size: 14px; font-weight: 500;
+    padding: 3px 10px; border-radius: 3px;
+    z-index: 50; white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+<div class="stage dna-anim-{{ animation_style|default('none') }}">
+  <div class="top-row">
+    {% if script.category %}<div class="category">{{ script.category }}</div>{% else %}<div></div>{% endif %}
+    <div class="stage-badge">{{ ui_breaking }}</div>
+  </div>
+
+  <div class="header">
+    <span class="top" data-fit-min="40" data-fit-max="76" data-fit-width="80">{{ script.header_top }}</span>
+    <span class="bot" data-fit-min="24" data-fit-max="36" data-fit-width="80">{{ script.header_bottom }}</span>
+  </div>
+
+  <div class="polaroid">
+    <div class="photo"></div>
+    {% if script.photo_overlay %}
+    <div class="caption" data-fit-min="28" data-fit-max="48" data-fit-width="40">{{ script.photo_overlay }}</div>
+    {% endif %}
+  </div>
+
+  <div class="body">
+    <div class="body-text" data-fit-min="28" data-fit-max="42" data-fit-pad="16">{{ body_html|safe }}</div>
+  </div>
+
+  <div class="progress"></div>
+  <div class="handle">{{ handle }}</div>
+
+  {% if cta.enabled %}
+  <div class="preflash"></div>
+  <div class="cta">
+    {% if cta.show_handle %}<div class="handle-line">{{ handle }}</div>{% endif %}
+    <div class="sub-btn"><span>🔔</span><span>{{ ui_subscribe }}</span></div>
+    <div class="icons-row">
+      {% set icon_labels = [ui_like, ui_subscribe, ui_share] %}
+      {% for icon in cta.icons %}
+      <div class="icon-item">
+        <span class="ic">{{ icon }}</span>
+        <span class="lbl">{{ icon_labels[loop.index0] if loop.index0 < icon_labels|length else "" }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if rss_source %}
+  <div class="source-credit">{{ ui_source }}: {{ rss_source }}</div>
+  {% endif %}
+</div>
+{% include "_auto_fit.js.j2" %}
+</body>
+</html>

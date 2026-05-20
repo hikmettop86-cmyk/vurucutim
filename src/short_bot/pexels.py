@@ -48,6 +48,11 @@ ARCHETYPE_BG_QUERIES: dict[str, list[str]] = {
     # conference / spotlight aesthetics work well.
     "bigquote":  ["press conference blur", "podium spotlight", "microphone closeup",
                   "abstract gold light", "press room dim"],
+    # polaroid: magazine-style photo — portraits, scenes, lifestyle.
+    # Sepia / warm tones rendered by CSS filter; source pool prefers natural light.
+    "polaroid":  ["vintage portrait warm", "street scene golden hour",
+                  "old istanbul nostalgia", "craftsman workshop natural light",
+                  "marketplace daily life"],
 }
 
 

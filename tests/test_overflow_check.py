@@ -84,16 +84,21 @@ def test_long_header_top_overflows():
     assert report.fields["header_top"].recommended_max_chars < len(long_header)
 
 
-def test_body_clamp_is_detected_as_overflow_when_text_exceeds_clamp():
+def test_body_budget_is_intentionally_generous_to_avoid_spurious_retries():
+    """2026-05-19: body_paragraph budget across all archetypes raised to 99
+    (commit 06237c5) so DNA custom_css scrollHeight measurement quirks don't
+    trigger truncate '…' UX. The CSS line-clamp still cuts visually; the
+    overflow check just no longer flags it. This test pins the decision."""
     html = _wrap("")
     html = _set_text(html, ".header .top", "OK")
     html = _set_text(html, ".header .bot", "OK")
     html = _set_text(html, ".photo .yellow", "OK")
-    very_long_body = "Bu cok uzun bir govde. " * 80  # well past 9 lines @ 48px
+    very_long_body = "Bu cok uzun bir govde. " * 80
     html = _set_text(html, ".body", very_long_body)
 
     report = check_overflow(html, archetype="newscast")
-    assert report.fields["body_paragraph"].has_overflow is True
+    assert report.fields["body_paragraph"].has_overflow is False
+    assert report.fields["body_paragraph"].max_lines == 99
 
 
 def test_unknown_archetype_raises_keyerror():

@@ -21,6 +21,7 @@ ARCHETYPES = [
     "stadium",    # sports/team broadcast (battle-tested, galatasaray lives here)
     "stat-hero",  # number-driven body (economy/polls — added 2026-05-19)
     "bigquote",   # fullscreen quote with attribution (politician/athlete statements — added 2026-05-20)
+    "polaroid",   # magazine/feature with tilted photo card (lifestyle/nostalji — added 2026-05-20)
 ]
 
 _ANIMATIONS_CSS_PATH = Path(__file__).resolve().parent.parent.parent / "templates" / "css" / "_animations.css"
@@ -63,6 +64,16 @@ ARCHETYPE_DEFAULTS: dict[str, dict] = {
         "body_bg_1": "#0f0f1e", "body_bg_2": "#1a1a2e",
         "text_main": "#ffffff", "text_muted": "#a0a0b0",
         "font_headline": "Playfair Display", "font_body": "Inter",
+    },
+    "polaroid": {
+        # Magazine / scrapbook feel — warm cream bg + soft sepia photo treatment.
+        # Tilted polaroid card centered, handwritten caption, serif body below.
+        # Reads more "feature" than "breaking news" — lifestyle / nostalji / culture.
+        "primary": "#8b4513", "accent": "#d4a574",
+        "bg_grad_1": "#f5f1e6", "bg_grad_2": "#e8dfc8",
+        "body_bg_1": "#f5f1e6", "body_bg_2": "#e0d4b8",
+        "text_main": "#2a1f15", "text_muted": "#6b5640",
+        "font_headline": "Playfair Display", "font_body": "Lora",
     },
 }
 
@@ -126,6 +137,7 @@ class DnaSpec(BaseModel):
         "stadium",    # sports/team broadcast
         "stat-hero",  # number-driven body (2026-05-19 onwards)
         "bigquote",   # fullscreen attributed quote (2026-05-20 onwards)
+        "polaroid",   # magazine/feature tilted photo card (2026-05-20 onwards)
     ]
     palette: DnaPalette
     fonts: DnaFonts
