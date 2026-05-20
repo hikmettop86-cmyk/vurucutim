@@ -48,6 +48,23 @@ ARCHETYPE_BG_QUERIES: dict[str, list[str]] = {
     # conference / spotlight aesthetics work well.
     "bigquote":  ["press conference blur", "podium spotlight", "microphone closeup",
                   "abstract gold light", "press room dim"],
+    # Designed archetypes (T1-T8)
+    "classic-breaking": ["newsroom busy lights", "press conference podium",
+                          "city night skyline", "stadium lights tribune"],
+    "bold-quote":       ["press conference podium", "microphone closeup dramatic",
+                          "leader portrait wide", "speech crowd lights"],
+    "big-stat":         ["data dashboard glow", "stock chart abstract",
+                          "graph rising motion", "minimal data viz"],
+    "versus":           ["product comparison clean", "two phones side by side",
+                          "vs split background"],
+    "countdown":        ["abstract numbers motion", "stage lights ranking",
+                          "spotlight stage rays"],
+    "leaked-doc":       ["secret document paper", "old paper texture moody",
+                          "stamp document closeup", "redacted file"],
+    "cinematic":        ["documentary scene wide", "lone subject dramatic",
+                          "natgeo style portrait", "cinematic landscape moody"],
+    "modern-news":      ["newspaper printing press", "editorial portrait clean",
+                          "documentary still natural", "minimal scene daylight"],
 }
 
 

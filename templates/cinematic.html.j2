@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="{{ language }}">
+<head>
+<meta charset="utf-8">
+<title>Short — cinematic</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;700&family=Inter:wght@400;500;600;700&display=swap');
+  {{ dna_css|safe }}
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1080px; height: 1920px; overflow: hidden; background: #000;
+    font-family: 'Inter', sans-serif;
+    color: var(--text-main, #fff); }
+
+  .stage { position: relative; width: 1080px; height: 1920px; }
+
+  /* Full-screen photo */
+  .photo {
+    position: absolute; inset: 0;
+    background: linear-gradient(135deg, {{ colors.bg_gradient[0] }}, {{ colors.bg_gradient[1] }});
+    overflow: hidden;
+  }
+  .photo .bg-img {
+    position: absolute; inset: 0;
+    background-image: url('{{ bg_image_url|default("") }}');
+    background-size: cover; background-position: center;
+    {% if not bg_image_url %}display: none;{% endif %}
+  }
+
+  /* Cinemascope bars */
+  .bar-top {
+    position: absolute; top: 0; left: 0; right: 0; height: 210px;
+    background: linear-gradient(180deg, rgba(0,0,0,.85), transparent);
+    z-index: 5;
+  }
+  .bar-bottom {
+    position: absolute; bottom: 0; left: 0; right: 0; height: 1020px;
+    background: linear-gradient(0deg, rgba(0,0,0,.95) 30%, rgba(0,0,0,.7) 60%, transparent);
+    z-index: 5;
+  }
+
+  /* Top badges */
+  .top-row {
+    position: absolute; top: 54px; left: 54px; right: 54px;
+    display: flex; justify-content: space-between;
+    z-index: 10;
+  }
+  .category {
+    background: rgba(255,255,255,.95);
+    color: #0a0a0a;
+    padding: 18px 36px;
+    font-family: 'Oswald', sans-serif;
+    font-size: 30px; font-weight: 700; letter-spacing: 6px;
+  }
+  .stage-badge {
+    background: rgba(0,0,0,.5);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,.2);
+    padding: 18px 30px;
+    font-family: monospace;
+    font-size: 30px; color: #fff;
+    letter-spacing: 3px;
+  }
+
+  /* Title block (bottom area) */
+  .title-block {
+    position: absolute;
+    bottom: 380px; left: 66px; right: 66px;
+    z-index: 10;
+  }
+  .title-block .ruler {
+    width: 96px; height: 9px;
+    background: {{ colors.accent }};
+    margin-bottom: 42px;
+  }
+  .header .top {
+    display: block;
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    font-size: var(--size-headline-top, 96px);
+    line-height: 1;
+    color: var(--text-main, #fff);
+    letter-spacing: -1.5px;
+  }
+  .header .bot {
+    display: block;
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    font-size: var(--size-headline-bot, 96px);
+    line-height: 1;
+    color: {{ colors.accent }};
+    letter-spacing: -1.5px;
+    margin-top: 6px;
+  }
+  .body-text {
+    margin-top: 42px;
+    font-size: 42px; line-height: 1.5;
+    color: rgba(255,255,255,.85);
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .body-text .hl-r { background: {{ colors.primary }}; color: #fff;
+    padding: 0 8px; font-weight: 700; }
+  .body-text .hl-y { background: {{ colors.accent }}; color: #0a0a0a;
+    padding: 0 8px; font-weight: 700; }
+
+  /* Source credit line */
+  .photo-overlay {
+    position: absolute; bottom: 290px; left: 66px;
+    display: flex; align-items: center; gap: 24px;
+    font-size: 30px; color: rgba(255,255,255,.5);
+    letter-spacing: 1.5px;
+    z-index: 10;
+  }
+  .photo-overlay::before {
+    content: 'FOTOĞRAF';
+  }
+  .photo-overlay .div { width: 48px; height: 3px; background: rgba(255,255,255,.3); }
+
+  .progress {
+    position: absolute; left: 0; right: 0; bottom: 110px; height: 6px;
+    background: rgba(255,255,255,.18);
+    z-index: 11;
+  }
+  .progress::after {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+    background: {{ colors.accent }};
+    animation: fill {{ duration_s }}s linear forwards;
+  }
+  @keyframes fill { from { width: 0; } to { width: 100%; } }
+
+  .handle {
+    position: absolute; left: 0; right: 0; bottom: 50px;
+    text-align: center;
+    font-family: 'Inter', sans-serif;
+    font-size: 32px; font-weight: 600; letter-spacing: 1.5px;
+    color: var(--text-muted, rgba(255,255,255,.7));
+    z-index: 11;
+  }
+
+  .source-credit {
+    position: absolute;
+    bottom: 18px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,.6); color: rgba(255,255,255,.85);
+    font-size: 14px; font-weight: 500; letter-spacing: 0.5px;
+    padding: 3px 10px; border-radius: 3px;
+    z-index: 50; white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+<div class="stage dna-anim-{{ animation_style|default('none') }}">
+  <div class="photo"><div class="bg-img"></div></div>
+  <div class="bar-top"></div>
+  <div class="bar-bottom"></div>
+
+  <div class="top-row">
+    {% if script.category %}<div class="category">{{ script.category }}</div>{% endif %}
+    <div class="stage-badge">{{ ui_breaking }}</div>
+  </div>
+
+  {% if script.photo_overlay %}
+  <div class="photo-overlay"><div class="div"></div><span>{{ script.photo_overlay }}</span></div>
+  {% endif %}
+
+  <div class="title-block">
+    <div class="ruler"></div>
+    <div class="header">
+      <span class="top">{{ script.header_top }}</span>
+      <span class="bot">{{ script.header_bottom }}</span>
+    </div>
+    <div class="body-text" data-fit-min="28" data-fit-max="42" data-fit-pad="20">{{ body_html|safe }}</div>
+  </div>
+
+  <div class="progress"></div>
+  <div class="handle">{{ handle }}</div>
+
+  {% if rss_source %}
+  <div class="source-credit">{{ ui_source }}: {{ rss_source }}</div>
+  {% endif %}
+</div>
+{% include "_auto_fit.js.j2" %}
+</body>
+</html>

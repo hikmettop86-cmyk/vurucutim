@@ -51,13 +51,59 @@ ARCHETYPE_OVERFLOW_FIELDS: dict[str, list[OverflowField]] = {
         OverflowField("body_paragraph", ".stat-caption",  99),
     ],
     # bigquote: body_paragraph = THE QUOTE (dominates the frame).
-    # header_top = "— who said it" attribution, header_bottom = when/where,
-    # photo_overlay = small context caption under the attribution.
-    # Auto-fit on .quote-text handles size; max-lines is a sanity bound.
     "bigquote": [
         OverflowField("header_top",     ".attribution .who",  2),
         OverflowField("header_bottom",  ".attribution .when", 1),
         OverflowField("photo_overlay",  ".caption",           3),
         OverflowField("body_paragraph", ".quote-text",        6),
+    ],
+    # ─── Designed archetypes (T1-T8) ───────────────────────────────────────
+    "classic-breaking": [
+        OverflowField("header_top",     ".header .top",   2),
+        OverflowField("header_bottom",  ".header .bot",   2),
+        OverflowField("photo_overlay",  ".yellow-band",   1),
+        OverflowField("body_paragraph", ".body-text",     99),
+    ],
+    "bold-quote": [
+        OverflowField("header_top",     ".attribution",   1),
+        OverflowField("header_bottom",  ".attribution",   1),
+        OverflowField("photo_overlay",  ".body-text",     3),
+        OverflowField("body_paragraph", ".quote-text",    6),
+    ],
+    "big-stat": [
+        OverflowField("header_top",     ".header .top",   2),
+        OverflowField("header_bottom",  ".header .bot",   2),
+        OverflowField("photo_overlay",  ".hero-stat .number", 1),
+        OverflowField("body_paragraph", ".body-text",     99),
+    ],
+    "versus": [
+        OverflowField("header_top",     ".half-A .product",   1),
+        OverflowField("header_bottom",  ".half-B .product",   1),
+        OverflowField("photo_overlay",  ".half-A .score",     1),
+        OverflowField("body_paragraph", ".metrics",           99),
+    ],
+    "countdown": [
+        OverflowField("header_top",     ".header .top",   3),
+        OverflowField("header_bottom",  ".header .bot",   2),
+        OverflowField("photo_overlay",  ".list",          1),
+        OverflowField("body_paragraph", ".list",          99),
+    ],
+    "leaked-doc": [
+        OverflowField("header_top",     ".header .top",   2),
+        OverflowField("header_bottom",  ".header .bot",   2),
+        OverflowField("photo_overlay",  ".commentary .photo-overlay", 1),
+        OverflowField("body_paragraph", ".doc-body",      99),
+    ],
+    "cinematic": [
+        OverflowField("header_top",     ".header .top",   3),
+        OverflowField("header_bottom",  ".header .bot",   2),
+        OverflowField("photo_overlay",  ".photo-overlay", 1),
+        OverflowField("body_paragraph", ".body-text",     99),
+    ],
+    "modern-news": [
+        OverflowField("header_top",     ".header .top",   3),
+        OverflowField("header_bottom",  ".header .bot",   3),
+        OverflowField("photo_overlay",  ".photo-caption", 2),
+        OverflowField("body_paragraph", ".body-text",     99),
     ],
 }

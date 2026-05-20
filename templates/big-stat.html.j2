@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="{{ language }}">
+<head>
+<meta charset="utf-8">
+<title>Short — big-stat</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+  {{ dna_css|safe }}
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1080px; height: 1920px; overflow: hidden;
+    background: {{ colors.accent }};
+    font-family: 'Inter', sans-serif;
+    color: #0a0a0a; }
+
+  .stage { position: relative; width: 1080px; height: 1920px; }
+
+  /* Category strip */
+  .top-strip {
+    padding: 60px 66px 0;
+    display: flex; align-items: center; gap: 24px;
+  }
+  .top-strip .stripe { width: 12px; height: 66px; background: #0a0a0a; }
+  .top-strip .category {
+    font-family: 'Oswald', sans-serif;
+    font-size: 42px; color: #0a0a0a;
+    font-weight: 700; letter-spacing: 4.5px;
+  }
+  .stage-badge {
+    margin-left: auto;
+    background: {{ colors.primary }}; color: #fff;
+    padding: 12px 27px; border-radius: 999px;
+    font-family: 'Oswald', sans-serif;
+    font-size: 30px; font-weight: 800; letter-spacing: 3px;
+  }
+
+  /* Big number */
+  .hero-stat {
+    padding: 24px 66px 0;
+    position: relative;
+  }
+  .hero-stat .number {
+    font-family: 'Oswald', sans-serif;
+    font-size: 540px;
+    line-height: 0.85;
+    font-weight: 700;
+    color: #0a0a0a;
+    letter-spacing: -24px;
+  }
+  .hero-stat .header {
+    margin-top: 12px;
+  }
+  .header .top {
+    display: block;
+    font-family: 'Oswald', sans-serif;
+    font-size: var(--size-headline-top, 54px);
+    color: #0a0a0a;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+  }
+  .header .bot {
+    display: block;
+    margin-top: 6px;
+    font-family: 'Oswald', sans-serif;
+    font-size: var(--size-headline-bot, 36px);
+    color: rgba(10,10,10,.7);
+    font-weight: 500;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+  }
+
+  /* Chart strip */
+  .chart {
+    padding: 72px 66px 0;
+  }
+  .chart svg { width: 100%; display: block; }
+
+  /* Black bottom panel */
+  .bottom {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    background: #0a0a0a;
+    color: #fff;
+    padding: 60px 66px 210px;
+  }
+  .body-text {
+    font-size: 45px; line-height: 1.45;
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .body-text .hl-r { background: {{ colors.primary }}; color: #fff;
+    padding: 0 8px; font-weight: 700; }
+  .body-text .hl-y { background: {{ colors.accent }}; color: #0a0a0a;
+    padding: 0 8px; font-weight: 700; }
+
+  .progress {
+    position: absolute; left: 0; right: 0; bottom: 110px; height: 6px;
+    background: rgba(255,255,255,.18);
+    z-index: 2;
+  }
+  .progress::after {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+    background: {{ colors.accent }};
+    animation: fill {{ duration_s }}s linear forwards;
+  }
+  @keyframes fill { from { width: 0; } to { width: 100%; } }
+
+  .handle {
+    position: absolute; left: 0; right: 0; bottom: 30px;
+    text-align: center;
+    padding: 30px 0;
+    font-family: 'Inter', sans-serif;
+    color: #fff;
+    z-index: 2;
+  }
+  .handle-inner {
+    display: inline-block;
+    border: 4px solid rgba(255,255,255,.4);
+    border-radius: 999px;
+    padding: 15px 48px;
+    font-size: 36px; font-weight: 600; letter-spacing: 1.5px;
+  }
+
+  .source-credit {
+    position: absolute;
+    bottom: 18px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,.6); color: rgba(255,255,255,.85);
+    font-size: 14px; font-weight: 500; letter-spacing: 0.5px;
+    padding: 3px 10px; border-radius: 3px;
+    z-index: 50; white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+<div class="stage dna-anim-{{ animation_style|default('none') }}">
+  <div class="top-strip">
+    <div class="stripe"></div>
+    {% if script.category %}<div class="category">{{ script.category }}</div>{% endif %}
+    <div class="stage-badge">{{ ui_breaking }}</div>
+  </div>
+
+  <div class="hero-stat">
+    <div class="number">{{ script.photo_overlay|default('—') }}</div>
+    <div class="header">
+      <span class="top">{{ script.header_top }}</span>
+      <span class="bot">{{ script.header_bottom }}</span>
+    </div>
+  </div>
+
+  <div class="chart">
+    <svg viewBox="0 0 960 240" preserveAspectRatio="none">
+      <path d="M 0 180 L 120 165 L 240 174 L 360 135 L 480 120 L 600 90 L 720 66 L 840 42 L 960 24"
+            stroke="#0a0a0a" stroke-width="9" fill="none" />
+      <path d="M 0 180 L 120 165 L 240 174 L 360 135 L 480 120 L 600 90 L 720 66 L 840 42 L 960 24 L 960 240 L 0 240 Z"
+            fill="{{ colors.primary }}" opacity="0.6" />
+      <circle cx="960" cy="24" r="15" fill="{{ colors.primary }}" stroke="#0a0a0a" stroke-width="6" />
+    </svg>
+  </div>
+
+  <div class="bottom">
+    <div class="body-text" data-fit-min="32" data-fit-max="48" data-fit-pad="20">{{ body_html|safe }}</div>
+  </div>
+
+  <div class="progress"></div>
+  <div class="handle"><span class="handle-inner">{{ handle }}</span></div>
+
+  {% if rss_source %}
+  <div class="source-credit">{{ ui_source }}: {{ rss_source }}</div>
+  {% endif %}
+</div>
+{% include "_auto_fit.js.j2" %}
+</body>
+</html>

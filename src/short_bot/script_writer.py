@@ -39,6 +39,90 @@ ARCHETYPE_PROMPTS = {
   hero number itself; highlight CONTEXT words around it)
 - mood: usually neutral (analytical), breaking only on rekor / sürpriz
 """,
+    "classic-breaking": """ARCHETYPE: classic-breaking — red header + yellow stat bant
+- header_top + header_bottom: 4-6 words total, formal news headline (allcaps friendly)
+- photo_overlay: 2-5 words, BIG yellow-bant STAT or DECISION ("3 MILYON EURO BONUS",
+  "250 BAZ PUAN INDIRIM"). Same value also shows as photo corner tag.
+- category: short topic chip ("CIMBOM", "EKONOMI", "EU AB")
+- body_paragraph: 3-4 sentences with key highlights
+- highlights: red=risk/warning, yellow=key stat/decision
+- mood: breaking by default
+""",
+    "bold-quote": """ARCHETYPE: bold-quote — yellow pull-quote card overlapping photo
+- body_paragraph: THE QUOTE as a direct first-person statement (60-180 chars ideal).
+- header_top: WHO said it ("DONALD TRUMP", "ELON MUSK")
+- header_bottom: WHEN/ROLE ("ABD BASKANI", "X SAHIBI")
+- category: topic chip ("SIYASET", "TEKNOLOJI", "EKONOMI")
+- photo_overlay: short context note (1-2 sentences) shown below quote
+- highlights: empty (the quote itself dominates)
+- mood: usually neutral; breaking for inflammatory statements
+""",
+    "big-stat": """ARCHETYPE: big-stat — yellow bg + massive 540px number callout
+- photo_overlay: THE HERO NUMBER — must be 1-6 chars ("%47", "5.2", "1973", "€100M").
+- header_top: 2-4 words context label below number ("ENFLASYON ZIRVEYI GORDU")
+- header_bottom: 2-3 words specifier ("MAYIS VERILERI", "EKIM 2026")
+- category: short topic ("EKONOMI · BUGUN", "ANKET")
+- body_paragraph: 2-3 sentences explaining the number (rendered on black bottom)
+- highlights: yellow=key context value
+- mood: usually neutral; breaking for record/surprise
+""",
+    "versus": """ARCHETYPE: versus — two-side comparison with metric bars
+- header_top: SIDE A name ("iPhone 17", "Galatasaray")
+- header_bottom: SIDE B name ("Galaxy S26", "Fenerbahce")
+- photo_overlay: OVERALL SCORES in format "9/10" (or "3/2" for sports). Single slash.
+- category: comparison context ("HANGISI KAZANIR?", "TELEFON SAVASI")
+- body_paragraph: METRIC ROWS separated by '|', each "LABEL: A_NUM vs B_NUM"
+  EXAMPLE: "KAMERA: 92 vs 78 | PIL: 71 vs 88 | EKRAN: 88 vs 95"
+  (numbers 0-100 representing % score; template parses and renders bars)
+- highlights: empty (data-driven)
+- mood: upbeat (competitive), breaking on big upset
+""",
+    "countdown": """ARCHETYPE: countdown — Top 5 ranked list (5→1)
+- header_top: HEADLINE START ("Tarihin EN PAHALI", "En Cok Izlenen")
+- header_bottom: HEADLINE END ("5 transferi", "5 dizisi")
+- category: short label ("TOP 5", "EN COK")
+- body_paragraph: 5 ranked items separated by '|', each "ITEM — VALUE"
+  EXAMPLE: "Bale - Real - €100M | Coutinho - Barca - €135M | Dembele - Barca - €140M | Mbappe - PSG - €180M | ??? - €???M"
+  (template assumes 5 items; 2nd-from-top auto-highlighted as current, last auto-locked)
+- photo_overlay: empty (list IS the content)
+- highlights: empty
+- mood: upbeat, breaking on reveal/spoiler
+""",
+    "leaked-doc": """ARCHETYPE: leaked-doc — rotated redacted document with GIZLI stamp
+- header_top: ORGANIZATION ("SAGLIK BAKANLIGI", "ASKER ARSIVI")
+- header_bottom: DOCUMENT TYPE in primary color ("GIZLI RAPORU", "ICTIMA NOTU")
+- category: document title at top of paper ("T.C. SAGLIK BAKANLIGI - DAHILI NOT")
+- photo_overlay: SHORT KICKER ("BUGUN ELE GECEN BELGE", "SIZAN RAPOR")
+- body_paragraph: the document content — use [REDACTED] in places where the
+  actual content would be blacked out. Include 1-2 specific stats/numbers in
+  <strong>...</strong> wrap to bold them. EXAMPLE:
+  "Sayin [REDACTED], bahse konu calismalarda [REDACTED] asinin yan etki
+  orani <strong>%14.2</strong> olarak olculmustur. [REDACTED] tarafindan 7
+  ilde uygulanan numunelerde <strong>213 vakada</strong> ciddi reaksiyon."
+- highlights: red=key stat/risk
+- mood: breaking
+""",
+    "cinematic": """ARCHETYPE: cinematic — full-screen photo + cinemascope bars + title
+- header_top: TITLE LINE 1 (3-5 words) — dominant white headline
+- header_bottom: TITLE LINE 2 (1-2 words) — accent-colored continuation
+- category: episode/chapter label ("BOLUM 02", "BELGESEL 04")
+- photo_overlay: short SOURCE/CONTEXT credit ("NATIONAL GEOGRAPHIC", "BBC ARSIV")
+- body_paragraph: 2-3 sentences explaining the scene/story
+- highlights: yellow=key event/year, red=critical detail
+- mood: usually neutral; breaking for shocking discovery
+""",
+    "modern-news": """ARCHETYPE: modern-news — light NYT/gazette feel, serif headline
+- header_top: ONE FULL HEADLINE SENTENCE (longer than usual; 6-10 words).
+  Use <em>...</em> tags around 1-2 key words for highlight effect.
+  EXAMPLE: "NASA, Mars'ta <em>su buhari</em> tespit etti."
+  (template auto-applies yellow highlight + primary color to em-wrapped text)
+- header_bottom: SUBHEAD / DECK (10-15 words, italic) — optional
+- category: section + flag ("BILIM · OZEL HABER", "POLITIKA · YORUM")
+- photo_overlay: photo caption ("Perseverance gezicisinin son karesi. (NASA/JPL)")
+- body_paragraph: SPOT paragraph, 3-5 sentences, gazete dili
+- highlights: yellow=key fact
+- mood: usually neutral
+""",
     "bigquote": """ARCHETYPE: bigquote — fullscreen attributed quotation
 - This template puts ONE quote on the screen huge. The quote IS the
   body_paragraph (max 800 chars but aim for 60-180 char punchy quotes).
