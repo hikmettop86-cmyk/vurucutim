@@ -520,5 +520,209 @@
       "protest poster",
       "editorial illustration"
     ]
+  },
+  {
+    "slug": "galatasaray",
+    "label": "Galatasaray",
+    "subtitle": "Klasik · 4 yıldız, 1905 mühür, diagonal şerit",
+    "defaults": {
+      "colors": {
+        "primary": "#A90432",
+        "accent": "#FCB900",
+        "primary_light": "#D11842",
+        "bg_gradient": [
+          "#25080d",
+          "#0a0204"
+        ]
+      },
+      "body_bg": [
+        "#1a0608",
+        "#050203"
+      ],
+      "text_main": "#ffffff",
+      "text_muted": "#FCB900",
+      "font_headline": "Anton",
+      "font_body": "Inter"
+    },
+    "pexels_queries": [
+      "galatasaray stadium",
+      "football celebration yellow red",
+      "soccer trophy crowd",
+      "champions league night"
+    ]
+  },
+  {
+    "slug": "galatasaray-matchday",
+    "label": "GS · Matchday",
+    "subtitle": "Maç günü skor barı · forma numarası watermark · ESPN tonu",
+    "defaults": {
+      "colors": {
+        "primary": "#A90432",
+        "accent": "#FCB900",
+        "primary_light": "#D11842",
+        "bg_gradient": [
+          "#25080d",
+          "#0a0204"
+        ]
+      },
+      "body_bg": [
+        "#0c0306",
+        "#050102"
+      ],
+      "text_main": "#ffffff",
+      "text_muted": "#FCB900",
+      "font_headline": "Anton",
+      "font_body": "Inter"
+    },
+    "pexels_queries": [
+      "football match action",
+      "scoreboard arena",
+      "stadium night"
+    ]
+  },
+  {
+    "slug": "galatasaray-fanzine",
+    "label": "GS · Fanzine",
+    "subtitle": "Tabloid scream · sarı zemin, halftone, eğik foto, pulp tipografi",
+    "defaults": {
+      "colors": {
+        "primary": "#A90432",
+        "accent": "#FCB900",
+        "primary_light": "#D11842",
+        "bg_gradient": [
+          "#25080d",
+          "#0a0204"
+        ]
+      },
+      "body_bg": [
+        "#FCB900",
+        "#e8a800"
+      ],
+      "text_main": "#0a0a0a",
+      "text_muted": "#A90432",
+      "font_headline": "Anton",
+      "font_body": "Inter"
+    },
+    "pexels_queries": [
+      "fan celebration",
+      "shocked face",
+      "scream emotion"
+    ]
+  },
+  {
+    "slug": "galatasaray-cinematic",
+    "label": "GS · Cinematic",
+    "subtitle": "Sinema · full-bleed foto, altın ışık, cinemascope bantlar",
+    "defaults": {
+      "colors": {
+        "primary": "#A90432",
+        "accent": "#FCB900",
+        "primary_light": "#D11842",
+        "bg_gradient": [
+          "#1a0608",
+          "#050203"
+        ]
+      },
+      "body_bg": [
+        "#000000",
+        "#000000"
+      ],
+      "text_main": "#ffffff",
+      "text_muted": "#FCB900",
+      "font_headline": "Source Serif 4",
+      "font_body": "Inter"
+    },
+    "pexels_queries": [
+      "dramatic portrait",
+      "stadium lights",
+      "champion moment"
+    ]
+  },
+  {
+    "slug": "galatasaray-stadium",
+    "label": "GS · Stadium",
+    "subtitle": "Tribün · çapraz sarı-kırmızı şerit zemin, taraftar silüet, perspektif foto",
+    "defaults": {
+      "colors": {
+        "primary": "#A90432",
+        "accent": "#FCB900",
+        "primary_light": "#D11842",
+        "bg_gradient": [
+          "#25080d",
+          "#0a0204"
+        ]
+      },
+      "body_bg": [
+        "#FCB900",
+        "#A90432"
+      ],
+      "text_main": "#ffffff",
+      "text_muted": "#FCB900",
+      "font_headline": "Anton",
+      "font_body": "Inter"
+    },
+    "pexels_queries": [
+      "stadium crowd",
+      "ultras tifosi",
+      "soccer fans"
+    ]
+  },
+  {
+    "slug": "galatasaray-trophy",
+    "label": "GS · Trophy",
+    "subtitle": "Kupa · altın ışın, defne dalı, madalyon foto, Cinzel görkemli serif",
+    "defaults": {
+      "colors": {
+        "primary": "#A90432",
+        "accent": "#FCB900",
+        "primary_light": "#D11842",
+        "bg_gradient": [
+          "#25080d",
+          "#0a0204"
+        ]
+      },
+      "body_bg": [
+        "#1a0608",
+        "#050203"
+      ],
+      "text_main": "#ffffff",
+      "text_muted": "#FCB900",
+      "font_headline": "Cinzel",
+      "font_body": "Inter"
+    },
+    "pexels_queries": [
+      "trophy ceremony",
+      "championship lift",
+      "gold medal celebration"
+    ]
+  },
+  {
+    "slug": "galatasaray-retro",
+    "label": "GS · Retro",
+    "subtitle": "Vintage · sepia, 1905 damgası, slab serif manşet, aşınmış kâğıt",
+    "defaults": {
+      "colors": {
+        "primary": "#A90432",
+        "accent": "#FCB900",
+        "primary_light": "#D11842",
+        "bg_gradient": [
+          "#25080d",
+          "#0a0204"
+        ]
+      },
+      "body_bg": [
+        "#f0deaa",
+        "#d4be7e"
+      ],
+      "text_main": "#2a1208",
+      "text_muted": "#A90432",
+      "font_headline": "Alfa Slab One",
+      "font_body": "Inter"
+    },
+    "pexels_queries": [
+      "vintage football",
+      "historic match",
+      "retro sports"
+    ]
   }
 ]

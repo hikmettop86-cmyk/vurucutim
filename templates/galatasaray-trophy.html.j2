@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="{{ language }}">
+<head>
+<meta charset="utf-8">
+<title>Short — GS Trophy</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Anton&family=Oswald:wght@500;700&family=Inter:wght@400;500;700&display=swap');
+
+  {{ dna_css|safe }}
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 1080px; height: 1920px; overflow: hidden;
+    font-family: var(--font-body, 'Inter'), sans-serif;
+    background: var(--body-bg-1, #0a0204);
+    color: var(--text-main, #fff);
+  }
+
+  .stage {
+    position: relative; width: 1080px; height: 1920px;
+    background:
+      radial-gradient(120% 80% at 50% 30%, color-mix(in srgb, var(--accent, #FCB900) 22%, transparent), transparent 60%),
+      linear-gradient(180deg, var(--body-bg-1, #1a0608) 0%, var(--body-bg-2, #050203) 100%);
+    overflow: hidden;
+  }
+  /* Altın ışın */
+  .stage::before {
+    content: ''; position: absolute;
+    top: -200px; left: 50%; transform: translateX(-50%);
+    width: 1400px; height: 1400px;
+    background:
+      conic-gradient(from 80deg,
+        transparent 0deg, color-mix(in srgb, var(--accent, #FCB900) 30%, transparent) 8deg, transparent 16deg,
+        transparent 30deg, color-mix(in srgb, var(--accent, #FCB900) 25%, transparent) 38deg, transparent 46deg,
+        transparent 60deg, color-mix(in srgb, var(--accent, #FCB900) 28%, transparent) 68deg, transparent 76deg,
+        transparent 90deg, color-mix(in srgb, var(--accent, #FCB900) 22%, transparent) 98deg, transparent 106deg);
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
+  /* Defne dalları köşelerde */
+  .laurel {
+    position: absolute; pointer-events: none; opacity: 0.55;
+    z-index: 2;
+  }
+  .laurel.l { top: 240px; left: 30px; }
+  .laurel.r { top: 240px; right: 30px; transform: scaleX(-1); }
+
+  /* Üst kategori — ornate */
+  .stage-badge {
+    position: absolute; top: 80px; left: 50%;
+    transform: translateX(-50%);
+    color: var(--accent, #FCB900);
+    font-family: 'Cinzel', serif;
+    font-weight: 700;
+    font-size: 28px;
+    letter-spacing: 0.45em;
+    text-transform: uppercase;
+    padding-bottom: 14px;
+    border-bottom: 2px solid var(--accent, #FCB900);
+    z-index: 5;
+  }
+  .stage-badge::before, .stage-badge::after {
+    content: '◆';
+    color: var(--primary, #A90432);
+    margin: 0 18px;
+    font-size: 18px;
+    vertical-align: middle;
+  }
+  .stars {
+    position: absolute; top: 170px; left: 50%;
+    transform: translateX(-50%);
+    display: flex; gap: 14px;
+    z-index: 5;
+  }
+  .stars .star {
+    width: 22px; height: 22px;
+    background: var(--accent, #FCB900);
+    clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+    filter: drop-shadow(0 0 6px color-mix(in srgb, var(--accent, #FCB900) 80%, transparent));
+  }
+
+  /* Manşet — Cinzel görkemli */
+  .header {
+    position: absolute; top: 240px; left: 80px; right: 80px;
+    text-align: center;
+    z-index: 4;
+  }
+  .header .top {
+    display: block;
+    font-family: 'Cinzel', serif;
+    font-weight: 900;
+    font-size: var(--size-headline-top, 180px);
+    line-height: 0.95;
+    color: var(--accent, #FCB900);
+    letter-spacing: -0.005em;
+    text-transform: uppercase;
+    text-shadow:
+      0 4px 30px color-mix(in srgb, var(--accent, #FCB900) 40%, transparent),
+      0 0 12px rgba(0,0,0,0.6);
+    text-wrap: balance;
+  }
+  .header .bot {
+    display: block; margin-top: 22px;
+    font-family: 'Cinzel', serif;
+    font-weight: 600;
+    font-style: italic;
+    font-size: var(--size-headline-bot, 44px);
+    line-height: 1.2;
+    color: rgba(255,255,255,0.92);
+    letter-spacing: 0.02em;
+    text-wrap: balance;
+  }
+  .header .bot::before {
+    content: '— ';
+    color: var(--accent, #FCB900);
+  }
+  .header .bot::after {
+    content: ' —';
+    color: var(--accent, #FCB900);
+  }
+
+  /* Foto — yuvarlak madalyon */
+  .photo {
+    position: absolute;
+    top: 800px; left: 50%; transform: translateX(-50%);
+    width: 640px; height: 640px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--bg-grad-1, #25080d), var(--bg-grad-2, #0a0204));
+    overflow: hidden;
+    box-shadow:
+      0 0 0 8px #0a0a0a,
+      0 0 0 14px var(--accent, #FCB900),
+      0 0 0 22px var(--primary, #A90432),
+      0 0 80px color-mix(in srgb, var(--accent, #FCB900) 50%, transparent);
+    z-index: 3;
+  }
+  .photo .bg-img {
+    position: absolute; inset: 0;
+    background-size: cover; background-position: center;
+  }
+  .photo::after {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(circle, transparent 40%, rgba(0,0,0,0.5) 100%);
+    pointer-events: none;
+  }
+  .photo .yellow {
+    position: absolute; left: 50%; bottom: 50px;
+    transform: translateX(-50%);
+    background: var(--accent, #FCB900);
+    color: var(--primary, #A90432);
+    padding: 10px 24px;
+    font-family: 'Cinzel', serif;
+    font-weight: 700;
+    font-size: 22px;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    border-radius: 999px;
+    white-space: nowrap;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+  }
+
+  /* Gövde */
+  .body {
+    position: absolute; left: 100px; right: 100px;
+    top: 1500px; bottom: 200px;
+    text-align: center;
+    z-index: 4;
+  }
+  .body-text {
+    font-family: var(--font-body, 'Inter'), sans-serif;
+    font-size: 30px; line-height: 1.45; font-weight: 400;
+    color: rgba(255,255,255,0.92);
+    text-wrap: pretty;
+    font-style: italic;
+  }
+  .body-text .hl-y {
+    background: var(--accent, #FCB900); color: var(--primary, #A90432);
+    padding: 0 10px; border-radius: 4px;
+    box-decoration-break: clone; -webkit-box-decoration-break: clone;
+    font-weight: 700; font-style: normal;
+  }
+  .body-text .hl-r {
+    background: var(--primary, #A90432); color: var(--accent, #FCB900);
+    padding: 0 10px; border-radius: 4px;
+    box-decoration-break: clone; -webkit-box-decoration-break: clone;
+    font-weight: 700; font-style: normal;
+  }
+
+  /* Standart öğeler */
+  .progress {
+    position: absolute; left: 0; right: 0; bottom: 84px;
+    height: 4px; background: rgba(252,185,0,0.18);
+    z-index: 6;
+  }
+  .progress::after {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+    background: linear-gradient(90deg, var(--accent, #FCB900), var(--primary, #A90432), var(--accent, #FCB900));
+    animation: fill {{ duration_s }}s linear forwards;
+  }
+  @keyframes fill { from { width: 0; } to { width: 100%; } }
+
+  .handle {
+    position: absolute; left: 0; right: 0; bottom: 30px;
+    text-align: center;
+    font-family: 'Cinzel', serif;
+    font-size: 28px; font-weight: 600;
+    color: var(--accent, #FCB900);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    z-index: 6;
+  }
+
+  .source-credit {
+    position: absolute; bottom: 6px; left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.7); color: rgba(255,255,255,0.9);
+    font-size: 14px; padding: 3px 10px; border-radius: 3px;
+    z-index: 50; white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+<div class="stage dna-anim-{{ animation_style|default('none') }}">
+
+  {% if script.category %}<div class="stage-badge">{{ script.category }}</div>{% endif %}
+  <div class="stars">
+    <div class="star"></div>
+    <div class="star"></div>
+    <div class="star"></div>
+    <div class="star"></div>
+  </div>
+
+  <svg class="laurel l" viewBox="0 0 120 600" width="60" height="500">
+    <g fill="var(--accent, #FCB900)">
+      <path d="M60 0 Q 70 50 60 100 Q 30 120 20 140 Q 50 140 60 150 Q 70 170 65 200 Q 30 220 20 240 Q 50 240 60 250 Q 75 280 60 320 Q 30 340 20 360 Q 55 360 60 370 Q 75 400 60 440 Q 30 460 20 480 Q 50 480 60 490 Q 70 530 60 580 L60 600 L55 600 L55 580 Q 50 540 30 510 Q 25 490 25 470 Q 35 460 50 460 Q 25 440 25 410 Q 30 380 50 360 Q 25 340 25 310 Q 30 280 50 260 Q 25 240 25 210 Q 30 180 50 160 Q 25 140 25 110 Q 30 80 50 60 Z" />
+    </g>
+  </svg>
+  <svg class="laurel r" viewBox="0 0 120 600" width="60" height="500">
+    <g fill="var(--accent, #FCB900)">
+      <path d="M60 0 Q 70 50 60 100 Q 30 120 20 140 Q 50 140 60 150 Q 70 170 65 200 Q 30 220 20 240 Q 50 240 60 250 Q 75 280 60 320 Q 30 340 20 360 Q 55 360 60 370 Q 75 400 60 440 Q 30 460 20 480 Q 50 480 60 490 Q 70 530 60 580 L60 600 L55 600 L55 580 Q 50 540 30 510 Q 25 490 25 470 Q 35 460 50 460 Q 25 440 25 410 Q 30 380 50 360 Q 25 340 25 310 Q 30 280 50 260 Q 25 240 25 210 Q 30 180 50 160 Q 25 140 25 110 Q 30 80 50 60 Z" />
+    </g>
+  </svg>
+
+  <div class="header">
+    <span class="top">{{ script.header_top }}</span>
+    <span class="bot">{{ script.header_bottom }}</span>
+  </div>
+
+  <div class="photo">
+    <div class="bg-img" style="background-image: url('{{ bg_image_url|default("") }}');
+         {% if not bg_image_url %}display: none;{% endif %}"></div>
+    {% if script.photo_overlay %}<div class="yellow">{{ script.photo_overlay }}</div>{% endif %}
+  </div>
+
+  <div class="body">
+    <div class="body-text" data-fit-min="22" data-fit-max="30" data-fit-pad="16">
+      {{ body_html|safe }}
+    </div>
+  </div>
+
+  <div class="progress"></div>
+  <div class="handle">{{ handle }}</div>
+  {% if rss_source %}<div class="source-credit">{{ ui_source }}: {{ rss_source }}</div>{% endif %}
+</div>
+
+{% include "_auto_fit.js.j2" %}
+</body>
+</html>

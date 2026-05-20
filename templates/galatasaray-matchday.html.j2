@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="{{ language }}">
+<head>
+<meta charset="utf-8">
+<title>Short — GS Matchday</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Anton&family=Oswald:wght@600;700&family=Inter:wght@500;700&display=swap');
+
+  {{ dna_css|safe }}
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 1080px; height: 1920px; overflow: hidden;
+    font-family: var(--font-body, 'Inter'), sans-serif;
+    background: var(--body-bg-1, #0a0a0a);
+    color: var(--text-main, #fff);
+  }
+
+  .stage {
+    position: relative; width: 1080px; height: 1920px;
+    background:
+      linear-gradient(180deg, var(--body-bg-1, #0c0306) 0%, var(--body-bg-2, #050102) 100%);
+    overflow: hidden;
+  }
+  /* Yan çubuk — half / half */
+  .stage::before {
+    content: ''; position: absolute;
+    top: 0; left: 0; width: 8px; height: 100%;
+    background: linear-gradient(180deg, var(--accent, #FCB900) 50%, var(--primary, #A90432) 50%);
+  }
+  .stage::after {
+    content: ''; position: absolute;
+    top: 0; right: 0; width: 8px; height: 100%;
+    background: linear-gradient(180deg, var(--primary, #A90432) 50%, var(--accent, #FCB900) 50%);
+  }
+
+  /* Üst skor barı */
+  .scorebar {
+    position: relative;
+    background: linear-gradient(135deg, var(--primary, #A90432) 0%, color-mix(in srgb, var(--primary, #A90432) 70%, black) 100%);
+    padding: 30px 50px;
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 4px solid var(--accent, #FCB900);
+    z-index: 4;
+  }
+  .scorebar .home {
+    display: flex; align-items: center; gap: 18px;
+    color: var(--accent, #FCB900);
+    font-family: 'Anton', sans-serif;
+    font-size: 56px;
+    letter-spacing: 0.02em;
+  }
+  .scorebar .home::before {
+    content: ''; width: 36px; height: 36px;
+    background:
+      conic-gradient(from 0deg, var(--accent, #FCB900) 0deg 90deg, var(--primary, #A90432) 90deg 180deg, var(--accent, #FCB900) 180deg 270deg, var(--primary, #A90432) 270deg 360deg);
+  }
+  .scorebar .live {
+    display: flex; align-items: center; gap: 12px;
+    font-family: 'Oswald', sans-serif;
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    color: var(--accent, #FCB900);
+  }
+  .scorebar .live::before {
+    content: ''; width: 12px; height: 12px; border-radius: 50%;
+    background: var(--accent, #FCB900);
+    box-shadow: 0 0 14px var(--accent, #FCB900);
+    animation: pulse 1.4s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.4} }
+
+  /* Dev forma numarası — arka plan dekorasyonu */
+  .jersey {
+    position: absolute;
+    top: 220px; right: -80px;
+    font-family: 'Anton', sans-serif;
+    font-size: 600px;
+    line-height: 0.8;
+    color: var(--accent, #FCB900);
+    opacity: 0.08;
+    letter-spacing: -0.04em;
+    z-index: 1;
+  }
+
+  /* Kategori chip + canlı */
+  .badges {
+    position: absolute; top: 200px; left: 50px; right: 50px;
+    display: flex; gap: 12px;
+    z-index: 4;
+  }
+  .stage-badge {
+    background: var(--accent, #FCB900);
+    color: var(--primary, #A90432);
+    padding: 10px 22px;
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    font-size: 26px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .stat-pill {
+    background: rgba(0,0,0,0.4);
+    color: var(--accent, #FCB900);
+    border: 1.5px solid var(--accent, #FCB900);
+    padding: 10px 22px;
+    font-family: 'Oswald', sans-serif;
+    font-weight: 600;
+    font-size: 22px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  /* Manşet */
+  .header {
+    position: absolute; top: 300px; left: 50px; right: 50px;
+    z-index: 4;
+  }
+  .header .top {
+    display: block;
+    font-family: var(--font-headline, 'Anton'), sans-serif;
+    font-size: var(--size-headline-top, 200px);
+    line-height: 0.84;
+    color: #fff;
+    text-transform: uppercase;
+    letter-spacing: 0.005em;
+    text-wrap: balance;
+  }
+  .header .top::first-letter {
+    color: var(--accent, #FCB900);
+  }
+  .header .bot {
+    display: block; margin-top: 20px;
+    font-family: 'Oswald', sans-serif;
+    font-weight: 600;
+    font-size: var(--size-headline-bot, 50px);
+    line-height: 1.05;
+    color: rgba(255,255,255,0.92);
+    text-transform: uppercase;
+    text-wrap: balance;
+  }
+  .header .bot::before {
+    content: '◀ ';
+    color: var(--accent, #FCB900);
+  }
+
+  /* Foto */
+  .photo {
+    position: absolute;
+    top: 820px; left: 50px; right: 50px;
+    height: 540px;
+    background: linear-gradient(135deg, var(--bg-grad-1, #25080d), var(--bg-grad-2, #0a0204));
+    border-top: 6px solid var(--accent, #FCB900);
+    border-bottom: 6px solid var(--primary, #A90432);
+    overflow: hidden;
+    z-index: 3;
+  }
+  .photo .bg-img {
+    position: absolute; inset: 0;
+    background-size: cover; background-position: center;
+  }
+  .photo::after {
+    content: ''; position: absolute; inset: 0;
+    background: linear-gradient(180deg, transparent 50%, rgba(0,0,0,0.7) 100%);
+  }
+  .photo .yellow {
+    position: absolute; left: 0; bottom: 0; right: 0;
+    background: var(--accent, #FCB900);
+    color: var(--primary, #A90432);
+    padding: 16px 30px;
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    font-size: 32px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border-top: 4px solid #0a0a0a;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .photo .yellow::after {
+    content: '⚽';
+    font-size: 36px;
+  }
+
+  /* Gövde */
+  .body {
+    position: absolute; left: 50px; right: 50px;
+    top: 1430px; bottom: 200px;
+    background: var(--primary, #A90432);
+    padding: 28px 36px;
+    z-index: 4;
+    display: flex; align-items: center;
+    box-shadow: 0 0 0 4px var(--accent, #FCB900), 0 0 0 8px var(--primary, #A90432);
+  }
+  .body-text {
+    font-family: var(--font-body, 'Inter'), sans-serif;
+    font-size: 30px; line-height: 1.4; font-weight: 500;
+    color: #fff;
+    text-wrap: pretty;
+  }
+  .body-text .hl-y {
+    background: var(--accent, #FCB900); color: var(--primary, #A90432);
+    padding: 0 10px;
+    box-decoration-break: clone; -webkit-box-decoration-break: clone;
+    font-weight: 800;
+  }
+  .body-text .hl-r {
+    background: #0a0a0a; color: var(--accent, #FCB900);
+    padding: 0 10px;
+    box-decoration-break: clone; -webkit-box-decoration-break: clone;
+    font-weight: 800;
+  }
+
+  /* Standart öğeler */
+  .progress {
+    position: absolute; left: 0; right: 0; bottom: 84px;
+    height: 6px; background: rgba(252,185,0,0.18);
+    z-index: 6;
+  }
+  .progress::after {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+    background: var(--accent, #FCB900);
+    animation: fill {{ duration_s }}s linear forwards;
+  }
+  @keyframes fill { from { width: 0; } to { width: 100%; } }
+
+  .handle {
+    position: absolute; left: 0; right: 0; bottom: 30px;
+    text-align: center;
+    font-family: 'Oswald', sans-serif;
+    font-size: 30px; font-weight: 700;
+    color: var(--accent, #FCB900);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    z-index: 6;
+  }
+
+  .source-credit {
+    position: absolute; bottom: 6px; left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.7); color: rgba(255,255,255,0.9);
+    font-size: 14px; padding: 3px 10px; border-radius: 3px;
+    z-index: 50; white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+<div class="stage dna-anim-{{ animation_style|default('none') }}">
+
+  <div class="scorebar">
+    <div class="home">CİMBOM</div>
+    <div class="live">{{ ui_breaking }}</div>
+  </div>
+
+  <div class="jersey">10</div>
+
+  <div class="badges">
+    {% if script.category %}<div class="stage-badge">{{ script.category }}</div>{% endif %}
+    <div class="stat-pill">MATCHDAY · TR</div>
+  </div>
+
+  <div class="header">
+    <span class="top">{{ script.header_top }}</span>
+    <span class="bot">{{ script.header_bottom }}</span>
+  </div>
+
+  <div class="photo">
+    <div class="bg-img" style="background-image: url('{{ bg_image_url|default("") }}');
+         {% if not bg_image_url %}display: none;{% endif %}"></div>
+    {% if script.photo_overlay %}<div class="yellow">{{ script.photo_overlay }}</div>{% endif %}
+  </div>
+
+  <div class="body">
+    <div class="body-text" data-fit-min="22" data-fit-max="30" data-fit-pad="18">
+      {{ body_html|safe }}
+    </div>
+  </div>
+
+  <div class="progress"></div>
+  <div class="handle">{{ handle }}</div>
+  {% if rss_source %}<div class="source-credit">{{ ui_source }}: {{ rss_source }}</div>{% endif %}
+</div>
+
+{% include "_auto_fit.js.j2" %}
+</body>
+</html>

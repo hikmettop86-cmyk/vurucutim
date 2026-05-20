@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="{{ language }}">
+<head>
+<meta charset="utf-8">
+<title>Short — GS Cinematic</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,700&family=Oswald:wght@500;600;700&family=Inter:wght@400;500;700&display=swap');
+
+  {{ dna_css|safe }}
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 1080px; height: 1920px; overflow: hidden;
+    font-family: var(--font-body, 'Inter'), sans-serif;
+    background: #000;
+    color: var(--text-main, #fff);
+  }
+
+  .stage {
+    position: relative; width: 1080px; height: 1920px;
+    background: #000;
+    overflow: hidden;
+  }
+
+  .photo-bg {
+    position: absolute; inset: 0;
+    background: linear-gradient(135deg, var(--bg-grad-1, #1a0608) 0%, var(--bg-grad-2, #050203) 100%);
+    overflow: hidden;
+  }
+  .photo-bg .bg-img {
+    position: absolute; inset: 0;
+    background-size: cover; background-position: center;
+    filter: brightness(0.7) contrast(1.1) saturate(0.9);
+    transform: scale(1.05);
+  }
+  .photo-bg::after {
+    content: ''; position: absolute; inset: 0;
+    background:
+      radial-gradient(circle at 50% 40%, transparent 25%, rgba(0,0,0,0.85) 100%),
+      linear-gradient(180deg, rgba(0,0,0,0.6) 0%, transparent 25%, transparent 55%, rgba(0,0,0,0.95) 100%);
+    pointer-events: none;
+  }
+  /* Sarı dramatik ray üst */
+  .ray {
+    position: absolute;
+    top: 0; left: 50%; transform: translateX(-50%);
+    width: 4px; height: 200px;
+    background: linear-gradient(180deg, var(--accent, #FCB900), transparent);
+    opacity: 0.6;
+    z-index: 2;
+  }
+
+  /* Cinemascope bands */
+  .scope-top, .scope-bot {
+    position: absolute; left: 0; right: 0;
+    background: #000;
+    z-index: 3;
+  }
+  .scope-top { top: 0; height: 110px; }
+  .scope-bot { bottom: 0; height: 110px; }
+  /* Sarı çizgi cinemascope altında */
+  .scope-top::after {
+    content: ''; position: absolute; bottom: -3px; left: 0; right: 0; height: 3px;
+    background: var(--accent, #FCB900);
+  }
+  .scope-bot::before {
+    content: ''; position: absolute; top: -3px; left: 0; right: 0; height: 3px;
+    background: var(--accent, #FCB900);
+  }
+
+  /* Üst meta */
+  .meta-top {
+    position: absolute; top: 130px; left: 70px; right: 70px;
+    display: flex; justify-content: space-between; align-items: center;
+    z-index: 5;
+  }
+  .stage-badge {
+    background: var(--accent, #FCB900);
+    color: var(--primary, #A90432);
+    padding: 8px 18px;
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    font-size: 22px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+  }
+  .timecode {
+    font-family: 'Oswald', sans-serif;
+    font-size: 22px; font-weight: 600;
+    color: var(--accent, #FCB900);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .timecode::before {
+    content: ''; width: 10px; height: 10px; border-radius: 50%;
+    background: var(--accent, #FCB900);
+  }
+
+  /* "1905" subtitle */
+  .est {
+    position: absolute; top: 290px; left: 50%;
+    transform: translateX(-50%);
+    font-family: 'Oswald', sans-serif;
+    font-size: 22px; font-weight: 500;
+    color: var(--accent, #FCB900);
+    letter-spacing: 0.45em;
+    text-transform: uppercase;
+    z-index: 5;
+  }
+  .est::before, .est::after {
+    content: ''; display: inline-block;
+    width: 40px; height: 1px;
+    background: var(--accent, #FCB900);
+    vertical-align: middle;
+    margin: 0 16px;
+  }
+
+  /* Manşet — alt yarıda */
+  .header-block {
+    position: absolute;
+    left: 70px; right: 70px;
+    bottom: 420px;
+    z-index: 5;
+  }
+  .accent-bar {
+    width: 80px; height: 3px;
+    background: var(--accent, #FCB900);
+    margin-bottom: 28px;
+  }
+  .header {
+    font-family: var(--font-headline, 'Source Serif 4'), serif;
+    color: #fff;
+  }
+  .header .top {
+    display: block;
+    font-size: var(--size-headline-top, 130px);
+    line-height: 0.92; font-weight: 700;
+    letter-spacing: -0.02em;
+    text-shadow: 0 4px 24px rgba(0,0,0,0.6);
+    text-wrap: balance;
+  }
+  .header .top em {
+    color: var(--accent, #FCB900);
+    font-style: italic;
+    font-weight: 700;
+  }
+  .header .bot {
+    display: block;
+    margin-top: 20px;
+    font-size: var(--size-headline-bot, 44px);
+    line-height: 1.15; font-weight: 400;
+    font-style: italic;
+    color: rgba(255,255,255,0.82);
+    text-wrap: balance;
+  }
+
+  /* Photo overlay chip */
+  .yellow {
+    position: absolute; left: 70px;
+    bottom: 320px;
+    background: var(--accent, #FCB900);
+    color: var(--primary, #A90432);
+    padding: 10px 22px;
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    font-size: 28px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    z-index: 5;
+  }
+
+  /* Gövde */
+  .body {
+    position: absolute; left: 70px; right: 70px;
+    bottom: 180px;
+    z-index: 5;
+  }
+  .body-text {
+    font-family: var(--font-body, 'Inter'), sans-serif;
+    font-size: 30px; line-height: 1.5; font-weight: 400;
+    color: rgba(255,255,255,0.92);
+    text-shadow: 0 2px 10px rgba(0,0,0,0.7);
+    text-wrap: pretty;
+  }
+  .body-text .hl-y {
+    background: var(--accent, #FCB900); color: var(--primary, #A90432);
+    padding: 0 10px;
+    box-decoration-break: clone; -webkit-box-decoration-break: clone;
+    text-shadow: none; font-weight: 700;
+  }
+  .body-text .hl-r {
+    background: var(--primary, #A90432); color: var(--accent, #FCB900);
+    padding: 0 10px;
+    box-decoration-break: clone; -webkit-box-decoration-break: clone;
+    font-weight: 700;
+  }
+
+  /* Standart öğeler */
+  .progress {
+    position: absolute; left: 0; right: 0; bottom: 84px;
+    height: 4px; background: rgba(252, 185, 0, 0.18);
+    z-index: 6;
+  }
+  .progress::after {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+    background: var(--accent, #FCB900);
+    animation: fill {{ duration_s }}s linear forwards;
+  }
+  @keyframes fill { from { width: 0; } to { width: 100%; } }
+
+  .handle {
+    position: absolute; left: 0; right: 0; bottom: 30px;
+    text-align: center;
+    font-family: 'Oswald', sans-serif;
+    font-size: 28px; font-weight: 500;
+    color: var(--accent, #FCB900);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    z-index: 6;
+  }
+
+  .source-credit {
+    position: absolute; bottom: 6px; left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.7); color: rgba(255,255,255,0.9);
+    font-size: 14px; padding: 3px 10px; border-radius: 3px;
+    z-index: 50; white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+<div class="stage dna-anim-{{ animation_style|default('none') }}">
+
+  <div class="photo-bg">
+    <div class="bg-img" style="background-image: url('{{ bg_image_url|default("") }}');
+         {% if not bg_image_url %}display: none;{% endif %}"></div>
+  </div>
+  <div class="ray"></div>
+  <div class="scope-top"></div>
+  <div class="scope-bot"></div>
+
+  <div class="meta-top">
+    {% if script.category %}<div class="stage-badge">{{ script.category }}</div>{% endif %}
+    <div class="timecode">{{ ui_breaking }} · CİMBOM</div>
+  </div>
+
+  <div class="est">EST 1905 · ★ ★ ★ ★</div>
+
+  {% if script.photo_overlay %}<div class="yellow">{{ script.photo_overlay }}</div>{% endif %}
+
+  <div class="header-block">
+    <div class="accent-bar"></div>
+    <div class="header">
+      <span class="top">{{ script.header_top }}</span>
+      <span class="bot">— {{ script.header_bottom }}</span>
+    </div>
+  </div>
+
+  <div class="body">
+    <div class="body-text" data-fit-min="22" data-fit-max="30" data-fit-pad="16">
+      {{ body_html|safe }}
+    </div>
+  </div>
+
+  <div class="progress"></div>
+  <div class="handle">{{ handle }}</div>
+  {% if rss_source %}<div class="source-credit">{{ ui_source }}: {{ rss_source }}</div>{% endif %}
+</div>
+
+{% include "_auto_fit.js.j2" %}
+</body>
+</html>
