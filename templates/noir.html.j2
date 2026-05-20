@@ -85,11 +85,11 @@
     letter-spacing: 0.15em;
   }
 
-  /* Manşet — alt yarıda, alt bandın üzerinde */
+  /* Manşet — alt yarıda, body'nin üstünde */
   .header-block {
     position: absolute;
     left: 70px; right: 70px;
-    bottom: 380px;
+    bottom: 720px;
     z-index: 5;
   }
   .accent-bar {
@@ -122,7 +122,7 @@
   /* Foto overlay — küçük yellow chip */
   .yellow {
     position: absolute; left: 70px;
-    bottom: 280px;
+    bottom: 540px;
     background: var(--accent, #d4af37);
     color: #0a0a0a;
     padding: 10px 22px;
@@ -136,8 +136,9 @@
   /* Gövde — alt, foto üstünde, koyu bg yok */
   .body {
     position: absolute; left: 70px; right: 70px;
-    bottom: 180px;
+    top: 1400px; bottom: 220px;
     z-index: 5;
+    display: flex; align-items: flex-start;
   }
   .body-text {
     font-family: var(--font-body, 'Inter'), sans-serif;

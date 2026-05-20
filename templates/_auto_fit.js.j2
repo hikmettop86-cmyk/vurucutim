@@ -68,6 +68,13 @@ async function _autoFit() {
   var min = parseFloat(text.getAttribute('data-fit-min') || '36');
   var max = parseFloat(text.getAttribute('data-fit-max') || '64');
   var pad = parseFloat(text.getAttribute('data-fit-pad') || '16');
+  /* Optional grow ceiling — if set, allow GROWING past `max` when container
+     has spare room. Defaults to 1.6× max so short content fills the slot
+     instead of leaving empty space. Set data-fit-grow-max="0" or "false"
+     on an element to disable growing for it. */
+  var growAttr = text.getAttribute('data-fit-grow-max');
+  var growCeil = growAttr === '0' || growAttr === 'false' ? max
+              : (growAttr ? parseFloat(growAttr) : max * 1.6);
 
   var origClamp = text.style.webkitLineClamp;
   var origDisplay = text.style.display;
@@ -89,10 +96,26 @@ async function _autoFit() {
   text.style.fontSize = size + 'px';
   void text.offsetHeight;
 
-  while (size > min && text.scrollHeight > targetH) {
-    size -= 2;
-    text.style.fontSize = size + 'px';
-    void text.offsetHeight;
+  if (text.scrollHeight > targetH) {
+    /* SHRINK phase — long text, step down until it fits (or min reached). */
+    while (size > min && text.scrollHeight > targetH) {
+      size -= 2;
+      text.style.fontSize = size + 'px';
+      void text.offsetHeight;
+    }
+  } else if (growCeil > max) {
+    /* GROW phase — short text, step up to fill the slot (up to growCeil). */
+    while (size < growCeil && text.scrollHeight <= targetH) {
+      size += 2;
+      text.style.fontSize = size + 'px';
+      void text.offsetHeight;
+    }
+    /* Last increment caused overflow; back off 2px so we stay just inside. */
+    if (text.scrollHeight > targetH && size > max) {
+      size -= 2;
+      text.style.fontSize = size + 'px';
+      void text.offsetHeight;
+    }
   }
 
   text.style.webkitLineClamp = origClamp;
