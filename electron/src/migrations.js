@@ -41,9 +41,11 @@ function syncRemotionUserDir() {
     return;
   }
   // Strategy: rsync-style overwrite of src/, package.json, package-lock.json,
-  // tsconfig.json, remotion.config.ts. Leave node_modules in place.
+  // tsconfig.json, remotion.config.ts, render-server.js. Leave node_modules
+  // in place so the lazy-installed deps survive app updates.
   for (const name of ['src', 'package.json', 'package-lock.json',
-                       'tsconfig.json', 'remotion.config.ts']) {
+                       'tsconfig.json', 'remotion.config.ts',
+                       'render-server.js']) {
     const s = path.join(bundled, name);
     const d = path.join(userDir, name);
     if (!fs.existsSync(s)) continue;

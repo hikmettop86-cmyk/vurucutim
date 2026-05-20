@@ -384,6 +384,123 @@ def list_templates() -> list[str]:
     return sorted(_AVAILABLE_TEMPLATES)
 
 
+_RENDER_DAEMON_PORT = 3219
+
+
+def _render_daemon_health(timeout: float = 1.5) -> bool:
+    """Quick TCP probe — is the long-lived render daemon up?"""
+    import urllib.request
+    import urllib.error
+    try:
+        with urllib.request.urlopen(
+            f"http://127.0.0.1:{_RENDER_DAEMON_PORT}/health",
+            timeout=timeout,
+        ) as resp:
+            return resp.status == 200
+    except (urllib.error.URLError, OSError):
+        return False
+
+
+def _ensure_render_daemon(remotion_root: Path) -> bool:
+    """Spawn the render daemon if it's not already running. Returns True
+    when the daemon is up (either was already, or we just started it and
+    health-checked OK)."""
+    if _render_daemon_health():
+        return True
+    node = _node_command()
+    if node is None:
+        return False
+    script = remotion_root / "render-server.js"
+    if not script.is_file():
+        logger.info(f"[remotion] no render-server.js at {script} — falling back to CLI")
+        return False
+    log_path = remotion_root / "render-server.log"
+    try:
+        # Detached background process — writes log file, doesn't tie to parent.
+        with open(log_path, "ab") as log_fh:
+            kwargs: dict[str, Any] = dict(
+                cwd=str(remotion_root),
+                stdout=log_fh, stderr=subprocess.STDOUT,
+                stdin=subprocess.DEVNULL,
+            )
+            if sys.platform == "win32":
+                # DETACHED_PROCESS = 0x00000008 + CREATE_NEW_PROCESS_GROUP = 0x200
+                kwargs["creationflags"] = 0x00000008 | 0x00000200
+            else:
+                kwargs["start_new_session"] = True
+            subprocess.Popen([node, str(script)], **kwargs)
+    except OSError as e:
+        logger.warning(f"[remotion] daemon spawn failed: {e}")
+        return False
+
+    # Wait up to 30s for /health to return 200 (bundle is slow first time).
+    import time as _t
+    deadline = _t.time() + 30.0
+    while _t.time() < deadline:
+        if _render_daemon_health(timeout=0.5):
+            logger.info("[remotion] daemon up")
+            return True
+        _t.sleep(0.5)
+    logger.warning("[remotion] daemon didn't come up within 30s")
+    return False
+
+
+def _render_via_daemon(
+    job: RemotionRenderJob, out_path: Path, *,
+    frame: int, timeout_s: int,
+) -> bool:
+    """Submit a render job to the daemon over HTTP. Returns True on success.
+    Caller falls back to CLI spawn on False."""
+    import urllib.request
+    import urllib.error
+    # Inline file:// → data URL for bgImageUrl (same logic as CLI path)
+    import base64
+    import mimetypes
+    props = job.to_props_dict()
+    bg_url = props.get("bgImageUrl", "")
+    if bg_url and bg_url.startswith("file://"):
+        try:
+            src_path = Path(bg_url.removeprefix("file:///").replace("/", "\\")
+                            if sys.platform == "win32"
+                            else bg_url.removeprefix("file://"))
+            if src_path.is_file():
+                mime = mimetypes.guess_type(src_path.name)[0] or "image/jpeg"
+                b64 = base64.b64encode(src_path.read_bytes()).decode("ascii")
+                props["bgImageUrl"] = f"data:{mime};base64,{b64}"
+            else:
+                props["bgImageUrl"] = ""
+        except (OSError, ValueError):
+            props["bgImageUrl"] = ""
+
+    payload = json.dumps({
+        "compositionId": job.template,
+        "props": props,
+        "frame": int(frame),
+        "outputPath": str(out_path.resolve()),
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        f"http://127.0.0.1:{_RENDER_DAEMON_PORT}/render-still",
+        method="POST",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout_s) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+            if body.get("success"):
+                logger.info(f"[remotion] daemon rendered {job.template} ({body.get('ms')}ms)")
+                return True
+            logger.warning(f"[remotion] daemon error: {body.get('error')}")
+            return False
+    except urllib.error.HTTPError as e:
+        tail = e.read().decode("utf-8", errors="replace")[:500]
+        logger.warning(f"[remotion] daemon http {e.code}: {tail}")
+        return False
+    except (urllib.error.URLError, OSError) as e:
+        logger.warning(f"[remotion] daemon transport error: {e}")
+        return False
+
+
 def render_still(
     job: RemotionRenderJob,
     out_path: Path,
@@ -395,15 +512,13 @@ def render_still(
 ) -> Path:
     """Render a SINGLE frame of the composition — for live preview snapshots.
 
-    Uses `npx remotion still` which spins up the Remotion bundler just long
-    enough to produce one image (~2-3s on first invocation, slightly faster
-    afterward due to esbuild cache). Output format derived from extension
-    (.jpg / .png). Different port than render() (3210) so previews don't
-    collide with concurrent renders.
+    Strategy:
+      1. Try the long-lived render daemon (bundle reused, ~1-2s per render)
+      2. Fall back to `npx remotion still` (full bundle each time, ~10-15s)
 
-    Caller's responsibility to cache results — same params → same image,
-    don't re-invoke needlessly. Phase 6a preview route hashes params and
-    caches frames to disk.
+    The daemon is spawned lazily; first call after a fresh launch warms up
+    the bundle (one-off ~12s) then subsequent renders are fast. Output
+    format derived from extension (.jpg / .png).
     """
     if job.template not in _AVAILABLE_TEMPLATES:
         raise RemotionRenderError(
@@ -420,6 +535,14 @@ def render_still(
     out_path = Path(out_path).resolve()
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
+    # Fast path: long-lived render daemon (bundle reused across calls)
+    if _ensure_render_daemon(root):
+        if _render_via_daemon(job, out_path, frame=frame, timeout_s=timeout_s):
+            if out_path.is_file() and out_path.stat().st_size >= 200:
+                return out_path
+        # Daemon health-check OK but render failed — fall through to CLI
+
+    # CLI fallback — full bundle each call, ~10-15s.
     # Reuse the same data-URL bg-image inlining as render() to defeat
     # Chromium's file:// cross-origin policy.
     import base64

@@ -1313,6 +1313,43 @@
         </p>
       </div>
 
+      {# Inline color pickers — same Alpine state as DNA tab. Editing here
+         reflects in real time in the Remotion preview AND saves into the
+         channel palette on form submit. No duplicate state. #}
+      <div class="bg-claude-surface border border-claude-border rounded-lg p-4 mt-4">
+        <div class="text-xs text-claude-muted uppercase tracking-wider mb-3">Renkler</div>
+        <div class="grid grid-cols-2 gap-3">
+          <label class="text-xs block">
+            <span class="block text-claude-muted mb-1">Primary (banner / vurgu)</span>
+            <input type="color" :value="primary"
+                   @input="primary = $event.target.value"
+                   class="bg-claude-surface-alt border border-claude-border rounded w-full h-9 cursor-pointer">
+          </label>
+          <label class="text-xs block">
+            <span class="block text-claude-muted mb-1">Accent (sarı bant / sayı)</span>
+            <input type="color" :value="accent"
+                   @input="accent = $event.target.value"
+                   class="bg-claude-surface-alt border border-claude-border rounded w-full h-9 cursor-pointer">
+          </label>
+          <label class="text-xs block">
+            <span class="block text-claude-muted mb-1">BG üst</span>
+            <input type="color" :value="bgGrad1"
+                   @input="bgGrad1 = $event.target.value"
+                   class="bg-claude-surface-alt border border-claude-border rounded w-full h-9 cursor-pointer">
+          </label>
+          <label class="text-xs block">
+            <span class="block text-claude-muted mb-1">BG alt</span>
+            <input type="color" :value="bgGrad2"
+                   @input="bgGrad2 = $event.target.value"
+                   class="bg-claude-surface-alt border border-claude-border rounded w-full h-9 cursor-pointer">
+          </label>
+        </div>
+        <p class="text-xs text-claude-subtle mt-2">
+          Bu 4 renk hem Remotion hem HTML tarafına uygulanır. Daha fazla renk ve yazı renkleri için
+          <strong>DNA / Renkler</strong> tab'ına bak.
+        </p>
+      </div>
+
       {# Template + Adaptive dimensions #}
       <div class="bg-claude-surface border border-claude-border rounded-lg p-4 mt-4">
         <div class="text-xs text-claude-muted uppercase tracking-wider mb-3">Şablon ve boyutlar</div>

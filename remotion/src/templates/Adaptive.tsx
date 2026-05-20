@@ -495,9 +495,11 @@ function PhotoPolaroidTilt({bgImageUrl, photoOverlay, category, colors, entrance
         justifyContent: 'center',
       }}
     >
-      {/* Polaroid card */}
+      {/* Polaroid card — `position: relative` so the caption positions
+          inside this card, not the outer photo band. */}
       <div
         style={{
+          position: 'relative',
           width: 600, height: 520,
           background: '#f5f1e6',
           padding: '18px 18px 70px',
@@ -526,14 +528,13 @@ function PhotoPolaroidTilt({bgImageUrl, photoOverlay, category, colors, entrance
           <div
             style={{
               position: 'absolute',
-              bottom: 12,
-              left: 0,
-              right: 0,
+              bottom: 14,
+              left: 18,
+              right: 18,
               fontFamily: "'Caveat', 'Brush Script MT', cursive",
-              fontSize: 36,
+              fontSize: 32,
               color: '#1a1a1a',
               textAlign: 'center',
-              padding: '0 18px',
               whiteSpace: 'nowrap',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
@@ -740,6 +741,49 @@ function BodyQuote({bodyParagraph, colors, entrance}: BodyRenderProps) {
 
 function BodyStatHero({bodyParagraph, colors, entrance, frame, fps}: BodyRenderProps) {
   const {number, caption} = extractStat(bodyParagraph);
+  // No numeric stat detected → gracefully degrade to a quote-style layout
+  // instead of showing an ugly "◆" placeholder. The shuffle picker is random
+  // so this combo (stat-hero + no-number body) WILL happen.
+  if (number === '◆') {
+    return (
+      <div
+        style={{
+          flex: 1,
+          padding: '40px 60px 200px',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          textAlign: 'center',
+          opacity: entrance,
+        }}
+      >
+        <div
+          style={{
+            fontSize: 140,
+            lineHeight: 0.8,
+            color: colors.accent,
+            opacity: 0.45,
+            fontWeight: 900,
+            marginBottom: -10,
+          }}
+        >
+          “
+        </div>
+        <div
+          style={{
+            fontSize: bodyParagraph.length <= 120 ? 48 : 38,
+            lineHeight: 1.3,
+            fontWeight: 700,
+            color: '#fff',
+            textShadow: '0 2px 8px rgba(0,0,0,.45)',
+          }}
+        >
+          {bodyParagraph}
+        </div>
+      </div>
+    );
+  }
   const target = parseTargetNumber(number);
   const countDuration = Math.round(fps * 1.2);
   const countProgress = interpolate(frame, [0, countDuration], [0, 1], {
@@ -771,11 +815,11 @@ function BodyStatHero({bodyParagraph, colors, entrance, frame, fps}: BodyRenderP
         style={{
           fontFamily: "'JetBrains Mono', monospace",
           fontWeight: 800,
-          fontSize: number === '◆' ? 60 : 240,
+          fontSize: 240,
           lineHeight: 0.95,
-          color: number === '◆' ? colors.textMuted : colors.accent,
+          color: colors.accent,
           letterSpacing: -4,
-          textShadow: number === '◆' ? 'none' : '0 4px 24px rgba(0,0,0,0.4)',
+          textShadow: '0 4px 24px rgba(0,0,0,0.4)',
           whiteSpace: 'nowrap',
           marginBottom: 16,
         }}
