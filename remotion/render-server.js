@@ -25,6 +25,26 @@ const ENTRY_POINT = path.resolve(__dirname, 'src/index.ts');
 let bundlePromise = null;
 let log = (msg) => console.log(`[render-server] ${msg}`);
 
+async function pickFreePort() {
+  // Try ports in 3221-3299 — first free wins. Each render needs its own
+  // port for Remotion's internal HTTP server; reusing across rapid calls
+  // hits EADDRINUSE because the previous socket lingers briefly.
+  const net = require('node:net');
+  for (let p = 3221; p < 3300; p++) {
+    const free = await new Promise((resolve) => {
+      const s = net.createServer();
+      s.unref();
+      s.on('error', () => resolve(false));
+      s.listen(p, '127.0.0.1', () => {
+        s.close(() => resolve(true));
+      });
+    });
+    if (free) return p;
+  }
+  // Last resort — let Remotion pick. Risk: it picks 3000 → Next.js collision.
+  return null;
+}
+
 async function getServeUrl() {
   if (!bundlePromise) {
     log(`bundling ${ENTRY_POINT} (one-time)…`);
@@ -89,13 +109,15 @@ const server = http.createServer((req, res) => {
       // 3000 is hijacked by many users' Next.js / dev servers (we saw the
       // same bug back in Phase 0 — Remotion loads the wrong page and fails
       // with "Tried to go to localhost:3000 ... not a Remotion project").
-      // Use 3221 (within our 3220-3299 range reserved for Remotion).
-      const REMOTION_INTERNAL_PORT = 3221;
+      // Rotate within 3221-3299 — using a single hardcoded port collides on
+      // consecutive renders (the previous server hasn't released its socket
+      // before the next call tries to bind).
+      const remotionPort = await pickFreePort();
       const composition = await renderer.selectComposition({
         serveUrl,
         id: compositionId,
         inputProps: props || {},
-        port: REMOTION_INTERNAL_PORT,
+        port: remotionPort,
       });
       const finalComposition = durationInFrames
         ? {...composition, durationInFrames}
@@ -108,7 +130,7 @@ const server = http.createServer((req, res) => {
         imageFormat: 'jpeg',
         jpegQuality: 80,
         frame: frame ?? 0,
-        port: REMOTION_INTERNAL_PORT,
+        port: remotionPort,
       });
       const dt = Date.now() - t0;
       log(`rendered ${compositionId} frame=${frame} → ${path.basename(outputPath)} (${dt}ms)`);
