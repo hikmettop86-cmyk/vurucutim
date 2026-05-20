@@ -2,6 +2,8 @@ import hashlib
 import json
 import logging
 import os
+import random
+import socket
 from pathlib import Path
 
 from flask import Blueprint, Response, abort, current_app, request, send_file
@@ -261,11 +263,34 @@ def remotion_frame_preview(slug):
     cached = cache_dir / f"{cache_key}.jpg"
 
     if not cached.exists():
+        # Pick a random free port in 3220-3299. Shuffle grid renders 6
+        # thumbnails in parallel; if they all targeted port 3220 they'd
+        # collide (port-in-use → exit 1 silent failure). Each call gets
+        # its own port so Remotion can spin up its bundler concurrently.
+        port = _pick_free_port_in_range(3220, 3300)
         try:
-            render_still(job, cached, frame=30, port=3220)
+            render_still(job, cached, frame=30, port=port, timeout_s=60)
         except RemotionRenderError as e:
             _log.warning(f"remotion preview failed: {e}")
             return Response(f"preview failed: {e}", status=500, mimetype="text/plain")
 
     return send_file(str(cached), mimetype="image/jpeg",
                       max_age=0, conditional=True)
+
+
+def _pick_free_port_in_range(low: int, high: int, attempts: int = 10) -> int:
+    """Try to find a free TCP port in [low, high). Falls back to a random
+    port in range after `attempts` tries — Remotion will fail loudly if it
+    can't bind, which is more diagnostic than a silent collision."""
+    for _ in range(attempts):
+        p = random.randint(low, high - 1)
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            s.bind(("127.0.0.1", p))
+            s.close()
+            return p
+        except OSError:
+            try: s.close()
+            except OSError: pass
+            continue
+    return random.randint(low, high - 1)
