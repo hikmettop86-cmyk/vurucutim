@@ -32,6 +32,17 @@ from pathlib import Path
 from typing import Any
 
 
+def _windows_no_window_kwargs() -> dict[str, Any]:
+    """Return subprocess kwargs that prevent a visible CMD window flash on
+    Windows. node.exe + npx.cmd are console apps; without CREATE_NO_WINDOW
+    they pop up a black terminal each invocation — annoying in a panel UI.
+    No-op on POSIX systems."""
+    if sys.platform == "win32":
+        # CREATE_NO_WINDOW = 0x08000000
+        return {"creationflags": 0x08000000}
+    return {}
+
+
 def _npx_command() -> str:
     """Resolve the npx executable.
 
@@ -234,6 +245,7 @@ def ensure_remotion_installed(
             cwd=str(root), timeout=timeout_s,
             capture_output=True, text=True, shell=False,
             encoding="utf-8", errors="replace",
+            **_windows_no_window_kwargs(),
         )
     except subprocess.TimeoutExpired as e:
         raise RemotionRenderError(
@@ -355,6 +367,7 @@ def render(
             cmd, cwd=str(root), timeout=timeout_s,
             capture_output=True, text=True, shell=False,
             encoding="utf-8", errors="replace",
+            **_windows_no_window_kwargs(),
         )
     except subprocess.TimeoutExpired as e:
         raise RemotionRenderError(
@@ -385,6 +398,8 @@ def list_templates() -> list[str]:
 
 
 _RENDER_DAEMON_PORT = 3219
+_DAEMON_SPAWN_LOCK = __import__("threading").Lock()
+_DAEMON_SPAWN_ATTEMPTED = False
 
 
 def _render_daemon_health(timeout: float = 1.5) -> bool:
@@ -404,45 +419,65 @@ def _render_daemon_health(timeout: float = 1.5) -> bool:
 def _ensure_render_daemon(remotion_root: Path) -> bool:
     """Spawn the render daemon if it's not already running. Returns True
     when the daemon is up (either was already, or we just started it and
-    health-checked OK)."""
+    health-checked OK).
+
+    Lock-guarded: concurrent requests don't all spawn their own daemon.
+    First caller spawns, others wait for it to come up.
+    """
+    global _DAEMON_SPAWN_ATTEMPTED
     if _render_daemon_health():
         return True
-    node = _node_command()
-    if node is None:
-        return False
-    script = remotion_root / "render-server.js"
-    if not script.is_file():
-        logger.info(f"[remotion] no render-server.js at {script} — falling back to CLI")
-        return False
-    log_path = remotion_root / "render-server.log"
-    try:
-        # Detached background process — writes log file, doesn't tie to parent.
-        with open(log_path, "ab") as log_fh:
+    with _DAEMON_SPAWN_LOCK:
+        # Re-check under lock — another thread may have brought it up while we waited.
+        if _render_daemon_health():
+            return True
+        if _DAEMON_SPAWN_ATTEMPTED:
+            # We already tried in this process and the daemon isn't up.
+            # Don't loop spawning — fall back to CLI for this call.
+            return False
+        node = _node_command()
+        if node is None:
+            return False
+        script = remotion_root / "render-server.js"
+        if not script.is_file():
+            logger.info(f"[remotion] no render-server.js at {script} — falling back to CLI")
+            return False
+        log_path = remotion_root / "render-server.log"
+        _DAEMON_SPAWN_ATTEMPTED = True
+        try:
+            # Detached background process — no visible console window.
+            log_fh = open(log_path, "ab")
             kwargs: dict[str, Any] = dict(
                 cwd=str(remotion_root),
                 stdout=log_fh, stderr=subprocess.STDOUT,
                 stdin=subprocess.DEVNULL,
+                close_fds=True,
             )
             if sys.platform == "win32":
-                # DETACHED_PROCESS = 0x00000008 + CREATE_NEW_PROCESS_GROUP = 0x200
-                kwargs["creationflags"] = 0x00000008 | 0x00000200
+                # CREATE_NO_WINDOW (0x08000000) — node.exe is a console app;
+                # without this flag a black cmd window pops up on spawn.
+                # CREATE_NEW_PROCESS_GROUP (0x00000200) — detach from parent
+                # signals so closing the Electron app doesn't kill the daemon.
+                kwargs["creationflags"] = 0x08000000 | 0x00000200
             else:
                 kwargs["start_new_session"] = True
             subprocess.Popen([node, str(script)], **kwargs)
-    except OSError as e:
-        logger.warning(f"[remotion] daemon spawn failed: {e}")
-        return False
+            # log_fh stays open in the child; close our reference
+            log_fh.close()
+        except OSError as e:
+            logger.warning(f"[remotion] daemon spawn failed: {e}")
+            return False
 
-    # Wait up to 30s for /health to return 200 (bundle is slow first time).
-    import time as _t
-    deadline = _t.time() + 30.0
-    while _t.time() < deadline:
-        if _render_daemon_health(timeout=0.5):
-            logger.info("[remotion] daemon up")
-            return True
-        _t.sleep(0.5)
-    logger.warning("[remotion] daemon didn't come up within 30s")
-    return False
+        # Wait up to 45s for /health to return 200 (cold bundle ~12s + safety margin).
+        import time as _t
+        deadline = _t.time() + 45.0
+        while _t.time() < deadline:
+            if _render_daemon_health(timeout=0.5):
+                logger.info("[remotion] daemon up")
+                return True
+            _t.sleep(0.5)
+        logger.warning("[remotion] daemon didn't come up within 45s")
+        return False
 
 
 def _render_via_daemon(
@@ -580,6 +615,7 @@ def render_still(
             cmd, cwd=str(root), timeout=timeout_s,
             capture_output=True, text=True, shell=False,
             encoding="utf-8", errors="replace",
+            **_windows_no_window_kwargs(),
         )
     except subprocess.TimeoutExpired as e:
         raise RemotionRenderError(

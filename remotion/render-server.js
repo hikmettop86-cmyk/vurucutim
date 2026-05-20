@@ -108,6 +108,18 @@ const server = http.createServer((req, res) => {
   });
 });
 
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    // Another instance is already bound — that's fine, just exit silently.
+    // Without this handler Node throws an uncaught error and the process
+    // crashes loud, which under multi-spawn race leaves zombie node.exe's.
+    log(`port ${PORT} already in use — another daemon is running; exiting cleanly`);
+    process.exit(0);
+  }
+  log(`server error: ${err.message}`);
+  process.exit(1);
+});
+
 server.listen(PORT, '127.0.0.1', () => {
   log(`listening on http://127.0.0.1:${PORT}`);
   // Pre-warm the bundle so the first real render is fast.
