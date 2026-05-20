@@ -1,0 +1,21 @@
+﻿
+> vurucutim@0.1.0 start
+> electron .
+
+
+00:04:56.845 > app ready, version: 0.1.0
+00:04:56.856 > python-runner: chosen port 5006
+00:04:56.856 > python-runner: spawn python -m short_bot web --port 5006
+00:04:59.435 > python-runner: healthz OK
+node.exe : [28644:0508/000459.502:ERROR:cache_util_win.cc(20)] Unable to move the cache: Access is denied. (0x5)
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([28644:0508/000...s denied. (0x5):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+[28644:0508/000459.502:ERROR:cache_util_win.cc(20)] Unable to move the cache: Access is denied. (0x5)
+[28644:0508/000459.532:ERROR:disk_cache.cc(208)] Unable to create cache
+[28644:0508/000459.532:ERROR:gpu_disk_cache.cc(676)] Gpu Cache Creation failed: -2
+[28644:0508/000459.532:ERROR:disk_cache.cc(208)] Unable to create cache
+[28644:0508/000459.532:ERROR:gpu_disk_cache.cc(676)] Gpu Cache Creation failed: -2

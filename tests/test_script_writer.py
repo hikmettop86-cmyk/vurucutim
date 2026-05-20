@@ -54,11 +54,10 @@ def test_write_script_returns_script_model():
     assert result.header_top == "FAİZ ŞOKU"
 
 
-def test_archetype_prompts_cover_three_active():
-    """2026-05-19: cut from 7 → 3 (newscast + stadium + stat-hero). The 5
-    legacy variants (tabloid/magazine/kinetic/dark-tech/meme) were dropped
-    along with their templates."""
-    expected = {"newscast", "stadium", "stat-hero"}
+def test_archetype_prompts_cover_four_active():
+    """2026-05-19: cut from 7 → 3 (newscast + stadium + stat-hero).
+    2026-05-20: added bigquote (fullscreen attributed quotation)."""
+    expected = {"newscast", "stadium", "stat-hero", "bigquote"}
     assert set(ARCHETYPE_PROMPTS.keys()) == expected
 
 

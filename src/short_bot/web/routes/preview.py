@@ -1,12 +1,7 @@
-import hashlib
 import json
-import logging
-import os
-import random
-import socket
 from pathlib import Path
 
-from flask import Blueprint, Response, abort, current_app, request, send_file
+from flask import Blueprint, Response, abort, current_app, request
 
 from short_bot.config import load_channel
 from short_bot.locale import ui_labels_for
@@ -15,7 +10,6 @@ from short_bot.renderer import build_html
 from short_bot.dna import build_css_override, DnaSpec, DnaPalette, DnaFonts, DnaTone
 
 bp = Blueprint("preview", __name__)
-_log = logging.getLogger(__name__)
 
 
 @bp.route("/api/dna/defaults")
@@ -171,128 +165,5 @@ def preview(slug):
     return Response(html, mimetype="text/html")
 
 
-# ── Remotion live snapshot preview (Phase 6a) ──────────────────────────────
-
-def _remotion_preview_cache_dir() -> Path:
-    """Cache previews under the configured cache dir so they survive across
-    pipeline runs but don't litter the project tree."""
-    cache_root = current_app.config.get("SHORTBOT_CACHE_DIR") or Path("data/cache")
-    out = Path(cache_root) / "remotion-previews"
-    out.mkdir(parents=True, exist_ok=True)
-    return out
-
-
-def _load_sample_script_for_remotion(language: str, channel) -> tuple[str, str, str, str, str]:
-    """Return (header_top, header_bottom, photo_overlay, body, handle) for
-    the snapshot. Uses the same sample as the HTML preview so changing
-    renderers shows the same content."""
-    s = _load_sample_script(language)
-    return (
-        s.header_top, s.header_bottom, s.photo_overlay,
-        s.body_paragraph, channel.handle,
-    )
-
-
-@bp.route("/preview/<slug>/remotion-frame")
-def remotion_frame_preview(slug):
-    """Return one rendered frame of the channel's Remotion template with
-    the query-param overrides applied. Used by the channel-edit Remotion
-    tab for live-update preview as the user changes dimensions/colors.
-    """
-    from short_bot.remotion_renderer import (
-        render_still, render_job_from_pipeline,
-        ADAPTIVE_DIMENSION_OPTIONS, RemotionRenderError,
-    )
-    from types import SimpleNamespace
-
-    cfg_path = current_app.config["SHORTBOT_CONFIG_DIR"] / "channels" / f"{slug}.yaml"
-    if not cfg_path.exists():
-        abort(404)
-    cfg = load_channel(cfg_path)
-
-    # Color overrides from query (mirror HTML preview semantics)
-    primary = request.args.get("primary") or cfg.colors.get("primary", "#c8102e")
-    accent  = request.args.get("accent")  or cfg.colors.get("accent", "#ffb81c")
-    bg_grad = cfg.colors.get("bg_gradient", ["#0a1733", "#1a2a4f"])
-    bg1 = request.args.get("bg_grad_1") or (bg_grad[0] if len(bg_grad) > 0 else "#0a1733")
-    bg2 = request.args.get("bg_grad_2") or (bg_grad[1] if len(bg_grad) > 1 else "#1a2a4f")
-
-    # Template selection — query overrides channel default for live tweaking
-    template = (
-        request.args.get("remotion_template")
-        or cfg.remotion_template
-        or cfg.resolved_remotion_template
-    )
-
-    # Adaptive dimensions: form may push partial overrides
-    dimensions = dict(cfg.remotion_dimensions or {})
-    for axis, valid in ADAPTIVE_DIMENSION_OPTIONS.items():
-        v = request.args.get(f"dim_{axis}", "").strip()
-        if v:
-            if v in valid:
-                dimensions[axis] = v
-            # invalid value silently dropped — preview still works
-    if template != "adaptive":
-        dimensions = {}  # other templates don't read this prop
-
-    headline, sub, overlay, body, handle = _load_sample_script_for_remotion(
-        cfg.language, cfg
-    )
-    script = SimpleNamespace(
-        header_top=headline, header_bottom=sub,
-        photo_overlay=overlay or "Test",
-        body_paragraph=body or "Önizleme için örnek metin.",
-        category=request.args.get("category", "GENEL"),
-    )
-
-    job = render_job_from_pipeline(
-        script=script,
-        channel_colors={"primary": primary, "accent": accent,
-                        "bg_gradient": [bg1, bg2]},
-        handle=handle,
-        duration_s=6,
-        template=template,
-        bg_image_path=None,
-        dimensions=dimensions or None,
-    )
-
-    # Cache key: hash of all props that affect the rendered output.
-    cache_key_blob = json.dumps(job.to_props_dict(), sort_keys=True, ensure_ascii=False)
-    cache_key = hashlib.sha256(cache_key_blob.encode("utf-8")).hexdigest()[:16]
-    cache_dir = _remotion_preview_cache_dir()
-    cached = cache_dir / f"{cache_key}.jpg"
-
-    if not cached.exists():
-        # Pick a random free port in 3220-3299. Shuffle grid renders 6
-        # thumbnails staggered 3.5s apart; if a slow one hasn't released
-        # its port yet, the next call needs a different one. Each call
-        # gets its own port so Remotion can spin up its bundler concurrently.
-        port = _pick_free_port_in_range(3220, 3300)
-        try:
-            # 90s budget — first bundle is ~10s + render ~3s, but under
-            # disk/CPU contention from staggered shuffle this can extend.
-            render_still(job, cached, frame=30, port=port, timeout_s=90)
-        except RemotionRenderError as e:
-            _log.warning(f"remotion preview failed: {e}")
-            return Response(f"preview failed: {e}", status=500, mimetype="text/plain")
-
-    return send_file(str(cached), mimetype="image/jpeg",
-                      max_age=0, conditional=True)
-
-
-def _pick_free_port_in_range(low: int, high: int, attempts: int = 10) -> int:
-    """Try to find a free TCP port in [low, high). Falls back to a random
-    port in range after `attempts` tries — Remotion will fail loudly if it
-    can't bind, which is more diagnostic than a silent collision."""
-    for _ in range(attempts):
-        p = random.randint(low, high - 1)
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        try:
-            s.bind(("127.0.0.1", p))
-            s.close()
-            return p
-        except OSError:
-            try: s.close()
-            except OSError: pass
-            continue
-    return random.randint(low, high - 1)
+# NOTE (v0.1.94): Remotion preview endpoint removed — entire Remotion
+# subsystem was deprecated. HTML iframe preview above is the sole path.

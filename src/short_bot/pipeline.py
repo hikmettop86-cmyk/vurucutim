@@ -42,7 +42,7 @@ from short_bot.overflow import (
     truncate_to_fit,
 )
 from short_bot.templates_config import ARCHETYPE_OVERFLOW_FIELDS
-from short_bot.composer import compose_video, compose_video_from_silent_video
+from short_bot.composer import compose_video
 from short_bot.locale import ui_labels_for
 from short_bot.generator import (
     GeneratorRetryExhausted, check_duplicate, generate_quote,
@@ -846,76 +846,24 @@ def _run_rss(*, channel, run_id, log, eng, settings,
         )
         bv = channel.bg_video
 
-        if channel.renderer == "remotion":
-            from short_bot.remotion_renderer import (
-                render as remotion_render,
-                render_job_from_pipeline,
-                ensure_remotion_installed,
-                auto_dimensions,
-                RemotionRenderError,
-            )
-            # ensure_remotion_installed is idempotent: no-op when node_modules
-            # already present, otherwise runs `npm install` (~2 min once).
-            # render() also does this internally, but calling it here surfaces
-            # any install error to the run log with the right context.
-            try:
-                ensure_remotion_installed(log=log)
-            except RemotionRenderError as e:
-                raise RuntimeError(
-                    f"channel.renderer='remotion' but install failed: {e}"
-                ) from e
-            silent_path = Path(tmpd) / "remotion-silent.mp4"
-            # Merge channel recipe with auto-picked per-video dimensions when
-            # the channel opts in. Auto wins on the axes it picks (motion +
-            # body), recipe controls visual identity (header/photo/typo).
-            merged_dimensions: dict[str, str] = dict(channel.remotion_dimensions or {})
-            if channel.remotion_auto_dimensions:
-                auto = auto_dimensions(script)
-                merged_dimensions.update(auto)
-                log.info(f"  remotion auto-dimensions: {auto}")
-            remotion_job = render_job_from_pipeline(
-                script=script,
-                channel_colors=channel.colors,
-                handle=channel.handle,
-                duration_s=channel.duration_s,
-                template=channel.resolved_remotion_template,
-                bg_image_path=bg,
-                dimensions=merged_dimensions or None,
-            )
-            log.info(f"  → remotion render {remotion_job.template}")
-            try:
-                remotion_render(remotion_job, silent_path)
-            except RemotionRenderError as e:
-                raise RuntimeError(f"Remotion render failed: {e}") from e
-            compose_video_from_silent_video(
-                silent_path, music, out_path,
-                ffmpeg_path=settings.ffmpeg_path,
-                sfx_overlays=sfx_overlays,
-                bg_video_path=bg_video_path,
-                bg_blur_px=bv.blur_px if bv else 30,
-                bg_dim=bv.dim if bv else 0.4,
-                fg_scale=bv.scale if (bv and bg_video_path) else 1.0,
-                duration_s=channel.duration_s,
-            )
-        else:
-            template_path = templates_dir / f"{archetype}.html.j2"
-            render_frames(job, template_path, frames_dir,
-                          fps=30, browser=settings.playwright_browser,
-                          ui_labels=ui_labels, dna_css=dna_css,
-                          animation_style=(effective_dna.animation_style
-                                            if effective_dna is not None else "none"))
-            compose_video(
-                frames_dir, music, out_path,
-                fps=30, ffmpeg_path=settings.ffmpeg_path,
-                sfx_overlays=sfx_overlays,
-                bg_video_path=bg_video_path,
-                bg_blur_px=bv.blur_px if bv else 30,
-                bg_dim=bv.dim if bv else 0.4,
-                fg_scale=bv.scale if (bv and bg_video_path) else 1.0,
-                duration_s=channel.duration_s,
-            )
+        template_path = templates_dir / f"{archetype}.html.j2"
+        render_frames(job, template_path, frames_dir,
+                      fps=30, browser=settings.playwright_browser,
+                      ui_labels=ui_labels, dna_css=dna_css,
+                      animation_style=(effective_dna.animation_style
+                                        if effective_dna is not None else "none"))
+        compose_video(
+            frames_dir, music, out_path,
+            fps=30, ffmpeg_path=settings.ffmpeg_path,
+            sfx_overlays=sfx_overlays,
+            bg_video_path=bg_video_path,
+            bg_blur_px=bv.blur_px if bv else 30,
+            bg_dim=bv.dim if bv else 0.4,
+            fg_scale=bv.scale if (bv and bg_video_path) else 1.0,
+            duration_s=channel.duration_s,
+        )
         render_ms = int((time.perf_counter() - t0) * 1000)
-        log.info(f"  → {out_path.name} ({render_ms}ms) renderer={channel.renderer}")
+        log.info(f"  → {out_path.name} ({render_ms}ms)")
 
     # Compute embedding of the Claude-PRODUCED headline too — drives the new
     # "produced-headline dedup" layer in dedup.filter_new on future runs.

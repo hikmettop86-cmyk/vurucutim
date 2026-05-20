@@ -1,6 +1,6 @@
 {
   "name": "vurucutim",
-  "version": "0.1.93",
+  "version": "0.1.94",
   "description": "VurucuTim - RSS to YouTube Shorts (Electron wrapper)",
   "main": "main.js",
   "author": "hikmettop86-cmyk",
@@ -10,9 +10,8 @@
     "start": "electron .",
     "test": "node --test test/*.test.js",
     "fetch-python": "node scripts/fetch-python-embed.js",
-    "fetch-node": "node scripts/fetch-node-portable.js",
     "sync-version": "node scripts/sync-version.js",
-    "prebuild": "npm run sync-version && npm run fetch-python && npm run fetch-node",
+    "prebuild": "npm run sync-version && npm run fetch-python",
     "build": "electron-builder --win --x64 --config build/electron-builder.yml",
     "publish": "electron-builder --win --x64 --config build/electron-builder.yml --publish always"
   },

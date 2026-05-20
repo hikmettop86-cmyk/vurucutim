@@ -9,12 +9,10 @@ from short_bot.dna import (
 )
 
 
-def test_archetypes_list_has_three():
-    # 2026-05-19: cut from 16 → 3. Legacy archetypes (tabloid, magazine, kinetic,
-    # dark-tech, meme, politika, ekonomi, spor-haber, tech-haber, hava-durumu,
-    # yerel, gundem, dosya) had no live channels + missing prompts; deleted to
-    # make room for the compositional system (Phase 2+).
-    assert set(ARCHETYPES) == {"newscast", "stadium", "stat-hero"}
+def test_archetypes_list_has_four():
+    # 2026-05-19: cut from 16 → 3 (legacy 13 deleted).
+    # 2026-05-20: added bigquote (fullscreen attributed quotation).
+    assert set(ARCHETYPES) == {"newscast", "stadium", "stat-hero", "bigquote"}
 
 
 def test_palette_validates_hex():

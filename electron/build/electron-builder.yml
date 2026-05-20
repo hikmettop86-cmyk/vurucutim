@@ -32,16 +32,6 @@ extraResources:
     to: short-bot/pyproject.toml
   - from: cache/python-embed
     to: python
-  # Phase 3: bundle Node + Remotion src (no node_modules — lazy-installed
-  # on first Remotion render via short_bot.remotion_renderer.ensure_remotion_installed)
-  - from: cache/node-portable
-    to: node
-  - from: ../remotion
-    to: short-bot/remotion
-    filter:
-      - "**/*"
-      - "!node_modules/**"
-      - "!out/**"
 
 win:
   target:

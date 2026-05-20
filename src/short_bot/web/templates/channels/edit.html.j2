@@ -88,32 +88,7 @@
         ctaText: "{{ (c.cta_text or '')|e }}",
         ctaShowHandle: {{ 'true' if c.cta_show_handle else 'false' }},
         rssSourceDemo: "",
-        currentTab: window.location.hash.replace("#", "") || "genel",
-        // ── Remotion tab state (Phase 6a) ──
-        rendererType: "{{ c.renderer }}",
-        remotionTemplate: "{{ c.remotion_template or '' }}",
-        dimHeaderStyle: "{{ (c.remotion_dimensions or {}).get('headerStyle', '') }}",
-        dimPhotoTreatment: "{{ (c.remotion_dimensions or {}).get('photoTreatment', '') }}",
-        dimBodyStyle: "{{ (c.remotion_dimensions or {}).get('bodyStyle', '') }}",
-        dimMotionPreset: "{{ (c.remotion_dimensions or {}).get('motionPreset', '') }}",
-        dimTypography: "{{ (c.remotion_dimensions or {}).get('typography', '') }}",
-        remotionPreviewBusy: false,
-        remotionPreviewKey: 0,
-        get effectiveRemotionTemplate() {
-          return this.remotionTemplate || "{{ c.resolved_remotion_template }}";
-        },
-        get remotionPreviewUrl() {
-          const p = new URLSearchParams({
-            primary: this.primary, accent: this.accent,
-            bg_grad_1: this.bgGrad1, bg_grad_2: this.bgGrad2,
-            remotion_template: this.effectiveRemotionTemplate,
-            dim_headerStyle: this.dimHeaderStyle,
-            dim_photoTreatment: this.dimPhotoTreatment,
-            dim_bodyStyle: this.dimBodyStyle,
-            _k: this.remotionPreviewKey,
-          });
-          return `/preview/{{ c.slug }}/remotion-frame?${p.toString()}`;
-        }
+        currentTab: window.location.hash.replace("#", "") || "genel"
       }'>
 
   {# ═══════════════════════════════════════════════════════════════════════
@@ -130,51 +105,14 @@
         <div class="p-5">
           <div class="relative bg-black rounded-lg overflow-hidden mx-auto"
                style="width: 100%; max-width: 360px; aspect-ratio: 9/16;">
-            {# HTML preview iframe — used everywhere except Remotion tab #}
-            <iframe x-show="currentTab !== 'remotion'"
-                    x-bind:src="`/preview/{{ c.slug }}?archetype=${encodeURIComponent(archetype)}&primary=${encodeURIComponent(primary)}&accent=${encodeURIComponent(accent)}&font_headline=${encodeURIComponent(fontHeadline)}&font_body=${encodeURIComponent(fontBody)}&banner_shape=${encodeURIComponent(bannerShape)}&highlight_style=${encodeURIComponent(highlightStyle)}&chip_style=${encodeURIComponent(chipStyle)}&category_icon=${encodeURIComponent(categoryIcon)}&bg_grad_1=${encodeURIComponent(bgGrad1)}&bg_grad_2=${encodeURIComponent(bgGrad2)}&body_bg_1=${encodeURIComponent(bodyBg1)}&body_bg_2=${encodeURIComponent(bodyBg2)}&text_main=${encodeURIComponent(textMain)}&text_muted=${encodeURIComponent(textMuted)}&header_top_color=${encodeURIComponent(headerTopColor)}&header_bottom_color=${encodeURIComponent(headerBottomColor)}&cta_enabled=${ctaEnabled ? '1' : '0'}&cta_text=${encodeURIComponent(ctaText)}&cta_show_handle=${ctaShowHandle ? '1' : '0'}&rss_source=${encodeURIComponent(rssSourceDemo)}`"
+            <iframe x-bind:src="`/preview/{{ c.slug }}?archetype=${encodeURIComponent(archetype)}&primary=${encodeURIComponent(primary)}&accent=${encodeURIComponent(accent)}&font_headline=${encodeURIComponent(fontHeadline)}&font_body=${encodeURIComponent(fontBody)}&banner_shape=${encodeURIComponent(bannerShape)}&highlight_style=${encodeURIComponent(highlightStyle)}&chip_style=${encodeURIComponent(chipStyle)}&category_icon=${encodeURIComponent(categoryIcon)}&bg_grad_1=${encodeURIComponent(bgGrad1)}&bg_grad_2=${encodeURIComponent(bgGrad2)}&body_bg_1=${encodeURIComponent(bodyBg1)}&body_bg_2=${encodeURIComponent(bodyBg2)}&text_main=${encodeURIComponent(textMain)}&text_muted=${encodeURIComponent(textMuted)}&header_top_color=${encodeURIComponent(headerTopColor)}&header_bottom_color=${encodeURIComponent(headerBottomColor)}&cta_enabled=${ctaEnabled ? '1' : '0'}&cta_text=${encodeURIComponent(ctaText)}&cta_show_handle=${ctaShowHandle ? '1' : '0'}&rss_source=${encodeURIComponent(rssSourceDemo)}`"
                     src="/preview/{{ c.slug }}"
                     scrolling="no"
                     class="absolute top-0 left-0 border-0"
                     style="width: 1080px; height: 1920px; transform: scale(0.333); transform-origin: top left;"></iframe>
-
-            {# Remotion still-frame preview — single JPG, refreshes on form change.
-               URL inline computed via template literal (Alpine getters don't always
-               trigger x-bind:src updates reliably across browsers). #}
-            <template x-if="currentTab === 'remotion'">
-              <div class="absolute inset-0" x-data="{ failed: false }">
-                <img x-bind:src="`/preview/{{ c.slug }}/remotion-frame?primary=${encodeURIComponent(primary)}&accent=${encodeURIComponent(accent)}&bg_grad_1=${encodeURIComponent(bgGrad1)}&bg_grad_2=${encodeURIComponent(bgGrad2)}&remotion_template=${encodeURIComponent(remotionTemplate || '{{ c.resolved_remotion_template }}')}&dim_headerStyle=${encodeURIComponent(dimHeaderStyle)}&dim_photoTreatment=${encodeURIComponent(dimPhotoTreatment)}&dim_bodyStyle=${encodeURIComponent(dimBodyStyle)}&dim_motionPreset=${encodeURIComponent(dimMotionPreset)}&dim_typography=${encodeURIComponent(dimTypography)}`"
-                     @load="remotionPreviewBusy = false; failed = false"
-                     @error="remotionPreviewBusy = false; failed = true"
-                     @loadstart="remotionPreviewBusy = true; failed = false"
-                     class="w-full h-full object-cover"
-                     alt="Remotion önizleme" />
-                <div x-show="remotionPreviewBusy && !failed"
-                     class="absolute inset-0 flex items-center justify-center bg-black/50 pointer-events-none">
-                  <div class="text-white text-sm flex flex-col items-center gap-2">
-                    <div class="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    <div>Render ediliyor… (~10s, ilk seferde daha uzun)</div>
-                  </div>
-                </div>
-                <div x-show="failed"
-                     class="absolute inset-0 flex items-center justify-center bg-red-900/70 text-white p-4">
-                  <div class="text-center text-sm space-y-2">
-                    <div class="text-2xl">⚠</div>
-                    <div>Önizleme render başarısız oldu.</div>
-                    <div class="text-xs opacity-80">
-                      Sayfayı yenile veya başka boyutlar dene.
-                      Loglar: panel_stderr.log
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </template>
           </div>
-          <p class="text-xs text-claude-muted mt-2 text-center" x-show="currentTab !== 'remotion'">
+          <p class="text-xs text-claude-muted mt-2 text-center">
             Gerçek 1080×1920 short, ölçekli HTML önizleme.
-          </p>
-          <p class="text-xs text-claude-muted mt-2 text-center" x-show="currentTab === 'remotion'">
-            Remotion frame snapshot (1s noktası). Sağdaki form değişince yenilenir.
           </p>
         </div>
       </div>
@@ -193,7 +131,6 @@
           {id: 'genel', label: 'Genel'},
           {id: 'icerik', label: 'Icerik'},
           {id: 'dna', label: 'DNA / Renkler'},
-          {id: 'remotion', label: 'Remotion'},
           {id: 'youtube', label: 'YouTube'},
         ]" :key="tab.id">
           <button type="button"
@@ -791,8 +728,7 @@
         </button>
       </form>
       <p class="text-xs text-claude-muted mt-3">
-        DNA ayarlı değilken bile <strong>Genel</strong> tab'ından temel renkleri ve
-        <strong>Remotion</strong> tab'ından şablonu kullanabilirsin.
+        DNA ayarlı değilken bile <strong>Genel</strong> tab'ından temel renkleri kullanabilirsin.
       </p>
     </div>
     {% else %}
@@ -1188,8 +1124,6 @@
       </label>
     </div>
 
-    {# Render motoru kartı buradan kaldırıldı — Remotion tab'ine taşındı (Phase 6a) #}
-
     {# ── Card: Generator Ayarları (closed by default, conditional) ────── #}
     {% if c.content_source == 'generator' %}
     <div x-data="{ open: false }" class="bg-white border border-claude-border rounded-xl shadow-soft mb-4 mt-4">
@@ -1288,311 +1222,6 @@
 
     </div>{# end TAB: Icerik #}
 
-    {# ── TAB: Remotion ──────────────────────────────────────────────────── #}
-    <div x-show="currentTab === 'remotion'">
-
-      {# Status banner: which renderer is active #}
-      <div class="bg-claude-surface border border-claude-border rounded-lg p-4 mt-4">
-        <div class="flex items-center justify-between mb-3">
-          <div class="text-xs text-claude-muted uppercase tracking-wider">Render motoru</div>
-          <span class="text-xs"
-                :class="rendererType === 'remotion' ? 'text-claude-success' : 'text-claude-muted'"
-                x-text="rendererType === 'remotion' ? '● aktif' : '○ kapalı (sol kolon yine de Remotion önizler)'"></span>
-        </div>
-        <label class="text-xs block">
-          <span class="block text-claude-muted mb-1">Motor</span>
-          <select name="renderer" x-model="rendererType"
-                  class="bg-claude-surface-alt border border-claude-border px-2 py-1 rounded w-full text-sm text-claude-text">
-            <option value="html">HTML + Playwright (varsayılan)</option>
-            <option value="remotion">Remotion (TypeScript/React)</option>
-          </select>
-        </label>
-        <p class="text-xs text-claude-muted mt-2">
-          Remotion daha pürüzsüz animasyon + 60fps yetenek sunar ama Node.js + npm install gerektirir.
-          Önizleme her zaman Remotion ile çalışır — gerçek render için yukarıdaki "Motor"u <code>remotion</code>'a alın.
-        </p>
-      </div>
-
-      {# Inline color pickers — same Alpine state as DNA tab. Editing here
-         reflects in real time in the Remotion preview AND saves into the
-         channel palette on form submit. No duplicate state. #}
-      <div class="bg-claude-surface border border-claude-border rounded-lg p-4 mt-4">
-        <div class="text-xs text-claude-muted uppercase tracking-wider mb-3">Renkler</div>
-        <div class="grid grid-cols-2 gap-3">
-          <label class="text-xs block">
-            <span class="block text-claude-muted mb-1">Primary (banner / vurgu)</span>
-            <input type="color" :value="primary"
-                   @input="primary = $event.target.value"
-                   class="bg-claude-surface-alt border border-claude-border rounded w-full h-9 cursor-pointer">
-          </label>
-          <label class="text-xs block">
-            <span class="block text-claude-muted mb-1">Accent (sarı bant / sayı)</span>
-            <input type="color" :value="accent"
-                   @input="accent = $event.target.value"
-                   class="bg-claude-surface-alt border border-claude-border rounded w-full h-9 cursor-pointer">
-          </label>
-          <label class="text-xs block">
-            <span class="block text-claude-muted mb-1">BG üst</span>
-            <input type="color" :value="bgGrad1"
-                   @input="bgGrad1 = $event.target.value"
-                   class="bg-claude-surface-alt border border-claude-border rounded w-full h-9 cursor-pointer">
-          </label>
-          <label class="text-xs block">
-            <span class="block text-claude-muted mb-1">BG alt</span>
-            <input type="color" :value="bgGrad2"
-                   @input="bgGrad2 = $event.target.value"
-                   class="bg-claude-surface-alt border border-claude-border rounded w-full h-9 cursor-pointer">
-          </label>
-        </div>
-        <p class="text-xs text-claude-subtle mt-2">
-          Bu 4 renk hem Remotion hem HTML tarafına uygulanır. Daha fazla renk ve yazı renkleri için
-          <strong>DNA / Renkler</strong> tab'ına bak.
-        </p>
-      </div>
-
-      {# Template + Adaptive dimensions #}
-      <div class="bg-claude-surface border border-claude-border rounded-lg p-4 mt-4">
-        <div class="text-xs text-claude-muted uppercase tracking-wider mb-3">Şablon ve boyutlar</div>
-
-        <label class="text-xs block mb-3">
-          <span class="block text-claude-muted mb-1">Remotion template</span>
-          <select name="remotion_template" x-model="remotionTemplate"
-                  class="bg-claude-surface-alt border border-claude-border px-2 py-1 rounded w-full text-sm text-claude-text">
-            <option value="">(otomatik: {{ c.resolved_remotion_template }})</option>
-            <option value="newscast-basic">newscast-basic</option>
-            <option value="stadium-basic">stadium-basic</option>
-            <option value="stat-hero">stat-hero</option>
-            <option value="big-quote">big-quote (Remotion-only)</option>
-            <option value="adaptive">adaptive (27 kombinasyon)</option>
-          </select>
-        </label>
-
-        <div x-show="effectiveRemotionTemplate === 'adaptive'"
-             class="pt-3 border-t border-claude-border">
-
-          {# Preset shortcuts — one click fills the recipe #}
-          <div class="mb-3">
-            <div class="text-xs text-claude-muted uppercase mb-2">Hızlı preset</div>
-            <div class="flex flex-wrap gap-2"
-                 x-data="{
-                   applyPreset(p) {
-                     dimHeaderStyle    = p.headerStyle;
-                     dimPhotoTreatment = p.photoTreatment;
-                     dimBodyStyle      = p.bodyStyle;
-                     dimMotionPreset   = p.motionPreset;
-                     dimTypography     = p.typography;
-                   }
-                 }">
-              <template x-for="p in [
-                {name: '🏟 Spor Yayın',     headerStyle: 'banner-skewed', photoTreatment: 'full-bleed',    bodyStyle: 'paragraph', motionPreset: 'sport',     typography: 'sport-bold'},
-                {name: '⚖ Asayiş Ciddi',  headerStyle: 'banner-flat',   photoTreatment: 'full-bleed',    bodyStyle: 'paragraph', motionPreset: 'news',      typography: 'authoritative'},
-                {name: '🎙 Politik Açıklama', headerStyle: 'hero-overlay', photoTreatment: 'blur-bg',     bodyStyle: 'quote',     motionPreset: 'dramatic',  typography: 'editorial'},
-                {name: '📊 Ekonomi Sayı',  headerStyle: 'banner-flat',   photoTreatment: 'banded',        bodyStyle: 'stat-hero', motionPreset: 'cinematic', typography: 'tech'},
-                {name: '✨ Magazin Kart',   headerStyle: 'hero-overlay',  photoTreatment: 'polaroid-tilt', bodyStyle: 'quote',     motionPreset: 'cinematic', typography: 'cinematic-serif'}
-              ]" :key="p.name">
-                <button type="button" @click="applyPreset(p)"
-                        class="text-xs bg-claude-surface hover:bg-claude-accent hover:text-white border border-claude-border px-3 py-1.5 rounded-lg transition-colors"
-                        x-text="p.name"></button>
-              </template>
-            </div>
-            <p class="text-xs text-claude-subtle mt-2">
-              Tıklayınca 5 dropdown da otomatik dolar. Sonra elle ince ayar yapabilirsin.
-            </p>
-          </div>
-
-          <div class="text-xs text-claude-muted uppercase mb-2 pt-3 border-t border-claude-border/40">Adaptive boyutlar</div>
-          <div class="grid grid-cols-3 gap-3 mb-3">
-            <label class="text-xs">
-              <span class="block text-claude-muted mb-1">Header</span>
-              <select name="adaptive_headerStyle" x-model="dimHeaderStyle"
-                      class="bg-claude-surface-alt border border-claude-border px-2 py-1 rounded w-full text-sm text-claude-text">
-                <option value="">(varsayılan: banner-flat)</option>
-                <option value="banner-flat">banner-flat (kırmızı bant)</option>
-                <option value="banner-skewed">banner-skewed (eğri spor)</option>
-                <option value="hero-overlay">hero-overlay (foto üstü)</option>
-              </select>
-            </label>
-            <label class="text-xs">
-              <span class="block text-claude-muted mb-1">Photo</span>
-              <select name="adaptive_photoTreatment" x-model="dimPhotoTreatment"
-                      class="bg-claude-surface-alt border border-claude-border px-2 py-1 rounded w-full text-sm text-claude-text">
-                <option value="">(varsayılan: full-bleed)</option>
-                <option value="full-bleed">full-bleed (tam)</option>
-                <option value="banded">banded (şerit)</option>
-                <option value="blur-bg">blur-bg (buğulu arka)</option>
-                <option value="polaroid-tilt">polaroid-tilt (eğri kart)</option>
-                <option value="cutout-float">cutout-float (yuvarlak)</option>
-              </select>
-            </label>
-            <label class="text-xs">
-              <span class="block text-claude-muted mb-1">Body</span>
-              <select name="adaptive_bodyStyle" x-model="dimBodyStyle"
-                      class="bg-claude-surface-alt border border-claude-border px-2 py-1 rounded w-full text-sm text-claude-text">
-                <option value="">(varsayılan: paragraph)</option>
-                <option value="paragraph">paragraph (klasik)</option>
-                <option value="quote">quote (alıntı)</option>
-                <option value="stat-hero">stat-hero (büyük sayı)</option>
-              </select>
-            </label>
-          </div>
-          <div class="grid grid-cols-2 gap-3">
-            <label class="text-xs">
-              <span class="block text-claude-muted mb-1">Motion</span>
-              <select name="adaptive_motionPreset" x-model="dimMotionPreset"
-                      class="bg-claude-surface-alt border border-claude-border px-2 py-1 rounded w-full text-sm text-claude-text">
-                <option value="">(varsayılan: subtle)</option>
-                <option value="subtle">subtle (yumuşak)</option>
-                <option value="dramatic">dramatic (yavaş & büyük)</option>
-                <option value="sport">sport (hızlı & sert)</option>
-                <option value="news">news (anında)</option>
-                <option value="cinematic">cinematic (sinematik)</option>
-              </select>
-            </label>
-            <label class="text-xs">
-              <span class="block text-claude-muted mb-1">Tipografi</span>
-              <select name="adaptive_typography" x-model="dimTypography"
-                      class="bg-claude-surface-alt border border-claude-border px-2 py-1 rounded w-full text-sm text-claude-text">
-                <option value="">(varsayılan: Inter)</option>
-                <option value="authoritative">authoritative (Oswald + Inter)</option>
-                <option value="tabloid">tabloid (Anton + Roboto)</option>
-                <option value="editorial">editorial (Playfair + Lora)</option>
-                <option value="tech">tech (Outfit + JetBrains)</option>
-                <option value="sport-bold">sport-bold (Bebas + Inter)</option>
-                <option value="cinematic-serif">cinematic-serif (Cinzel + Source)</option>
-              </select>
-            </label>
-          </div>
-          <p class="text-xs text-claude-muted mt-3">
-            3 × 5 × 3 × 5 × 7 = <strong>1575 kombinasyon</strong>. Eksik akslar Zod default'una düşer.
-            Tipografi seçince Google Fonts CSS otomatik yüklenir.
-          </p>
-
-          {# Content-aware auto-pick toggle #}
-          <label class="flex items-start gap-2 mt-4 pt-3 border-t border-claude-border/40 cursor-pointer">
-            <input type="checkbox" name="remotion_auto_dimensions" value="1"
-                   class="mt-0.5"
-                   {% if c.remotion_auto_dimensions %}checked{% endif %}>
-            <span>
-              <span class="text-sm font-semibold text-claude-text">🧠 İçerik-uyumlu otomatik seçim</span>
-              <span class="block text-[11px] text-claude-subtle mt-0.5">
-                Açıkken her video için pipeline <code>script.mood</code> + body metnine göre
-                <strong>motionPreset</strong> ve <strong>bodyStyle</strong> akslarını otomatik seçer
-                (örn. breaking → news motion, sayı içeriği → stat-hero). Üstteki recipe diğer akslari
-                (header / photo / tipografi) kontrol eder — kanal kimliği korunur, motion+body içerikle değişir.
-              </span>
-            </span>
-          </label>
-        </div>
-      </div>
-
-      {# Shuffle: 6 rastgele kombinasyon thumbnail grid.
-         Implementation note: thumbnails are rendered SEQUENTIALLY (3s stagger)
-         rather than in parallel — 6 concurrent `npx remotion still` invocations
-         thrash disk + memory (each spawns a bundler + headless Chromium ~500MB).
-         Stagger trades total wall time (~25s) for reliability (no timeouts). #}
-      <div x-show="effectiveRemotionTemplate === 'adaptive'"
-           x-data='{
-             shuffles: [],
-             busy: false,
-             buildShuffles() {
-               const heads = ["banner-flat","banner-skewed","hero-overlay"];
-               const photos = ["full-bleed","banded","blur-bg","polaroid-tilt","cutout-float"];
-               const bodies = ["paragraph","quote","stat-hero"];
-               const motions = ["subtle","dramatic","sport","news","cinematic"];
-               const types = ["default","authoritative","tabloid","editorial","tech","sport-bold","cinematic-serif"];
-               const pick = (a) => a[Math.floor(Math.random() * a.length)];
-               this.shuffles = [];
-               for (let i = 0; i < 6; i++) {
-                 this.shuffles.push({
-                   headerStyle: pick(heads),
-                   photoTreatment: pick(photos),
-                   bodyStyle: pick(bodies),
-                   motionPreset: pick(motions),
-                   typography: pick(types),
-                   started: false,
-                   loaded: false,
-                   failed: false,
-                 });
-               }
-               this.busy = true;
-               // Stagger src assignment: thumb i starts at i*3s
-               this.shuffles.forEach((s, i) => {
-                 setTimeout(() => { s.started = true; }, i * 3500);
-               });
-               // Clear busy flag when last thumb expected to be done
-               setTimeout(() => { this.busy = false; }, 6 * 3500 + 30000);
-             },
-             previewUrl(s) {
-               const p = new URLSearchParams({
-                 primary: this.primary, accent: this.accent,
-                 bg_grad_1: this.bgGrad1, bg_grad_2: this.bgGrad2,
-                 remotion_template: "adaptive",
-                 dim_headerStyle: s.headerStyle,
-                 dim_photoTreatment: s.photoTreatment,
-                 dim_bodyStyle: s.bodyStyle,
-                 dim_motionPreset: s.motionPreset,
-                 dim_typography: s.typography,
-               });
-               return `/preview/{{ c.slug }}/remotion-frame?${p.toString()}`;
-             },
-             applyShuffle(s) {
-               this.dimHeaderStyle    = s.headerStyle;
-               this.dimPhotoTreatment = s.photoTreatment;
-               this.dimBodyStyle      = s.bodyStyle;
-               this.dimMotionPreset   = s.motionPreset;
-               this.dimTypography     = s.typography;
-             }
-           }'
-           class="bg-claude-surface border border-claude-border rounded-lg p-4 mt-4">
-        <div class="flex items-center justify-between mb-3">
-          <div class="text-xs text-claude-muted uppercase tracking-wider">🎲 Rastgele 6 stil</div>
-          <button type="button" @click="buildShuffles()" :disabled="busy"
-                  class="text-xs bg-claude-text text-white hover:bg-claude-muted px-3 py-1.5 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed">
-            <span x-text="busy ? '⏳ Render ediliyor…' : (shuffles.length === 0 ? '🎲 Üret' : '↻ Yenile')"></span>
-          </button>
-        </div>
-        <p class="text-xs text-claude-muted mb-3" x-show="shuffles.length === 0">
-          Tek tıkla 6 rastgele kombinasyon thumbnail olarak render edilir.
-          Her biri sırayla (~3s aralıkla, toplam ~25s) — daha güvenli. Beğendiğine tıkla → form doluyor.
-        </p>
-        <div x-show="shuffles.length > 0" class="grid grid-cols-3 gap-2">
-          <template x-for="(s, i) in shuffles" :key="i">
-            <button type="button" @click="applyShuffle(s)"
-                    class="relative aspect-[9/16] bg-black rounded overflow-hidden group ring-1 ring-claude-border hover:ring-claude-accent transition-all">
-              <template x-if="s.started">
-                <img :src="previewUrl(s)" loading="eager"
-                     @load="s.loaded = true; s.failed = false"
-                     @error="s.failed = true; s.loaded = false"
-                     class="w-full h-full object-cover" alt="" />
-              </template>
-              <div x-show="!s.started"
-                   class="absolute inset-0 flex items-center justify-center text-white/60 text-xs">
-                Sırada…
-              </div>
-              <div x-show="s.started && !s.loaded && !s.failed"
-                   class="absolute inset-0 flex items-center justify-center bg-black/60">
-                <div class="w-6 h-6 border-2 border-white/80 border-t-transparent rounded-full animate-spin"></div>
-              </div>
-              <div x-show="s.failed"
-                   class="absolute inset-0 flex items-center justify-center bg-red-900/60 text-white text-xs">
-                ✗ Başarısız
-              </div>
-              <div class="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[9px] px-1 py-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                <span x-text="`${s.headerStyle.slice(0,4)}/${s.photoTreatment.slice(0,4)}/${s.bodyStyle.slice(0,4)}`"></span>
-              </div>
-            </button>
-          </template>
-        </div>
-      </div>
-
-      {# Tip: how to use the live preview #}
-      <div class="bg-blue-50 border border-blue-200 text-blue-900 text-xs rounded-lg p-3 mt-4 space-y-1">
-        <div>💡 Sol kolondaki önizleme her form değişikliğinde otomatik yeniden render eder (~3s).</div>
-        <div>🎨 <strong>"DNA / Renkler"</strong> tab'ındaki paletler hem HTML hem Remotion'a uygulanır
-            — orada renk değiştirip Remotion tab'ına dönerek anında görebilirsin.</div>
-      </div>
-
-    </div>{# end TAB: Remotion #}
 
     {# ── Sticky save bar — always visible at bottom of right column #}
     <div class="sticky bottom-0 bg-claude-bg/95 backdrop-blur border-t border-claude-border pt-3 pb-3 mt-4 -mx-1 px-1 z-20">

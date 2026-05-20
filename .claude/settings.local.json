@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "defaultMode": "bypassPermissions",
+    "allow": [
+      "Bash(python -m pytest tests/test_trends_google_daily.py tests/test_trends_youtube_trending.py tests/test_trends_matcher.py tests/test_trends_aggregator.py tests/test_pipeline_trend_boost.py -x --tb=short)",
+      "Bash(python -m pytest tests/test_trends_google_daily.py tests/test_trends_youtube_trending.py tests/test_trends_matcher.py tests/test_trends_aggregator.py tests/test_pipeline_trend_boost.py --tb=short)",
+      "Bash(python -m pytest tests/test_config.py tests/test_config_generator.py tests/test_config_youtube.py tests/test_pipeline.py tests/test_pipeline_dispatcher.py tests/test_pipeline_age_filter.py tests/test_secrets_io.py tests/test_secrets_io_openai.py tests/test_locale.py tests/test_scorer.py --tb=short)",
+      "Bash(python -m pytest --tb=line -q)",
+      "Bash(tail -40 C:\\\\\\\\Users\\\\\\\\Hiko\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\claude\\\\\\\\D--short\\\\\\\\5b219610-c835-4b5d-b76f-21ad8259b1e4\\\\\\\\tasks\\\\\\\\b7v5codca.output)",
+      "Bash(python -m pytest tests/test_overflow_check.py::test_body_clamp_is_detected_as_overflow_when_text_exceeds_clamp --tb=short)",
+      "Bash(python *)",
+      "Bash(git check-ignore *)",
+      "Skill(update-config)"
+    ]
+  }
+}

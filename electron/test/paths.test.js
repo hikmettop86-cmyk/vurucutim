@@ -49,17 +49,3 @@ test('shortBotSrc is under resources/short-bot/src in packaged app', () => {
 test('initializedFlag is under userData', () => {
   assert.ok(paths.initializedFlag().endsWith(path.join('VurucuTim', '.initialized')));
 });
-
-// Phase 3: Remotion + bundled Node paths
-
-test('nodeHome is under resources/node in packaged app', () => {
-  assert.ok(paths.nodeHome().includes(path.join('resources', 'node')));
-});
-
-test('bundledRemotionSrc is under resources/short-bot/remotion in packaged app', () => {
-  assert.ok(paths.bundledRemotionSrc().includes(path.join('resources', 'short-bot', 'remotion')));
-});
-
-test('remotionUserDir is under userData/remotion (writable for npm install)', () => {
-  assert.ok(paths.remotionUserDir().endsWith(path.join('VurucuTim', 'remotion')));
-});

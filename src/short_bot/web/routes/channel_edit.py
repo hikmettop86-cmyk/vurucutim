@@ -127,27 +127,6 @@ def _form_get_list(key: str) -> list[str]:
     return [x.strip() for x in request.form.get(key, "").split(",") if x.strip()]
 
 
-def _collect_adaptive_dimensions(form, cfg) -> dict[str, str] | None:
-    """Read adaptive_{axis} form fields, validate against the known axis
-    options, and return a dict (or None when all axes empty). Unknown values
-    silently fall back to the channel's current setting for that axis so a
-    stray form value doesn't wipe a user-set recipe.
-    """
-    from short_bot.remotion_renderer import ADAPTIVE_DIMENSION_OPTIONS
-    current = cfg.remotion_dimensions or {}
-    out: dict[str, str] = {}
-    for axis, valid in ADAPTIVE_DIMENSION_OPTIONS.items():
-        submitted = form.get(f"adaptive_{axis}", "").strip()
-        if submitted and submitted in valid:
-            out[axis] = submitted
-        elif axis in current:
-            # form was blank but channel had a value — keep it only if we
-            # didn't actively see a 'reset to default' (empty option submitted)
-            if f"adaptive_{axis}" not in form:
-                out[axis] = current[axis]
-    return out or None
-
-
 @bp.route("/channels/<slug>/edit", methods=["POST"])
 def save(slug):
     path = _yaml_path(slug)
@@ -358,12 +337,6 @@ def save(slug):
         youtube=new_youtube,
         bg_video=new_bg_video,
         trend_boost=new_trend_boost,
-        renderer=(request.form.get("renderer") if request.form.get("renderer")
-                  in ("html", "remotion") else cfg.renderer),
-        remotion_template=(request.form.get("remotion_template", "").strip()
-                            or None),
-        remotion_dimensions=_collect_adaptive_dimensions(request.form, cfg),
-        remotion_auto_dimensions=request.form.get("remotion_auto_dimensions") == "1",
     )
     save_channel(path, new_cfg)
     flash("Kanal güncellendi.", "success")

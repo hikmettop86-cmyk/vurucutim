@@ -84,13 +84,6 @@ class TrendBoostConfig(BaseModel):
     region_override: str | None = None
 
 
-HTML_TO_REMOTION_TEMPLATE: dict[str, str] = {
-    "newscast": "newscast-basic",
-    "stadium": "stadium-basic",
-    "stat-hero": "stat-hero",
-}
-
-
 @dataclass(frozen=True)
 class ChannelConfig:
     slug: str
@@ -125,29 +118,6 @@ class ChannelConfig:
     youtube: YoutubeChannelConfig | None = None
     bg_video: BgVideoConfig | None = None
     trend_boost: TrendBoostConfig | None = None
-    renderer: Literal["html", "remotion"] = "html"
-    # If None, auto-derived from `template` via HTML_TO_REMOTION_TEMPLATE.
-    remotion_template: str | None = None
-    # Only meaningful when remotion_template == "adaptive". Keys:
-    # headerStyle, photoTreatment, bodyStyle. See
-    # short_bot.remotion_renderer.ADAPTIVE_DIMENSION_OPTIONS for valid values.
-    # None or empty dict → Adaptive uses its Zod defaults (banner-flat /
-    # full-bleed / paragraph). Unknown keys/values silently dropped by the
-    # Zod schema so partial configs are safe.
-    remotion_dimensions: dict[str, str] | None = None
-    # When True, the pipeline calls auto_dimensions(script) per video and
-    # MERGES the result over remotion_dimensions (auto wins for the axes
-    # it picks: motionPreset + bodyStyle). The channel-level recipe still
-    # controls headerStyle/photoTreatment/typography so brand identity
-    # holds while motion + body adapt to content.
-    remotion_auto_dimensions: bool = False
-
-    @property
-    def resolved_remotion_template(self) -> str:
-        """Return the Remotion composition id to render for this channel."""
-        return self.remotion_template or HTML_TO_REMOTION_TEMPLATE.get(
-            self.template, "newscast-basic"
-        )
 
 
 def load_settings(path: Path) -> Settings:
@@ -244,29 +214,6 @@ def load_channel(path: Path) -> ChannelConfig:
     trend_boost = (TrendBoostConfig.model_validate(trend_boost_data)
                    if trend_boost_data else None)
 
-    renderer = data.get("renderer", "html")
-    if renderer not in ("html", "remotion"):
-        raise ValueError(
-            f"renderer must be 'html' or 'remotion', got {renderer!r}"
-        )
-    remotion_template = data.get("remotion_template")
-    remotion_dimensions_raw = data.get("remotion_dimensions")
-    remotion_dimensions: dict[str, str] | None = None
-    if remotion_dimensions_raw:
-        if not isinstance(remotion_dimensions_raw, dict):
-            raise ValueError(
-                f"remotion_dimensions must be a mapping, got "
-                f"{type(remotion_dimensions_raw).__name__}"
-            )
-        # Coerce all values to str; Adaptive's Zod schema validates the
-        # actual enum membership at render time, so unknown values just
-        # fall back to defaults rather than crashing the pipeline.
-        remotion_dimensions = {
-            str(k): str(v) for k, v in remotion_dimensions_raw.items()
-            if v not in (None, "")
-        } or None
-    remotion_auto_dimensions = bool(data.get("remotion_auto_dimensions", False))
-
     cta = data.get("cta", {})
     return ChannelConfig(
         slug=slug,
@@ -298,10 +245,6 @@ def load_channel(path: Path) -> ChannelConfig:
         youtube=youtube,
         bg_video=bg_video,
         trend_boost=trend_boost,
-        renderer=renderer,
-        remotion_template=remotion_template,
-        remotion_dimensions=remotion_dimensions,
-        remotion_auto_dimensions=remotion_auto_dimensions,
     )
 
 
@@ -381,14 +324,6 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
     if cfg.dna is not None:
         # mode='json' → tuple becomes list, ready for YAML round-trip
         data["dna"] = cfg.dna.model_dump(mode="json")
-    if cfg.renderer != "html":
-        data["renderer"] = cfg.renderer
-    if cfg.remotion_template is not None:
-        data["remotion_template"] = cfg.remotion_template
-    if cfg.remotion_dimensions:
-        data["remotion_dimensions"] = dict(cfg.remotion_dimensions)
-    if cfg.remotion_auto_dimensions:
-        data["remotion_auto_dimensions"] = True
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     Path(path).write_text(
         yaml.safe_dump(data, allow_unicode=True, sort_keys=False, default_flow_style=False),
