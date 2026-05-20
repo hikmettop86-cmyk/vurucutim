@@ -122,33 +122,6 @@ def preview(slug):
     if top_update:
         dna = dna.model_copy(update=top_update)
 
-    # Style knob overrides (Phase A2 "Stil Düzenle" tab)
-    knob_update: dict = {}
-    knob_specs = [
-        ("banner_skew_deg",  float),
-        ("header_padding_y", int),
-        ("header_size_top",  int),
-        ("header_size_bot",  int),
-        ("photo_height",     int),
-        ("photo_blur_px",    float),
-        ("photo_saturation", float),
-        ("body_font_size",   int),
-        ("body_line_height", float),
-        ("corner_radius",    int),
-        ("letter_spacing",   float),
-        ("shadow_intensity", float),
-    ]
-    for key, kind in knob_specs:
-        raw = request.args.get(f"knob_{key}")
-        if raw is None or raw == "":
-            continue
-        try:
-            knob_update[key] = kind(raw)
-        except (TypeError, ValueError):
-            pass  # silently drop invalid input
-    if knob_update:
-        dna = dna.model_copy(update={"style_knobs": dna.style_knobs.model_copy(update=knob_update)})
-
     # Template comes from archetype override if present, else channel default
     template_name = (request.args.get("archetype")
                      if request.args.get("archetype") in valid_archetypes

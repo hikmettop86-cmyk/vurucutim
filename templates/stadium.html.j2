@@ -35,33 +35,31 @@
 
   .header {
     background: linear-gradient(135deg, var(--primary), var(--bg-grad-2));
-    padding: calc(var(--header-padding-y, 78px) * 0.65) 40px calc(var(--header-padding-y, 78px) * 0.5);
+    padding: 50px 40px 40px;
     text-align: center;
     font-family: var(--font-headline);
     color: var(--accent);
     border-bottom: 8px solid var(--accent);
-    transform: skewY(calc(var(--banner-skew-deg, 0deg) * -1));
-    border-radius: var(--corner-radius, 0px);
   }
   .header .top {
     display: block;
-    font-size: calc(var(--header-size-top, 100px) * 2);
+    font-size: 200px;
     line-height: .95;
-    letter-spacing: calc(var(--letter-spacing, 0.5px) * 16);
-    text-shadow: 6px calc(6px * var(--shadow-intensity, 1)) 0 #000;
+    letter-spacing: 8px;
+    text-shadow: 6px 6px 0 #000;
     -webkit-text-stroke: 2px #000;
   }
   .header .bot {
     display: block;
-    font-size: calc(var(--header-size-bot, 70px) * 0.86);
+    font-size: 60px;
     color: var(--text-main);
-    letter-spacing: calc(var(--letter-spacing, 0.5px) * 12);
+    letter-spacing: 6px;
     margin-top: 14px;
   }
 
   .photo {
     position: relative;
-    height: calc(var(--photo-height, 640px) * 0.9);
+    height: 580px;
     background: linear-gradient(180deg, var(--bg-grad-1), var(--bg-grad-2));
     overflow: hidden;
   }
@@ -69,7 +67,6 @@
     position: absolute; inset: 0;
     background-image: url('{{ bg_image_url|default("") }}');
     background-size: cover; background-position: center;
-    filter: blur(var(--photo-blur-px, 0px)) saturate(var(--photo-saturation, 1));
     {% if not bg_image_url %}display: none;{% endif %}
   }
   .photo::after {
@@ -103,8 +100,8 @@
   }
   .body-text {
     width: 100%;
-    font-size: var(--body-font-size, 54px);
-    line-height: var(--body-line-height, 1.32);
+    font-size: 54px;
+    line-height: 1.32;
     font-weight: 600;
     display: -webkit-box;
     -webkit-line-clamp: 9;

@@ -25,25 +25,23 @@
   /* HEADER */
   .header {
     background: linear-gradient(135deg, {{ colors.primary }}, rgba(6,182,212,0.4));
-    padding: calc(var(--header-padding-y, 78px) * 0.9) 60px 36px;
+    padding: 70px 60px 36px;
     text-align: center;
     font-weight: 900;
-    font-size: calc(var(--header-size-top, 100px) * 0.8);
+    font-size: 80px;
     line-height: 1.05;
-    letter-spacing: var(--letter-spacing, 0.3px);
+    letter-spacing: 0.3px;
     border-bottom: 4px solid {{ colors.accent }};
-    transform: skewY(calc(var(--banner-skew-deg, 0deg) * -1));
-    border-radius: var(--corner-radius, 0px);
   }
   .header .top {
     display: block; white-space: nowrap;
     color: {{ colors.accent }};
-    text-shadow: 0 calc(2px * var(--shadow-intensity, 1)) 8px rgba(0,0,0,.5);
+    text-shadow: 0 2px 8px rgba(0,0,0,.5);
   }
   .header .bot {
     display: block; white-space: nowrap;
     margin-top: 6px;
-    font-size: calc(var(--header-size-bot, 70px) * 0.8);
+    font-size: 56px;
     color: #fff;
     opacity: 0.92;
   }
@@ -51,7 +49,7 @@
   /* PHOTO band — shorter than newscast so the stat gets more room */
   .photo {
     position: relative;
-    height: calc(var(--photo-height, 640px) * 0.66);
+    height: 420px;
     background: linear-gradient(135deg, {{ colors.bg_gradient[0] }}, {{ colors.bg_gradient[1] }});
     overflow: hidden;
   }
@@ -59,7 +57,7 @@
     position: absolute; inset: 0;
     background-image: url('{{ bg_image_url|default("") }}');
     background-size: cover; background-position: center;
-    filter: blur(calc(0.5px + var(--photo-blur-px, 0px))) brightness(0.6) saturate(var(--photo-saturation, 1));
+    filter: blur(0.5px) brightness(0.6);
     {% if not bg_image_url %}display: none;{% endif %}
   }
   .photo .vignette { position: absolute; inset: 0;
@@ -115,8 +113,8 @@
     opacity: 0.5;
   }
   .stat-caption {
-    font-size: var(--body-font-size, 38px);
-    line-height: var(--body-line-height, 1.35);
+    font-size: 38px;
+    line-height: 1.35;
     font-weight: 500;
     color: #fff;
     max-width: 100%;
