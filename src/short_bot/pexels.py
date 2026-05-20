@@ -44,6 +44,10 @@ ARCHETYPE_BG_QUERIES: dict[str, list[str]] = {
     "stadium":   ["stadium lights night", "crowd cheering blur", "grass pitch zoom"],
     "stat-hero": ["data dashboard blur", "stock chart abstract",
                    "financial graph motion", "analytics screen glow"],
+    # bigquote: faint blurred bg (the quote dominates) — abstract / press
+    # conference / spotlight aesthetics work well.
+    "bigquote":  ["press conference blur", "podium spotlight", "microphone closeup",
+                  "abstract gold light", "press room dim"],
 }
 
 

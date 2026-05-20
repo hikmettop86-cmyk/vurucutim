@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="{{ language }}">
+<head>
+<meta charset="utf-8">
+<title>Short</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Inter:wght@400;600;700;800;900&display=swap');
+  {{ dna_css|safe }}
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1080px; height: 1920px; overflow: hidden; background: #000;
+    font-family: 'Inter', -apple-system, sans-serif; color: #fff; }
+
+  .stage { position: relative; width: 1080px; height: 1920px;
+    background: linear-gradient(155deg, {{ colors.bg_gradient[0] }}, {{ colors.bg_gradient[1] }});
+    overflow: hidden; }
+
+  /* STAGE-LEVEL BADGE (top-right corner) */
+  .stage-badge {
+    position: absolute; top: 36px; right: 36px;
+    background: {{ colors.accent }}; color: #0f0f1e;
+    font-size: 22px; font-weight: 800; letter-spacing: 1.5px;
+    padding: 10px 18px; border-radius: 4px;
+    z-index: 10;
+  }
+
+  /* CATEGORY chip (top-left) */
+  .category {
+    position: absolute; top: 44px; left: 36px;
+    font-size: 18px; font-weight: 700;
+    color: {{ colors.accent }};
+    letter-spacing: 2px;
+    opacity: 0.9;
+  }
+
+  /* Optional faint background photo */
+  .bg-photo {
+    position: absolute; inset: 0;
+    background-image: url('{{ bg_image_url|default("") }}');
+    background-size: cover; background-position: center;
+    opacity: 0.15;
+    filter: blur(2px);
+    {% if not bg_image_url %}display: none;{% endif %}
+  }
+
+  /* THE QUOTE — centered, dominates the frame */
+  .quote-block {
+    position: absolute;
+    top: 32%; left: 80px; right: 80px; bottom: 32%;
+    display: flex; flex-direction: column; justify-content: center;
+  }
+  .quote-mark-open, .quote-mark-close {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 220px; font-weight: 900;
+    color: {{ colors.accent }};
+    line-height: 0.7;
+    opacity: 0.55;
+  }
+  .quote-mark-open { margin-bottom: -20px; }
+  .quote-mark-close { margin-top: 4px; text-align: right; }
+  .quote-text {
+    font-size: 72px; line-height: 1.2;
+    font-weight: 700;
+    color: #fff;
+    padding-left: 16px;
+    text-shadow: 0 4px 18px rgba(0,0,0,.45);
+  }
+  /* Auto-fit hook — _auto_fit.js shrinks if text overflows container height */
+  .quote-text[data-fit-min] {}
+
+  /* ATTRIBUTION — who said it */
+  .attribution {
+    position: absolute;
+    left: 0; right: 0; bottom: 240px;
+    text-align: center;
+  }
+  .attribution .who {
+    font-size: 40px; font-weight: 800;
+    color: {{ colors.accent }};
+    letter-spacing: 1px;
+  }
+  .attribution .when {
+    margin-top: 6px;
+    font-size: 26px;
+    color: {{ colors.text_muted|default('#a0a0b0') }};
+  }
+
+  /* CAPTION — small context line under attribution */
+  .caption {
+    position: absolute;
+    left: 80px; right: 80px; bottom: 150px;
+    text-align: center;
+    font-size: 22px; line-height: 1.4;
+    color: {{ colors.text_muted|default('#a0a0b0') }};
+  }
+
+  /* PROGRESS bar */
+  .progress {
+    position: absolute; left: 0; right: 0; bottom: 84px; height: 6px;
+    background: rgba(255,255,255,.12);
+  }
+  .progress::after {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+    background: linear-gradient(90deg, {{ colors.accent }}, {{ colors.primary }});
+    animation: fill {{ duration_s }}s linear forwards;
+  }
+  @keyframes fill { from { width: 0; } to { width: 100%; } }
+
+  /* HANDLE */
+  .handle {
+    position: absolute; left: 0; right: 0; bottom: 30px;
+    text-align: center; color: {{ colors.accent }};
+    font-size: 28px; font-weight: 700; letter-spacing: 1px;
+  }
+
+  {% if cta.enabled %}
+  /* Pre-flash + CTA overlay — same pattern as newscast for consistency */
+  .preflash {
+    position: absolute; inset: 0;
+    background: #fff; opacity: 0;
+    pointer-events: none; z-index: 50;
+    animation: flash 0.18s ease-out {{ duration_s - cta.duration_s - 0.15 }}s forwards;
+  }
+  @keyframes flash {
+    0% { opacity: 0; } 40% { opacity: 0.9; } 100% { opacity: 0; }
+  }
+  .cta {
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse at center, rgba(20,20,20,.92), rgba(0,0,0,.98));
+    padding: 0 60px;
+    text-align: center;
+    opacity: 0; pointer-events: none; z-index: 40;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    animation: cta-fade-in 0.25s ease-out {{ duration_s - cta.duration_s }}s forwards;
+  }
+  @keyframes cta-fade-in { to { opacity: 1; } }
+  {% if cta.show_handle %}
+  .cta .handle-line {
+    font-size: 64px; font-weight: 900;
+    color: {{ colors.accent }};
+    margin-bottom: 50px;
+    text-shadow: 0 0 18px rgba(255,234,59,.7);
+  }
+  {% endif %}
+  .cta .sub-btn {
+    background: linear-gradient(180deg, #ff2d2d, #c81e1e);
+    color: #fff;
+    font-size: 88px; font-weight: 900;
+    padding: 40px 70px;
+    border-radius: 100px;
+    box-shadow: 0 12px 0 rgba(0,0,0,.5), 0 20px 60px rgba(255,45,45,.6);
+    display: inline-flex; align-items: center; gap: 28px;
+    margin-bottom: 60px;
+  }
+  .cta .icons-row {
+    display: flex; gap: 40px; margin-top: 30px;
+  }
+  .cta .icon-item {
+    display: flex; flex-direction: column; align-items: center;
+  }
+  .cta .icon-item .ic { font-size: 80px; }
+  .cta .icon-item .lbl { font-size: 24px; opacity: .7; margin-top: 4px; }
+  {% endif %}
+
+  /* SOURCE CREDIT */
+  .source-credit {
+    position: absolute;
+    bottom: 6px; left: 50%; transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.6); color: rgba(255, 255, 255, 0.85);
+    font-size: 14px; font-weight: 500; letter-spacing: 0.5px;
+    padding: 3px 10px; border-radius: 3px;
+    z-index: 50; white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+<div class="stage dna-anim-{{ animation_style|default('none') }}">
+  <div class="bg-photo"></div>
+  <div class="stage-badge">{{ ui_breaking }}</div>
+  {% if script.category %}<div class="category">{{ script.category }}</div>{% endif %}
+
+  <div class="quote-block">
+    <div class="quote-mark-open">&ldquo;</div>
+    <div class="quote-text" data-fit-min="40" data-fit-max="72" data-fit-pad="10">{{ body_html|safe }}</div>
+    <div class="quote-mark-close">&rdquo;</div>
+  </div>
+
+  <div class="attribution">
+    <div class="who">— {{ script.header_top }}</div>
+    <div class="when">{{ script.header_bottom }}</div>
+  </div>
+
+  {% if script.photo_overlay %}
+  <div class="caption">{{ script.photo_overlay }}</div>
+  {% endif %}
+
+  <div class="progress"></div>
+  <div class="handle">{{ handle }}</div>
+
+  {% if cta.enabled %}
+  <div class="preflash"></div>
+  <div class="cta">
+    {% if cta.show_handle %}<div class="handle-line">{{ handle }}</div>{% endif %}
+    <div class="sub-btn"><span>🔔</span><span>{{ ui_subscribe }}</span></div>
+    <div class="icons-row">
+      {% set icon_labels = [ui_like, ui_subscribe, ui_share] %}
+      {% for icon in cta.icons %}
+      <div class="icon-item">
+        <span class="ic">{{ icon }}</span>
+        <span class="lbl">{{ icon_labels[loop.index0] if loop.index0 < icon_labels|length else "" }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if rss_source %}
+  <div class="source-credit">{{ ui_source }}: {{ rss_source }}</div>
+  {% endif %}
+</div>
+{% include "_auto_fit.js.j2" %}
+</body>
+</html>

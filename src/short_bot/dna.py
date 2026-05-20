@@ -20,6 +20,7 @@ ARCHETYPES = [
     "newscast",   # general breaking news (battle-tested, son-dakika lives here)
     "stadium",    # sports/team broadcast (battle-tested, galatasaray lives here)
     "stat-hero",  # number-driven body (economy/polls — added 2026-05-19)
+    "bigquote",   # fullscreen quote with attribution (politician/athlete statements — added 2026-05-20)
 ]
 
 _ANIMATIONS_CSS_PATH = Path(__file__).resolve().parent.parent.parent / "templates" / "css" / "_animations.css"
@@ -52,6 +53,16 @@ ARCHETYPE_DEFAULTS: dict[str, dict] = {
         "body_bg_1": "#020617", "body_bg_2": "#0f172a",
         "text_main": "#ffffff", "text_muted": "#94a3b8",
         "font_headline": "Inter", "font_body": "JetBrains Mono",
+    },
+    "bigquote": {
+        # Editorial / press-conference feel — deep navy + warm gold.
+        # Optimized for ONE big quote dominating the frame; attribution
+        # underneath. Photo is faint background.
+        "primary": "#1e3a5f", "accent": "#ffd700",
+        "bg_grad_1": "#1a1a2e", "bg_grad_2": "#0f0f1e",
+        "body_bg_1": "#0f0f1e", "body_bg_2": "#1a1a2e",
+        "text_main": "#ffffff", "text_muted": "#a0a0b0",
+        "font_headline": "Playfair Display", "font_body": "Inter",
     },
 }
 
@@ -114,6 +125,7 @@ class DnaSpec(BaseModel):
         "newscast",   # general breaking news
         "stadium",    # sports/team broadcast
         "stat-hero",  # number-driven body (2026-05-19 onwards)
+        "bigquote",   # fullscreen attributed quote (2026-05-20 onwards)
     ]
     palette: DnaPalette
     fonts: DnaFonts

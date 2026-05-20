@@ -50,4 +50,14 @@ ARCHETYPE_OVERFLOW_FIELDS: dict[str, list[OverflowField]] = {
         OverflowField("photo_overlay",  ".photo .yellow", 3),
         OverflowField("body_paragraph", ".stat-caption",  99),
     ],
+    # bigquote: body_paragraph = THE QUOTE (dominates the frame).
+    # header_top = "— who said it" attribution, header_bottom = when/where,
+    # photo_overlay = small context caption under the attribution.
+    # Auto-fit on .quote-text handles size; max-lines is a sanity bound.
+    "bigquote": [
+        OverflowField("header_top",     ".attribution .who",  2),
+        OverflowField("header_bottom",  ".attribution .when", 1),
+        OverflowField("photo_overlay",  ".caption",           3),
+        OverflowField("body_paragraph", ".quote-text",        6),
+    ],
 }

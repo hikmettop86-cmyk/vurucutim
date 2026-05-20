@@ -39,6 +39,23 @@ ARCHETYPE_PROMPTS = {
   hero number itself; highlight CONTEXT words around it)
 - mood: usually neutral (analytical), breaking only on rekor / sürpriz
 """,
+    "bigquote": """ARCHETYPE: bigquote — fullscreen attributed quotation
+- This template puts ONE quote on the screen huge. The quote IS the
+  body_paragraph (max 800 chars but aim for 60-180 char punchy quotes).
+- header_top: 2-4 words — WHO said it ("Maliye Bakanı", "Galatasaray Başkanı",
+  "Cumhurbaşkanı"). Renders as "— Maliye Bakanı" attribution.
+- header_bottom: 2-5 words — WHEN / WHERE / KONU ("Mayıs 2026", "TBMM kürsüsü",
+  "Basın toplantısı", "Bütçe görüşmesi")
+- photo_overlay: 2-7 words context tag — usually a category/topic clue
+  ("BÜTÇE AÇIKLAMASI", "TRANSFER YORUMU", "DEPREM AÇIKLAMASI")
+- body_paragraph: THE QUOTE ITSELF as a direct first-person statement.
+  Must stand alone. NOT a 3rd-person description of what they said.
+  GOOD: "Şampiyonluk hakkımızdır, hiç kimse bizi durduramaz."
+  BAD:  "Galatasaray Başkanı şampiyonluğa olan inancını ifade etti."
+  Length: 60-180 chars ideal; can go up to 300 for nuanced quotes.
+- highlights: leave empty — quote is presented as-is, no inline highlights
+- mood: usually neutral, breaking for inflammatory statements
+""",
 }
 
 
