@@ -14,20 +14,15 @@ async function _autoFit() {
     try { await document.fonts.ready; } catch (_) {}
   }
   /* Width-fit mode (header lines etc.): any element with data-fit-width
-     scales DOWN so scrollWidth ≤ parent.clientWidth - padding.
-     IMPORTANT: respects the user's Style Knobs slider value. If the element
-     has a CSS-resolved font-size (from var(--header-size-top, …)), that wins
-     as the ceiling instead of data-fit-max. Otherwise this JS would always
-     overwrite the slider value with the hardcoded data-fit-max. */
+     scales DOWN so scrollWidth ≤ parent.clientWidth - padding. Independent
+     of height; complements the body height-fit logic below.
+     Triggered by adding data-fit-width to an element with data-fit-min /
+     data-fit-max attrs. */
   document.querySelectorAll('[data-fit-width][data-fit-min]').forEach(function(el) {
     var parent = el.parentElement;
     if (!parent) return;
     var wmin = parseFloat(el.getAttribute('data-fit-min') || '36');
-    var attrMax = parseFloat(el.getAttribute('data-fit-max') || '120');
-    // Read computed font-size from CSS (which has resolved var(--knob, default))
-    var cssSize = parseFloat(getComputedStyle(el).fontSize) || attrMax;
-    // Cap at attrMax so a runaway CSS value doesn't make it bigger than designer-allowed
-    var wmax = Math.min(cssSize, attrMax * 1.5);  // 1.5× headroom for sliders
+    var wmax = parseFloat(el.getAttribute('data-fit-max') || '120');
     var wpad = parseFloat(el.getAttribute('data-fit-width') || '0');
     var wsize = wmax;
     el.style.fontSize = wsize + 'px';
@@ -67,14 +62,8 @@ async function _autoFit() {
   if (!container) return;
 
   var min = parseFloat(text.getAttribute('data-fit-min') || '36');
-  var attrMax = parseFloat(text.getAttribute('data-fit-max') || '64');
+  var max = parseFloat(text.getAttribute('data-fit-max') || '64');
   var pad = parseFloat(text.getAttribute('data-fit-pad') || '16');
-  /* Style Knobs hook: if CSS resolved a custom font-size (from
-     var(--body-font-size, …)), use it as the ceiling so the slider value
-     persists. Without this, this loop would always reset to attrMax and
-     the slider would have no visible effect. */
-  var cssSize = parseFloat(getComputedStyle(text).fontSize) || attrMax;
-  var max = Math.min(cssSize, attrMax * 1.5);  // 1.5× headroom for sliders
 
   var origClamp = text.style.webkitLineClamp;
   var origDisplay = text.style.display;
