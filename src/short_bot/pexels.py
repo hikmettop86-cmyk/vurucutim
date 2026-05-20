@@ -48,6 +48,19 @@ ARCHETYPE_BG_QUERIES: dict[str, list[str]] = {
     # conference / spotlight aesthetics work well.
     "bigquote":  ["press conference blur", "podium spotlight", "microphone closeup",
                   "abstract gold light", "press room dim"],
+    # ─── Designed archetypes (from share zip, 2026-05-20) ───────────────────
+    "editorial":  ["newspaper", "editorial portrait", "classic architecture"],
+    "neon":       ["neon city night", "cyberpunk", "tech abstract"],
+    "tabloid":    ["vintage portrait", "shocked face", "retro tv"],
+    "brutalist":  ["brutalist architecture", "concrete wall", "minimal portrait"],
+    "noir":       ["cinematic portrait", "rain street night", "film noir"],
+    "popblock":   ["vibrant gradient", "pop culture", "modern fashion"],
+    "broadsheet": ["serious portrait", "newsroom", "historic building"],
+    "holo":       ["holographic abstract", "iridescent", "chrome material"],
+    "extra":      ["vintage newspaper", "sepia portrait", "archive photo"],
+    "manifesto":  ["protest", "urban architecture", "graphic poster"],
+    "polaroid":   ["vintage moment", "travel memory", "film photography"],
+    "story":      ["vibrant lifestyle", "urban youth", "colorful party"],
 }
 
 

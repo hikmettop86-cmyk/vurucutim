@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="{{ language }}">
+<head>
+<meta charset="utf-8">
+<title>Short — Neon</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@500;700&family=Inter:wght@400;600;700&display=swap');
+
+  {{ dna_css|safe }}
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 1080px; height: 1920px; overflow: hidden;
+    font-family: var(--font-body, 'Inter'), sans-serif;
+    background: var(--body-bg-1, #0a0118);
+    color: var(--text-main, #fff);
+  }
+
+  .stage {
+    position: relative; width: 1080px; height: 1920px;
+    background:
+      radial-gradient(120% 60% at 30% 0%, color-mix(in srgb, var(--primary, #ff2bd6) 28%, transparent) 0%, transparent 60%),
+      radial-gradient(80% 50% at 90% 100%, color-mix(in srgb, var(--accent, #00fff0) 22%, transparent) 0%, transparent 50%),
+      linear-gradient(180deg, var(--body-bg-1, #0a0118) 0%, var(--body-bg-2, #04020c) 100%);
+    overflow: hidden;
+  }
+  /* Izgara overlay */
+  .stage::before {
+    content: ''; position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+  }
+
+  /* Üst kategori */
+  .stage-badge {
+    position: absolute; top: 60px; left: 60px;
+    display: inline-flex; align-items: center; gap: 12px;
+    padding: 14px 26px;
+    background: rgba(0,0,0,0.45);
+    border: 1.5px solid var(--accent, #00fff0);
+    color: var(--accent, #00fff0);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 22px; font-weight: 700; letter-spacing: 0.2em;
+    text-transform: uppercase;
+    box-shadow: 0 0 24px color-mix(in srgb, var(--accent, #00fff0) 30%, transparent);
+    z-index: 5;
+  }
+  .stage-badge::before {
+    content: ''; width: 10px; height: 10px; border-radius: 50%;
+    background: var(--accent, #00fff0);
+    box-shadow: 0 0 12px var(--accent, #00fff0);
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  /* Tracking strip */
+  .track {
+    position: absolute; top: 60px; right: 60px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 20px; color: rgba(255,255,255,0.6);
+    text-align: right; letter-spacing: 0.1em;
+    z-index: 5;
+  }
+  .track div + div { margin-top: 4px; }
+
+  /* Manşet */
+  .header {
+    position: absolute; top: 220px; left: 60px; right: 60px;
+    font-family: var(--font-headline, 'Bebas Neue'), sans-serif;
+    z-index: 4;
+  }
+  .header .top {
+    display: block;
+    font-size: var(--size-headline-top, 200px);
+    line-height: 0.85; font-weight: 700;
+    color: var(--accent, #00fff0);
+    letter-spacing: 0.01em;
+    text-shadow:
+      0 0 24px color-mix(in srgb, var(--accent, #00fff0) 50%, transparent),
+      0 0 56px color-mix(in srgb, var(--accent, #00fff0) 30%, transparent);
+    text-wrap: balance;
+  }
+  .header .bot {
+    display: block; margin-top: 18px;
+    font-size: var(--size-headline-bot, 60px);
+    line-height: 1.0; font-weight: 700;
+    color: var(--text-main, #fff);
+    letter-spacing: 0.02em;
+    text-wrap: balance;
+  }
+
+  /* Foto */
+  .photo {
+    position: absolute; top: 760px; left: 60px; right: 60px;
+    height: 600px;
+    border-radius: 18px;
+    overflow: hidden;
+    background: linear-gradient(135deg, var(--bg-grad-1, #2a0a4a) 0%, var(--bg-grad-2, #0a0118) 100%);
+    box-shadow:
+      0 0 0 1.5px color-mix(in srgb, var(--primary, #ff2bd6) 50%, transparent),
+      0 30px 80px color-mix(in srgb, var(--primary, #ff2bd6) 25%, transparent);
+  }
+  .photo .bg-img {
+    position: absolute; inset: 0;
+    background-size: cover; background-position: center;
+    filter: saturate(1.2) contrast(1.1);
+  }
+  /* Foto üstü renk geçişi */
+  .photo::after {
+    content: ''; position: absolute; inset: 0;
+    background:
+      linear-gradient(180deg, transparent 40%, rgba(0,0,0,0.4) 100%),
+      linear-gradient(135deg, color-mix(in srgb, var(--primary, #ff2bd6) 18%, transparent) 0%, color-mix(in srgb, var(--accent, #00fff0) 18%, transparent) 100%);
+    mix-blend-mode: screen;
+    pointer-events: none;
+  }
+  .photo .yellow {
+    position: absolute; left: 30px; bottom: 30px;
+    max-width: 88%;
+    background: var(--accent, #00fff0);
+    color: #000;
+    padding: 18px 32px;
+    font-family: var(--font-headline, 'Bebas Neue'), sans-serif;
+    font-size: 52px; line-height: 1.0;
+    letter-spacing: 0.04em;
+    border-radius: 6px;
+    text-transform: uppercase;
+    z-index: 2;
+  }
+
+  /* Gövde */
+  .body {
+    position: absolute; left: 60px; right: 60px;
+    top: 1410px; bottom: 180px;
+  }
+  .body-text {
+    font-family: var(--font-body, 'Inter'), sans-serif;
+    font-size: 42px; line-height: 1.4; font-weight: 500;
+    color: var(--text-main, #fff);
+    text-wrap: pretty;
+  }
+  .body-text .hl-y {
+    background: var(--accent, #00fff0); color: #000;
+    padding: 2px 14px; border-radius: 4px;
+    box-decoration-break: clone; -webkit-box-decoration-break: clone;
+    text-shadow: none;
+  }
+  .body-text .hl-r {
+    background: var(--primary, #ff2bd6); color: #fff;
+    padding: 2px 14px; border-radius: 4px;
+    box-decoration-break: clone; -webkit-box-decoration-break: clone;
+    box-shadow: 0 0 18px color-mix(in srgb, var(--primary, #ff2bd6) 50%, transparent);
+  }
+
+  /* Standart öğeler */
+  .progress {
+    position: absolute; left: 0; right: 0; bottom: 84px;
+    height: 6px; background: rgba(255,255,255,0.12);
+  }
+  .progress::after {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+    background: var(--accent, #00fff0);
+    box-shadow: 0 0 18px var(--accent, #00fff0);
+    animation: fill {{ duration_s }}s linear forwards;
+  }
+  @keyframes fill { from { width: 0; } to { width: 100%; } }
+
+  .handle {
+    position: absolute; left: 0; right: 0; bottom: 30px;
+    text-align: center; font-size: 32px; font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-muted, rgba(255,255,255,0.7));
+    letter-spacing: 0.08em;
+  }
+
+  .source-credit {
+    position: absolute; bottom: 6px; left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.7); color: rgba(255,255,255,0.9);
+    font-size: 14px; padding: 3px 10px; border-radius: 3px;
+    z-index: 50; white-space: nowrap;
+    font-family: 'JetBrains Mono', monospace;
+  }
+</style>
+</head>
+<body>
+<div class="stage dna-anim-{{ animation_style|default('none') }}">
+
+  {% if script.category %}<div class="stage-badge">{{ script.category }}</div>{% endif %}
+  <div class="track">
+    <div>{{ ui_breaking }}</div>
+    <div>// {{ language|upper }}-LIVE</div>
+  </div>
+
+  <div class="header">
+    <span class="top">{{ script.header_top }}</span>
+    <span class="bot">{{ script.header_bottom }}</span>
+  </div>
+
+  <div class="photo">
+    <div class="bg-img" style="background-image: url('{{ bg_image_url|default("") }}');
+         {% if not bg_image_url %}display: none;{% endif %}"></div>
+    {% if script.photo_overlay %}<div class="yellow">{{ script.photo_overlay }}</div>{% endif %}
+  </div>
+
+  <div class="body">
+    <div class="body-text" data-fit-min="32" data-fit-max="42" data-fit-pad="20">
+      {{ body_html|safe }}
+    </div>
+  </div>
+
+  <div class="progress"></div>
+  <div class="handle">{{ handle }}</div>
+  {% if rss_source %}<div class="source-credit">{{ ui_source }}: {{ rss_source }}</div>{% endif %}
+</div>
+
+{% include "_auto_fit.js.j2" %}
+</body>
+</html>

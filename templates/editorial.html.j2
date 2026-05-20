@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="{{ language }}">
+<head>
+<meta charset="utf-8">
+<title>Short — Editorial</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Inter:wght@400;500;600;700&display=swap');
+
+  {{ dna_css|safe }}
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 1080px; height: 1920px; overflow: hidden;
+    font-family: var(--font-body, 'Inter'), sans-serif;
+    background: var(--body-bg-1, #f4f1ea);
+    color: var(--text-main, #111);
+  }
+
+  .stage {
+    position: relative; width: 1080px; height: 1920px;
+    background:
+      linear-gradient(180deg, var(--body-bg-1, #f4f1ea) 0%, var(--body-bg-2, #e9e4d4) 100%);
+    padding: 70px 80px 140px;
+    display: flex; flex-direction: column;
+  }
+
+  /* Tepe ribbon */
+  .ribbon {
+    display: flex; align-items: center; justify-content: space-between;
+    border-top: 4px solid var(--text-main, #111);
+    border-bottom: 1px solid var(--text-main, #111);
+    padding: 22px 0;
+    font-family: var(--font-body, 'Inter'), sans-serif;
+    font-size: 26px; font-weight: 700; letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+  .ribbon .left  { color: var(--text-main, #111); }
+  .ribbon .right { color: var(--primary, #b91c1c); display: flex; align-items: center; gap: 14px; }
+  .ribbon .right::before {
+    content: ''; width: 14px; height: 14px; border-radius: 50%;
+    background: var(--primary, #b91c1c);
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--primary, #b91c1c) 22%, transparent);
+  }
+
+  /* Manşet */
+  .header {
+    margin-top: 60px;
+    font-family: var(--font-headline, 'Playfair Display'), serif;
+    color: var(--text-main, #111);
+  }
+  .header .top {
+    display: block;
+    font-size: var(--size-headline-top, 120px);
+    line-height: 0.92; font-weight: 900;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+  .header .bot {
+    display: block;
+    margin-top: 18px;
+    font-size: var(--size-headline-bot, 64px);
+    line-height: 1.04; font-weight: 700;
+    font-style: italic;
+    color: color-mix(in srgb, var(--text-main, #111) 70%, transparent);
+    text-wrap: balance;
+  }
+
+  /* Foto */
+  .photo {
+    position: relative;
+    margin-top: 60px;
+    height: 620px;
+    border: 1px solid var(--text-main, #111);
+    background:
+      linear-gradient(135deg, var(--bg-grad-1, #2a3a5e) 0%, var(--bg-grad-2, #11182f) 100%);
+    overflow: hidden;
+  }
+  .photo .bg-img {
+    position: absolute; inset: 0;
+    background-size: cover; background-position: center;
+  }
+  .photo .yellow {
+    position: absolute; left: 0; bottom: 36px;
+    max-width: 92%;
+    background: var(--accent, #ffea3b);
+    color: #000;
+    padding: 22px 42px 22px 80px;
+    font-family: var(--font-headline, 'Playfair Display'), serif;
+    font-weight: 900;
+    font-size: 56px; line-height: 1.05;
+    letter-spacing: -0.01em;
+    box-shadow: 6px 6px 0 var(--text-main, #111);
+  }
+
+  /* Gövde */
+  .body {
+    flex: 1; margin-top: 50px;
+    display: flex; align-items: flex-start;
+  }
+  .body-text {
+    font-family: var(--font-body, 'Inter'), sans-serif;
+    font-size: 44px; line-height: 1.45; font-weight: 500;
+    color: var(--text-main, #111);
+    text-wrap: pretty;
+  }
+  .body-text .hl-y { background: var(--accent, #ffea3b); color: #000; padding: 2px 14px; border-radius: 4px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+  .body-text .hl-r { background: var(--primary, #b91c1c); color: #fff; padding: 2px 14px; border-radius: 4px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+
+  /* Standart alt öğeler */
+  .progress {
+    position: absolute; left: 0; right: 0; bottom: 84px;
+    height: 6px; background: rgba(0,0,0,0.12);
+  }
+  .progress::after {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+    background: var(--primary, #b91c1c);
+    animation: fill {{ duration_s }}s linear forwards;
+  }
+  @keyframes fill { from { width: 0; } to { width: 100%; } }
+
+  .handle {
+    position: absolute; left: 0; right: 0; bottom: 30px;
+    text-align: center; font-size: 32px; font-weight: 600;
+    font-family: var(--font-body, 'Inter'), sans-serif;
+    color: var(--text-muted, #555);
+    letter-spacing: 0.04em;
+  }
+
+  .source-credit {
+    position: absolute; bottom: 6px; left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.7); color: rgba(255,255,255,0.9);
+    font-size: 14px; padding: 3px 10px; border-radius: 3px;
+    z-index: 50; white-space: nowrap;
+    font-family: var(--font-body, 'Inter'), sans-serif;
+  }
+</style>
+</head>
+<body>
+<div class="stage dna-anim-{{ animation_style|default('none') }}">
+
+  <div class="ribbon">
+    <span class="left">{{ script.category }}</span>
+    <span class="right">{{ ui_breaking }}</span>
+  </div>
+
+  <div class="header">
+    <span class="top">{{ script.header_top }}</span>
+    <span class="bot">{{ script.header_bottom }}</span>
+  </div>
+
+  <div class="photo">
+    <div class="bg-img" style="background-image: url('{{ bg_image_url|default("") }}');
+         {% if not bg_image_url %}display: none;{% endif %}"></div>
+    {% if script.photo_overlay %}<div class="yellow">{{ script.photo_overlay }}</div>{% endif %}
+  </div>
+
+  <div class="body">
+    <div class="body-text" data-fit-min="32" data-fit-max="44" data-fit-pad="20">
+      {{ body_html|safe }}
+    </div>
+  </div>
+
+  <div class="progress"></div>
+  <div class="handle">{{ handle }}</div>
+  {% if rss_source %}<div class="source-credit">{{ ui_source }}: {{ rss_source }}</div>{% endif %}
+</div>
+
+{% include "_auto_fit.js.j2" %}
+</body>
+</html>

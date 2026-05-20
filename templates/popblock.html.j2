@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="{{ language }}">
+<head>
+<meta charset="utf-8">
+<title>Short — Pop Block</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@500;700;800;900&family=Inter:wght@400;500;600;700&display=swap');
+
+  {{ dna_css|safe }}
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 1080px; height: 1920px; overflow: hidden;
+    font-family: var(--font-body, 'Inter'), sans-serif;
+    background: var(--body-bg-1, #ff5b8a);
+    color: var(--text-main, #fff);
+  }
+
+  .stage {
+    position: relative; width: 1080px; height: 1920px;
+    background:
+      radial-gradient(80% 60% at 80% 10%, var(--primary, #ff5b8a) 0%, transparent 60%),
+      radial-gradient(70% 50% at 10% 90%, var(--accent, #6b3df4) 0%, transparent 50%),
+      linear-gradient(160deg, var(--body-bg-1, #ff5b8a) 0%, var(--body-bg-2, #6b3df4) 100%);
+    overflow: hidden;
+  }
+  /* Mesh dots */
+  .stage::before {
+    content: ''; position: absolute; inset: 0;
+    background-image: radial-gradient(rgba(255,255,255,0.18) 1.5px, transparent 1.5px);
+    background-size: 32px 32px;
+    opacity: 0.5;
+    pointer-events: none;
+  }
+  /* Sticker — kategorik */
+  .sticker {
+    position: absolute; top: 60px; left: 60px;
+    display: inline-flex; align-items: center; gap: 14px;
+    padding: 18px 32px;
+    background: #fff;
+    color: var(--primary, #ff2a6d);
+    border-radius: 999px;
+    font-family: var(--font-headline, 'Montserrat'), sans-serif;
+    font-weight: 800; font-size: 28px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.18);
+    z-index: 5;
+  }
+  .sticker::before {
+    content: '✦';
+    color: var(--primary, #ff2a6d);
+    font-size: 32px;
+  }
+  .live-pill {
+    position: absolute; top: 60px; right: 60px;
+    display: inline-flex; align-items: center; gap: 10px;
+    background: rgba(0,0,0,0.32);
+    backdrop-filter: blur(14px);
+    color: #fff;
+    border: 1.5px solid rgba(255,255,255,0.3);
+    padding: 14px 26px;
+    border-radius: 999px;
+    font-family: var(--font-body, 'Inter'), sans-serif;
+    font-weight: 700; font-size: 22px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    z-index: 5;
+  }
+  .live-pill::before {
+    content: ''; width: 12px; height: 12px;
+    border-radius: 50%; background: var(--accent, #fff);
+    animation: blink 1s ease-in-out infinite;
+  }
+  @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  /* Foto kartı — yuvarlatılmış üst kart */
+  .photo-card {
+    position: absolute;
+    top: 180px; left: 60px; right: 60px;
+    height: 720px;
+    border-radius: 36px;
+    overflow: hidden;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.32);
+    background:
+      linear-gradient(135deg, var(--bg-grad-1, #1a1a3a) 0%, var(--bg-grad-2, #2a0a5a) 100%);
+  }
+  .photo-card .bg-img {
+    position: absolute; inset: 0;
+    background-size: cover; background-position: center;
+  }
+  .photo-card::after {
+    content: ''; position: absolute; inset: 0;
+    background: linear-gradient(180deg, transparent 50%, rgba(0,0,0,0.45) 100%);
+    pointer-events: none;
+  }
+  .photo-card .yellow {
+    position: absolute; left: 36px; bottom: 36px; right: 36px;
+    color: #fff;
+    font-family: var(--font-headline, 'Montserrat'), sans-serif;
+    font-weight: 900;
+    font-size: 56px; line-height: 1.0;
+    letter-spacing: -0.02em;
+    text-transform: uppercase;
+    text-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    z-index: 2;
+  }
+  .photo-card .yellow::before {
+    content: '▸';
+    display: inline-block;
+    color: var(--accent, #ffd93d);
+    margin-right: 14px;
+  }
+
+  /* Beyaz alt kart */
+  .content-card {
+    position: absolute;
+    left: 60px; right: 60px;
+    top: 940px; bottom: 180px;
+    background: #fff;
+    color: #0a0a0a;
+    border-radius: 36px;
+    padding: 50px 56px;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.22);
+    display: flex; flex-direction: column;
+  }
+
+  /* Manşet */
+  .header {
+    font-family: var(--font-headline, 'Montserrat'), sans-serif;
+    color: #0a0a0a;
+  }
+  .header .top {
+    display: block;
+    font-size: var(--size-headline-top, 92px);
+    line-height: 0.9; font-weight: 900;
+    letter-spacing: -0.025em;
+    background: linear-gradient(135deg, var(--primary, #ff2a6d), var(--accent, #6b3df4));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    text-wrap: balance;
+  }
+  .header .bot {
+    display: block;
+    margin-top: 14px;
+    font-size: var(--size-headline-bot, 38px);
+    line-height: 1.15; font-weight: 600;
+    letter-spacing: -0.01em;
+    color: #444;
+    text-wrap: balance;
+  }
+
+  .divider {
+    margin: 32px 0 28px;
+    width: 80px; height: 4px;
+    background: var(--primary, #ff2a6d);
+    border-radius: 999px;
+  }
+
+  .body-text {
+    font-family: var(--font-body, 'Inter'), sans-serif;
+    font-size: 34px; line-height: 1.4; font-weight: 500;
+    color: #1a1a1a;
+    text-wrap: pretty;
+  }
+  .body-text .hl-y {
+    background: var(--accent, #ffd93d); color: #0a0a0a;
+    padding: 2px 12px; border-radius: 999px;
+    box-decoration-break: clone; -webkit-box-decoration-break: clone;
+    font-weight: 700;
+  }
+  .body-text .hl-r {
+    background: var(--primary, #ff2a6d); color: #fff;
+    padding: 2px 12px; border-radius: 999px;
+    box-decoration-break: clone; -webkit-box-decoration-break: clone;
+    font-weight: 700;
+  }
+
+  /* Standart öğeler */
+  .progress {
+    position: absolute; left: 0; right: 0; bottom: 84px;
+    height: 6px; background: rgba(255,255,255,0.2);
+  }
+  .progress::after {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+    background: #fff;
+    animation: fill {{ duration_s }}s linear forwards;
+  }
+  @keyframes fill { from { width: 0; } to { width: 100%; } }
+
+  .handle {
+    position: absolute; left: 0; right: 0; bottom: 30px;
+    text-align: center;
+    font-family: var(--font-body, 'Inter'), sans-serif;
+    font-size: 32px; font-weight: 600;
+    color: var(--text-muted, rgba(255,255,255,0.9));
+    letter-spacing: 0.04em;
+  }
+
+  .source-credit {
+    position: absolute; bottom: 6px; left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.7); color: rgba(255,255,255,0.9);
+    font-size: 14px; padding: 3px 10px; border-radius: 3px;
+    z-index: 50; white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+<div class="stage dna-anim-{{ animation_style|default('none') }}">
+
+  {% if script.category %}<div class="sticker">{{ script.category }}</div>{% endif %}
+  <div class="live-pill">{{ ui_breaking }}</div>
+
+  <div class="photo-card">
+    <div class="bg-img" style="background-image: url('{{ bg_image_url|default("") }}');
+         {% if not bg_image_url %}display: none;{% endif %}"></div>
+    {% if script.photo_overlay %}<div class="yellow">{{ script.photo_overlay }}</div>{% endif %}
+  </div>
+
+  <div class="content-card">
+    <div class="header">
+      <span class="top">{{ script.header_top }}</span>
+      <span class="bot">{{ script.header_bottom }}</span>
+    </div>
+    <div class="divider"></div>
+    <div class="body-text" data-fit-min="26" data-fit-max="34" data-fit-pad="16">
+      {{ body_html|safe }}
+    </div>
+  </div>
+
+  <div class="progress"></div>
+  <div class="handle">{{ handle }}</div>
+  {% if rss_source %}<div class="source-credit">{{ ui_source }}: {{ rss_source }}</div>{% endif %}
+</div>
+
+{% include "_auto_fit.js.j2" %}
+</body>
+</html>

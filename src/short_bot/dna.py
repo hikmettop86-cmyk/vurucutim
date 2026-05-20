@@ -21,6 +21,19 @@ ARCHETYPES = [
     "stadium",    # sports/team broadcast (battle-tested, galatasaray lives here)
     "stat-hero",  # number-driven body (economy/polls — added 2026-05-19)
     "bigquote",   # fullscreen quote with attribution (politician/athlete statements — added 2026-05-20)
+    # ─── Designed archetypes (from share zip, 2026-05-20, all spec-compliant) ───
+    "editorial",   # Magazine spread · serif başlık
+    "neon",        # Cyberpunk · neon glow
+    "tabloid",     # 60s pulp · scream type
+    "brutalist",   # Swiss · grid · massive type
+    "noir",        # Cinematic · cinemascope
+    "popblock",    # Modern social · gradient
+    "broadsheet",  # Editorial alt · gazete formatı, 2-sütun
+    "holo",        # Neon alt · holografik chrome, conic gradient
+    "extra",       # Tabloid alt · gazete extra! yırtık kâğıt
+    "manifesto",   # Brutalist alt · dikey şerit, ızgara bölünme
+    "polaroid",    # Noir alt · polaroid foto, kraft kâğıt
+    "story",       # Popblock alt · Instagram story stili, sticker
 ]
 
 _ANIMATIONS_CSS_PATH = Path(__file__).resolve().parent.parent.parent / "templates" / "css" / "_animations.css"
@@ -56,13 +69,96 @@ ARCHETYPE_DEFAULTS: dict[str, dict] = {
     },
     "bigquote": {
         # Editorial / press-conference feel — deep navy + warm gold.
-        # Optimized for ONE big quote dominating the frame; attribution
-        # underneath. Photo is faint background.
         "primary": "#1e3a5f", "accent": "#ffd700",
         "bg_grad_1": "#1a1a2e", "bg_grad_2": "#0f0f1e",
         "body_bg_1": "#0f0f1e", "body_bg_2": "#1a1a2e",
         "text_main": "#ffffff", "text_muted": "#a0a0b0",
         "font_headline": "Playfair Display", "font_body": "Inter",
+    },
+    # ─── Designed archetypes (from share zip, 2026-05-20) ───────────────────
+    "editorial": {
+        "primary": "#b91c1c", "accent": "#ffea3b",
+        "bg_grad_1": "#2a3a5e", "bg_grad_2": "#11182f",
+        "body_bg_1": "#f4f1ea", "body_bg_2": "#e9e4d4",
+        "text_main": "#111111", "text_muted": "#555555",
+        "font_headline": "Playfair Display", "font_body": "Inter",
+    },
+    "neon": {
+        "primary": "#ff2bd6", "accent": "#00fff0",
+        "bg_grad_1": "#2a0a4a", "bg_grad_2": "#0a0118",
+        "body_bg_1": "#0a0118", "body_bg_2": "#04020c",
+        "text_main": "#ffffff", "text_muted": "#b0b0c0",
+        "font_headline": "Bebas Neue", "font_body": "Inter",
+    },
+    "tabloid": {
+        "primary": "#c81e1e", "accent": "#ffd400",
+        "bg_grad_1": "#3a1a1a", "bg_grad_2": "#1a0a0a",
+        "body_bg_1": "#ffd400", "body_bg_2": "#f5b800",
+        "text_main": "#0a0a0a", "text_muted": "#0a0a0a",
+        "font_headline": "Anton", "font_body": "Inter",
+    },
+    "brutalist": {
+        "primary": "#ff4d2e", "accent": "#ffe600",
+        "bg_grad_1": "#0a0a0a", "bg_grad_2": "#1a1a1a",
+        "body_bg_1": "#f5f3ed", "body_bg_2": "#f5f3ed",
+        "text_main": "#0a0a0a", "text_muted": "#0a0a0a",
+        "font_headline": "Inter", "font_body": "Inter",
+    },
+    "noir": {
+        "primary": "#c0392b", "accent": "#d4af37",
+        "bg_grad_1": "#1a1a2e", "bg_grad_2": "#0a0a14",
+        "body_bg_1": "#000000", "body_bg_2": "#000000",
+        "text_main": "#ffffff", "text_muted": "#aaaaaa",
+        "font_headline": "Source Serif 4", "font_body": "Inter",
+    },
+    "popblock": {
+        "primary": "#ff2a6d", "accent": "#ffd93d",
+        "bg_grad_1": "#1a1a3a", "bg_grad_2": "#2a0a5a",
+        "body_bg_1": "#ff5b8a", "body_bg_2": "#6b3df4",
+        "text_main": "#ffffff", "text_muted": "#e8e8f0",
+        "font_headline": "Montserrat", "font_body": "Inter",
+    },
+    "broadsheet": {
+        "primary": "#b3261e", "accent": "#d4a017",
+        "bg_grad_1": "#2a3a5e", "bg_grad_2": "#11182f",
+        "body_bg_1": "#faf6ec", "body_bg_2": "#efe7d3",
+        "text_main": "#1a1410", "text_muted": "#66594a",
+        "font_headline": "Playfair Display", "font_body": "Source Serif 4",
+    },
+    "holo": {
+        "primary": "#ff00aa", "accent": "#00f0ff",
+        "bg_grad_1": "#2a0a4a", "bg_grad_2": "#0a0118",
+        "body_bg_1": "#050208", "body_bg_2": "#1a0220",
+        "text_main": "#ffffff", "text_muted": "#d8d8e8",
+        "font_headline": "Anton", "font_body": "Inter",
+    },
+    "extra": {
+        "primary": "#c02020", "accent": "#f0c800",
+        "bg_grad_1": "#3a1a1a", "bg_grad_2": "#1a0a0a",
+        "body_bg_1": "#f0e6c8", "body_bg_2": "#d6cba8",
+        "text_main": "#1a0a0a", "text_muted": "#4a3020",
+        "font_headline": "Bebas Neue", "font_body": "Inter",
+    },
+    "manifesto": {
+        "primary": "#1f2937", "accent": "#fde047",
+        "bg_grad_1": "#1f2937", "bg_grad_2": "#0a1018",
+        "body_bg_1": "#ededeb", "body_bg_2": "#dad5d0",
+        "text_main": "#0a0a0a", "text_muted": "#666666",
+        "font_headline": "Inter", "font_body": "Inter",
+    },
+    "polaroid": {
+        "primary": "#c93838", "accent": "#d4a017",
+        "bg_grad_1": "#4a3a2a", "bg_grad_2": "#1a1410",
+        "body_bg_1": "#2a2520", "body_bg_2": "#1a1410",
+        "text_main": "#f4ede0", "text_muted": "#c9a045",
+        "font_headline": "Source Serif 4", "font_body": "Inter",
+    },
+    "story": {
+        "primary": "#ff3d6e", "accent": "#ffd93d",
+        "bg_grad_1": "#2a0a3a", "bg_grad_2": "#0a1428",
+        "body_bg_1": "#ff3d6e", "body_bg_2": "#c81e5a",
+        "text_main": "#ffffff", "text_muted": "#ffffff",
+        "font_headline": "Montserrat", "font_body": "Inter",
     },
 }
 
@@ -128,10 +224,10 @@ class DnaTone(BaseModel):
 
 class DnaSpec(BaseModel):
     archetype: Literal[
-        "newscast",   # general breaking news
-        "stadium",    # sports/team broadcast
-        "stat-hero",  # number-driven body (2026-05-19 onwards)
-        "bigquote",   # fullscreen attributed quote (2026-05-20 onwards)
+        "newscast", "stadium", "stat-hero", "bigquote",
+        "editorial", "neon", "tabloid", "brutalist",
+        "noir", "popblock", "broadsheet", "holo",
+        "extra", "manifesto", "polaroid", "story",
     ]
     palette: DnaPalette
     fonts: DnaFonts

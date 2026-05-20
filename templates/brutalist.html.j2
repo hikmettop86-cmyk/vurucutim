@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="{{ language }}">
+<head>
+<meta charset="utf-8">
+<title>Short — Brutalist</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@500;700;900&family=JetBrains+Mono:wght@500;700&display=swap');
+
+  {{ dna_css|safe }}
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 1080px; height: 1920px; overflow: hidden;
+    font-family: var(--font-body, 'Inter'), sans-serif;
+    background: var(--body-bg-1, #f5f3ed);
+    color: var(--text-main, #0a0a0a);
+  }
+
+  .stage {
+    position: relative; width: 1080px; height: 1920px;
+    background: var(--body-bg-1, #f5f3ed);
+    padding: 80px;
+    display: grid;
+    grid-template-rows: auto auto 1fr auto;
+    gap: 36px;
+    overflow: hidden;
+  }
+
+  /* Üst index satırı */
+  .index-row {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: end;
+    gap: 24px;
+    padding-bottom: 22px;
+    border-bottom: 3px solid var(--text-main, #0a0a0a);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 22px;
+    color: var(--text-main, #0a0a0a);
+  }
+  .index-row .num {
+    font-size: 64px; font-weight: 700; line-height: 0.9;
+    font-family: var(--font-headline, 'Inter'), sans-serif;
+    letter-spacing: -0.02em;
+  }
+  .index-row .cat {
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    font-size: 24px; font-weight: 700;
+    background: var(--primary, #ff4d2e);
+    color: #fff;
+    padding: 8px 18px;
+    justify-self: end;
+  }
+  .index-row .live {
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    font-size: 22px;
+    color: var(--primary, #ff4d2e);
+  }
+
+  /* Manşet — devasa, sola yaslı, sıkışık */
+  .header {
+    font-family: var(--font-headline, 'Inter'), sans-serif;
+    color: var(--text-main, #0a0a0a);
+  }
+  .header .top {
+    display: block;
+    font-size: var(--size-headline-top, 200px);
+    line-height: 0.86; font-weight: 900;
+    letter-spacing: -0.04em;
+    text-transform: uppercase;
+    text-wrap: balance;
+  }
+  .header .bot {
+    display: block;
+    margin-top: 24px;
+    font-size: var(--size-headline-bot, 48px);
+    line-height: 1.1; font-weight: 500;
+    letter-spacing: -0.01em;
+    color: color-mix(in srgb, var(--text-main, #0a0a0a) 60%, transparent);
+    max-width: 80%;
+    text-wrap: balance;
+  }
+
+  /* Foto + gövde, yan yana grid */
+  .main {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 28px;
+  }
+  .photo {
+    position: relative;
+    background: var(--text-main, #0a0a0a);
+    overflow: hidden;
+    min-height: 540px;
+  }
+  .photo .bg-img {
+    position: absolute; inset: 0;
+    background-size: cover; background-position: center;
+    filter: grayscale(0.2) contrast(1.1);
+  }
+  /* Foto yok ise — büyük şeritli pattern */
+  .photo .bg-fallback {
+    position: absolute; inset: 0;
+    background:
+      repeating-linear-gradient(45deg,
+        var(--bg-grad-1, #0a0a0a) 0 30px,
+        var(--bg-grad-2, #1a1a1a) 30px 60px);
+  }
+  .photo .yellow {
+    position: absolute; left: 0; bottom: 0; right: 0;
+    background: var(--accent, #ffe600);
+    color: #0a0a0a;
+    padding: 22px 24px;
+    font-family: var(--font-headline, 'Inter'), sans-serif;
+    font-weight: 900;
+    font-size: 42px; line-height: 1.0;
+    text-transform: uppercase;
+    letter-spacing: -0.01em;
+  }
+
+  .body {
+    background: var(--text-main, #0a0a0a);
+    color: #fff;
+    padding: 36px 32px;
+    display: flex; align-items: flex-end;
+  }
+  .body-text {
+    font-family: var(--font-body, 'Inter'), sans-serif;
+    font-size: 36px; line-height: 1.35; font-weight: 600;
+    text-wrap: pretty;
+  }
+  .body-text .hl-y {
+    background: var(--accent, #ffe600); color: #0a0a0a;
+    padding: 2px 10px;
+    box-decoration-break: clone; -webkit-box-decoration-break: clone;
+  }
+  .body-text .hl-r {
+    background: var(--primary, #ff4d2e); color: #fff;
+    padding: 2px 10px;
+    box-decoration-break: clone; -webkit-box-decoration-break: clone;
+  }
+
+  /* Alt footer şeridi */
+  .footer-strip {
+    background: var(--primary, #ff4d2e);
+    color: #fff;
+    padding: 20px 32px;
+    display: flex; justify-content: space-between; align-items: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 24px; font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+  }
+
+  /* Standart öğeler */
+  .progress {
+    position: absolute; left: 0; right: 0; bottom: 84px;
+    height: 6px; background: rgba(0,0,0,0.15);
+  }
+  .progress::after {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+    background: var(--primary, #ff4d2e);
+    animation: fill {{ duration_s }}s linear forwards;
+  }
+  @keyframes fill { from { width: 0; } to { width: 100%; } }
+
+  .handle {
+    position: absolute; left: 0; right: 0; bottom: 30px;
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 32px; font-weight: 700;
+    color: var(--text-muted, #0a0a0a);
+    letter-spacing: 0.04em;
+  }
+
+  .source-credit {
+    position: absolute; bottom: 6px; left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.7); color: rgba(255,255,255,0.9);
+    font-size: 14px; padding: 3px 10px; border-radius: 3px;
+    z-index: 50; white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+<div class="stage dna-anim-{{ animation_style|default('none') }}">
+
+  <div class="index-row">
+    <div class="num">№01</div>
+    <div class="live">— {{ ui_breaking }}</div>
+    {% if script.category %}<div class="cat">{{ script.category }}</div>{% endif %}
+  </div>
+
+  <div class="header">
+    <span class="top">{{ script.header_top }}</span>
+    <span class="bot">{{ script.header_bottom }}</span>
+  </div>
+
+  <div class="main">
+    <div class="photo">
+      {% if bg_image_url %}
+        <div class="bg-img" style="background-image: url('{{ bg_image_url }}');"></div>
+      {% else %}
+        <div class="bg-fallback"></div>
+      {% endif %}
+      {% if script.photo_overlay %}<div class="yellow">{{ script.photo_overlay }}</div>{% endif %}
+    </div>
+    <div class="body">
+      <div class="body-text" data-fit-min="26" data-fit-max="36" data-fit-pad="16">
+        {{ body_html|safe }}
+      </div>
+    </div>
+  </div>
+
+  <div class="footer-strip">
+    <span>{{ language|upper }} · {{ handle }}</span>
+    <span>↗</span>
+  </div>
+
+  <div class="progress"></div>
+  <div class="handle">{{ handle }}</div>
+  {% if rss_source %}<div class="source-credit">{{ ui_source }}: {{ rss_source }}</div>{% endif %}
+</div>
+
+{% include "_auto_fit.js.j2" %}
+</body>
+</html>

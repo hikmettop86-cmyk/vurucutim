@@ -51,13 +51,26 @@ ARCHETYPE_OVERFLOW_FIELDS: dict[str, list[OverflowField]] = {
         OverflowField("body_paragraph", ".stat-caption",  99),
     ],
     # bigquote: body_paragraph = THE QUOTE (dominates the frame).
-    # header_top = "— who said it" attribution, header_bottom = when/where,
-    # photo_overlay = small context caption under the attribution.
-    # Auto-fit on .quote-text handles size; max-lines is a sanity bound.
     "bigquote": [
         OverflowField("header_top",     ".attribution .who",  2),
         OverflowField("header_bottom",  ".attribution .when", 1),
         OverflowField("photo_overlay",  ".caption",           3),
         OverflowField("body_paragraph", ".quote-text",        6),
     ],
+    # ─── Designed archetypes (from share zip, 2026-05-20) — all spec-compliant
+    # Standard selectors: .header .top, .header .bot, .yellow (photo_overlay),
+    # .body-text (body, auto-fit handles size; max_lines=99 = clamp-only).
+    **{
+        slug: [
+            OverflowField("header_top",     ".header .top",   3),
+            OverflowField("header_bottom",  ".header .bot",   3),
+            OverflowField("photo_overlay",  ".yellow",        2),
+            OverflowField("body_paragraph", ".body-text",    99),
+        ]
+        for slug in (
+            "editorial", "neon", "tabloid", "brutalist",
+            "noir", "popblock", "broadsheet", "holo",
+            "extra", "manifesto", "polaroid", "story",
+        )
+    },
 }
