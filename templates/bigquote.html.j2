@@ -45,32 +45,33 @@
   /* THE QUOTE — centered, dominates the frame */
   .quote-block {
     position: absolute;
-    top: 32%; left: 80px; right: 80px; bottom: 32%;
+    top: 28%; left: 80px; right: 80px; bottom: 30%;
     display: flex; flex-direction: column; justify-content: center;
+    align-items: center;
   }
   .quote-mark-open, .quote-mark-close {
     font-family: 'Playfair Display', Georgia, serif;
-    font-size: 220px; font-weight: 900;
+    font-size: 200px; font-weight: 900;
     color: {{ colors.accent }};
     line-height: 0.7;
-    opacity: 0.55;
+    opacity: 0.5;
   }
-  .quote-mark-open { margin-bottom: -20px; }
-  .quote-mark-close { margin-top: 4px; text-align: right; }
+  .quote-mark-open { align-self: flex-start; margin-bottom: -10px; }
+  .quote-mark-close { align-self: flex-end; margin-top: -10px; }
   .quote-text {
-    font-size: 72px; line-height: 1.2;
+    font-size: 72px; line-height: 1.25;
     font-weight: 700;
     color: #fff;
-    padding-left: 16px;
+    text-align: center;
     text-shadow: 0 4px 18px rgba(0,0,0,.45);
   }
   /* Auto-fit hook — _auto_fit.js shrinks if text overflows container height */
   .quote-text[data-fit-min] {}
 
-  /* ATTRIBUTION — who said it */
+  /* ATTRIBUTION — who said it (sits above progress bar, with caption tucked under it) */
   .attribution {
     position: absolute;
-    left: 0; right: 0; bottom: 240px;
+    left: 0; right: 0; bottom: 170px;
     text-align: center;
   }
   .attribution .who {
@@ -83,14 +84,13 @@
     font-size: 26px;
     color: {{ colors.text_muted|default('#a0a0b0') }};
   }
-
-  /* CAPTION — small context line under attribution */
-  .caption {
-    position: absolute;
-    left: 80px; right: 80px; bottom: 150px;
-    text-align: center;
-    font-size: 22px; line-height: 1.4;
+  .attribution .caption {
+    margin-top: 14px;
+    font-size: 20px; line-height: 1.4;
+    letter-spacing: 1px;
+    text-transform: uppercase;
     color: {{ colors.text_muted|default('#a0a0b0') }};
+    opacity: 0.75;
   }
 
   /* PROGRESS bar */
@@ -188,11 +188,10 @@
   <div class="attribution">
     <div class="who">— {{ script.header_top }}</div>
     <div class="when">{{ script.header_bottom }}</div>
+    {% if script.photo_overlay %}
+    <div class="caption">{{ script.photo_overlay }}</div>
+    {% endif %}
   </div>
-
-  {% if script.photo_overlay %}
-  <div class="caption">{{ script.photo_overlay }}</div>
-  {% endif %}
 
   <div class="progress"></div>
   <div class="handle">{{ handle }}</div>

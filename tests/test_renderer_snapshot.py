@@ -53,6 +53,9 @@ def _render_to_png(archetype: str, out_path: Path):
         page = b.new_page(viewport={"width": 1080, "height": 1920}, device_scale_factor=1)
         page.add_init_script("document.getAnimations().forEach(a => a.pause());")
         page.set_content(html, wait_until="networkidle")
+        # Wait for auto-fit JS to finish font-size shrink — otherwise the
+        # screenshot fires mid-shrink and pixel positions drift between runs.
+        page.evaluate("window.__autoFitDone || Promise.resolve()")
         page.evaluate(
             "(t) => { document.getAnimations().forEach(a => { a.currentTime = t; }); }",
             500,

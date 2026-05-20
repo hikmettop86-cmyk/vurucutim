@@ -7,14 +7,14 @@
   @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;700&family=Inter:wght@600;800&display=swap');
   * { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
-    --primary: #0a4d2a;
-    --accent: #ffd700;
-    --bg-grad-1: #1a8b3a;
-    --bg-grad-2: #0a4d1a;
-    --body-bg-1: #0a1a0a;
-    --body-bg-2: #000000;
+    --primary: {{ colors.primary }};
+    --accent: {{ colors.accent }};
+    --bg-grad-1: {{ colors.bg_gradient[0] }};
+    --bg-grad-2: {{ colors.bg_gradient[1] }};
+    --body-bg-1: {{ colors.bg_gradient[0] }};
+    --body-bg-2: {{ colors.bg_gradient[1] }};
     --text-main: #ffffff;
-    --text-muted: #aaffaa;
+    --text-muted: rgba(255,255,255,.65);
     --font-headline: 'Oswald', Impact, sans-serif;
     --font-body: 'Inter', sans-serif;
   }
@@ -46,6 +46,7 @@
     font-size: 200px;
     line-height: .95;
     letter-spacing: 8px;
+    white-space: nowrap;
     text-shadow: 6px 6px 0 #000;
     -webkit-text-stroke: 2px #000;
   }
@@ -181,7 +182,7 @@
 <div class="stage dna-anim-{{ animation_style|default('none') }}">
   <div class="stage-badge">{{ ui_breaking }}</div>
   <div class="header">
-    <span class="top">{{ script.header_top }}</span>
+    <span class="top" data-fit-width="40" data-fit-min="80" data-fit-max="200">{{ script.header_top }}</span>
     <span class="bot">{{ script.header_bottom }}</span>
   </div>
 

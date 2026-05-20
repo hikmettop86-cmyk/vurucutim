@@ -69,13 +69,18 @@
     font-weight: 700; letter-spacing: 1px;
   }
   .photo .yellow {
-    position: absolute; bottom: 24px; left: 24px; right: 24px;
+    position: absolute; bottom: 24px; left: 50%;
+    transform: translateX(-50%);
     background: {{ colors.accent }};
     color: #0f172a;
-    font-size: 38px; font-weight: 900;
-    padding: 14px 22px;
+    font-size: 32px; font-weight: 900;
+    padding: 10px 22px;
+    border-radius: 999px;
     text-align: center;
-    letter-spacing: 0.5px;
+    letter-spacing: 1px;
+    white-space: nowrap;
+    max-width: calc(100% - 48px);
+    box-shadow: 0 4px 12px rgba(0,0,0,.4);
   }
 
   /* BODY: HERO STAT — the giant number is the visual centerpiece. JS
