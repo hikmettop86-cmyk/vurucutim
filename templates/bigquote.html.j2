@@ -14,12 +14,14 @@
     background: linear-gradient(155deg, {{ colors.bg_gradient[0] }}, {{ colors.bg_gradient[1] }});
     overflow: hidden; }
 
-  /* STAGE-LEVEL BADGE (top-right corner) */
+  /* STAGE-LEVEL BADGE (top-right corner) — corner_radius applies here */
   .stage-badge {
     position: absolute; top: 36px; right: 36px;
     background: {{ colors.accent }}; color: #0f0f1e;
-    font-size: 22px; font-weight: 800; letter-spacing: 1.5px;
-    padding: 10px 18px; border-radius: 4px;
+    font-size: 22px; font-weight: 800;
+    letter-spacing: calc(var(--letter-spacing, 0.5px) * 3);
+    padding: 10px 18px;
+    border-radius: var(--corner-radius, 4px);
     z-index: 10;
   }
 
@@ -28,29 +30,36 @@
     position: absolute; top: 44px; left: 36px;
     font-size: 18px; font-weight: 700;
     color: {{ colors.accent }};
-    letter-spacing: 2px;
+    letter-spacing: calc(var(--letter-spacing, 0.5px) * 4);
     opacity: 0.9;
   }
 
-  /* Optional faint background photo */
+  /* Optional faint background photo — photo_height knob proxies as opacity
+     (0% = invisible, 100% = full image), photo_blur + photo_saturation
+     control the rendering. */
   .bg-photo {
     position: absolute; inset: 0;
     background-image: url('{{ bg_image_url|default("") }}');
     background-size: cover; background-position: center;
-    opacity: 0.15;
-    filter: blur(2px);
+    opacity: calc(0.15 + (var(--photo-height, 640px) - 300px) / 600px * 0.25);
+    filter: blur(calc(2px + var(--photo-blur-px, 0px))) saturate(var(--photo-saturation, 1));
     {% if not bg_image_url %}display: none;{% endif %}
   }
 
-  /* THE QUOTE — centered, dominates the frame */
+  /* THE QUOTE — centered, dominates the frame.
+     header_padding_y knob tightens or loosens the top/bottom whitespace. */
   .quote-block {
     position: absolute;
-    top: 32%; left: 80px; right: 80px; bottom: 32%;
+    top: calc(32% - var(--header-padding-y, 78px) * 0.1);
+    left: 80px; right: 80px;
+    bottom: calc(32% - var(--header-padding-y, 78px) * 0.1);
     display: flex; flex-direction: column; justify-content: center;
+    transform: skewY(calc(var(--banner-skew-deg, 0deg) * -0.3));
   }
   .quote-mark-open, .quote-mark-close {
     font-family: 'Playfair Display', Georgia, serif;
-    font-size: 220px; font-weight: 900;
+    font-size: calc(var(--header-size-top, 100px) * 2.2);
+    font-weight: 900;
     color: {{ colors.accent }};
     line-height: 0.7;
     opacity: 0.55;
@@ -76,13 +85,14 @@
     text-align: center;
   }
   .attribution .who {
-    font-size: 40px; font-weight: 800;
+    font-size: calc(var(--header-size-top, 100px) * 0.4);
+    font-weight: 800;
     color: {{ colors.accent }};
-    letter-spacing: 1px;
+    letter-spacing: calc(var(--letter-spacing, 0.5px) * 2);
   }
   .attribution .when {
     margin-top: 6px;
-    font-size: 26px;
+    font-size: calc(var(--header-size-bot, 70px) * 0.37);
     color: {{ colors.text_muted|default('#a0a0b0') }};
   }
 
