@@ -14,9 +14,19 @@ def download_and_blur_thumb(
     url: str,
     cache_dir: Path,
     *,
-    blur_radius: int = 8,
+    blur_radius: int = 0,
     timeout: int = 15,
+    min_width: int = 600,
 ) -> Path | None:
+    """Download a publisher og:image to cache. Crisp by default.
+
+    blur_radius: 0 = no blur (default since v0.6.3). Templates that want
+      bg blur should do it in CSS (filter: blur(...) on .bg-img), not bake
+      it into the cached jpeg.
+    min_width: reject thumbnails smaller than this so we don't upscale a
+      300px og:image into 1080×1920 (which is what made publisher photos
+      look mushy). Caller falls back to Pexels search when None returned.
+    """
     cache_dir = Path(cache_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
     key = hashlib.sha1(url.encode("utf-8")).hexdigest()[:16]
@@ -36,8 +46,14 @@ def download_and_blur_thumb(
     except (UnidentifiedImageError, OSError):
         return None
 
-    blurred = img.filter(ImageFilter.GaussianBlur(radius=blur_radius))
-    blurred.save(cached, "JPEG", quality=85)
+    # Reject tiny thumbnails — upscaling a 320×180 og:image into 1080×1920
+    # produces blocky/mushy frames. Let the pipeline fall back to Pexels.
+    if img.width < min_width:
+        return None
+
+    if blur_radius > 0:
+        img = img.filter(ImageFilter.GaussianBlur(radius=blur_radius))
+    img.save(cached, "JPEG", quality=92)
     return cached
 
 

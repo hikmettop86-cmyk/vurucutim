@@ -89,6 +89,7 @@
         fontBody: "{{ (c.dna.fonts.body if c.dna else "Inter") }}",
         sizeHeadlineTop: "{{ (c.dna.fonts.size_headline_top if c.dna and c.dna.fonts.size_headline_top else '') }}",
         sizeHeadlineBot: "{{ (c.dna.fonts.size_headline_bottom if c.dna and c.dna.fonts.size_headline_bottom else '') }}",
+        bgImageBlur: {{ c.bg_image_blur }},
         bannerShape: "{{ (c.dna.banner_shape if c.dna else "flat") }}",
         highlightStyle: "{{ (c.dna.highlight_style if c.dna else "bg-flat") }}",
         chipStyle: "{{ (c.dna.chip_style if c.dna else "rounded") }}",
@@ -922,6 +923,22 @@
                    x-model="sizeHeadlineBot" placeholder="auto"
                    class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
             <span class="text-[10px] text-claude-subtle">Boş = template default (newscast 100, stadium 60, stat-hero 56, polaroid 36)</span>
+          </label>
+        </div>
+
+        <div class="pt-3 border-t border-claude-border/50 mt-2">
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase flex items-center justify-between">
+              <span>Haber görseli bulanıklık (px)</span>
+              <span x-text="bgImageBlur + ' px'" class="text-claude-accent font-mono"></span>
+            </span>
+            <input type="range" name="bg_image_blur" min="0" max="20" step="1"
+                   x-model.number="bgImageBlur"
+                   class="w-full mt-2 accent-claude-accent">
+            <span class="text-[10px] text-claude-subtle">
+              <strong x-text="bgImageBlur === 0 ? 'Net görsel' : (bgImageBlur < 6 ? 'Hafif blur' : (bgImageBlur < 12 ? 'Orta blur' : 'Yoğun blur'))"></strong>
+              — 0 = haber sitesinden gelen orijinal görsel, 8 = eski varsayılan, 20 = ağır frosted.
+            </span>
           </label>
         </div>
 

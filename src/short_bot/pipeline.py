@@ -733,14 +733,19 @@ def _run_rss(*, channel, run_id, log, eng, settings,
         og_url = extract_og_image_url(article_url)
         if og_url:
             log.info(f"  og:image: {og_url[:100]}")
-            bg_try = download_and_blur_thumb(og_url, cache_dir)
+            bg_try = download_and_blur_thumb(og_url, cache_dir,
+                                             blur_radius=channel.bg_image_blur)
             if bg_try:
-                log.info(f"  og:image accepted: {bg_try.name}")
+                log.info(f"  og:image accepted: {bg_try.name} "
+                         f"(blur={channel.bg_image_blur})")
+            else:
+                log.info(f"  og:image rejected (too small or fetch failed)")
         # 2. RSS thumb fallback (publisher media:thumbnail). Still skipped
         # when the original was google-news -- the thumb on those feeds is
         # always Google's generic publisher logo, identical across articles.
         if bg_try is None and not original_was_gnews and candidate.item.thumb_url:
-            bg_try = download_and_blur_thumb(candidate.item.thumb_url, cache_dir)
+            bg_try = download_and_blur_thumb(candidate.item.thumb_url, cache_dir,
+                                             blur_radius=channel.bg_image_blur)
         # 3. DDG/Wikimedia/Pexels search fallback.
         if bg_try is None:
             from short_bot.image_picker import pick_image_for_script

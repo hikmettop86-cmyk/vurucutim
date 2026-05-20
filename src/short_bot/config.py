@@ -118,6 +118,10 @@ class ChannelConfig:
     youtube: YoutubeChannelConfig | None = None
     bg_video: BgVideoConfig | None = None
     trend_boost: TrendBoostConfig | None = None
+    # Per-channel og:image blur radius (0 = crisp original). Up to v0.6.2 a
+    # baked-in 8px GaussianBlur was applied to every publisher photo. v0.6.3
+    # made this a UI knob: 0 = original, 8 = old behavior, 20 = heavy frosted.
+    bg_image_blur: int = 0
 
 
 def load_settings(path: Path) -> Settings:
@@ -245,6 +249,7 @@ def load_channel(path: Path) -> ChannelConfig:
         youtube=youtube,
         bg_video=bg_video,
         trend_boost=trend_boost,
+        bg_image_blur=int(data.get("bg_image_blur", 0)),
     )
 
 
@@ -321,6 +326,8 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
         if cfg.trend_boost.region_override:
             tb["region_override"] = cfg.trend_boost.region_override
         data["trend_boost"] = tb
+    if cfg.bg_image_blur:
+        data["bg_image_blur"] = cfg.bg_image_blur
     if cfg.dna is not None:
         # mode='json' → tuple becomes list, ready for YAML round-trip
         data["dna"] = cfg.dna.model_dump(mode="json")

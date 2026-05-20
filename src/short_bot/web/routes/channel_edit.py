@@ -314,6 +314,7 @@ def save(slug):
         min_score=_form_get_float("min_score", cfg.min_score),
         max_candidates_per_run=_form_get_int("max_candidates_per_run", cfg.max_candidates_per_run),
         max_age_hours=_form_get_int("max_age_hours", cfg.max_age_hours),
+        bg_image_blur=_form_get_int("bg_image_blur", cfg.bg_image_blur),
         dynamic_dna=("dynamic_dna" in request.form),
         negative_keywords=_form_get_list("negative_keywords"),
         template=new_template,
