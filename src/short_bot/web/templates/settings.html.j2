@@ -89,6 +89,66 @@
       </label>
     </div>
 
+    <h2 class="font-serif text-lg font-bold mt-6 border-t border-claude-border pt-4">AI Kaynağı</h2>
+    <div class="bg-claude-surface border border-claude-border rounded-lg p-4 space-y-3">
+      <label class="block">
+        <span class="text-xs text-claude-muted uppercase">Kaynak</span>
+        <select name="ai_backend" id="ai_backend"
+                class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
+          <option value="claude_cli" {% if ai_backend == 'claude_cli' %}selected{% endif %}>Claude CLI (mevcut)</option>
+          <option value="openrouter" {% if ai_backend == 'openrouter' %}selected{% endif %}>OpenRouter</option>
+        </select>
+      </label>
+
+      <div id="openrouter_box" {% if ai_backend != 'openrouter' %}style="display:none"{% endif %}>
+        <div class="bg-claude-surface-alt border border-claude-border rounded-lg p-3 space-y-3">
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase">OpenRouter API Key
+              {% if openrouter_key_set %}<span class="normal-case text-claude-muted">(mevcut: {{ openrouter_key_masked }})</span>{% endif %}
+            </span>
+            <input type="password" name="openrouter_api_key" placeholder="sk-or-v1-..."
+                   autocomplete="new-password"
+                   class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg text-sm w-full mt-1 text-claude-text">
+          </label>
+          <label class="text-xs flex items-center gap-1 text-claude-muted">
+            <input type="checkbox" name="openrouter_api_key_clear" value="1"> Key'i temizle
+          </label>
+
+          {% for role, title in [('dna','DNA / tasarım'), ('default','Skorlama / varsayılan'), ('script','Script / metin')] %}
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase">{{ title }}</span>
+            <select name="or_model_{{ role }}" class="or-model-select bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
+              {% for group in openrouter_catalog.groups %}
+              <optgroup label="{{ group.label }}">
+                {% for m in group.models %}
+                <option value="{{ m.id }}" {% if openrouter_models.get(role) == m.id %}selected{% endif %}>{{ m.label }}</option>
+                {% endfor %}
+              </optgroup>
+              {% endfor %}
+              <option value="__custom__">Özel…</option>
+            </select>
+            <input type="text" name="or_model_{{ role }}_custom" class="or-custom bg-claude-surface border border-claude-border px-3 py-2 rounded-lg text-sm w-full mt-1 text-claude-text" placeholder="örn. x-ai/grok-2" style="display:none">
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        var sel = document.getElementById('ai_backend');
+        var box = document.getElementById('openrouter_box');
+        if (sel) sel.addEventListener('change', function () {
+          box.style.display = (sel.value === 'openrouter') ? '' : 'none';
+        });
+        document.querySelectorAll('.or-model-select').forEach(function (s) {
+          var custom = s.parentElement.querySelector('.or-custom');
+          function sync() { custom.style.display = (s.value === '__custom__') ? '' : 'none'; }
+          s.addEventListener('change', sync); sync();
+        });
+      })();
+    </script>
+
     <h2 class="font-serif text-lg font-bold mt-6 border-t border-claude-border pt-4">Pexels API</h2>
     <div class="bg-claude-surface border border-claude-border rounded-lg p-4">
       {% if pexels_key_set %}
