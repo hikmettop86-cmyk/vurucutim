@@ -171,3 +171,35 @@ def test_prompt_emits_correct_json_schema_hint():
     assert '"guid"' in prompt
     assert '"score"' in prompt
     assert '"reasoning"' in prompt
+
+
+def test_score_items_forwards_backend_and_api_key():
+    items = [_item("g1", "X")]
+    fake = {"scores": [{"guid": "g1", "score": 7, "reasoning": "y"}]}
+    with patch("short_bot.scorer.run_json") as m:
+        from short_bot.scorer import _ScoreResponse
+        m.return_value = _ScoreResponse.model_validate(fake)
+        score_items(items, claude_path="claude", model="x",
+                    backend="openrouter", api_key="sk-or-k")
+    assert m.call_args.kwargs["backend"] == "openrouter"
+    assert m.call_args.kwargs["api_key"] == "sk-or-k"
+
+
+def test_score_items_propagates_openrouter_error():
+    from short_bot.claude_cli import OpenRouterError
+    items = [_item("g1", "X"), _item("g2", "Y")]
+    with patch("short_bot.scorer.run_json", side_effect=OpenRouterError("key yok")):
+        with pytest.raises(OpenRouterError):
+            score_items(items, claude_path="claude", backend="openrouter", api_key=None)
+
+
+def test_score_items_raises_on_openrouter_key_missing_real_flow():
+    """run_json mock'lanMADAN: key yokken score_items OpenRouterError firlatir (sessiz [] DEGIL)."""
+    from short_bot.claude_cli import OpenRouterError
+    items = [_item("g1", "X")]
+    with patch("short_bot.openrouter_client.complete",
+               side_effect=OpenRouterError("key yok")), \
+         patch("short_bot.claude_cli.time.sleep"):
+        with pytest.raises(OpenRouterError):
+            score_items(items, claude_path="claude", backend="openrouter",
+                        api_key=None, model="x")

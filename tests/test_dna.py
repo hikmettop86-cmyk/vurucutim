@@ -518,3 +518,27 @@ def test_generate_dna_for_video_uses_article_context(monkeypatch):
     assert "Sarı kırmızılılar" in prompt
     # Channel persona should be referenced when channel has DNA
     assert "Spor" in prompt or "futbol" in prompt
+
+
+def test_generate_dna_for_video_forwards_backend_and_api_key():
+    from short_bot.config import ChannelConfig
+    from short_bot.dna import generate_dna_for_video
+
+    cfg = ChannelConfig(
+        slug="spor-haber", name="Spor", keywords=["futbol"], rss_locale="tr-TR",
+        schedule_cron="0 * * * *", duration_s=25, min_score=6.0,
+        max_candidates_per_run=3, template="newscast",
+        colors={"primary": "#fff"}, handle="@spor", output_dir="out",
+        enabled=True, cta_enabled=True, cta_text="x", cta_icons=[],
+        cta_duration_s=4, cta_show_handle=True, language="tr",
+        max_age_hours=24, dynamic_dna=True,
+    )
+    fake = _sample_dna()
+    with patch("short_bot.dna.run_json", return_value=fake) as m:
+        generate_dna_for_video(
+            channel=cfg, headline="Galatasaray transfer",
+            body="Yıldız oyuncu transfer edildi.",
+            backend="openrouter", api_key="k",
+        )
+    assert m.call_args.kwargs["backend"] == "openrouter"
+    assert m.call_args.kwargs["api_key"] == "k"

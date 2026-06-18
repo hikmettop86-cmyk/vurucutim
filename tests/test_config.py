@@ -652,3 +652,103 @@ def test_channel_config_negative_keywords_empty_not_written(tmp_path):
     assert "negative_keywords" not in text
 
 
+def test_load_settings_ai_backend_default_claude_cli(tmp_path):
+    (tmp_path / "settings.yaml").write_text(
+        "ffmpeg_path: ffmpeg\nclaude_cli_path: claude\nplaywright_browser: chromium\n"
+        "web: {host: 127.0.0.1, port: 5000}\n"
+        "fuzzy_dedup_threshold: 0.85\nlog_level: INFO\n",
+        encoding="utf-8",
+    )
+    s = load_settings(tmp_path / "settings.yaml")
+    assert s.ai_backend == "claude_cli"
+    assert s.openrouter_models == {}
+
+
+def test_load_settings_openrouter_block(tmp_path):
+    (tmp_path / "settings.yaml").write_text(
+        "ffmpeg_path: ffmpeg\nclaude_cli_path: claude\nplaywright_browser: chromium\n"
+        "web: {host: 127.0.0.1, port: 5000}\n"
+        "fuzzy_dedup_threshold: 0.85\nlog_level: INFO\n"
+        "ai_backend: openrouter\n"
+        "openrouter_models:\n  dna: anthropic/claude-opus-4.8\n"
+        "  default: google/gemini-2.5-flash\n  script: anthropic/claude-sonnet-4.6\n",
+        encoding="utf-8",
+    )
+    s = load_settings(tmp_path / "settings.yaml")
+    assert s.ai_backend == "openrouter"
+    assert s.openrouter_models["dna"] == "anthropic/claude-opus-4.8"
+    assert s.openrouter_models["default"] == "google/gemini-2.5-flash"
+
+
+def _settings_with(ai_backend, claude_models=None, openrouter_models=None):
+    from short_bot.config import Settings
+    return Settings(
+        ffmpeg_path="ffmpeg", claude_cli_path="claude", playwright_browser="chromium",
+        web_host="127.0.0.1", web_port=5005, fuzzy_dedup_threshold=0.85, log_level="INFO",
+        claude_models=claude_models or {"dna": "opus", "default": "haiku", "script": "sonnet"},
+        ai_backend=ai_backend, openrouter_models=openrouter_models or {},
+    )
+
+
+def test_resolve_ai_call_claude_cli():
+    from short_bot.config import resolve_ai_call
+    s = _settings_with("claude_cli")
+    call = resolve_ai_call(s, {}, "script")
+    assert call.backend == "claude_cli"
+    assert call.model == "sonnet"
+    assert call.api_key is None
+    assert call.claude_path == "claude"
+
+
+def test_resolve_ai_call_openrouter():
+    from short_bot.config import resolve_ai_call
+    s = _settings_with("openrouter", openrouter_models={
+        "dna": "anthropic/claude-opus-4.8", "default": "google/gemini-2.5-flash",
+        "script": "anthropic/claude-sonnet-4.6"})
+    call = resolve_ai_call(s, {"openrouter_api_key": "sk-or-x"}, "script")
+    assert call.backend == "openrouter"
+    assert call.model == "anthropic/claude-sonnet-4.6"
+    assert call.api_key == "sk-or-x"
+
+
+def test_resolve_ai_call_openrouter_falls_back_to_default_model():
+    from short_bot.config import resolve_ai_call
+    s = _settings_with("openrouter", openrouter_models={"default": "google/gemini-2.5-flash"})
+    call = resolve_ai_call(s, {"openrouter_api_key": "k"}, "dna")  # 'dna' tanımsız
+    assert call.model == "google/gemini-2.5-flash"
+
+
+def test_resolve_ai_call_claude_cli_falls_back_to_haiku():
+    from short_bot.config import resolve_ai_call
+    s = _settings_with("claude_cli", claude_models={"dna": "opus"})
+    call = resolve_ai_call(s, {}, "default")  # 'default' tanımsız
+    assert call.model == "haiku"
+
+
+def test_resolve_ai_call_vision_openrouter():
+    from short_bot.config import resolve_ai_call
+    s = _settings_with("openrouter", openrouter_models={
+        "default": "google/gemini-2.5-flash",
+        "vision": "google/gemma-4-31b-it"})
+    call = resolve_ai_call(s, {"openrouter_api_key": "k"}, "vision")
+    assert call.backend == "openrouter"
+    assert call.model == "google/gemma-4-31b-it"
+
+
+def test_resolve_ai_call_vision_claude_cli_default():
+    from short_bot.config import resolve_ai_call
+    s = _settings_with("claude_cli", claude_models={
+        "default": "haiku", "vision": "default"})
+    call = resolve_ai_call(s, {}, "vision")
+    assert call.backend == "claude_cli"
+    assert call.model == "default"
+
+
+def test_resolve_ai_call_vision_claude_cli_falls_back_to_default_when_unset():
+    """settings.yaml'da claude_models.vision YOKSA bile vision rolu 'default'
+    modele duser (haiku degil) — CLI vision-capable varsayilani korunur."""
+    from short_bot.config import resolve_ai_call
+    s = _settings_with("claude_cli", claude_models={"dna": "opus", "default": "haiku"})
+    call = resolve_ai_call(s, {}, "vision")
+    assert call.model == "default"
+

@@ -132,3 +132,19 @@ def test_script_header_bottom_max_35():
             body_paragraph="Yeterince uzun bir paragraf metni icin asgari kosul.",
             highlights=[], category="X", mood="neutral",
         )
+
+
+def test_write_script_forwards_backend_and_api_key():
+    from unittest.mock import patch
+    from short_bot.script_writer import write_script
+    from short_bot.models import NewsItem, Script
+    from datetime import datetime
+    item = NewsItem(guid="g", title="T", link="l", source="s",
+                    pub_date=datetime(2026, 5, 5), thumb_url=None, description=None)
+    fake = Script(header_top="A", header_bottom="B", photo_overlay="C",
+                  body_paragraph="Yeterince uzun bir test paragraf metni.",
+                  highlights=[], category="X", mood="neutral")
+    with patch("short_bot.script_writer.run_json", return_value=fake) as m:
+        write_script(item, "body", backend="openrouter", api_key="k")
+    assert m.call_args.kwargs["backend"] == "openrouter"
+    assert m.call_args.kwargs["api_key"] == "k"

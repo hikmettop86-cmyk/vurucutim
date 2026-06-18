@@ -399,3 +399,77 @@ def test_upload_route_falls_back_when_sonnet_fails(tmp_path):
     # Fallback uses header_top | header_bottom
     assert sent_snippet["title"] == "A | B"
     assert "#shorts" in sent_snippet["description"]
+
+
+def _make_openrouter_app(tmp_path):
+    """Like _make_app but with ai_backend=openrouter + a secrets file holding a key."""
+    cfg_dir = tmp_path / "config"
+    (cfg_dir / "channels").mkdir(parents=True)
+    (cfg_dir / "settings.yaml").write_text(
+        "ffmpeg_path: ffmpeg\nclaude_cli_path: claude\nplaywright_browser: chromium\n"
+        "web: {host: 127.0.0.1, port: 5005}\n"
+        "fuzzy_dedup_threshold: 0.85\nlog_level: INFO\n"
+        "claude_models: {dna: opus, default: haiku}\n"
+        "ai_backend: openrouter\n"
+        "openrouter_models: {dna: or-opus, default: or-default}\n",
+        encoding="utf-8",
+    )
+    (cfg_dir / "channels" / "ch.yaml").write_text(
+        "slug: ch\nname: C\nkeywords: [a]\nlanguage: tr\n"
+        "schedule_cron: '* * * * *'\nduration_s: 6\nmin_score: 6.0\n"
+        "max_candidates_per_run: 10\ntemplate: newscast\n"
+        "colors: {primary: '#000', accent: '#111', bg_gradient: ['#000','#111']}\n"
+        "handle: '@ch'\noutput_dir: out\nenabled: true\n"
+        "cta: {enabled: false, text: '', icons: [], duration_s: 0, show_handle: false}\n",
+        encoding="utf-8",
+    )
+    secrets_path = tmp_path / "data" / "secrets.yaml"
+    secrets_path.parent.mkdir(parents=True, exist_ok=True)
+    secrets_path.write_text("openrouter_api_key: sk-or-test123\n", encoding="utf-8")
+    return create_app(
+        config_dir=cfg_dir, db_path=tmp_path / "x.sqlite",
+        templates_dir=tmp_path / "templates",
+        music_root=tmp_path / "music", cache_dir=tmp_path / "cache",
+        lock_dir=tmp_path / "locks", logs_dir=tmp_path / "logs",
+        output_root=tmp_path / "out", secrets_path=secrets_path, scheduler=False,
+    )
+
+
+def test_upload_route_uses_openrouter_backend_when_configured(tmp_path):
+    """ai_backend=openrouter → generate_youtube_metadata gets backend/api_key/model."""
+    app = _make_openrouter_app(tmp_path)
+    yt_root = tmp_path / "yt_creds"
+    (yt_root / "ch").mkdir(parents=True)
+    (yt_root / "ch" / "token.json").write_text(json.dumps({
+        "token": "x", "refresh_token": "y", "client_id": "x",
+        "client_secret": "y", "token_uri": "https://oauth2.googleapis.com/token",
+        "scopes": ["https://www.googleapis.com/auth/youtube.upload"],
+    }))
+    app.config["SHORTBOT_YT_CREDS_DIR"] = yt_root
+    out_dir = tmp_path / "out" / "ch"; out_dir.mkdir(parents=True)
+    mp4 = out_dir / "v.mp4"; mp4.write_bytes(b"\x00")
+    from short_bot.db import init_db, record_short
+    eng = init_db(app.config["SHORTBOT_DB_PATH"])
+    sid = record_short(eng, channel="ch", rss_item_guid="g1",
+                        title="T", file_path=str(mp4), duration_s=6,
+                        script_json='{"header_top":"A","header_bottom":"B",'
+                                     '"photo_overlay":"X","body_paragraph":"yyyyyyyyyyyyyyyyyyyy",'
+                                     '"highlights":[],"category":"x","mood":"neutral"}',
+                        render_ms=1)
+
+    from short_bot.youtube.metadata_writer import YoutubeMetadata
+    fake_meta = YoutubeMetadata(title="t", description="dddddddddddddddddddd", tags=["x"])
+
+    with patch("short_bot.youtube.auth.Credentials") as MockCreds, \
+         patch("short_bot.web.routes.youtube.upload_video", return_value="VID"), \
+         patch("short_bot.web.routes.youtube.generate_youtube_metadata",
+               return_value=fake_meta) as mmeta:
+        mock_cred = MagicMock(); mock_cred.expired = False
+        MockCreds.from_authorized_user_info.return_value = mock_cred
+        client = app.test_client()
+        resp = client.post(f"/shorts/{sid}/upload-youtube", follow_redirects=False)
+    assert resp.status_code == 302
+    kw = mmeta.call_args.kwargs
+    assert kw["backend"] == "openrouter"
+    assert kw["api_key"] == "sk-or-test123"
+    assert kw["model"] == "or-default"

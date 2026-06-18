@@ -114,6 +114,58 @@ def test_generate_404_for_unknown_channel(app):
     assert r.status_code == 404
 
 
+def _openrouter_app(tmp_path):
+    """App configured with ai_backend=openrouter + a secrets file holding a key."""
+    cfg_dir = tmp_path / "config"
+    (cfg_dir / "channels").mkdir(parents=True)
+    (cfg_dir / "settings.yaml").write_text(
+        "ffmpeg_path: ffmpeg\nclaude_cli_path: claude\nplaywright_browser: chromium\n"
+        "web: {host: 127.0.0.1, port: 5005}\nfuzzy_dedup_threshold: 0.85\n"
+        "log_level: INFO\nclaude_models: {dna: opus, default: haiku, script: sonnet}\n"
+        "ai_backend: openrouter\n"
+        "openrouter_models: {dna: or-opus, default: or-default, script: or-script}\n",
+        encoding="utf-8",
+    )
+    (cfg_dir / "channels" / "demo.yaml").write_text("""\
+slug: demo
+name: Demo Channel
+keywords: [test]
+language: tr
+schedule_cron: 0 * * * *
+duration_s: 6
+min_score: 6.0
+max_candidates_per_run: 5
+template: newscast
+colors: {primary: '#fff', accent: '#fff', bg_gradient: ['#000', '#111']}
+handle: '@demo'
+output_dir: output/demo
+enabled: true
+cta: {enabled: false, text: '', icons: [], duration_s: 0, show_handle: false}
+""", encoding="utf-8")
+    secrets_path = tmp_path / "data" / "secrets.yaml"
+    secrets_path.parent.mkdir(parents=True, exist_ok=True)
+    secrets_path.write_text("openrouter_api_key: sk-or-test123\n", encoding="utf-8")
+    return create_app(config_dir=cfg_dir, db_path=tmp_path / "x.sqlite",
+                      secrets_path=secrets_path, scheduler=False)
+
+
+def test_generate_uses_openrouter_backend_when_configured(tmp_path):
+    """ai_backend=openrouter → suggest_community_posts gets backend/api_key/model."""
+    app = _openrouter_app(tmp_path)
+    captured = {}
+
+    def fake_suggest(channel, *, recent_titles, trend_terms, **kw):
+        captured.update(kw)
+        return _drafts().drafts
+
+    with patch("short_bot.web.routes.community.suggest_community_posts",
+                side_effect=fake_suggest):
+        app.test_client().post("/community/demo/generate", follow_redirects=True)
+    assert captured["backend"] == "openrouter"
+    assert captured["api_key"] == "sk-or-test123"
+    assert captured["model"] == "or-default"
+
+
 # --- channel edit page link ------------------------------------------------
 
 def test_channel_edit_includes_community_link(app):

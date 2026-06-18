@@ -335,7 +335,7 @@ def test_verify_with_claude_prompt_signals_loose_matching_and_dual_axis():
     from short_bot.image_picker import _verify_with_claude
     captured = {}
 
-    def fake_run_json(prompt, model, **kw):
+    def fake_run_json(prompt, schema, **kw):
         captured["prompt"] = prompt
         return _Verdict(appropriate=True, is_safe=True, reason="ok")
 
@@ -413,7 +413,7 @@ def test_verify_prompt_requests_has_text_overlay_field():
     """Prompt must instruct Claude to evaluate burned-in headline graphics."""
     from short_bot.image_picker import _verify_with_claude
     captured = {}
-    def fake_run_json(prompt, model, **kw):
+    def fake_run_json(prompt, schema, **kw):
         captured["prompt"] = prompt
         return _Verdict(appropriate=True, is_safe=True,
                         has_text_overlay=False, reason="ok")
@@ -424,3 +424,38 @@ def test_verify_prompt_requests_has_text_overlay_field():
     # examples of news-graphic cues
     pl = p.lower()
     assert any(s in pl for s in ("burned", "banner", "başlık", "kart"))
+
+
+def test_verify_forwards_backend_and_image_path(tmp_path):
+    from short_bot.image_picker import _verify_with_claude
+    img = tmp_path / "x.jpg"
+    img.write_bytes(b"jpeg")
+    captured = {}
+    def fake_run_json(prompt, schema, **kw):
+        captured["prompt"] = prompt
+        captured.update(kw)
+        return _Verdict(appropriate=True, is_safe=True, reason="ok")
+    with patch("short_bot.image_picker.run_json", side_effect=fake_run_json):
+        _verify_with_claude(img, _script(), "claude",
+                            backend="openrouter", api_key="k", model="g")
+    assert captured["backend"] == "openrouter"
+    assert captured["api_key"] == "k"
+    assert captured["model"] == "g"
+    assert captured["image_path"] == img
+    assert not captured["prompt"].lstrip().startswith("@")
+
+
+def test_pick_image_forwards_vision_params(tmp_path):
+    cand = _cand("https://example.com/a.jpg")
+    captured = {}
+    def fake_verify(path, script, claude_path, **kw):
+        captured.update(kw)
+        return _Verdict(appropriate=True, is_safe=True, reason="ok")
+    with patch("short_bot.image_picker.search_images", return_value=[cand]), \
+         patch("short_bot.image_picker._download", return_value=True), \
+         patch("short_bot.image_picker._verify_with_claude", side_effect=fake_verify):
+        pick_image_for_script(_script(), tmp_path / "img", claude_path="claude",
+                              backend="openrouter", api_key="k", model="g")
+    assert captured["backend"] == "openrouter"
+    assert captured["api_key"] == "k"
+    assert captured["model"] == "g"
