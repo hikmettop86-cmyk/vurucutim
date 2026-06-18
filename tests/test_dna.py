@@ -137,6 +137,23 @@ def test_generate_dna_returns_dnaspec():
     assert m.call_args.kwargs["model"] == "opus"
 
 
+def test_generate_dna_forwards_backend_and_api_key():
+    fake = DnaSpec(
+        archetype="newscast",
+        palette=DnaPalette(primary="#c81e1e", accent="#ffea3b",
+                           bg_gradient=["#1a3b6b", "#0a1a3b"],
+                           body_bg=["#1a1a2a", "#0a0a1a"]),
+        fonts=DnaFonts(headline="Inter", body="Inter"),
+        tone=DnaTone(voice="formal", style="concise"),
+        persona_summary="Test kanalı.",
+    )
+    with patch("short_bot.dna.run_json", return_value=fake) as m:
+        generate_dna(name="X", keywords=["a"], language="tr",
+                     backend="openrouter", api_key="k")
+    assert m.call_args.kwargs["backend"] == "openrouter"
+    assert m.call_args.kwargs["api_key"] == "k"
+
+
 def test_generate_dna_default_model_is_opus():
     fake = DnaSpec(
         archetype="newscast",
