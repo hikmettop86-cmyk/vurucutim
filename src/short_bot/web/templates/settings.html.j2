@@ -114,7 +114,7 @@
             <input type="checkbox" name="openrouter_api_key_clear" value="1"> Key'i temizle
           </label>
 
-          {% for role, title in [('dna','DNA / tasarım'), ('default','Skorlama / varsayılan'), ('script','Script / metin')] %}
+          {% for role, title in [('dna','DNA / tasarım'), ('default','Skorlama / varsayılan'), ('script','Script / metin'), ('vision','Görsel doğrulama')] %}
           <label class="block">
             <span class="text-xs text-claude-muted uppercase">{{ title }}</span>
             <select name="or_model_{{ role }}" class="or-model-select bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">

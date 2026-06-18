@@ -130,7 +130,7 @@ def save():
             return request.form.get(f"or_model_{role}_custom", "").strip()
         return choice
     or_models = data.get("openrouter_models", {}) or {}
-    for role in ("dna", "default", "script"):
+    for role in ("dna", "default", "script", "vision"):
         val = _or_model(role)
         if val:
             or_models[role] = val
