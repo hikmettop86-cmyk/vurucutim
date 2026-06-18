@@ -403,6 +403,8 @@ def generate_dna_for_video(
     body: str,
     claude_path: str = "claude",
     model: str = "opus",
+    backend: str = "claude_cli",
+    api_key: str | None = None,
 ) -> DnaSpec:
     """Generate a fresh DnaSpec tuned to a specific article.
 
@@ -415,6 +417,7 @@ def generate_dna_for_video(
     return run_json(
         prompt, DnaSpec,
         claude_path=claude_path, model=model,
+        backend=backend, api_key=api_key,
         retries=2, timeout_s=180,
     )
 

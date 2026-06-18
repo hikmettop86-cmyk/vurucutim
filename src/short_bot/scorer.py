@@ -129,6 +129,8 @@ def score_items(
     batch_size: int = _BATCH_SIZE,
     channel: "ChannelConfig | None" = None,
     performance_insights: dict | None = None,
+    backend: str = "claude_cli",
+    api_key: str | None = None,
 ) -> list[ScoredItem]:
     if not items:
         return []
@@ -146,6 +148,7 @@ def score_items(
             response = run_json(
                 prompt, _ScoreResponse,
                 claude_path=claude_path, model=model,
+                backend=backend, api_key=api_key,
             )
         except Exception:
             # Batch failure: skip this batch, score the rest. Better to lose

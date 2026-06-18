@@ -180,6 +180,8 @@ def generate_quote(
     topic_distribution: dict[str, int],
     claude_path: str = "claude",
     model: str = "sonnet",
+    backend: str = "claude_cli",
+    api_key: str | None = None,
 ) -> GeneratorResult:
     prompt = build_generator_prompt(
         channel=channel, dna=dna,
@@ -189,5 +191,6 @@ def generate_quote(
     return run_json(
         prompt, GeneratorResult,
         claude_path=claude_path, model=model,
+        backend=backend, api_key=api_key,
         retries=2, timeout_s=180,
     )

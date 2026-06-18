@@ -107,7 +107,9 @@ TAGS KURALLARI:
 def generate_youtube_metadata(*, channel, script: dict,
                               rss_source: str | None, rss_link: str | None,
                               claude_path: str = "claude",
-                              model: str = "sonnet") -> YoutubeMetadata:
+                              model: str = "sonnet",
+                              backend: str = "claude_cli",
+                              api_key: str | None = None) -> YoutubeMetadata:
     """Call Sonnet to produce metadata. Raises ClaudeCliError on failure —
     callers should fall back to non-LLM build_snippet."""
     prompt = build_metadata_prompt(
@@ -117,5 +119,6 @@ def generate_youtube_metadata(*, channel, script: dict,
     return run_json(
         prompt, YoutubeMetadata,
         claude_path=claude_path, model=model,
+        backend=backend, api_key=api_key,
         retries=2, timeout_s=120,
     )
