@@ -12,6 +12,10 @@
     { "label": "OpenAI", "models": [
       { "id": "openai/gpt-4o",      "label": "GPT-4o" },
       { "id": "openai/gpt-4o-mini", "label": "GPT-4o mini (ucuz)" }
+    ]},
+    { "label": "Google Gemma (vision)", "models": [
+      { "id": "google/gemma-4-31b-it",     "label": "Gemma 4 31B (vision)" },
+      { "id": "google/gemma-4-26b-a4b-it", "label": "Gemma 4 26B A4B (ucuz, vision)" }
     ]}
   ]
 }

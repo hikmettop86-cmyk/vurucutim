@@ -36,6 +36,15 @@ claude_models:
   dna: opus      # Kanal DNA olusturma — Opus kullanir (~30-60s)
   default: haiku # Skoring + diger islemler — Haiku kullanir (hizli + ucuz)
   script: sonnet # Script yazimi — Sonnet kullanir (Haiku basliklarda klise/yanlis caption uretiyordu)
+  vision: default # Gorsel analiz — "default" demek claude_models["default"] kullanilir
+
+# OpenRouter backend icin model secimi (ai_backend: openrouter ise kullanilir)
+# ai_backend: openrouter  # veya claude_cli (varsayilan)
+# openrouter_models:
+#   dna: anthropic/claude-opus-4.8
+#   default: google/gemini-2.5-flash
+#   script: anthropic/claude-sonnet-4.6
+#   vision: google/gemma-4-31b-it
 
 # Trend detection: trend olan bir konu icin scorer puanini yukseltir.
 # enabled=false ise tum trend kanal ayarlari yok sayilir.
