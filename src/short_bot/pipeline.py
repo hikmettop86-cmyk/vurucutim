@@ -773,9 +773,13 @@ def _run_rss(*, channel, run_id, log, eng, settings,
         if bg_try is None:
             from short_bot.image_picker import pick_image_for_script
             images_cache = cache_dir / "images"
+            vision_call = resolve_ai_call(settings, secrets, "vision")
             bg_try = pick_image_for_script(script_try, images_cache,
-                                           claude_path=settings.claude_cli_path,
-                                           channel=channel)
+                                           claude_path=vision_call.claude_path,
+                                           channel=channel,
+                                           backend=vision_call.backend,
+                                           api_key=vision_call.api_key,
+                                           model=vision_call.model)
             if bg_try:
                 log.info(f"  ddg image accepted: {bg_try.name}")
 
@@ -1019,11 +1023,15 @@ def _run_generator(*, channel, run_id, log, eng, settings,
     # Phase 4: image
     log.info("[4/6] image search (Sonnet keywords)")
     images_cache = Path(cache_dir) / "images"
+    vision_call = resolve_ai_call(settings, secrets, "vision")
     bg = pick_image_for_generator(
         keywords=chosen_result.image_keywords,
         script=chosen_result.script,
         cache_dir=images_cache,
-        claude_path=settings.claude_cli_path,
+        claude_path=vision_call.claude_path,
+        backend=vision_call.backend,
+        api_key=vision_call.api_key,
+        model=vision_call.model,
     )
     music = pick_music(music_root, mood=chosen_result.script.mood, channel_slug=channel.slug)
     log.info(f"  → bg={'cached' if bg else 'none'} music={music.name}")
