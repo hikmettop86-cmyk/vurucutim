@@ -18,7 +18,7 @@ import requests
 from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel
 
-from short_bot.claude_cli import ClaudeCliError, run_json
+from short_bot.claude_cli import AIBackendError, ClaudeCliError, run_json
 from short_bot.config import ChannelConfig
 from short_bot.image_search import ImageCandidate, search_images
 from short_bot.models import Script
@@ -70,24 +70,18 @@ def _download(url: str, dest: Path, *, timeout: int = 15) -> bool:
     return True
 
 
-def _verify_with_claude(image_path: Path, script: Script, claude_path: str) -> _Verdict | None:
-    """Ask Claude (vision) whether the image is appropriate. Returns None on CLI failure.
+def _verify_with_claude(image_path: Path, script: Script, claude_path: str,
+                        *, backend: str = "claude_cli", api_key: str | None = None,
+                        model: str = "default") -> _Verdict | None:
+    """Görselin uygunluğunu vision ile değerlendir (Claude CLI veya OpenRouter/Gemma).
+    Görsel run_json'a image_path ile gönderilir (prompt'a @path konmaz).
+    None döner CLI/HTTP hatasında.
 
-    Three signals returned:
-      - appropriate: STRICT fit (image directly represents the news topic)
-      - is_safe: LOOSE/thematic fit (no inappropriate content, at least
-        plausible for the news category — used as last-resort fallback
-        when every source rejects on appropriate=true)
-      - has_text_overlay: HARD REJECT — another outlet's burned-in headline
-        graphic, embedded text will appear in our frame and may contradict
-        the script (e.g. our script says '45 gün', image says '15 gün').
-    Loose phrasing in the prompt prevents over-rejection on stories like
-    'Putin announces ceasefire' where the search returns thematic images
-    (Kremlin, Russian flag, soldiers) rather than a direct headshot.
+    Üç sinyal: appropriate (sıkı fit), is_safe (gevşek/temalı fit),
+    has_text_overlay (burned-in haber grafiği → hard reject).
     """
     summary = script.body_paragraph[:200]
     prompt = (
-        f"@{image_path.absolute().as_posix()}\n\n"
         f"Bu görseli haber kanalı YouTube Shorts kapağı olarak değerlendir. "
         f"GEVŞEK ol — haberin TEMASIYLA ilişkili olması yeterli, "
         f"kişinin yüzü/birebir yer şart değil.\n\n"
@@ -129,9 +123,11 @@ def _verify_with_claude(image_path: Path, script: Script, claude_path: str) -> _
         f'"reason": "<kısa Türkçe açıklama, 1 cümle>"}}'
     )
     try:
-        return run_json(prompt, _Verdict, claude_path=claude_path, retries=1, timeout_s=60)
-    except ClaudeCliError as e:
-        logger.warning(f"claude verification failed: {e}")
+        return run_json(prompt, _Verdict, claude_path=claude_path, model=model,
+                        backend=backend, api_key=api_key, image_path=image_path,
+                        retries=1, timeout_s=60)
+    except AIBackendError as e:
+        logger.warning(f"vision verification failed: {e}")
         return None
 
 
@@ -186,6 +182,9 @@ def pick_image_for_script(
     claude_path: str = "claude",
     max_candidates: int = 3,
     channel: ChannelConfig | None = None,
+    backend: str = "claude_cli",
+    api_key: str | None = None,
+    model: str = "default",
 ) -> Path | None:
     """Search -> download candidates -> verify with Claude -> return first OK image path."""
     query = (build_search_query_for_channel(script, channel)
@@ -193,6 +192,7 @@ def pick_image_for_script(
     return _run_image_search(
         query, script, cache_dir,
         claude_path=claude_path, max_candidates=max_candidates,
+        backend=backend, api_key=api_key, model=model,
     )
 
 
@@ -203,12 +203,16 @@ def pick_image_for_generator(
     cache_dir: Path,
     claude_path: str = "claude",
     max_candidates: int = 3,
+    backend: str = "claude_cli",
+    api_key: str | None = None,
+    model: str = "default",
 ) -> Path | None:
     """Image picker for generator mode: query is space-joined keywords from Sonnet."""
     query = " ".join(k for k in keywords if k).strip()
     return _run_image_search(
         query, script, cache_dir,
         claude_path=claude_path, max_candidates=max_candidates,
+        backend=backend, api_key=api_key, model=model,
     )
 
 
@@ -240,6 +244,9 @@ def _run_image_search(
     *,
     claude_path: str,
     max_candidates: int,
+    backend: str = "claude_cli",
+    api_key: str | None = None,
+    model: str = "default",
 ) -> Path | None:
     """Source-by-source iteration: each source gets its own batch of candidates,
     Claude-verified until one is accepted. If all candidates from a source are
@@ -337,7 +344,8 @@ def _run_image_search(
             if not path.exists():
                 if not _download(cand.url, path):
                     continue
-            verdict = _verify_with_claude(path, script, claude_path)
+            verdict = _verify_with_claude(path, script, claude_path,
+                                          backend=backend, api_key=api_key, model=model)
             if verdict is None:
                 logger.warning(f"  {source_name} cand {i}: verification CLI failed -> skip")
                 continue
