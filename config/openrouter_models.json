@@ -1,21 +1,21 @@
 {
   "groups": [
     { "label": "Anthropic Claude", "models": [
-      { "id": "anthropic/claude-opus-4.8",   "label": "Claude Opus 4.8 (guclu)" },
-      { "id": "anthropic/claude-sonnet-4.6", "label": "Claude Sonnet 4.6 (dengeli)" },
-      { "id": "anthropic/claude-haiku-4.5",  "label": "Claude Haiku 4.5 (hizli/ucuz)" }
+      { "id": "anthropic/claude-opus-4.8",   "label": "Claude Opus 4.8 (guclu)",      "vision": true },
+      { "id": "anthropic/claude-sonnet-4.6", "label": "Claude Sonnet 4.6 (dengeli)",  "vision": true },
+      { "id": "anthropic/claude-haiku-4.5",  "label": "Claude Haiku 4.5 (hizli/ucuz)", "vision": true }
     ]},
     { "label": "Google Gemini", "models": [
-      { "id": "google/gemini-2.5-pro",   "label": "Gemini 2.5 Pro" },
-      { "id": "google/gemini-2.5-flash", "label": "Gemini 2.5 Flash (hizli/ucuz)" }
+      { "id": "google/gemini-2.5-pro",   "label": "Gemini 2.5 Pro",             "vision": true },
+      { "id": "google/gemini-2.5-flash", "label": "Gemini 2.5 Flash (hizli/ucuz)", "vision": true }
     ]},
     { "label": "OpenAI", "models": [
-      { "id": "openai/gpt-4o",      "label": "GPT-4o" },
-      { "id": "openai/gpt-4o-mini", "label": "GPT-4o mini (ucuz)" }
+      { "id": "openai/gpt-4o",      "label": "GPT-4o",           "vision": true },
+      { "id": "openai/gpt-4o-mini", "label": "GPT-4o mini (ucuz)", "vision": true }
     ]},
     { "label": "Google Gemma (vision)", "models": [
-      { "id": "google/gemma-4-31b-it",     "label": "Gemma 4 31B (vision)" },
-      { "id": "google/gemma-4-26b-a4b-it", "label": "Gemma 4 26B A4B (ucuz, vision)" }
+      { "id": "google/gemma-4-31b-it",     "label": "Gemma 4 31B (vision)",          "vision": true },
+      { "id": "google/gemma-4-26b-a4b-it", "label": "Gemma 4 26B A4B (ucuz, vision)", "vision": true }
     ]}
   ]
 }
