@@ -5,8 +5,9 @@ from pathlib import Path
 from flask import (Blueprint, abort, current_app, flash, redirect,
                    render_template, request, session, url_for)
 
-from short_bot.config import ChannelConfig, save_channel
+from short_bot.config import ChannelConfig, resolve_ai_call, save_channel
 from short_bot.dna import DnaSpec, build_css_override, generate_dna
+from short_bot.pexels import load_secrets as _load_secrets
 from short_bot.dna_smoke import smoke_render_dna
 from short_bot.locale import RSS_LOCALES, SUPPORTED_LANGUAGES
 
@@ -45,13 +46,18 @@ def generate():
     content_source = request.form.get("content_source", "rss")
     generator_topic = request.form.get("generator_topic", "").strip()
     settings = current_app.config["SHORTBOT_SETTINGS"]
+    secrets_path = current_app.config.get("SHORTBOT_SECRETS_PATH")
+    secrets = _load_secrets(Path(secrets_path)) if secrets_path else {}
+    dna_call = resolve_ai_call(settings, secrets, "dna")
     try:
         dna = generate_dna(
             name=name, keywords=keywords, language=language,
             topic_hint=request.form.get("topic_hint", ""),
             target_audience=request.form.get("target_audience", ""),
-            claude_path=settings.claude_cli_path,
-            model=settings.claude_models.get("dna", "opus"),
+            claude_path=dna_call.claude_path,
+            model=dna_call.model,
+            backend=dna_call.backend,
+            api_key=dna_call.api_key,
         )
     except Exception as e:
         return render_template("_partials/dna_preview.html.j2",

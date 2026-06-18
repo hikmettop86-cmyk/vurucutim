@@ -330,11 +330,14 @@ def generate_dna(
     target_audience: str = "",
     claude_path: str = "claude",
     model: str = "opus",
+    backend: str = "claude_cli",
+    api_key: str | None = None,
 ) -> DnaSpec:
     prompt = build_dna_prompt(name, keywords, language, topic_hint, target_audience)
     return run_json(
         prompt, DnaSpec,
         claude_path=claude_path, model=model,
+        backend=backend, api_key=api_key,
         retries=2, timeout_s=180,
     )
 
