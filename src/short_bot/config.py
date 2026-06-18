@@ -39,6 +39,8 @@ class Settings:
     fuzzy_dedup_threshold: float
     log_level: str
     claude_models: dict
+    ai_backend: str = "claude_cli"
+    openrouter_models: dict = field(default_factory=dict)
     trends: TrendsSettings = field(default_factory=_default_trends_settings)
 
 
@@ -144,6 +146,8 @@ def load_settings(path: Path) -> Settings:
         fuzzy_dedup_threshold=float(data.get("fuzzy_dedup_threshold", 0.85)),
         log_level=data.get("log_level", "INFO"),
         claude_models=dict(data.get("claude_models", {"dna": "opus", "default": "haiku"})),
+        ai_backend=data.get("ai_backend", "claude_cli"),
+        openrouter_models=dict(data.get("openrouter_models", {})),
         trends=trends,
     )
 
