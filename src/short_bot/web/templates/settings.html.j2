@@ -121,7 +121,9 @@
               {% for group in openrouter_catalog.groups %}
               <optgroup label="{{ group.label }}">
                 {% for m in group.models %}
+                {% if role != 'vision' or m.vision %}
                 <option value="{{ m.id }}" {% if openrouter_models.get(role) == m.id %}selected{% endif %}>{{ m.label }}</option>
+                {% endif %}
                 {% endfor %}
               </optgroup>
               {% endfor %}
