@@ -14,7 +14,7 @@ from pathlib import Path
 
 from filelock import FileLock, Timeout
 
-from short_bot.config import ChannelConfig, Settings
+from short_bot.config import ChannelConfig, Settings, resolve_ai_call
 from short_bot.db import (
     init_db, mark_processed, record_short, record_rss_item,
     start_run, finish_run, get_last_youtube_upload_at,
@@ -189,6 +189,9 @@ def _resolve_dna_for_video(
     secrets_path: Path,
     templates_dir: Path,
     eng,
+    model: str = "opus",
+    backend: str = "claude_cli",
+    api_key: str | None = None,
 ) -> tuple[DnaSpec, Path] | None:
     """For dynamic_dna channels: lookup cache or generate per-video DNA.
 
@@ -234,7 +237,8 @@ def _resolve_dna_for_video(
     try:
         dna = generate_dna_for_video(
             channel=channel, headline=headline, body=body,
-            claude_path=claude_path,
+            claude_path=claude_path, model=model,
+            backend=backend, api_key=api_key,
         )
     except Exception as e:  # broad: timeout, JSON parse, validation, etc.
         log.warning(f"  [dna] generation failed: {e} → fallback to static")
@@ -265,7 +269,9 @@ def _resolve_ui_labels(channel: ChannelConfig) -> dict[str, str]:
 def _maybe_auto_upload(*, eng, short_id: int, channel, picked_score: float | None,
                        log, yt_creds_root: Path, claude_path: str,
                        model: str, cooldown_minutes: int = 5,
-                       secrets_path: Path | None = None) -> None:
+                       secrets_path: Path | None = None,
+                       backend: str = "claude_cli",
+                       api_key: str | None = None) -> None:
     """Post-render hook: if channel opts in, evaluate gates + run upload."""
     if channel.youtube is None or not channel.youtube.auto_upload:
         return
@@ -297,7 +303,7 @@ def _maybe_auto_upload(*, eng, short_id: int, channel, picked_score: float | Non
         result = run_auto_upload(
             eng=eng, short_id=short_id, channel=channel,
             credentials=creds, claude_path=claude_path, model=model,
-            secrets_path=secrets_path,
+            secrets_path=secrets_path, backend=backend, api_key=api_key,
         )
         log.info(f"[YT] auto-upload başarılı: {result.video_url}")
     except Exception as e:
@@ -621,12 +627,18 @@ def _run_rss(*, channel, run_id, log, eng, settings,
             )
     except Exception as e:  # noqa: BLE001 -- never let insights crash pipeline
         log.warning(f"  [insights] load failed: {e} -- skipping injection")
+    # Resolve the active AI backend (claude_cli default; openrouter when configured).
+    # Load secrets once and reuse for every role below.
+    secrets = _load_secrets(secrets_path_for_dedup)
+    score_call = resolve_ai_call(settings, secrets, "default")
     scored = score_items(
         candidates,
-        claude_path=settings.claude_cli_path,
-        model=settings.claude_models.get("default", "haiku"),
+        claude_path=score_call.claude_path,
+        model=score_call.model,
         channel=channel,
         performance_insights=perf_insights,
+        backend=score_call.backend,
+        api_key=score_call.api_key,
     )
     # Trend boost: augment scores when a candidate headline matches a
     # currently trending term in the channel's region. Best-effort -- any
@@ -660,9 +672,16 @@ def _run_rss(*, channel, run_id, log, eng, settings,
              f"(retry-on-no-image up to {_IMAGE_RETRY_MAX})")
     top_guids = {c.item.guid for c in top_n_candidates}
 
-    script_model = (channel.script_model
-                    or settings.claude_models.get("script")
-                    or settings.claude_models.get("default", "haiku"))
+    # Resolve the script-role AI backend. In claude_cli mode keep the existing
+    # channel-aware model precedence (channel.script_model wins); in openrouter
+    # mode use the resolved openrouter model.
+    script_call = resolve_ai_call(settings, secrets, "script")
+    if script_call.backend == "claude_cli":
+        script_model = (channel.script_model
+                        or settings.claude_models.get("script")
+                        or settings.claude_models.get("default", "haiku"))
+    else:
+        script_model = script_call.model
 
     picked = None
     body = None
@@ -710,16 +729,20 @@ def _run_rss(*, channel, run_id, log, eng, settings,
                 },
                 max_retries=2,
                 log=log,
-                claude_path=settings.claude_cli_path,
+                claude_path=script_call.claude_path,
                 model=script_model,
+                backend=script_call.backend,
+                api_key=script_call.api_key,
             )
         else:
             log.info(f"  template '{channel.template}' not in overflow config "
                      f"— skipping overflow check")
             script_try = write_script(
                 candidate.item, body_try,
-                claude_path=settings.claude_cli_path,
+                claude_path=script_call.claude_path,
                 channel=channel, model=script_model,
+                backend=script_call.backend,
+                api_key=script_call.api_key,
             )
         log.info(f"  → {script_try.header_top} | {script_try.header_bottom}")
 
@@ -824,12 +847,15 @@ def _run_rss(*, channel, run_id, log, eng, settings,
         from short_bot.dna import build_css_override
         effective_dna = channel.dna
         secrets_path = current_app_secrets_path()
+        dna_call = resolve_ai_call(settings, secrets, "dna")
         resolved = _resolve_dna_for_video(
             channel=channel,
             headline=f"{script.header_top} {script.header_bottom}",
             body=script.body_paragraph,
-            log=log, claude_path=settings.claude_cli_path,
+            log=log, claude_path=dna_call.claude_path,
             secrets_path=secrets_path, templates_dir=templates_dir, eng=eng,
+            model=dna_call.model, backend=dna_call.backend,
+            api_key=dna_call.api_key,
         )
         if resolved is not None:
             effective_dna, css_path = resolved
@@ -906,9 +932,11 @@ def _run_rss(*, channel, run_id, log, eng, settings,
         eng=eng, short_id=short_id, channel=channel,
         picked_score=picked.score, log=log,
         yt_creds_root=yt_creds_root,
-        claude_path=settings.claude_cli_path,
-        model=settings.claude_models.get("default", "haiku"),
+        claude_path=score_call.claude_path,
+        model=score_call.model,
         secrets_path=secrets_path,
+        backend=score_call.backend,
+        api_key=score_call.api_key,
     )
     log.info(f"=== success short_id={short_id} ===")
     return RunResult(run_id=run_id, status="success", short_path=out_path, error=None)
@@ -928,6 +956,20 @@ def _run_generator(*, channel, run_id, log, eng, settings,
                        if channel.generator.fuzzy_threshold is not None
                        else settings.fuzzy_dedup_threshold)
 
+    # Resolve the active AI backend (claude_cli default; openrouter when configured).
+    # Load secrets once and reuse for every role in this path.
+    gen_secrets_path = (
+        (Path(eng.url.database).parent / "secrets.yaml").resolve()
+        if eng.url.database else Path("data/secrets.yaml").resolve()
+    )
+    secrets = _load_secrets(gen_secrets_path)
+    gen_call = resolve_ai_call(settings, secrets, "default")
+    if gen_call.backend == "claude_cli":
+        gen_model = (channel.script_model
+                     or settings.claude_models.get("default", "sonnet"))
+    else:
+        gen_model = gen_call.model
+
     last_text = ""
     chosen_result = None
     for attempt in range(1, channel.generator.max_retries + 1):
@@ -935,9 +977,10 @@ def _run_generator(*, channel, run_id, log, eng, settings,
         result = generate_quote(
             channel=channel, dna=channel.dna,
             forbidden_texts=forbidden, topic_distribution=topic_dist,
-            claude_path=settings.claude_cli_path,
-            model=channel.script_model
-                  or settings.claude_models.get("default", "sonnet"),
+            claude_path=gen_call.claude_path,
+            model=gen_model,
+            backend=gen_call.backend,
+            api_key=gen_call.api_key,
         )
 
         log.info(f"[3/6] dedup-check (text={result.text[:60]!r})")
@@ -1008,12 +1051,15 @@ def _run_generator(*, channel, run_id, log, eng, settings,
         from short_bot.dna import build_css_override
         effective_dna = channel.dna
         secrets_path = current_app_secrets_path()
+        dna_call = resolve_ai_call(settings, secrets, "dna")
         resolved = _resolve_dna_for_video(
             channel=channel,
             headline=f"{chosen_result.script.header_top} {chosen_result.script.header_bottom}",
             body=chosen_result.script.body_paragraph,
-            log=log, claude_path=settings.claude_cli_path,
+            log=log, claude_path=dna_call.claude_path,
             secrets_path=secrets_path, templates_dir=templates_dir, eng=eng,
+            model=dna_call.model, backend=dna_call.backend,
+            api_key=dna_call.api_key,
         )
         if resolved is not None:
             effective_dna, css_path = resolved
@@ -1071,9 +1117,11 @@ def _run_generator(*, channel, run_id, log, eng, settings,
         eng=eng, short_id=short_id, channel=channel,
         picked_score=None, log=log,
         yt_creds_root=yt_creds_root,
-        claude_path=settings.claude_cli_path,
-        model=settings.claude_models.get("default", "haiku"),
+        claude_path=gen_call.claude_path,
+        model=gen_call.model,
         secrets_path=secrets_path,
+        backend=gen_call.backend,
+        api_key=gen_call.api_key,
     )
     log.info(f"=== success short_id={short_id} ===")
     return RunResult(run_id=run_id, status="success",
@@ -1111,6 +1159,8 @@ def write_script_with_overflow_check(
     log,
     claude_path: str = "claude",
     model: str = "default",
+    backend: str = "claude_cli",
+    api_key: str | None = None,
 ) -> tuple:
     """Returns (final_script, retry_count).
 
@@ -1125,7 +1175,8 @@ def write_script_with_overflow_check(
     for attempt in range(max_retries + 1):  # 0, 1, 2 → 3 attempts
         script = write_script(item, body_html, channel=channel,
                               overflow_feedback=feedback,
-                              claude_path=claude_path, model=model)
+                              claude_path=claude_path, model=model,
+                              backend=backend, api_key=api_key)
         last_script = script
 
         check_job = _build_check_job(script, channel, **job_template_args)

@@ -85,7 +85,9 @@ def _load_short_for_upload(eng, short_id: int):
 def run_auto_upload(*, eng, short_id: int, channel, credentials,
                     claude_path: str = "claude",
                     model: str = "sonnet",
-                    secrets_path: Path | None = None) -> AutoUploadResult:
+                    secrets_path: Path | None = None,
+                    backend: str = "claude_cli",
+                    api_key: str | None = None) -> AutoUploadResult:
     """Build metadata via Sonnet (best-effort) + upload + record DB row.
 
     secrets_path: data/secrets.yaml path. If None, no proxy lookup is attempted.
@@ -127,6 +129,7 @@ def run_auto_upload(*, eng, short_id: int, channel, credentials,
             channel=channel, script=script,
             rss_source=rss_source, rss_link=rss_link,
             claude_path=claude_path, model=model,
+            backend=backend, api_key=api_key,
         )
         generated = {"title": meta.title, "description": meta.description, "tags": meta.tags}
     except Exception:
