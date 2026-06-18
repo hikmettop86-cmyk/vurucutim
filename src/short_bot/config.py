@@ -360,3 +360,30 @@ def list_channels(channels_dir: Path, enabled_only: bool = False) -> list[Channe
             continue
         out.append(c)
     return out
+
+
+@dataclass(frozen=True)
+class AICall:
+    backend: str            # "claude_cli" | "openrouter"
+    model: str
+    api_key: str | None     # openrouter'da dolu, claude_cli'da None
+    claude_path: str
+
+
+def resolve_ai_call(settings: Settings, secrets: dict, role: str) -> AICall:
+    """role: 'dna' | 'default' | 'script'. Aktif backend'e göre model+key çözer."""
+    if settings.ai_backend == "openrouter":
+        model = (settings.openrouter_models.get(role)
+                 or settings.openrouter_models.get("default", ""))
+        return AICall(
+            backend="openrouter",
+            model=model,
+            api_key=(secrets.get("openrouter_api_key", "") or None),
+            claude_path=settings.claude_cli_path,
+        )
+    return AICall(
+        backend="claude_cli",
+        model=settings.claude_models.get(role, "haiku"),
+        api_key=None,
+        claude_path=settings.claude_cli_path,
+    )
