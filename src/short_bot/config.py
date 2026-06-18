@@ -371,7 +371,7 @@ class AICall:
 
 
 def resolve_ai_call(settings: Settings, secrets: dict, role: str) -> AICall:
-    """role: 'dna' | 'default' | 'script'. Aktif backend'e göre model+key çözer."""
+    """role: 'dna' | 'default' | 'script' | 'vision'. Aktif backend'e göre model+key çözer."""
     if settings.ai_backend == "openrouter":
         model = (settings.openrouter_models.get(role)
                  or settings.openrouter_models.get("default", ""))
@@ -381,9 +381,10 @@ def resolve_ai_call(settings: Settings, secrets: dict, role: str) -> AICall:
             api_key=(secrets.get("openrouter_api_key", "") or None),
             claude_path=settings.claude_cli_path,
         )
+    cli_fallback = "default" if role == "vision" else "haiku"
     return AICall(
         backend="claude_cli",
-        model=settings.claude_models.get(role, "haiku"),
+        model=settings.claude_models.get(role, cli_fallback),
         api_key=None,
         claude_path=settings.claude_cli_path,
     )

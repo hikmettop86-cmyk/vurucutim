@@ -80,7 +80,7 @@ def _extract_json(raw: str) -> str:
 
 def _invoke_raw(prompt: str, *, backend: str, model: str,
                 claude_path: str, api_key: str | None, timeout_s: int,
-                image_path=None) -> str:
+                image_path: "Path | None" = None) -> str:
     """Tek-atış ham çıktı. claude_cli → subprocess; openrouter → HTTP.
     FileNotFoundError ve TimeoutExpired'i (claude_cli) yukarıya bırakır;
     diğer hatalarda ClaudeCliError/OpenRouterError fırlatır."""
@@ -114,7 +114,7 @@ def run_json(
     api_key: str | None = None,
     retries: int = 2,
     timeout_s: int = 180,
-    image_path=None,
+    image_path: "Path | None" = None,
 ) -> T:
     """Prompt'u backend'e gönder, çıktıyı JSON olarak parse edip schema ile doğrula.
 

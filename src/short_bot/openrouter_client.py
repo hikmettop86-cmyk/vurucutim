@@ -13,7 +13,7 @@ _ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
 
 def complete(prompt: str, *, model: str, api_key: str | None,
              timeout_s: int = 180, json_mode: bool = True,
-             image_path=None) -> str:
+             image_path: "Path | None" = None) -> str:
     """OpenRouter'a tek-atış istek; mesaj içeriğini (ham metin) döndürür.
     image_path verilirse görsel base64 image_url content block olarak eklenir.
 
