@@ -1,5 +1,4 @@
 """Settings page: view + edit settings.yaml + write Pexels API key to data/secrets.yaml."""
-import json
 import logging
 from pathlib import Path
 
@@ -8,6 +7,7 @@ from flask import (Blueprint, current_app, flash, redirect, render_template,
                    request, url_for)
 
 from short_bot.config import load_settings
+from short_bot.openrouter_catalog import get_catalog
 
 bp = Blueprint("settings", __name__)
 _LOG = logging.getLogger(__name__)
@@ -41,20 +41,6 @@ def _mask_key(key: str) -> str:
     return "•" * 8 + (key[-4:] if len(key) >= 4 else "")
 
 
-def _load_catalog() -> dict:
-    """config/openrouter_models.json'u yükle (proje kökü). Bulunamazsa boş."""
-    candidates = [
-        Path("config/openrouter_models.json"),
-        current_app.config["SHORTBOT_CONFIG_DIR"] / "openrouter_models.json",
-    ]
-    for target in candidates:
-        try:
-            if target.exists():
-                return json.loads(target.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            continue
-    return {"groups": []}
-
 
 @bp.route("/settings", methods=["GET"])
 def view():
@@ -75,6 +61,7 @@ def view():
     openai_key_masked = _mask_key(secrets.get("openai_api_key", ""))
     youtube_key_masked = _mask_key(secrets.get("youtube_api_key", ""))
     openrouter_key_masked = _mask_key(secrets.get("openrouter_api_key", ""))
+    cache_dir = current_app.config.get("SHORTBOT_CACHE_DIR") or Path("data")
     return render_template("settings.html.j2", data=data, paths=paths,
                             pexels_key_masked=pexels_key_masked,
                             pexels_key_set=bool(secrets.get("pexels_api_key")),
@@ -86,7 +73,7 @@ def view():
                             openrouter_models=data.get("openrouter_models", {}) or {},
                             openrouter_key_masked=openrouter_key_masked,
                             openrouter_key_set=bool(secrets.get("openrouter_api_key")),
-                            openrouter_catalog=_load_catalog())
+                            openrouter_catalog=get_catalog(Path(cache_dir)))
 
 
 @bp.route("/settings", methods=["POST"])
