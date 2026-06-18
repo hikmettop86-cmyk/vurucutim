@@ -1,4 +1,5 @@
 """Settings page: view + edit settings.yaml + write Pexels API key to data/secrets.yaml."""
+import json
 import logging
 from pathlib import Path
 
@@ -40,6 +41,21 @@ def _mask_key(key: str) -> str:
     return "•" * 8 + (key[-4:] if len(key) >= 4 else "")
 
 
+def _load_catalog() -> dict:
+    """config/openrouter_models.json'u yükle (proje kökü). Bulunamazsa boş."""
+    candidates = [
+        Path("config/openrouter_models.json"),
+        current_app.config["SHORTBOT_CONFIG_DIR"] / "openrouter_models.json",
+    ]
+    for target in candidates:
+        try:
+            if target.exists():
+                return json.loads(target.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+    return {"groups": []}
+
+
 @bp.route("/settings", methods=["GET"])
 def view():
     data = yaml.safe_load(_settings_path().read_text(encoding="utf-8")) or {}
@@ -58,13 +74,19 @@ def view():
     pexels_key_masked = _mask_key(secrets.get("pexels_api_key", ""))
     openai_key_masked = _mask_key(secrets.get("openai_api_key", ""))
     youtube_key_masked = _mask_key(secrets.get("youtube_api_key", ""))
+    openrouter_key_masked = _mask_key(secrets.get("openrouter_api_key", ""))
     return render_template("settings.html.j2", data=data, paths=paths,
                             pexels_key_masked=pexels_key_masked,
                             pexels_key_set=bool(secrets.get("pexels_api_key")),
                             openai_key_masked=openai_key_masked,
                             openai_key_set=bool(secrets.get("openai_api_key")),
                             youtube_key_masked=youtube_key_masked,
-                            youtube_key_set=bool(secrets.get("youtube_api_key")))
+                            youtube_key_set=bool(secrets.get("youtube_api_key")),
+                            ai_backend=data.get("ai_backend", "claude_cli"),
+                            openrouter_models=data.get("openrouter_models", {}) or {},
+                            openrouter_key_masked=openrouter_key_masked,
+                            openrouter_key_set=bool(secrets.get("openrouter_api_key")),
+                            openrouter_catalog=_load_catalog())
 
 
 @bp.route("/settings", methods=["POST"])
@@ -97,6 +119,23 @@ def save():
     models["default"] = request.form.get("model_default", models.get("default"))
     models["script"]  = request.form.get("model_script", models.get("script"))
     data["claude_models"] = models
+
+    # AI backend seçimi
+    data["ai_backend"] = request.form.get("ai_backend", data.get("ai_backend", "claude_cli"))
+
+    # OpenRouter rol modelleri ("__custom__" → serbest metin alanı)
+    def _or_model(role: str) -> str:
+        choice = request.form.get(f"or_model_{role}", "")
+        if choice == "__custom__":
+            return request.form.get(f"or_model_{role}_custom", "").strip()
+        return choice
+    or_models = data.get("openrouter_models", {}) or {}
+    for role in ("dna", "default", "script"):
+        val = _or_model(role)
+        if val:
+            or_models[role] = val
+    if or_models:
+        data["openrouter_models"] = or_models
 
     # Trends block
     trends_data = data.get("trends", {}) or {}
@@ -157,6 +196,16 @@ def save():
         _save_secrets(secrets)
     elif clear_yt:
         secrets.pop("youtube_api_key", None)
+        _save_secrets(secrets)
+
+    # OpenRouter API key — separate file
+    new_or_key = request.form.get("openrouter_api_key", "").strip()
+    clear_or = request.form.get("openrouter_api_key_clear") == "1"
+    if new_or_key:
+        secrets["openrouter_api_key"] = new_or_key
+        _save_secrets(secrets)
+    elif clear_or:
+        secrets.pop("openrouter_api_key", None)
         _save_secrets(secrets)
 
     # Reload in-memory Settings so trend boost / refresh cron / cache TTL
