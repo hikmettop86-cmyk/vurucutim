@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import time
+from pathlib import Path
 from typing import TypeVar
 
 from pydantic import BaseModel, ValidationError
@@ -78,19 +79,25 @@ def _extract_json(raw: str) -> str:
 
 
 def _invoke_raw(prompt: str, *, backend: str, model: str,
-                claude_path: str, api_key: str | None, timeout_s: int) -> str:
+                claude_path: str, api_key: str | None, timeout_s: int,
+                image_path=None) -> str:
     """Tek-atış ham çıktı. claude_cli → subprocess; openrouter → HTTP.
     FileNotFoundError ve TimeoutExpired'i (claude_cli) yukarıya bırakır;
     diğer hatalarda ClaudeCliError/OpenRouterError fırlatır."""
     if backend == "openrouter":
         from short_bot import openrouter_client   # fonksiyon-içi import → circular önler
         return openrouter_client.complete(prompt, model=model,
-                                          api_key=api_key, timeout_s=timeout_s)
+                                          api_key=api_key, timeout_s=timeout_s,
+                                          image_path=image_path)
     resolved_path = _resolve_claude_binary(claude_path)
+    effective_prompt = (
+        f"@{Path(image_path).absolute().as_posix()}\n\n{prompt}"
+        if image_path is not None else prompt
+    )
     cmd = [resolved_path, "-p", "--output-format", "text"]
     if model != "default":
         cmd += ["--model", model]
-    proc = subprocess.run(cmd, input=prompt, capture_output=True, text=True,
+    proc = subprocess.run(cmd, input=effective_prompt, capture_output=True, text=True,
                           encoding="utf-8", timeout=timeout_s, check=False)
     if proc.returncode != 0:
         raise ClaudeCliError(f"claude exit {proc.returncode}: {proc.stderr[:500]}")
@@ -107,11 +114,13 @@ def run_json(
     api_key: str | None = None,
     retries: int = 2,
     timeout_s: int = 180,
+    image_path=None,
 ) -> T:
     """Prompt'u backend'e gönder, çıktıyı JSON olarak parse edip schema ile doğrula.
 
     backend: "claude_cli" (varsayılan, `claude -p`) | "openrouter" (HTTP).
     api_key: yalnızca backend="openrouter" için gerekli.
+    image_path: görsel dosya yolu; claude_cli'da @path prepend, openrouter'da forward.
     """
     last_error: Exception | None = None
     retry_feedback: str = ""
@@ -121,7 +130,7 @@ def run_json(
         try:
             raw = _invoke_raw(current_prompt, backend=backend, model=model,
                               claude_path=claude_path, api_key=api_key,
-                              timeout_s=timeout_s)
+                              timeout_s=timeout_s, image_path=image_path)
         except FileNotFoundError as e:
             raise ClaudeCliError(
                 f"claude binary not found at {claude_path!r}. "
