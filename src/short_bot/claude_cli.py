@@ -77,75 +77,65 @@ def _extract_json(raw: str) -> str:
     return raw
 
 
+def _invoke_raw(prompt: str, *, backend: str, model: str,
+                claude_path: str, api_key: str | None, timeout_s: int) -> str:
+    """Tek-atış ham çıktı. claude_cli → subprocess; openrouter → HTTP.
+    FileNotFoundError ve TimeoutExpired'i (claude_cli) yukarıya bırakır;
+    diğer hatalarda ClaudeCliError/OpenRouterError fırlatır."""
+    if backend == "openrouter":
+        from short_bot import openrouter_client   # fonksiyon-içi import → circular önler
+        return openrouter_client.complete(prompt, model=model,
+                                          api_key=api_key, timeout_s=timeout_s)
+    resolved_path = _resolve_claude_binary(claude_path)
+    cmd = [resolved_path, "-p", "--output-format", "text"]
+    if model != "default":
+        cmd += ["--model", model]
+    proc = subprocess.run(cmd, input=prompt, capture_output=True, text=True,
+                          encoding="utf-8", timeout=timeout_s, check=False)
+    if proc.returncode != 0:
+        raise ClaudeCliError(f"claude exit {proc.returncode}: {proc.stderr[:500]}")
+    return proc.stdout
+
+
 def run_json(
     prompt: str,
     schema: type[T],
     *,
     claude_path: str = "claude",
     model: str = "default",
+    backend: str = "claude_cli",
+    api_key: str | None = None,
     retries: int = 2,
     timeout_s: int = 180,
 ) -> T:
-    """Invoke `claude -p PROMPT --output-format text` and parse output as JSON validating against `schema`.
+    """Prompt'u backend'e gönder, çıktıyı JSON olarak parse edip schema ile doğrula.
 
-    Args:
-        prompt: prompt text passed to claude via -p
-        schema: Pydantic BaseModel subclass to validate the parsed JSON against
-        claude_path: path to claude CLI binary (default 'claude' resolves via PATH)
-        model: Claude model to use (e.g. 'opus', 'sonnet', 'haiku'); default 'default' omits the --model flag
-        retries: total number of attempts (NOT retries-after-first); minimum useful value is 1
-        timeout_s: per-attempt subprocess timeout in seconds
-
-    Raises:
-        ClaudeCliError: if all attempts fail (parse error, validation error, exit != 0, timeout)
-                        or immediately if claude binary is not found
+    backend: "claude_cli" (varsayılan, `claude -p`) | "openrouter" (HTTP).
+    api_key: yalnızca backend="openrouter" için gerekli.
     """
     last_error: Exception | None = None
     retry_feedback: str = ""
 
-    resolved_path = _resolve_claude_binary(claude_path)
-
     for attempt in range(1, retries + 1):
         current_prompt = prompt + retry_feedback if retry_feedback else prompt
         try:
-            # Pass prompt via stdin (not argv) — Windows argv encoding mangles
-            # non-ASCII characters silently, causing Sonnet to receive a
-            # corrupted prompt and return empty output.
-            cmd = [resolved_path, "-p", "--output-format", "text"]
-            if model != "default":
-                cmd += ["--model", model]
-            proc = subprocess.run(
-                cmd,
-                input=current_prompt,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                timeout=timeout_s,
-                check=False,
-            )
+            raw = _invoke_raw(current_prompt, backend=backend, model=model,
+                              claude_path=claude_path, api_key=api_key,
+                              timeout_s=timeout_s)
         except FileNotFoundError as e:
-            # Don't retry — sleeping won't make the binary appear
             raise ClaudeCliError(
-                f"claude binary not found at {claude_path!r} "
-                f"(resolved to {resolved_path!r}). "
+                f"claude binary not found at {claude_path!r}. "
                 f"Install Claude Code CLI or set claude_cli_path in config/settings.yaml."
             ) from e
-        except subprocess.TimeoutExpired as e:
+        except (subprocess.TimeoutExpired, AIBackendError) as e:
             last_error = e
             retry_feedback = ""
             if attempt < retries:
                 time.sleep(2 ** attempt)
             continue
 
-        if proc.returncode != 0:
-            last_error = ClaudeCliError(f"claude exit {proc.returncode}: {proc.stderr[:500]}")
-            retry_feedback = ""
-            if attempt < retries:
-                time.sleep(2 ** attempt)
-            continue
-
         try:
-            payload = _extract_json(proc.stdout)
+            payload = _extract_json(raw)
             data = json.loads(payload)
             return schema.model_validate(data)
         except (ValueError, json.JSONDecodeError, ValidationError) as e:
@@ -159,4 +149,4 @@ def run_json(
                 time.sleep(2 ** attempt)
             continue
 
-    raise ClaudeCliError(f"claude_cli failed after {retries} attempts: {last_error}")
+    raise ClaudeCliError(f"run_json failed after {retries} attempts: {last_error}")
