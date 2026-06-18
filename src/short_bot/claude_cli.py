@@ -149,4 +149,5 @@ def run_json(
                 time.sleep(2 ** attempt)
             continue
 
-    raise ClaudeCliError(f"run_json failed after {retries} attempts: {last_error}")
+    err_cls = OpenRouterError if backend == "openrouter" else ClaudeCliError
+    raise err_cls(f"run_json failed after {retries} attempts: {last_error}")
