@@ -14,7 +14,16 @@ from pydantic import BaseModel, ValidationError
 T = TypeVar("T", bound=BaseModel)
 
 
-class ClaudeCliError(RuntimeError):
+class AIBackendError(RuntimeError):
+    """AI motorlarının ortak hata tabanı (Claude CLI + OpenRouter)."""
+    pass
+
+
+class ClaudeCliError(AIBackendError):
+    pass
+
+
+class OpenRouterError(AIBackendError):
     pass
 
 
