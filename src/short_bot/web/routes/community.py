@@ -16,9 +16,10 @@ from flask import (Blueprint, abort, current_app, flash, redirect,
 from short_bot.community import (
     fetch_recent_short_titles, suggest_community_posts,
 )
-from short_bot.config import load_channel
+from short_bot.config import load_channel, resolve_ai_call
 from short_bot.db import init_db
 from short_bot.locale import trend_region_for
+from short_bot.pexels import load_secrets as _load_secrets
 from short_bot.trends.aggregator import load_trends_cache
 
 bp = Blueprint("community", __name__)
@@ -60,12 +61,16 @@ def generate(slug):
     recent = fetch_recent_short_titles(eng, slug, limit=8, days=14)
     trends = _load_trend_terms(cfg)
     settings = current_app.config["SHORTBOT_SETTINGS"]
+    secrets_path = current_app.config.get("SHORTBOT_SECRETS_PATH")
+    secrets = _load_secrets(Path(secrets_path)) if secrets_path else {}
+    call = resolve_ai_call(settings, secrets, "default")
     try:
         drafts = suggest_community_posts(
             cfg, recent_titles=recent, trend_terms=trends,
-            claude_path=settings.claude_cli_path,
-            model=(settings.claude_models.get("script")
-                   or settings.claude_models.get("default", "sonnet")),
+            claude_path=call.claude_path,
+            model=call.model,
+            backend=call.backend,
+            api_key=call.api_key,
         )
     except Exception as e:  # noqa: BLE001
         _LOG.warning(f"[community] generate failed for {slug}: {e}")

@@ -172,8 +172,10 @@ def suggest_community_posts(
     trend_terms: list[str] | None = None,
     claude_path: str = "claude",
     model: str = "sonnet",
+    backend: str = "claude_cli",
+    api_key: str | None = None,
 ) -> list[CommunityDraft]:
-    """Generate 5 community-post drafts via Claude. Returns drafts list.
+    """Generate 5 community-post drafts via the active AI backend. Returns drafts list.
 
     Raises short_bot.claude_cli.ClaudeCliError on CLI / JSON failure (caller
     surfaces an error flash). On model returning fewer/more than 5 drafts,
@@ -182,5 +184,6 @@ def suggest_community_posts(
         channel, recent_titles=recent_titles, trend_terms=trend_terms,
     )
     parsed = run_json(prompt, _Drafts, claude_path=claude_path,
-                       model=model, retries=2, timeout_s=90)
+                       model=model, backend=backend, api_key=api_key,
+                       retries=2, timeout_s=90)
     return list(parsed.drafts)

@@ -5,8 +5,9 @@ import requests
 from flask import (Blueprint, abort, current_app, flash, jsonify, redirect,
                    render_template, request, send_from_directory, url_for)
 
-from short_bot.config import load_channel
+from short_bot.config import load_channel, resolve_ai_call
 from short_bot.db import init_db, record_youtube_upload, get_rss_item_for_short
+from short_bot.pexels import load_secrets as _load_secrets
 from short_bot.web.models import Short
 from short_bot.youtube import auth as yt_auth
 from short_bot.youtube.metadata_writer import generate_youtube_metadata
@@ -200,13 +201,20 @@ def upload(short_id):
     rss_source = rss_row.source if rss_row else None
     rss_link = rss_row.link if rss_row else None
 
+    # Resolve the active AI backend (claude_cli default; openrouter when configured)
+    # — same as auto_upload.run_auto_upload's metadata path.
+    secrets = _load_secrets(Path(secrets_path)) if secrets_path else {}
+    call = resolve_ai_call(settings, secrets, "default")
+
     generated = None
     try:
         meta = generate_youtube_metadata(
             channel=cfg, script=script,
             rss_source=rss_source, rss_link=rss_link,
-            claude_path=settings.claude_cli_path,
-            model=settings.claude_models.get("default", "sonnet"),
+            claude_path=call.claude_path,
+            model=call.model,
+            backend=call.backend,
+            api_key=call.api_key,
         )
         generated = {"title": meta.title, "description": meta.description, "tags": meta.tags}
         current_app.logger.info("youtube: Sonnet metadata generated for short %s", short_id)
