@@ -1,0 +1,17 @@
+{
+  "groups": [
+    { "label": "Anthropic Claude", "models": [
+      { "id": "anthropic/claude-opus-4.8",   "label": "Claude Opus 4.8 (guclu)" },
+      { "id": "anthropic/claude-sonnet-4.6", "label": "Claude Sonnet 4.6 (dengeli)" },
+      { "id": "anthropic/claude-haiku-4.5",  "label": "Claude Haiku 4.5 (hizli/ucuz)" }
+    ]},
+    { "label": "Google Gemini", "models": [
+      { "id": "google/gemini-2.5-pro",   "label": "Gemini 2.5 Pro" },
+      { "id": "google/gemini-2.5-flash", "label": "Gemini 2.5 Flash (hizli/ucuz)" }
+    ]},
+    { "label": "OpenAI", "models": [
+      { "id": "openai/gpt-4o",      "label": "GPT-4o" },
+      { "id": "openai/gpt-4o-mini", "label": "GPT-4o mini (ucuz)" }
+    ]}
+  ]
+}
