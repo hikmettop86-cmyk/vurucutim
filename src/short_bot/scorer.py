@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
-from short_bot.claude_cli import run_json
+from short_bot.claude_cli import OpenRouterError, run_json
 from short_bot.models import NewsItem, ScoredItem
 
 if TYPE_CHECKING:
@@ -150,9 +150,16 @@ def score_items(
                 claude_path=claude_path, model=model,
                 backend=backend, api_key=api_key,
             )
+        except OpenRouterError:
+            # Permanent failure (bad/missing API key, quota exhausted, etc.).
+            # Re-raise immediately — retrying every batch would just repeat the
+            # same error silently, leaving the pipeline with an empty result and
+            # no explanation.
+            raise
         except Exception:
-            # Batch failure: skip this batch, score the rest. Better to lose
-            # some candidates than to fail the entire run.
+            # Transient batch failure (timeout, parse error, etc.): skip this
+            # batch and score the rest. Better to lose some candidates than to
+            # fail the entire run.
             continue
         for s in response.scores:
             item = by_guid.get(s.guid)
