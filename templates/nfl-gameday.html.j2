@@ -151,7 +151,7 @@
   .photo {
     position: absolute;
     top: 560px; left: 40px; right: 40px;
-    height: 620px;
+    height: 520px;
     background: linear-gradient(135deg, var(--bg-grad-1, #0a2a52), var(--bg-grad-2, #04101f));
     border-top: 6px solid var(--accent, #D50A0A);
     border-bottom: 6px solid var(--primary, #013369);
@@ -203,18 +203,29 @@
   /* ===== GÖVDE ===== */
   .body {
     position: absolute; left: 60px; right: 60px;
-    top: 1240px; bottom: 220px;
+    top: 1130px; bottom: 210px;
     display: grid; place-items: center;
+    overflow: hidden;
     z-index: 4;
   }
   .body-text {
     width: 100%;
     font-family: var(--font-body, 'Inter'), sans-serif;
-    font-size: 44px; line-height: 1.36; font-weight: 600;
+    font-size: 44px; line-height: 1.32; font-weight: 600;
     color: var(--text-main, #fff);
     text-shadow: 0 2px 10px rgba(0,0,0,0.7);
     text-align: center;
     text-wrap: pretty;
+    /* Graceful-clamp güvenlik ağı (stadium pattern'i): auto-fit min'e
+       inse bile uzun metin görünür taşmaz — 9 satırda kesilir, son satır
+       mask ile yumuşak solar. _auto_fit.js ölçüm sırasında clamp/overflow'u
+       geçici strip edip gerçek scrollHeight'e göre küçültür, sonra restore. */
+    display: -webkit-box;
+    -webkit-line-clamp: 9;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 90%, transparent 100%);
+            mask-image: linear-gradient(180deg, #000 0%, #000 90%, transparent 100%);
   }
   .body-text .hl-r {
     background: var(--accent, #D50A0A); color: var(--text-main, #fff);
@@ -285,7 +296,7 @@
   </div>
 
   <div class="body">
-    <div class="body-text" data-fit-min="36" data-fit-max="48" data-fit-pad="20">
+    <div class="body-text" data-fit-min="34" data-fit-max="52" data-fit-pad="24" data-fit-grow-max="52">
       {{ body_html|safe }}
     </div>
   </div>
