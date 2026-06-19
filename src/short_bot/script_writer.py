@@ -71,6 +71,17 @@ ARCHETYPE_PROMPTS = {
 """
         for a in _DESIGNED_ARCHETYPES
     },
+    # ─── NFL gameday — özel spor prompt'u. Aynı anahtar comprehension'da generic
+    # üretildiği için bu explicit tanım (dict literal'de sonra geldiğinden) onu ezer.
+    "nfl-gameday": """ARCHETYPE: nfl-gameday — American football (NFL) gameday broadcast energy
+- header_top (max 25 chars): SCORE or big action. Prefer "TEAM ## - ## TEAM" score format when the news is a result; else a punchy ALLCAPS action line (e.g. "TOUCHDOWN CHIEFS", "OT THRILLER"). NFL team names/abbreviations OK.
+- header_bottom (max 35 chars): game context / stakes (quarter, week, playoff round, record) — e.g. "4th quarter, 0:12 left", "Week 12, AFC clash".
+- photo_overlay (max 60 chars): on-field action tag, ALLCAPS punchy (e.g. "TOUCHDOWN!", "4TH & GOAL", "PICK SIX", "GAME-WINNING FG").
+- body_paragraph: 2-4 sentences, gameday hype tone. Use NFL terminology naturally (touchdown, QB, yards, sack, interception/INT, drive, red zone, field goal, end zone). Lead with the decisive play/result.
+- highlights: wrap the key player name(s) and the decisive number/score — color "red" for scores/results, "yellow" for player names.
+- category: "NFL" or the specific matchup/round.
+- mood: "breaking" for finals/upsets, "upbeat" for highlights/wins.
+- KEEP NFL terms in English even when the output language is not English.""",
 }
 
 
