@@ -724,5 +724,36 @@
       "historic match",
       "retro sports"
     ]
+  },
+  {
+    "slug": "nfl-gameday",
+    "label": "NFL · Gameday",
+    "subtitle": "Amerikan Futbolu · yard çizgileri, end zone, skor barı, stadyum ışığı",
+    "defaults": {
+      "colors": {
+        "primary": "#013369",
+        "accent": "#D50A0A",
+        "primary_light": "#1a4a8a",
+        "bg_gradient": [
+          "#0a1f3c",
+          "#04101f"
+        ]
+      },
+      "body_bg": [
+        "#0a1f3c",
+        "#04101f"
+      ],
+      "text_main": "#ffffff",
+      "text_muted": "rgba(255,255,255,0.72)",
+      "font_headline": "Anton",
+      "font_body": "Inter"
+    },
+    "pexels_queries": [
+      "american football stadium night",
+      "nfl touchdown celebration",
+      "football field end zone",
+      "american football player action",
+      "football helmet close up"
+    ]
   }
 ]
