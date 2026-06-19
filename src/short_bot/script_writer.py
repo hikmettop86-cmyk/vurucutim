@@ -128,6 +128,7 @@ Output STRICT JSON only:
 }}
 
 Rules:
+- FACTUAL ACCURACY (critical): Use ONLY facts present in the ARTICLE BODY above. Do NOT invent or guess names, numbers, dates, ages, fees, scores, titles, records, or events. If a specific figure is not in the source, do not state one. Never attribute quotes or actions to people not named in the source. If the article is thin, write a shorter factual script instead of padding with fabricated details.
 - All text in {lang_name}, with proper diacritics
 - highlights[i].text must appear verbatim in body_paragraph
 - Stay within tone constraints if specified above
@@ -159,6 +160,7 @@ Görev: Bu haberi 3-katmanlı bir Short videoya dönüştür. SADECE aşağıdak
 }}
 
 Kurallar:
+- OLGUSAL DOĞRULUK (kritik): SADECE yukarıdaki MAKALE GÖVDESİ'nde geçen bilgileri kullan. İsim, sayı, tarih, yaş, ücret, skor, unvan, rekor veya olay UYDURMA. Kaynakta olmayan spesifik bir rakam verme; kaynakta geçmeyen kişilere söz/eylem atfetme. Haber zayıfsa uydurma detayla şişirme — daha kısa ama doğru bir script yaz.
 - highlights[i].text MUTLAKA body_paragraph içinde birebir (kelimesi kelimesine) geçmelidir
 - 1-4 highlight ekle: önemli sayı/oran/karar = yellow; uyarı/tehlike/şok = red
 - header_top: MAX 25 karakter (sert sınır, aşılırsa reddedilir)
