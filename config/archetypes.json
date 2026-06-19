@@ -755,5 +755,24 @@
       "american football player action",
       "football helmet close up"
     ]
+  },
+  {
+    "slug": "fenerbahce-stadium",
+    "label": "FB · Stadium",
+    "subtitle": "Tribün · çapraz lacivert-sarı şerit zemin, taraftar silüet, perspektif foto",
+    "defaults": {
+      "colors": {
+        "primary": "#002C5F",
+        "accent": "#FFED00",
+        "primary_light": "#1B4A8A",
+        "bg_gradient": ["#0a1430", "#04081a"]
+      },
+      "body_bg": ["#FFED00", "#002C5F"],
+      "text_main": "#ffffff",
+      "text_muted": "#FFED00",
+      "font_headline": "Anton",
+      "font_body": "Inter"
+    },
+    "pexels_queries": ["stadium crowd", "ultras tifosi", "soccer fans", "football fans celebration"]
   }
 ]
