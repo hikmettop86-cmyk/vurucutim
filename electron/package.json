@@ -1,6 +1,6 @@
 {
   "name": "vurucutim",
-  "version": "0.8.4",
+  "version": "0.8.5",
   "description": "VurucuTim - RSS to YouTube Shorts (Electron wrapper)",
   "main": "main.js",
   "author": "hikmettop86-cmyk",
