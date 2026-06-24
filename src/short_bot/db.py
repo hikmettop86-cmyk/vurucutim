@@ -161,6 +161,18 @@ channel_insights = Table(
 )
 
 
+feeds = Table(
+    "feeds", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("url", Text, nullable=False, unique=True),
+    Column("title", Text),
+    Column("enabled", Integer, default=1, nullable=False),
+    Column("added_at", DateTime, default=_utcnow, nullable=False),
+    Column("last_fetched_at", DateTime),
+    Column("last_error", Text),
+)
+
+
 def init_db(db_path: Path | str) -> Engine:
     """Create engine, enable WAL + FK + busy_timeout, create schema if absent."""
     db_path = Path(db_path).resolve()    # absolute, avoids cwd surprises
@@ -736,3 +748,57 @@ def clear_recent_failed_runs(eng: Engine, *, hours: int = 24) -> int:
             {"delta": f"-{hours} hours"}
         )
         return int(result.rowcount or 0)
+
+
+def add_feed(eng: Engine, *, url: str, title: str | None) -> int:
+    """Insert a feed into the pool. Raises on duplicate url (UNIQUE)."""
+    with eng.begin() as conn:
+        result = conn.execute(feeds.insert().values(
+            url=url, title=title, enabled=1, added_at=_utcnow(),
+        ))
+        return result.inserted_primary_key[0]
+
+
+def list_feeds(eng: Engine, enabled_only: bool = False) -> list:
+    """All feeds, newest first. enabled_only filters disabled rows out."""
+    with eng.connect() as conn:
+        stmt = select(feeds)
+        if enabled_only:
+            stmt = stmt.where(feeds.c.enabled == 1)
+        return list(conn.execute(stmt.order_by(feeds.c.added_at.desc())))
+
+
+def get_feed(eng: Engine, feed_id: int):
+    """Single feed row by id, or None."""
+    with eng.connect() as conn:
+        return conn.execute(
+            select(feeds).where(feeds.c.id == feed_id)
+        ).first()
+
+
+def delete_feed(eng: Engine, feed_id: int) -> None:
+    with eng.begin() as conn:
+        conn.execute(feeds.delete().where(feeds.c.id == feed_id))
+
+
+def set_feed_meta(
+    eng: Engine, feed_id: int, *,
+    last_fetched_at: datetime | None = None,
+    last_error: str | None = None,
+    title: str | None = None,
+    enabled: int | None = None,
+) -> None:
+    """Patch fetch-state / enabled / title. Only non-None args are written."""
+    values: dict = {}
+    if last_fetched_at is not None:
+        values["last_fetched_at"] = last_fetched_at
+    if last_error is not None:
+        values["last_error"] = last_error
+    if title is not None:
+        values["title"] = title
+    if enabled is not None:
+        values["enabled"] = enabled
+    if not values:
+        return
+    with eng.begin() as conn:
+        conn.execute(feeds.update().where(feeds.c.id == feed_id).values(**values))
