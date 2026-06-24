@@ -557,6 +557,10 @@ def _produce_from_item(
     Görsel bulunamazsa RunResult(status='image_rejected') döner (run'ı
     finish ETMEZ — çağıran karar verir: manuel'de hata, _run_rss'te sonraki
     aday). Başarıda run'ı finish EDER ve auto-upload tetikler.
+
+    Caller, 'image_rejected' (veya 'success' dışı) dönüşte
+    `finish_run(eng, run_id, status='no_candidates', ...)` çağırMAKLA
+    yükümlüdür; aksi halde run satırı açık kalır.
     """
     secrets_path = current_app_secrets_path()
     secrets = _load_secrets(secrets_path)

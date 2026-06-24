@@ -66,6 +66,11 @@ def test_produce_from_item_success_records_short(tmp_path, monkeypatch):
     monkeypatch.setattr(pipeline, "extract_og_image_url", lambda url: None)
     fake_img = tmp_path / "bg.jpg"; fake_img.write_bytes(b"x")
     monkeypatch.setattr(pipeline, "download_and_blur_thumb", lambda *a, **k: fake_img)
+    # og→thumb dalları atlanınca pick_image_for_script'e düşülür (local import).
+    # Gerçek modül konumunu patch'le ki gerçek DuckDuckGo + Claude subprocess'e
+    # gitmesin → test offline ve <1s kalsın.
+    monkeypatch.setattr("short_bot.image_picker.pick_image_for_script",
+                        lambda *a, **k: fake_img)
     monkeypatch.setattr(pipeline, "render_frames", lambda *a, **k: None)
     monkeypatch.setattr(pipeline, "compose_video", lambda *a, **k: None)
     monkeypatch.setattr(pipeline, "pick_music", lambda *a, **k: tmp_path / "m.mp3")
