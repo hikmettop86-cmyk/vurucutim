@@ -1,0 +1,46 @@
+{% extends "base.html.j2" %}
+{% block title %}Vurucu TİM — RSS Havuzu{% endblock %}
+{% block content %}
+<h1 class="font-serif text-3xl font-bold mb-6">RSS Havuzu</h1>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for category, message in messages %}
+      <div class="mb-4 px-4 py-3 rounded text-sm
+        {% if category == 'error' %}bg-red-100 text-red-800 border border-red-300
+        {% else %}bg-green-100 text-green-800 border border-green-300{% endif %}">
+        {{ message }}
+      </div>
+    {% endfor %}
+  {% endif %}
+{% endwith %}
+
+<form method="post" action="{{ url_for('feeds.add') }}"
+      class="flex gap-2 mb-8">
+  <input type="url" name="url" placeholder="https://site.com/rss" required
+         class="flex-1 border border-claude-border rounded px-3 py-2 text-sm bg-claude-surface">
+  <button type="submit"
+          class="bg-claude-accent text-white px-4 py-2 rounded text-sm hover:opacity-90">
+    + Feed Ekle
+  </button>
+</form>
+
+<ul class="space-y-2">
+{% for f in feeds %}
+  <li class="flex items-center justify-between border border-claude-border rounded px-4 py-3 bg-claude-surface">
+    <div>
+      <span class="font-semibold">{{ f.title }}</span>
+      — <code class="text-xs text-claude-muted">{{ f.url }}</code>
+    </div>
+    <form method="post"
+          action="{{ url_for('feeds.delete', feed_id=f.id) }}"
+          style="display:inline">
+      <button type="submit"
+              class="text-xs text-red-600 hover:underline">Sil</button>
+    </form>
+  </li>
+{% else %}
+  <li class="p-8 text-center text-claude-muted">Henüz feed eklenmedi.</li>
+{% endfor %}
+</ul>
+{% endblock %}
