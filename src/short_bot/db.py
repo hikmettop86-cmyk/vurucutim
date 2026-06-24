@@ -777,6 +777,7 @@ def get_feed(eng: Engine, feed_id: int):
 
 
 def delete_feed(eng: Engine, feed_id: int) -> None:
+    """Delete a feed by id. No-op (silent) if the id does not exist."""
     with eng.begin() as conn:
         conn.execute(feeds.delete().where(feeds.c.id == feed_id))
 

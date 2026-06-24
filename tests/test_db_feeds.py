@@ -52,7 +52,7 @@ def test_delete_feed(tmp_path):
 
 def test_list_feeds_enabled_only(tmp_path):
     eng = init_db(tmp_path / "x.sqlite")
-    f1 = add_feed(eng, url="https://a.com/rss", title="A")
+    _ = add_feed(eng, url="https://a.com/rss", title="A")
     f2 = add_feed(eng, url="https://b.com/rss", title="B")
     set_feed_meta(eng, f2, enabled=0)
     assert len(list_feeds(eng)) == 2
@@ -67,3 +67,12 @@ def test_set_feed_meta_updates_fetch_state(tmp_path):
     row = get_feed(eng, fid)
     assert row.last_error == "boom"
     assert row.last_fetched_at is not None
+
+
+def test_set_feed_meta_clears_error_with_empty_string(tmp_path):
+    eng = init_db(tmp_path / "x.sqlite")
+    fid = add_feed(eng, url="https://site.com/rss", title="T")
+    set_feed_meta(eng, fid, last_error="boom")
+    assert get_feed(eng, fid).last_error == "boom"
+    set_feed_meta(eng, fid, last_error="")   # "" None değil → yazılır, hatayı temizler
+    assert get_feed(eng, fid).last_error == ""
