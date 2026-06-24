@@ -1,29 +1,49 @@
 {% extends "base.html.j2" %}
 {% block title %}Vurucu TİM — RSS Havuzu{% endblock %}
 {% block content %}
-<h1 class="font-serif text-3xl font-bold mb-6">RSS Havuzu</h1>
-<div style="display:flex;gap:16px">
-  <div style="width:220px">
-    <form method="post" action="{{ url_for('feeds.add') }}">
-      <input type="url" name="url" placeholder="https://site.com/rss" required>
-      <button type="submit">+ Feed Ekle</button>
+<h1 class="font-serif text-3xl font-bold mb-2">RSS Havuzu</h1>
+<p class="text-sm text-claude-muted mb-6">Kendi haber kaynaklarını ekle, istediğin haberi seçip videoya çevir.</p>
+
+<div class="flex gap-6 items-start" x-data="{ active: null }">
+  <!-- sol: feed havuzu -->
+  <aside class="w-72 flex-shrink-0 bg-claude-surface border border-claude-border rounded-xl p-4 shadow-soft">
+    <form method="post" action="{{ url_for('feeds.add') }}" class="mb-4">
+      <label class="block text-xs uppercase tracking-wide text-claude-subtle mb-1.5">Yeni Feed</label>
+      <input type="url" name="url" placeholder="https://site.com/rss" required
+             class="w-full border border-claude-border rounded-lg px-3 py-2 text-sm bg-white text-claude-text focus:outline-none focus:ring-2 focus:ring-claude-accent/30 placeholder:text-claude-subtle">
+      <button type="submit"
+              class="w-full mt-2 bg-claude-accent text-white rounded-lg py-2 text-sm font-medium hover:bg-claude-accent-hover transition">+ Feed Ekle</button>
     </form>
-    <ul style="list-style:none;padding:0">
+
+    <div class="text-xs uppercase tracking-wide text-claude-subtle mb-2 pt-3 border-t border-claude-border">Kaynaklar</div>
     {% for f in feeds %}
-      <li>
-        <a href="#" hx-get="{{ url_for('feeds.items', feed_id=f.id) }}"
-           hx-target="#feed-items" hx-swap="innerHTML">{{ f.title|e }}</a>
-        <div style="font-size:11px;opacity:.6;word-break:break-all">{{ f.url|e }}</div>
-        <form method="post" action="{{ url_for('feeds.delete', feed_id=f.id) }}"
-              style="display:inline">
-          <button type="submit">×</button>
-        </form>
-      </li>
+    <div class="flex items-start gap-1 rounded-lg px-2 py-1.5 cursor-pointer transition"
+         :class="active === {{ f.id }} ? 'bg-claude-accent-soft ring-1 ring-claude-accent/30' : 'hover:bg-claude-surface-alt'"
+         @click="active = {{ f.id }}">
+      <a class="flex-1 min-w-0 block"
+         hx-get="{{ url_for('feeds.items', feed_id=f.id) }}"
+         hx-target="#feed-items" hx-swap="innerHTML">
+        <div class="font-medium text-sm text-claude-text truncate">{{ f.title|e }}</div>
+        <div class="text-xs text-claude-subtle truncate">{{ f.url|e }}</div>
+      </a>
+      <form method="post" action="{{ url_for('feeds.delete', feed_id=f.id) }}"
+            onsubmit="return confirm('Bu feed silinsin mi?')">
+        <button type="submit" title="Sil" @click.stop
+                class="text-claude-subtle hover:text-claude-error w-6 h-6 rounded-full hover:bg-claude-surface flex items-center justify-center text-sm">×</button>
+      </form>
+    </div>
+    {% else %}
+    <p class="text-sm text-claude-muted">Henüz feed yok. Yukarıdan ekle.</p>
     {% endfor %}
-    </ul>
-  </div>
-  <div id="feed-items" style="flex:1">
-    <p class="label">Soldan bir feed seç.</p>
-  </div>
+  </aside>
+
+  <!-- sağ: haberler -->
+  <section class="flex-1 min-w-0">
+    <div id="feed-items">
+      <div class="text-claude-muted text-center py-16 border border-dashed border-claude-border rounded-xl">
+        ← Soldan bir feed seç, haberleri burada gör.
+      </div>
+    </div>
+  </section>
 </div>
 {% endblock %}

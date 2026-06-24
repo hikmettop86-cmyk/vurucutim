@@ -1,4 +1,6 @@
 """RSS Havuzu — feed ekleme/silme + manuel haber seçimi → video üretimi."""
+import re
+
 import feedparser
 import requests
 from flask import (Blueprint, current_app, flash, redirect,
@@ -13,6 +15,18 @@ from short_bot.config import load_channel, list_channels
 from short_bot.models import NewsItem
 
 bp = Blueprint("feeds", __name__)
+
+_IMG_SRC_RE = re.compile(r"""<img[^>]+src=["']([^"']+)["']""", re.IGNORECASE)
+
+
+def _first_img_in_html(html):
+    """RSS description HTML'inden ilk <img src> değerini çıkar (yoksa None).
+    Çoğu feed media:thumbnail vermez ama description gövdesinde görsel taşır;
+    bu sayede haber önizlemesinde mümkün olduğunca gerçek görsel gösterilir."""
+    if not html:
+        return None
+    m = _IMG_SRC_RE.search(html)
+    return m.group(1) if m else None
 
 
 def _eng():
@@ -81,7 +95,8 @@ def items(feed_id):
         done = any(is_processed(eng, n.guid, c.slug) or
                    similar_title_exists(eng, n.title, c.slug, threshold=0.85)
                    for c in channels)
-        enriched.append({"item": n, "done": done})
+        image = n.thumb_url or _first_img_in_html(n.description)
+        enriched.append({"item": n, "done": done, "image": image})
     return render_template("_feed_items.html.j2", feed=feed,
                            items=enriched, channels=channels)
 
