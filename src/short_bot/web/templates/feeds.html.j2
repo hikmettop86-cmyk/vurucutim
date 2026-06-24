@@ -12,8 +12,8 @@
     {% for f in feeds %}
       <li>
         <a href="#" hx-get="{{ url_for('feeds.items', feed_id=f.id) }}"
-           hx-target="#feed-items" hx-swap="innerHTML">{{ f.title }}</a>
-        <div style="font-size:11px;opacity:.6;word-break:break-all">{{ f.url }}</div>
+           hx-target="#feed-items" hx-swap="innerHTML">{{ f.title|e }}</a>
+        <div style="font-size:11px;opacity:.6;word-break:break-all">{{ f.url|e }}</div>
         <form method="post" action="{{ url_for('feeds.delete', feed_id=f.id) }}"
               style="display:inline">
           <button type="submit">×</button>

@@ -581,6 +581,11 @@ def _produce_from_item(
     Caller, 'image_rejected' (veya 'success' dışı) dönüşte
     `finish_run(eng, run_id, status='no_candidates', ...)` çağırMAKLA
     yükümlüdür; aksi halde run satırı açık kalır.
+
+    NOT: mark_processed burada embedding OLMADAN çağrılır (yalnızca guid+title).
+    Feed/manuel yol için embedding-dedup bilinçli olarak kapsam dışıdır; GUID +
+    fuzzy-title dedup yeterli kabul edildi. Embedding-dedup paritesi (çok-kaynak
+    aynı haber) gelecek bir iyileştirmedir.
     """
     secrets_path = current_app_secrets_path()
     secrets = _load_secrets(secrets_path)
@@ -1350,6 +1355,8 @@ def _run_feed(*, channel, run_id, log, eng, settings,
         items = _filter_negative_keywords(items, channel.negative_keywords)
 
     log.info("[2/3] dedup")
+    # NOT: filter_new burada embedding olmadan (GUID + fuzzy title) çalışır.
+    # Embedding-dedup (_run_rss'teki gibi) feed yolu için gelecek iyileştirme.
     new_items = filter_new(eng, items, channel.slug,
                            fuzzy_threshold=settings.fuzzy_dedup_threshold)
     if not new_items:

@@ -789,7 +789,9 @@ def set_feed_meta(
     title: str | None = None,
     enabled: int | None = None,
 ) -> None:
-    """Patch fetch-state / enabled / title. Only non-None args are written."""
+    """Patch fetch-state / enabled / title. Only non-None args are written.
+    To CLEAR a prior error, pass last_error="" (empty string is written;
+    None means 'leave unchanged')."""
     values: dict = {}
     if last_fetched_at is not None:
         values["last_fetched_at"] = last_fetched_at
