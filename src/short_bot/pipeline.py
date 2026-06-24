@@ -18,7 +18,7 @@ from short_bot.config import ChannelConfig, Settings, resolve_ai_call
 from short_bot.db import (
     init_db, mark_processed, record_short, record_rss_item,
     start_run, finish_run, get_last_youtube_upload_at,
-    list_feeds, get_feed,
+    get_feed,
 )
 from short_bot.youtube import auth as _yt_auth
 from short_bot.youtube.auto_upload import (
@@ -1329,7 +1329,7 @@ def _run_feed(*, channel, run_id, log, eng, settings,
               music_root, templates_dir, cache_dir) -> RunResult:
     """Otomatik feed pipeline: auto_feed_ids'ten çek → dedup → score →
     hibrit seçim (eşik üstü en yeni) → _produce_from_item."""
-    log.info(f"[1/?] fetch feeds {channel.auto_feed_ids}")
+    log.info(f"[1/3] fetch feeds {channel.auto_feed_ids}")
     items = []
     for fid in channel.auto_feed_ids:
         feed = get_feed(eng, fid)
@@ -1349,7 +1349,7 @@ def _run_feed(*, channel, run_id, log, eng, settings,
     if channel.negative_keywords:
         items = _filter_negative_keywords(items, channel.negative_keywords)
 
-    log.info("[2/?] dedup")
+    log.info("[2/3] dedup")
     new_items = filter_new(eng, items, channel.slug,
                            fuzzy_threshold=settings.fuzzy_dedup_threshold)
     if not new_items:
@@ -1358,14 +1358,24 @@ def _run_feed(*, channel, run_id, log, eng, settings,
         return RunResult(run_id=run_id, status="no_candidates",
                          short_path=None, error=None)
 
-    log.info("[3/?] score_items")
+    log.info("[3/3] score_items")
     secrets_path = current_app_secrets_path()
     secrets = _load_secrets(secrets_path)
     score_call = resolve_ai_call(settings, secrets, "default")
     candidates = new_items[:channel.max_candidates_per_run]
+    perf_insights = None
+    try:
+        from short_bot.db import load_channel_insights
+        perf_insights = load_channel_insights(eng, channel.slug)
+    except Exception as e:
+        log.warning(f"  [insights] load failed: {e} -- skipping injection")
     scored = score_items(candidates, claude_path=score_call.claude_path,
                          model=score_call.model, channel=channel,
+                         performance_insights=perf_insights,
                          backend=score_call.backend, api_key=score_call.api_key)
+    scored = _apply_trend_boost(
+        scored, channel=channel, settings=settings,
+        cache_dir=Path(cache_dir), secrets_path=secrets_path, log=log)
     picked = select_newest_above(scored, min_score=channel.min_score, n=1)
     if not picked:
         log.info(f"no item ≥ {channel.min_score} → finish")

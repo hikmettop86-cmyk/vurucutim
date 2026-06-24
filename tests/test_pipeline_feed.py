@@ -58,3 +58,37 @@ def test_run_feed_fetches_scores_produces(tmp_path, monkeypatch):
     assert result.status == "success"
     assert captured["item"].guid == "g1"
     assert captured["score"] == 8.0
+
+
+def test_run_feed_no_candidates_after_dedup(tmp_path, monkeypatch):
+    from short_bot import pipeline
+    eng = init_db(tmp_path / "x.sqlite")
+    fid = add_feed(eng, url="https://ornek.com/rss", title="Örnek")
+    ch = _channel(tmp_path, [fid])
+    news = [NewsItem(guid="g1", title="t", link="l", source=None,
+                     pub_date=datetime.now(timezone.utc), thumb_url=None, description="d")]
+    monkeypatch.setattr(pipeline, "fetch_feed_url", lambda url, **k: news)
+    monkeypatch.setattr(pipeline, "filter_new", lambda eng, items, slug, **k: [])  # hepsi dup
+    from unittest.mock import MagicMock
+    result = pipeline._run_feed(
+        channel=ch, run_id=1, log=MagicMock(), eng=eng, settings=_settings(),
+        music_root=tmp_path, templates_dir=Path("templates"), cache_dir=tmp_path)
+    assert result.status == "no_candidates"
+
+
+def test_run_feed_no_candidates_below_threshold(tmp_path, monkeypatch):
+    from short_bot import pipeline
+    eng = init_db(tmp_path / "x.sqlite")
+    fid = add_feed(eng, url="https://ornek.com/rss", title="Örnek")
+    ch = _channel(tmp_path, [fid])  # min_score=6.0
+    news = [NewsItem(guid="g1", title="t", link="l", source=None,
+                     pub_date=datetime.now(timezone.utc), thumb_url=None, description="d")]
+    monkeypatch.setattr(pipeline, "fetch_feed_url", lambda url, **k: news)
+    monkeypatch.setattr(pipeline, "filter_new", lambda eng, items, slug, **k: items)
+    monkeypatch.setattr(pipeline, "score_items",
+                        lambda items, **k: [ScoredItem(item=items[0], score=2.0, reasoning="")])
+    from unittest.mock import MagicMock
+    result = pipeline._run_feed(
+        channel=ch, run_id=1, log=MagicMock(), eng=eng, settings=_settings(),
+        music_root=tmp_path, templates_dir=Path("templates"), cache_dir=tmp_path)
+    assert result.status == "no_candidates"
