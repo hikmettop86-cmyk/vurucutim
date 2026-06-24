@@ -547,6 +547,171 @@ def run_pipeline(
         eng.dispose()
 
 
+def _produce_from_item(
+    *, item, channel, eng, settings, log,
+    music_root, templates_dir, cache_dir, run_id: int,
+    score: float | None = None,
+) -> RunResult:
+    """Tek bir NewsItem'dan video üretir. Manuel ve otomatik yol paylaşır.
+
+    Görsel bulunamazsa RunResult(status='image_rejected') döner (run'ı
+    finish ETMEZ — çağıran karar verir: manuel'de hata, _run_rss'te sonraki
+    aday). Başarıda run'ı finish EDER ve auto-upload tetikler.
+    """
+    secrets_path = current_app_secrets_path()
+    secrets = _load_secrets(secrets_path)
+    script_call = resolve_ai_call(settings, secrets, "script")
+    if script_call.backend == "claude_cli":
+        script_model = (channel.script_model
+                        or settings.claude_models.get("script")
+                        or settings.claude_models.get("default", "haiku"))
+    else:
+        script_model = script_call.model
+
+    article_url = item.link
+    if _is_google_news_url(article_url):
+        from short_bot.google_news_resolver import resolve as _resolve_gnews
+        resolved = _resolve_gnews(article_url)
+        if resolved:
+            article_url = resolved
+
+    log.info("  extract_article")
+    body = extract_article(article_url)
+    if body is None:
+        body = item.description or item.title
+        log.warning("  trafilatura empty → fallback description")
+
+    log.info(f"  write_script (model={script_model})")
+    if channel.template in ARCHETYPE_OVERFLOW_FIELDS:
+        template_path = templates_dir / f"{channel.template}.html.j2"
+        script, _retries = write_script_with_overflow_check(
+            item=item, body_html=body, channel=channel,
+            template_path=template_path,
+            job_template_args={"music_path": Path("dummy.mp3"),
+                               "ui_language": channel.language},
+            max_retries=2, log=log,
+            claude_path=script_call.claude_path, model=script_model,
+            backend=script_call.backend, api_key=script_call.api_key,
+        )
+    else:
+        script = write_script(
+            item, body, claude_path=script_call.claude_path,
+            channel=channel, model=script_model,
+            backend=script_call.backend, api_key=script_call.api_key,
+        )
+
+    log.info("  assets/image")
+    bg = None
+    original_was_gnews = _is_google_news_url(item.link)
+    og_url = extract_og_image_url(article_url)
+    if og_url:
+        bg = download_and_blur_thumb(og_url, cache_dir,
+                                     blur_radius=channel.bg_image_blur)
+    if bg is None and not original_was_gnews and item.thumb_url:
+        bg = download_and_blur_thumb(item.thumb_url, cache_dir,
+                                     blur_radius=channel.bg_image_blur)
+    if bg is None:
+        from short_bot.image_picker import pick_image_for_script
+        vision_call = resolve_ai_call(settings, secrets, "vision")
+        bg = pick_image_for_script(
+            script, cache_dir / "images",
+            claude_path=vision_call.claude_path, channel=channel,
+            backend=vision_call.backend, api_key=vision_call.api_key,
+            model=vision_call.model)
+    if bg is None:
+        log.warning("  no image → image_rejected")
+        record_rss_item(eng, guid=item.guid, channel=channel.slug,
+                        title=item.title, link=item.link, source=item.source,
+                        pub_date=item.pub_date, thumb_url=item.thumb_url,
+                        score=score, status="image_rejected")
+        return RunResult(run_id=run_id, status="image_rejected",
+                         short_path=None, error="no usable image")
+
+    record_rss_item(eng, guid=item.guid, channel=channel.slug,
+                    title=item.title, link=item.link, source=item.source,
+                    pub_date=item.pub_date, thumb_url=item.thumb_url,
+                    score=score, status="selected")
+
+    music = pick_music(music_root, mood=script.mood, channel_slug=channel.slug)
+    job = RenderJob(
+        script=script, bg_image_path=bg, music_path=music,
+        channel_colors=channel.colors, handle=channel.handle,
+        duration_s=channel.duration_s, language=channel.language,
+        cta_enabled=channel.cta_enabled, cta_text=channel.cta_text,
+        cta_icons=channel.cta_icons, cta_duration_s=channel.cta_duration_s,
+        cta_show_handle=channel.cta_show_handle,
+        rss_source=item.source,
+    )
+
+    with tempfile.TemporaryDirectory() as tmpd:
+        frames_dir = Path(tmpd) / "frames"
+        t0 = time.perf_counter()
+        ui_labels = _resolve_ui_labels(channel)
+        from short_bot.dna import build_css_override
+        dna_call = resolve_ai_call(settings, secrets, "dna")
+        resolved = _resolve_dna_for_video(
+            channel=channel,
+            headline=f"{script.header_top} {script.header_bottom}",
+            body=script.body_paragraph, log=log,
+            claude_path=dna_call.claude_path, secrets_path=secrets_path,
+            templates_dir=templates_dir, eng=eng, model=dna_call.model,
+            backend=dna_call.backend, api_key=dna_call.api_key)
+        if resolved is not None:
+            effective_dna, css_path = resolved
+            dna_css = css_path.read_text(encoding="utf-8")
+        else:
+            effective_dna = channel.dna
+            dna_css = build_css_override(channel.dna) if channel.dna else ""
+        archetype = (effective_dna.archetype if effective_dna is not None
+                     else channel.template)
+
+        out_dir = Path(channel.output_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        slug = _slugify(item.title)
+        out_path = out_dir / f"{datetime.now(timezone.utc):%Y-%m-%d}_{slug}.mp4"
+        sfx_overlays = _build_cta_sfx(channel)
+        bg_video_path = _resolve_pexels_bg(
+            channel=channel, cache_dir=cache_dir,
+            secrets_path=secrets_path, log=log)
+        bv = channel.bg_video
+        template_path = templates_dir / f"{archetype}.html.j2"
+        render_frames(job, template_path, frames_dir, fps=30,
+                      browser=settings.playwright_browser, ui_labels=ui_labels,
+                      dna_css=dna_css,
+                      animation_style=(effective_dna.animation_style
+                                       if effective_dna is not None else "none"))
+        compose_video(frames_dir, music, out_path, fps=30,
+                      ffmpeg_path=settings.ffmpeg_path, sfx_overlays=sfx_overlays,
+                      bg_video_path=bg_video_path,
+                      bg_blur_px=bv.blur_px if bv else 30,
+                      bg_dim=bv.dim if bv else 0.4,
+                      fg_scale=bv.scale if (bv and bg_video_path) else 1.0,
+                      duration_s=channel.duration_s)
+        render_ms = int((time.perf_counter() - t0) * 1000)
+        log.info(f"  → {out_path.name} ({render_ms}ms)")
+
+    mark_processed(eng, item.guid, item.title, channel.slug)
+    short_id = record_short(
+        eng, channel=channel.slug, rss_item_guid=item.guid,
+        title=script.header_top + " " + script.header_bottom,
+        file_path=str(out_path), duration_s=channel.duration_s,
+        script_json=script.model_dump_json(), render_ms=render_ms)
+    finish_run(eng, run_id, status="success", short_id=short_id, error=None)
+
+    score_call = resolve_ai_call(settings, secrets, "default")
+    yt_creds_root = (Path(eng.url.database).parent / "youtube_credentials").resolve() \
+        if eng.url.database else Path("data/youtube_credentials").resolve()
+    _maybe_auto_upload(
+        eng=eng, short_id=short_id, channel=channel, picked_score=score,
+        log=log, yt_creds_root=yt_creds_root,
+        claude_path=score_call.claude_path, model=score_call.model,
+        secrets_path=secrets_path, backend=score_call.backend,
+        api_key=score_call.api_key)
+    log.info(f"=== success short_id={short_id} ===")
+    return RunResult(run_id=run_id, status="success",
+                     short_path=out_path, error=None)
+
+
 def _run_rss(*, channel, run_id, log, eng, settings,
              music_root, templates_dir, cache_dir) -> RunResult:
     """Existing 8-stage RSS pipeline body, extracted verbatim. Returns RunResult."""
