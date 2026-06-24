@@ -173,3 +173,22 @@ def select_top(scored: list[ScoredItem], min_score: float, n: int = 1) -> list[S
     above = [s for s in scored if s.score >= min_score]
     above.sort(key=lambda s: s.score, reverse=True)
     return above[:n]
+
+
+def select_newest_above(
+    scored: list[ScoredItem], min_score: float, n: int = 1,
+) -> list[ScoredItem]:
+    """Hibrit seçim: min_score eşiğini geçenler arasından EN YENİ pub_date'e
+    göre sırala, ilk n'i döndür. pub_date None olanlar en eskiye konur
+    (datetime.min). select_top puana göre sıralarken bu tazeliğe göre sıralar."""
+    from datetime import datetime, timezone
+    above = [s for s in scored if s.score >= min_score]
+
+    def _key(s: ScoredItem):
+        pd = s.item.pub_date
+        if pd is None:
+            return datetime.min.replace(tzinfo=timezone.utc)
+        return pd if pd.tzinfo else pd.replace(tzinfo=timezone.utc)
+
+    above.sort(key=_key, reverse=True)
+    return above[:n]
