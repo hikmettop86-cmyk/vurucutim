@@ -83,3 +83,36 @@ def test_produce_from_item_success_records_short(tmp_path, monkeypatch):
     )
     assert result.status == "success"
     assert is_processed(eng, "g-manual-1", ch.slug)
+
+
+def test_run_pipeline_with_preselected_item(tmp_path, monkeypatch):
+    """preselected_item verilince fetch/score atlanir, dogrudan uretim yapilir."""
+    from short_bot import pipeline
+
+    monkeypatch.setattr(pipeline, "extract_article", lambda url: "uzun govde")
+    monkeypatch.setattr(pipeline, "write_script", lambda *a, **k: _script())
+    monkeypatch.setattr(pipeline, "write_script_with_overflow_check",
+                        lambda **k: (_script(), 0))
+    monkeypatch.setattr(pipeline, "extract_og_image_url", lambda url: None)
+    fake_img = tmp_path / "bg.jpg"; fake_img.write_bytes(b"x")
+    monkeypatch.setattr(pipeline, "download_and_blur_thumb", lambda *a, **k: fake_img)
+    monkeypatch.setattr("short_bot.image_picker.pick_image_for_script",
+                        lambda *a, **k: fake_img)
+    monkeypatch.setattr(pipeline, "render_frames", lambda *a, **k: None)
+    monkeypatch.setattr(pipeline, "compose_video", lambda *a, **k: None)
+    monkeypatch.setattr(pipeline, "pick_music", lambda *a, **k: tmp_path / "m.mp3")
+
+    # fetch_rss cagirilmamali -- cagirirsa testi patlat
+    monkeypatch.setattr(pipeline, "fetch_rss",
+                        lambda *a, **k: (_ for _ in ()).throw(
+                            AssertionError("fetch_rss preselected modda cagrilmamali")))
+
+    ch = _minimal_channel(tmp_path)
+    result = pipeline.run_pipeline(
+        channel=ch, settings=_minimal_settings(),
+        db_path=tmp_path / "x.sqlite", music_root=tmp_path,
+        templates_dir=Path("templates"), cache_dir=tmp_path,
+        logs_dir=tmp_path / "logs", lock_dir=tmp_path / "locks",
+        trigger="manual_feed", preselected_item=_item(),
+    )
+    assert result.status == "success"

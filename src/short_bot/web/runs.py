@@ -11,7 +11,8 @@ _log = logging.getLogger("short_bot.web.runs")
 def launch_pipeline(*, channel, settings, db_path: Path,
                     music_root: Path, templates_dir: Path,
                     cache_dir: Path, lock_dir: Path, logs_dir: Path,
-                    trigger: str = "manual") -> threading.Thread:
+                    trigger: str = "manual",
+                    preselected_item=None) -> threading.Thread:
     """Start pipeline in a daemon thread. Returns the thread object."""
     def _runner():
         try:
@@ -21,6 +22,7 @@ def launch_pipeline(*, channel, settings, db_path: Path,
                 templates_dir=templates_dir,
                 cache_dir=cache_dir, lock_dir=lock_dir,
                 logs_dir=logs_dir, trigger=trigger,
+                preselected_item=preselected_item,
             )
         except Exception:
             # Pipeline already records its own DB row + per-run log on internal

@@ -502,6 +502,7 @@ def run_pipeline(
     logs_dir: Path,
     lock_dir: Path | None = None,
     trigger: str = "cli",
+    preselected_item=None,   # NewsItem | None — manuel feed seciminde dolu
 ) -> RunResult:
     eng = init_db(db_path)
     log_path = logs_dir / f"{datetime.now(timezone.utc):%Y%m%d_%H%M%S}_{channel.slug}.log"
@@ -520,6 +521,18 @@ def run_pipeline(
             with lock:
                 log.info(f"=== run {run_id} channel={channel.slug} "
                          f"trigger={trigger} source={channel.content_source} ===")
+                if preselected_item is not None:
+                    log.info(f"  preselected item: {preselected_item.title[:80]}")
+                    res = _produce_from_item(
+                        item=preselected_item, channel=channel, eng=eng,
+                        settings=settings, log=log, music_root=music_root,
+                        templates_dir=templates_dir, cache_dir=cache_dir,
+                        run_id=run_id, score=None,
+                    )
+                    if res.status != "success":
+                        finish_run(eng, run_id, status="no_candidates",
+                                   short_id=None, error=res.error)
+                    return res
                 if channel.content_source == "generator":
                     return _run_generator(
                         channel=channel, run_id=run_id, log=log, eng=eng,
