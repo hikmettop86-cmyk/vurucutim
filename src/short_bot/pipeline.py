@@ -18,15 +18,16 @@ from short_bot.config import ChannelConfig, Settings, resolve_ai_call
 from short_bot.db import (
     init_db, mark_processed, record_short, record_rss_item,
     start_run, finish_run, get_last_youtube_upload_at,
+    list_feeds, get_feed,
 )
 from short_bot.youtube import auth as _yt_auth
 from short_bot.youtube.auto_upload import (
     should_auto_upload, run_auto_upload,
 )
 from short_bot.models import RenderJob
-from short_bot.fetcher import fetch_rss
+from short_bot.fetcher import fetch_rss, fetch_feed_url
 from short_bot.dedup import filter_new
-from short_bot.scorer import score_items, select_top
+from short_bot.scorer import score_items, select_top, select_newest_above
 from short_bot.extractor import (
     extract_article,
     extract_og_image_url,
@@ -535,6 +536,12 @@ def run_pipeline(
                     return res
                 if channel.content_source == "generator":
                     return _run_generator(
+                        channel=channel, run_id=run_id, log=log, eng=eng,
+                        settings=settings, music_root=music_root,
+                        templates_dir=templates_dir, cache_dir=cache_dir,
+                    )
+                if channel.content_source == "feed":
+                    return _run_feed(
                         channel=channel, run_id=run_id, log=log, eng=eng,
                         settings=settings, music_root=music_root,
                         templates_dir=templates_dir, cache_dir=cache_dir,
@@ -1316,6 +1323,73 @@ def _run_generator(*, channel, run_id, log, eng, settings,
     log.info(f"=== success short_id={short_id} ===")
     return RunResult(run_id=run_id, status="success",
                      short_path=out_path, error=None)
+
+
+def _run_feed(*, channel, run_id, log, eng, settings,
+              music_root, templates_dir, cache_dir) -> RunResult:
+    """Otomatik feed pipeline: auto_feed_ids'ten çek → dedup → score →
+    hibrit seçim (eşik üstü en yeni) → _produce_from_item."""
+    log.info(f"[1/?] fetch feeds {channel.auto_feed_ids}")
+    items = []
+    for fid in channel.auto_feed_ids:
+        feed = get_feed(eng, fid)
+        if feed is None:
+            log.warning(f"  feed id={fid} bulunamadı — atlanıyor")
+            continue
+        try:
+            items.extend(fetch_feed_url(feed.url))
+        except Exception as e:
+            log.warning(f"  feed {feed.url} çekilemedi: {e}")
+    log.info(f"  → {len(items)} items")
+
+    if channel.max_age_hours > 0:
+        from datetime import timedelta
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=channel.max_age_hours)
+        items = [i for i in items if _is_recent(i.pub_date, cutoff)]
+    if channel.negative_keywords:
+        items = _filter_negative_keywords(items, channel.negative_keywords)
+
+    log.info("[2/?] dedup")
+    new_items = filter_new(eng, items, channel.slug,
+                           fuzzy_threshold=settings.fuzzy_dedup_threshold)
+    if not new_items:
+        log.info("no candidates → finish")
+        finish_run(eng, run_id, status="no_candidates", short_id=None, error=None)
+        return RunResult(run_id=run_id, status="no_candidates",
+                         short_path=None, error=None)
+
+    log.info("[3/?] score_items")
+    secrets_path = current_app_secrets_path()
+    secrets = _load_secrets(secrets_path)
+    score_call = resolve_ai_call(settings, secrets, "default")
+    candidates = new_items[:channel.max_candidates_per_run]
+    scored = score_items(candidates, claude_path=score_call.claude_path,
+                         model=score_call.model, channel=channel,
+                         backend=score_call.backend, api_key=score_call.api_key)
+    picked = select_newest_above(scored, min_score=channel.min_score, n=1)
+    if not picked:
+        log.info(f"no item ≥ {channel.min_score} → finish")
+        for s in scored:
+            record_rss_item(eng, guid=s.item.guid, channel=channel.slug,
+                            title=s.item.title, link=s.item.link,
+                            source=s.item.source, pub_date=s.item.pub_date,
+                            thumb_url=s.item.thumb_url, score=s.score,
+                            status="below_threshold")
+        finish_run(eng, run_id, status="no_candidates", short_id=None, error=None)
+        return RunResult(run_id=run_id, status="no_candidates",
+                         short_path=None, error=None)
+
+    chosen = picked[0]
+    log.info(f"  → picked {chosen.item.guid} score={chosen.score:.1f} "
+             f"(newest above threshold)")
+    res = _produce_from_item(
+        item=chosen.item, channel=channel, eng=eng, settings=settings,
+        log=log, music_root=music_root, templates_dir=templates_dir,
+        cache_dir=cache_dir, run_id=run_id, score=chosen.score)
+    if res.status != "success":
+        finish_run(eng, run_id, status="no_candidates", short_id=None,
+                   error=res.error)
+    return res
 
 
 def _build_check_job(script, channel, *, music_path, ui_language):
