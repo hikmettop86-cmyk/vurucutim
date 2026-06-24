@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/">
+  <channel>
+    <title>Örnek Spor</title>
+    <item>
+      <guid>https://ornek.com/haber/1</guid>
+      <title>Icardi'den flaş açıklama</title>
+      <link>https://ornek.com/haber/1</link>
+      <pubDate>Wed, 24 Jun 2026 09:00:00 +0300</pubDate>
+      <description>Arjantinli golcü konuştu.</description>
+      <media:thumbnail url="https://ornek.com/img/1.jpg"/>
+    </item>
+    <item>
+      <guid>https://ornek.com/haber/2</guid>
+      <title>Derbi öncesi kritik karar</title>
+      <link>https://ornek.com/haber/2</link>
+      <pubDate>Wed, 24 Jun 2026 07:00:00 +0300</pubDate>
+      <description>Teknik direktör rotasyon planlıyor.</description>
+    </item>
+  </channel>
+</rss>

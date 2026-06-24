@@ -46,6 +46,32 @@ def fetch_rss(
     return []
 
 
+def fetch_feed_url(
+    url: str,
+    *,
+    max_retries: int = 3,
+    backoff: float = 1.0,
+    timeout: int = 15,
+) -> list[NewsItem]:
+    """Fetch and parse ANY RSS/Atom feed URL into NewsItems.
+
+    Same request+retry skeleton as fetch_rss, but takes a ready URL instead
+    of building a Google News query. Reuses _parse_feed. Returns [] on
+    persistent failure (caller decides how to surface it)."""
+    last_err: Exception | None = None
+    for attempt in range(max_retries):
+        try:
+            r = requests.get(url, timeout=timeout,
+                             headers={"User-Agent": "short-bot/0.1"})
+            r.raise_for_status()
+            return _parse_feed(r.content)
+        except Exception as e:
+            last_err = e
+            if attempt < max_retries - 1:
+                time.sleep(backoff * (2 ** attempt))
+    return []
+
+
 def _parse_feed(raw: bytes) -> list[NewsItem]:
     parsed = feedparser.parse(raw)
     items: list[NewsItem] = []
