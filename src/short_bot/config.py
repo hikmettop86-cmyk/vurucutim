@@ -115,8 +115,9 @@ class ChannelConfig:
     negative_keywords: list[str] = field(default_factory=list)
     dna: DnaSpec | None = None
     script_model: str | None = None
-    content_source: Literal["rss", "generator"] = "rss"
+    content_source: Literal["rss", "generator", "feed"] = "rss"
     generator: GeneratorConfig | None = None
+    auto_feed_ids: list[int] = field(default_factory=list)
     youtube: YoutubeChannelConfig | None = None
     bg_video: BgVideoConfig | None = None
     trend_boost: TrendBoostConfig | None = None
@@ -180,9 +181,17 @@ def load_channel(path: Path) -> ChannelConfig:
         )
 
     content_source = data.get("content_source", "rss")
-    if content_source not in ("rss", "generator"):
+    if content_source not in ("rss", "generator", "feed"):
         raise ValueError(
-            f"content_source must be 'rss' or 'generator', got {content_source!r}"
+            f"content_source must be 'rss', 'generator' or 'feed', "
+            f"got {content_source!r}"
+        )
+
+    auto_feed_ids = [int(x) for x in (data.get("auto_feed_ids") or [])]
+    if content_source == "feed" and not auto_feed_ids:
+        raise ValueError(
+            f"channel {slug!r} has content_source='feed' but no auto_feed_ids. "
+            f"Add at least one feed id from the pool."
         )
 
     keywords = list(data.get("keywords", []))
@@ -250,6 +259,7 @@ def load_channel(path: Path) -> ChannelConfig:
         script_model=data.get("script_model"),
         content_source=content_source,
         generator=generator,
+        auto_feed_ids=auto_feed_ids,
         youtube=youtube,
         bg_video=bg_video,
         trend_boost=trend_boost,
@@ -290,6 +300,8 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
         data["script_model"] = cfg.script_model
     if cfg.content_source != "rss":
         data["content_source"] = cfg.content_source
+    if cfg.auto_feed_ids:
+        data["auto_feed_ids"] = list(cfg.auto_feed_ids)
     if cfg.generator is not None:
         gen_data = {
             "topic": cfg.generator.topic,
