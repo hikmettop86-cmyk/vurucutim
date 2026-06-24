@@ -1094,6 +1094,40 @@
     {# ── TAB: Icerik ─────────────────────────────────────────────────── #}
     <div x-show="currentTab === 'icerik'">
 
+    {# ── Card: İçerik Kaynağı (rss / feed) ──────────────────────────── #}
+    <div class="bg-white border border-claude-border rounded-xl shadow-soft mb-4">
+      <div class="px-5 py-3 border-b border-claude-border/40">
+        <h2 class="font-serif text-base font-semibold flex items-center gap-2">
+          <span class="text-lg opacity-70">📡</span> İçerik Kaynağı
+        </h2>
+      </div>
+      <div class="px-5 pb-5 pt-3 space-y-3">
+        <label class="flex items-center gap-2 text-sm">
+          <input type="radio" name="content_source" value="rss"
+            {% if c.content_source == 'rss' %}checked{% endif %}>
+          Google News (keywords)
+        </label>
+        <label class="flex items-center gap-2 text-sm">
+          <input type="radio" name="content_source" value="feed"
+            {% if c.content_source == 'feed' %}checked{% endif %}>
+          Özel RSS Feed'leri
+        </label>
+        <div class="mt-2">
+          <label class="block text-xs text-claude-muted uppercase mb-1">Otomatik beslenecek feed'ler (çoklu seçim):</label>
+          <select name="auto_feed_ids" multiple size="6"
+                  class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full text-sm text-claude-text">
+            {% for f in all_feeds %}
+            <option value="{{ f.id }}"
+              {% if f.id in c.auto_feed_ids %}selected{% endif %}>{{ f.title|e }}</option>
+            {% endfor %}
+          </select>
+          <p class="text-[10px] text-claude-subtle mt-1">
+            Havuza feed eklemek için <a href="{{ url_for('feeds.list_view') }}" class="text-claude-accent underline">RSS Havuzu</a>.
+          </p>
+        </div>
+      </div>
+    </div>
+
     {# ── Card: Trend Boost ────────────────────────────────────────────── #}
     <div class="bg-claude-surface border border-claude-border rounded-lg p-4 mt-4">
       <div class="flex items-center justify-between mb-3">

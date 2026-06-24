@@ -60,6 +60,8 @@ def edit(slug):
     # Mevcut proxy URL'i secrets.yaml'dan oku (UI'da göstermek için)
     from short_bot.youtube.proxy import load_channel_proxy_url
     proxy_url = load_channel_proxy_url(slug, secrets_path) if secrets_path else None
+    from short_bot.db import list_feeds
+    all_feeds = list_feeds(eng)
     return render_template("channels/edit.html.j2", c=cfg,
                            archetypes=ARCHETYPES,
                            cron_human=describe_cron(cfg.schedule_cron),
@@ -72,7 +74,8 @@ def edit(slug):
                            pexels_key_set=pexels_key_set,
                            yt_history=yt_history,
                            yt_quota_today=yt_quota_today,
-                           proxy_url=proxy_url or "")
+                           proxy_url=proxy_url or "",
+                           all_feeds=all_feeds)
 
 
 @bp.route("/channels/<slug>/music/init", methods=["POST"])
@@ -304,6 +307,15 @@ def save(slug):
     else:
         new_trend_boost = cfg.trend_boost
 
+    new_content_source = request.form.get("content_source", cfg.content_source)
+    if new_content_source not in ("rss", "generator", "feed"):
+        new_content_source = cfg.content_source
+    auto_feed_ids = [int(x) for x in request.form.getlist("auto_feed_ids")
+                     if x.strip().isdigit()]
+    if new_content_source == "feed" and not auto_feed_ids:
+        flash("Feed modu için en az bir feed seçmelisin.", "error")
+        return redirect(url_for("channel_edit.edit", slug=slug))
+
     new_cfg = ChannelConfig(
         slug=cfg.slug,
         name=cfg.name,
@@ -335,7 +347,8 @@ def save(slug):
         language=cfg.language,
         dna=new_dna,
         script_model=cfg.script_model,
-        content_source=cfg.content_source,
+        content_source=new_content_source,
+        auto_feed_ids=auto_feed_ids,
         generator=new_generator,
         youtube=new_youtube,
         bg_video=new_bg_video,
