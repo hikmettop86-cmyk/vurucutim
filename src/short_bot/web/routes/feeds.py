@@ -1,5 +1,7 @@
 """RSS Havuzu — feed ekleme/silme + manuel haber seçimi → video üretimi."""
 import re
+from concurrent.futures import ThreadPoolExecutor
+from functools import lru_cache
 
 import feedparser
 import requests
@@ -10,6 +12,7 @@ from short_bot.db import (
     init_db, add_feed, list_feeds, get_feed, delete_feed, set_feed_meta,
 )
 from short_bot.fetcher import fetch_feed_url
+from short_bot.extractor import extract_og_image_url
 from short_bot.web.runs import launch_pipeline
 from short_bot.config import load_channel, list_channels
 from short_bot.models import NewsItem
@@ -27,6 +30,25 @@ def _first_img_in_html(html):
         return None
     m = _IMG_SRC_RE.search(html)
     return m.group(1) if m else None
+
+
+@lru_cache(maxsize=512)
+def _og_image_cached(link):
+    """Makale sayfasından og:image çek (sonuç — None dahil — cache'lenir, böylece
+    aynı feed tekrar açıldığında ve başarısız fetch'lerde yeniden indirme olmaz)."""
+    if not link:
+        return None
+    try:
+        return extract_og_image_url(link, timeout=8)
+    except Exception:
+        return None
+
+
+def _resolve_item_image(n):
+    """Haber önizleme görseli: feed thumbnail → açıklama görseli → makale og:image.
+    İlk ikisi HTTP gerektirmez; og:image makale sayfasını indirir (paralel çağrılır)."""
+    return (n.thumb_url or _first_img_in_html(n.description)
+            or _og_image_cached(n.link))
 
 
 def _eng():
@@ -90,12 +112,15 @@ def items(feed_id):
         set_feed_meta(eng, feed_id, last_error=str(e))
         news = []
     channels = list_channels(current_app.config["SHORTBOT_CONFIG_DIR"] / "channels")
+    # Görselleri paralel çöz: og:image fallback makale sayfasını indirir, tek tek
+    # yapmak haber sayısı kadar seri HTTP demek olurdu. lru_cache tekrar açılışı hızlandırır.
+    with ThreadPoolExecutor(max_workers=10) as ex:
+        images = list(ex.map(_resolve_item_image, news))
     enriched = []
-    for n in news:
+    for n, image in zip(news, images):
         done = any(is_processed(eng, n.guid, c.slug) or
                    similar_title_exists(eng, n.title, c.slug, threshold=0.85)
                    for c in channels)
-        image = n.thumb_url or _first_img_in_html(n.description)
         enriched.append({"item": n, "done": done, "image": image})
     return render_template("_feed_items.html.j2", feed=feed,
                            items=enriched, channels=channels)

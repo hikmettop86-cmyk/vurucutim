@@ -60,7 +60,8 @@ def test_feed_items_lists_news(client):
     from short_bot.db import init_db, list_feeds
     eng = init_db(client.application.config["SHORTBOT_DB_PATH"])
     fid = list_feeds(eng)[0].id
-    with patch("short_bot.web.routes.feeds.fetch_feed_url") as mock_fetch:
+    with patch("short_bot.web.routes.feeds.fetch_feed_url") as mock_fetch, \
+         patch("short_bot.web.routes.feeds.extract_og_image_url", return_value=None):
         from short_bot.models import NewsItem
         from datetime import datetime, timezone
         mock_fetch.return_value = [

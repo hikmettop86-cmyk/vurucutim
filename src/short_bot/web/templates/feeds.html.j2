@@ -1,6 +1,10 @@
 {% extends "base.html.j2" %}
 {% block title %}Vurucu TİM — RSS Havuzu{% endblock %}
 {% block content %}
+<style>
+  #feed-spin { display: none; }
+  #feed-spin.htmx-request { display: flex; }
+</style>
 <h1 class="font-serif text-3xl font-bold mb-2">RSS Havuzu</h1>
 <p class="text-sm text-claude-muted mb-6">Kendi haber kaynaklarını ekle, istediğin haberi seçip videoya çevir.</p>
 
@@ -22,7 +26,7 @@
          @click="active = {{ f.id }}">
       <a class="flex-1 min-w-0 block"
          hx-get="{{ url_for('feeds.items', feed_id=f.id) }}"
-         hx-target="#feed-items" hx-swap="innerHTML">
+         hx-target="#feed-items" hx-swap="innerHTML" hx-indicator="#feed-spin">
         <div class="font-medium text-sm text-claude-text truncate">{{ f.title|e }}</div>
         <div class="text-xs text-claude-subtle truncate">{{ f.url|e }}</div>
       </a>
@@ -39,6 +43,10 @@
 
   <!-- sağ: haberler -->
   <section class="flex-1 min-w-0">
+    <div id="feed-spin" class="items-center gap-2 text-sm text-claude-muted mb-3">
+      <span class="w-3.5 h-3.5 rounded-full border-2 border-claude-accent border-t-transparent animate-spin"></span>
+      Haberler yükleniyor… (görseller makale sayfalarından çekiliyor)
+    </div>
     <div id="feed-items">
       <div class="text-claude-muted text-center py-16 border border-dashed border-claude-border rounded-xl">
         ← Soldan bir feed seç, haberleri burada gör.
