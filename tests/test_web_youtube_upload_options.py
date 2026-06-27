@@ -136,3 +136,17 @@ def test_malformed_publish_at_rejected_no_upload(tmp_path):
                         follow_redirects=False)
     mock_up.assert_not_called()
     assert r.status_code in (302, 303)
+
+
+def test_detail_page_shows_upload_options(tmp_path):
+    app = _make_app(tmp_path)
+    short_id = _seed_short(app, tmp_path)
+    client = app.test_client()
+    html = client.get(f"/shorts/{short_id}").get_data(as_text=True)
+    # Gizlilik radyolari
+    assert 'value="public"' in html
+    assert 'value="unlisted"' in html
+    assert 'value="private"' in html
+    # Zamanlama gizli input + datetime alani
+    assert 'name="publish_at"' in html
+    assert 'type="datetime-local"' in html

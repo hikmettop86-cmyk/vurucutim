@@ -26,16 +26,41 @@
         ▶ YouTube ({{ yt_upload.video_id }})
       </a>
     {% else %}
-      <div class="flex flex-col gap-1">
-        <form method="POST" action="/shorts/{{ s.id }}/upload-youtube" class="inline"
-              onsubmit="return confirm('Bu shortu YouTube\'a yükle?');">
-          <button class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm text-claude-text {% if not yt_connected %}opacity-50 cursor-not-allowed{% endif %}"
-                  {% if not yt_connected %}disabled title="Önce kanal edit sayfasından YouTube bağla"{% endif %}>
-            ↑ YouTube'a Yükle
+      <div x-data="{ open:false, schedule:false, dt:'' }" class="relative">
+        <button type="button" x-on:click="open=!open"
+                class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm text-claude-text {% if not yt_connected %}opacity-50 cursor-not-allowed{% endif %}"
+                {% if not yt_connected %}disabled title="Önce kanal edit sayfasından YouTube bağla"{% endif %}>
+          ↑ YouTube'a Yükle ▾
+        </button>
+        <form method="POST" action="/shorts/{{ s.id }}/upload-youtube"
+              x-show="open" x-cloak
+              x-on:submit="if(schedule){ if(!dt){ $event.preventDefault(); return; } $refs.pub.value = new Date(dt).toISOString(); } else { $refs.pub.value=''; }"
+              class="mt-2 w-72 bg-claude-surface border border-claude-border rounded-lg p-3 flex flex-col gap-3 text-sm">
+          <input type="hidden" name="publish_at" x-ref="pub" value="">
+          <div class="flex flex-col gap-1">
+            <span class="text-xs text-claude-muted uppercase tracking-wider">Gizlilik</span>
+            {% for val, label in [('public','Herkese açık'), ('unlisted','Liste dışı'), ('private','Gizli')] %}
+            <label class="flex items-center gap-2" :class="schedule ? 'opacity-40' : ''">
+              <input type="radio" name="privacy" value="{{ val }}"
+                     :disabled="schedule"
+                     {% if val == default_privacy %}checked{% endif %}>
+              <span :class="schedule && '{{ val }}' === 'private' ? 'font-semibold text-claude-text' : ''">{{ label }}</span>
+            </label>
+            {% endfor %}
+          </div>
+          <label class="flex items-center gap-2">
+            <input type="checkbox" x-model="schedule">
+            <span>Zamanla <span class="text-xs text-claude-muted">(yayına kadar gizli)</span></span>
+          </label>
+          <input type="datetime-local" x-model="dt" x-show="schedule"
+                 class="bg-claude-bg border border-claude-border rounded px-2 py-1 text-claude-text">
+          <button type="submit"
+                  class="bg-claude-accent hover:opacity-90 text-white px-3 py-2 rounded-lg text-sm">
+            Yükle
           </button>
         </form>
         {% if yt_upload and yt_upload.status == 'failed' %}
-          <div class="text-xs text-claude-error">Son deneme başarısız: {{ yt_upload.error[:80] }}</div>
+          <div class="text-xs text-claude-error mt-1">Son deneme başarısız: {{ yt_upload.error[:80] }}</div>
         {% endif %}
       </div>
     {% endif %}
