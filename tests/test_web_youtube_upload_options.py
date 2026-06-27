@@ -123,3 +123,16 @@ def test_no_options_uses_channel_default(tmp_path):
     _, ukw = mock_up.call_args
     assert ukw["status"]["privacyStatus"] == "public"
     assert "publishAt" not in ukw["status"]
+
+
+def test_malformed_publish_at_rejected_no_upload(tmp_path):
+    app = _make_app(tmp_path)
+    short_id = _seed_short(app, tmp_path)
+    client = app.test_client()
+    p_load, p_up, p_meta = _patches()
+    with p_load, p_up as mock_up, p_meta:
+        r = client.post(f"/shorts/{short_id}/upload-youtube",
+                        data={"publish_at": "not-a-date"},
+                        follow_redirects=False)
+    mock_up.assert_not_called()
+    assert r.status_code in (302, 303)

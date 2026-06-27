@@ -200,15 +200,16 @@ def upload(short_id):
     if publish_at:
         try:
             # Tarayıcıdan UTC ISO gelir: "...Z" -> +00:00
-            pa = datetime.fromisoformat(publish_at.replace("Z", "+00:00"))
-            if pa.tzinfo is None:
-                pa = pa.replace(tzinfo=timezone.utc)
+            publish_dt = datetime.fromisoformat(publish_at.replace("Z", "+00:00"))
+            if publish_dt.tzinfo is None:
+                publish_dt = publish_dt.replace(tzinfo=timezone.utc)
         except ValueError:
             flash("Zamanlama tarihi geçersiz.", "error")
             return redirect(url_for("shorts.detail", short_id=short_id))
-        if pa <= datetime.now(timezone.utc):
+        if publish_dt <= datetime.now(timezone.utc):
             flash("Zamanlama tarihi gelecekte olmalı.", "error")
             return redirect(url_for("shorts.detail", short_id=short_id))
+        publish_at = publish_dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
     script = _json.loads(s.script_json or "{}")
 
