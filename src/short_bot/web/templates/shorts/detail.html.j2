@@ -53,7 +53,7 @@
             <span>Zamanla <span class="text-xs text-claude-muted">(yayına kadar gizli)</span></span>
           </label>
           <input type="datetime-local" x-model="dt" x-show="schedule"
-                 :min="new Date(Date.now() + 60000).toISOString().slice(0,16)"
+                 :min="new Date(Date.now() - new Date().getTimezoneOffset()*60000 + 60000).toISOString().slice(0,16)"
                  class="bg-claude-bg border border-claude-border rounded px-2 py-1 text-claude-text">
           <button type="submit"
                   class="bg-claude-accent hover:opacity-90 text-white px-3 py-2 rounded-lg text-sm">
