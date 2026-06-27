@@ -1,5 +1,6 @@
 import json as _json
 import json as _json_m
+from datetime import datetime, timezone
 from pathlib import Path
 import requests
 from flask import (Blueprint, abort, current_app, flash, jsonify, redirect,
@@ -191,6 +192,23 @@ def upload(short_id):
     category_id = yt_cfg.category_id if yt_cfg else "24"
     privacy = yt_cfg.privacy_status if yt_cfg else "public"
     ai = yt_cfg.ai_content if yt_cfg else True
+    # Manuel yükleme opsiyonları (form). Hiçbiri yoksa kanal varsayılanı korunur.
+    form_privacy = (request.form.get("privacy") or "").strip().lower()
+    if form_privacy in {"public", "unlisted", "private"}:
+        privacy = form_privacy
+    publish_at = (request.form.get("publish_at") or "").strip() or None
+    if publish_at:
+        try:
+            # Tarayıcıdan UTC ISO gelir: "...Z" -> +00:00
+            pa = datetime.fromisoformat(publish_at.replace("Z", "+00:00"))
+            if pa.tzinfo is None:
+                pa = pa.replace(tzinfo=timezone.utc)
+        except ValueError:
+            flash("Zamanlama tarihi geçersiz.", "error")
+            return redirect(url_for("shorts.detail", short_id=short_id))
+        if pa <= datetime.now(timezone.utc):
+            flash("Zamanlama tarihi gelecekte olmalı.", "error")
+            return redirect(url_for("shorts.detail", short_id=short_id))
 
     script = _json.loads(s.script_json or "{}")
 
@@ -231,7 +249,8 @@ def upload(short_id):
         category_id=category_id, language=cfg.language,
         generated=generated,
     )
-    status = build_status(privacy_status=privacy, ai_content=ai)
+    status = build_status(privacy_status=privacy, ai_content=ai,
+                          publish_at=publish_at)
 
     try:
         video_id = upload_video(
@@ -244,7 +263,11 @@ def upload(short_id):
             eng, short_id=short_id, video_id=video_id, status="success",
             error=None, video_url=url,
         )
-        flash(f"YouTube'a yüklendi: {url}", "success")
+        if publish_at:
+            flash(f"YouTube'a yüklendi — {publish_at} (UTC) tarihinde yayınlanacak "
+                  f"(şimdilik gizli): {url}", "success")
+        else:
+            flash(f"YouTube'a yüklendi: {url}", "success")
     except Exception as e:
         # Categorize: proxy transport fail vs API fail
         is_proxy_fail = proxy_url is not None and isinstance(
