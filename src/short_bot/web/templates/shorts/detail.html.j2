@@ -34,8 +34,8 @@
         </button>
         <form method="POST" action="/shorts/{{ s.id }}/upload-youtube"
               x-show="open" x-cloak
-              x-on:submit="if(schedule){ if(!dt){ $event.preventDefault(); return; } $refs.pub.value = new Date(dt).toISOString(); } else { $refs.pub.value=''; }"
-              class="mt-2 w-72 bg-claude-surface border border-claude-border rounded-lg p-3 flex flex-col gap-3 text-sm">
+              x-on:submit="if(!confirm('Bu shortu YouTube\'a yükle?')){ $event.preventDefault(); return; } if(schedule){ if(!dt){ $event.preventDefault(); return; } $refs.pub.value = new Date(dt).toISOString(); } else { $refs.pub.value=''; }"
+              class="absolute left-0 top-full mt-2 w-72 z-20 bg-claude-surface border border-claude-border rounded-lg p-3 flex flex-col gap-3 text-sm shadow-lg">
           <input type="hidden" name="publish_at" x-ref="pub" value="">
           <div class="flex flex-col gap-1">
             <span class="text-xs text-claude-muted uppercase tracking-wider">Gizlilik</span>
@@ -53,6 +53,7 @@
             <span>Zamanla <span class="text-xs text-claude-muted">(yayına kadar gizli)</span></span>
           </label>
           <input type="datetime-local" x-model="dt" x-show="schedule"
+                 :min="new Date(Date.now() + 60000).toISOString().slice(0,16)"
                  class="bg-claude-bg border border-claude-border rounded px-2 py-1 text-claude-text">
           <button type="submit"
                   class="bg-claude-accent hover:opacity-90 text-white px-3 py-2 rounded-lg text-sm">

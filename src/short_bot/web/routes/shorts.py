@@ -88,10 +88,13 @@ def detail(short_id):
     from short_bot.db import get_video_stats_for_short, init_db
     eng = init_db(current_app.config["SHORTBOT_DB_PATH"])
     yt_video_stats = get_video_stats_for_short(eng, short_id=s.id, days=30)
-    cfg = load_channel(
-        current_app.config["SHORTBOT_CONFIG_DIR"] / "channels" / f"{s.channel}.yaml"
-    )
-    default_privacy = cfg.youtube.privacy_status if cfg.youtube else "public"
+    try:
+        cfg = load_channel(
+            current_app.config["SHORTBOT_CONFIG_DIR"] / "channels" / f"{s.channel}.yaml"
+        )
+        default_privacy = cfg.youtube.privacy_status if cfg.youtube else "public"
+    except Exception:
+        default_privacy = "public"
     return render_template("shorts/detail.html.j2", s=s,
                            yt_connected=yt_connected, yt_upload=yt_upload,
                            yt_video_stats=yt_video_stats,
