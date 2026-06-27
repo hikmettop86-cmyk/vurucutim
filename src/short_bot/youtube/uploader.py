@@ -42,11 +42,16 @@ def build_snippet(*, header_top: str, header_bottom: str, body_paragraph: str,
     }
 
 
-def build_status(*, privacy_status: str, ai_content: bool) -> dict:
+def build_status(*, privacy_status: str, ai_content: bool,
+                 publish_at: str | None = None) -> dict:
+    if publish_at:
+        privacy_status = "private"  # YouTube: publishAt sadece private iken geçerli
     s: dict = {
         "privacyStatus": privacy_status,
         "selfDeclaredMadeForKids": False,
     }
+    if publish_at:
+        s["publishAt"] = publish_at
     if ai_content:
         s["containsSyntheticMedia"] = True
     return s
