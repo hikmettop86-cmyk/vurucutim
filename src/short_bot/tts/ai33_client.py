@@ -150,3 +150,73 @@ def synthesize(
                 f"ai33 task hatası: {task.get('error_message') or 'bilinmeyen hata'}"
             )
         # 'doing' | 'processing' | 'pending' → poll'a devam
+
+
+HEALTH_TIMEOUT_S = 25.0
+HEALTH_TEXT = "test bir iki"
+
+
+def health_check(
+    *,
+    voice_id: str,
+    api_key: str,
+    tmp_dir: "Path",
+    timeout_s: float = HEALTH_TIMEOUT_S,
+    base_url: str = BASE_URL,
+    session=None,
+    sleep=time.sleep,
+    now=time.monotonic,
+) -> str:
+    """Küçük bir TTS isteğiyle servisi yoklar. ASLA exception atmaz.
+
+    Dönüş: 'healthy' | 'stalled' | 'auth' | 'no-key' | 'no-voice' | 'error'
+    """
+    if not api_key:
+        return "no-key"
+    if not (voice_id or "").strip():
+        return "no-voice"
+    probe = Path(tmp_dir) / "_ai33_health.mp3"
+    try:
+        synthesize(HEALTH_TEXT, voice_id=voice_id, api_key=api_key,
+                   out_path=probe, base_url=base_url, session=session,
+                   sleep=sleep, now=now,
+                   poll_interval_s=1.0, poll_timeout_s=timeout_s)
+    except Ai33AuthError:
+        return "auth"
+    except Ai33Error as e:
+        return "stalled" if "timeout" in str(e) else "error"
+    except Exception:
+        return "error"
+    finally:
+        probe.unlink(missing_ok=True)
+    return "healthy"
+
+
+def list_voices(
+    *,
+    api_key: str,
+    provider: str = "elevenlabs",
+    search: str = "",
+    page: int = 1,
+    page_size: int = 100,
+    base_url: str = BASE_URL,
+    session=None,
+) -> list[dict]:
+    """Ses kütüphanesini listeler. Hata durumunda boş liste döner (UI dostu)."""
+    if not api_key:
+        return []
+    sess = session or _new_session()
+    try:
+        r = sess.get(
+            f"{base_url}/v3/voices",
+            headers={"xi-api-key": api_key},
+            params={"provider": provider, "search": search,
+                    "page": page, "page_size": page_size},
+            timeout=TASK_TIMEOUT_S,
+        )
+        _check_status(r, "voices")
+        body = r.json() or {}
+    except Exception:
+        return []
+    items = body.get("data") if isinstance(body, dict) else body
+    return list(items or [])
