@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="{{ language }}">
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1080px; height: 1920px; overflow: hidden;
+    font-family: "{{ dna_font_headline | default('Inter') }}", Inter, sans-serif;
+    background: linear-gradient(160deg, {{ colors.bg_gradient[0] }}, {{ colors.bg_gradient[1] }});
+    color: #f8fafc;
+  }
+  .stage { position: relative; width: 100%; height: 100%; }
+
+  /* Arka plan görseli — yavaş ken-burns, tüm video boyunca tek bir hareket. */
+  .bg {
+    position: absolute; inset: 0;
+    background-image: url("{{ bg_image_url }}");
+    background-size: cover; background-position: center;
+    opacity: 0.45;
+    animation: kenburns {{ (narration.duration_s if narration else duration_s) }}s linear forwards;
+  }
+  @keyframes kenburns {
+    from { transform: scale(1.05); }
+    to   { transform: scale(1.20); }
+  }
+  .scrim { position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(2,6,23,.55) 0%, rgba(2,6,23,.20) 40%, rgba(2,6,23,.85) 100%); }
+
+  /* İlerleme çubuğu — retention sinyali, üstte ince şerit. */
+  #__progress {
+    position: absolute; top: 0; left: 0; height: 10px; width: 0%;
+    background: {{ colors.accent }};
+  }
+
+  .hook, .close {
+    position: absolute; top: 260px; left: 70px; right: 70px;
+    font-size: 92px; font-weight: 800; line-height: 1.1;
+    letter-spacing: -0.02em; text-wrap: balance;
+    text-shadow: 0 8px 40px rgba(0,0,0,.6);
+    display: none;
+  }
+  .hook.on, .close.on { display: block; }
+
+  /* Sahne kartı — beat sınırlarında değişen tek görsel eleman. */
+  .card {
+    position: absolute; top: 300px; left: 70px;
+    padding: 22px 34px; border-radius: 18px;
+    background: {{ colors.primary }};
+    font-size: 56px; font-weight: 800; letter-spacing: 0.02em;
+    text-transform: uppercase;
+    box-shadow: 0 18px 60px rgba(0,0,0,.55);
+    display: none;
+  }
+  .card.on { display: block; }
+
+  /* Karaoke altyazı bloğu — sadece aktif segmentin kelimeleri görünür. */
+  .caption {
+    position: absolute; left: 60px; right: 60px; bottom: 420px;
+    font-size: 74px; font-weight: 800; line-height: 1.22;
+    text-align: center; text-wrap: balance;
+    text-shadow: 0 6px 28px rgba(0,0,0,.75);
+  }
+  .caption .w { display: none; margin: 0 10px; color: #f8fafc; }
+  .caption .w.vis { display: inline; }
+  .caption .w.hot { color: {{ colors.accent }}; }
+
+  .handle {
+    position: absolute; bottom: 90px; left: 0; right: 0;
+    text-align: center; font-size: 40px; font-weight: 700;
+    color: rgba(248,250,252,.72);
+  }
+  {{ dna_css }}
+</style>
+</head>
+<body>
+<div class="stage">
+  {% if bg_image_url %}<div class="bg"></div>{% endif %}
+  <div class="scrim"></div>
+  <div id="__progress"></div>
+
+  <div class="hook" id="__hook">{{ narration.hook }}</div>
+  <div class="close" id="__close" data-seg="{{ (narration.beats | length) + 1 }}">{{ narration.loop_close }}</div>
+
+  {% for b in narration.beats %}
+  <div class="card" data-s="{{ b.start_s }}" data-e="{{ b.end_s }}">{{ b.on_screen }}</div>
+  {% endfor %}
+
+  <div class="caption">
+    {% for w in narration.words %}<span class="w" data-s="{{ w.start_s }}" data-e="{{ w.end_s }}" data-seg="{{ w.seg }}">{{ w.word }}</span>{% endfor %}
+  </div>
+
+  <div class="handle">{{ handle }}</div>
+</div>
+
+<script>
+// Karaoke sürücüsü. renderer.py her kare için __seek(t_ms) çağırır.
+// LEAD_MS: kelime söylenmeden hemen önce yanar — göz sesi yakalasın.
+const LEAD_MS = 80;
+const WORDS = Array.from(document.querySelectorAll('.caption .w'));
+const CARDS = Array.from(document.querySelectorAll('.card'));
+const HOOK = document.getElementById('__hook');
+const CLOSE = document.getElementById('__close');
+const CLOSE_SEG = parseInt(CLOSE.dataset.seg, 10);
+const PROGRESS = document.getElementById('__progress');
+const DURATION_S = {{ narration.duration_s }};
+
+window.__seek = function (tMs) {
+  const t = tMs / 1000;
+  const lead = t + LEAD_MS / 1000;
+
+  // Aktif segment: o an konuşulan kelimenin segmenti.
+  let activeSeg = 0;
+  for (const w of WORDS) {
+    if (lead >= parseFloat(w.dataset.s)) activeSeg = parseInt(w.dataset.seg, 10);
+  }
+
+  for (const w of WORDS) {
+    const s = parseFloat(w.dataset.s), e = parseFloat(w.dataset.e);
+    const inSeg = parseInt(w.dataset.seg, 10) === activeSeg;
+    w.classList.toggle('vis', inSeg);
+    w.classList.toggle('hot', inSeg && lead >= s && t < e);
+  }
+
+  // Hook yalnızca segment 0 boyunca büyük başlık olarak durur.
+  HOOK.classList.toggle('on', activeSeg === 0);
+  // loop_close son segment boyunca büyük başlık — döngüde hook'a doğal köprü.
+  CLOSE.classList.toggle('on', activeSeg === CLOSE_SEG);
+
+  for (const c of CARDS) {
+    const s = parseFloat(c.dataset.s), e = parseFloat(c.dataset.e);
+    c.classList.toggle('on', t >= s && t < e);
+  }
+
+  PROGRESS.style.width = Math.min(100, (t / DURATION_S) * 100) + '%';
+};
+window.__seek(0);
+window.__autoFitDone = Promise.resolve();
+</script>
+</body>
+</html>

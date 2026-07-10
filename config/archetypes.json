@@ -774,5 +774,24 @@
       "font_body": "Inter"
     },
     "pexels_queries": ["stadium crowd", "ultras tifosi", "soccer fans", "football fans celebration"]
+  },
+  {
+    "slug": "narrator",
+    "label": "Narrator",
+    "subtitle": "Seslendirmeli explainer · karaoke altyazı",
+    "defaults": {
+      "colors": {
+        "primary": "#0ea5e9",
+        "accent": "#facc15",
+        "primary_light": "#38bdf8",
+        "bg_gradient": ["#0f172a", "#020617"]
+      },
+      "body_bg": ["#0f172a", "#020617"],
+      "text_main": "#f8fafc",
+      "text_muted": "#94a3b8",
+      "font_headline": "Inter",
+      "font_body": "Inter"
+    },
+    "pexels_queries": ["city night", "abstract technology", "documentary footage"]
   }
 ]
