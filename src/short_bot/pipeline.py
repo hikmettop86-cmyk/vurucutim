@@ -1223,7 +1223,7 @@ def _run_generator(*, channel, run_id, log, eng, settings,
                 settings=settings, secrets=secrets, music_root=music_root,
                 templates_dir=templates_dir, cache_dir=cache_dir,
                 work_dir=Path(reel_tmp), log=log, llm_call=gen_call,
-                vision_call=reel_call,
+                vision_call=reel_call, seed=generated_id,
             )
             render_ms = int((time.perf_counter() - t0) * 1000)
         log.info(f"  → {reel_out.name} ({render_ms}ms)")
@@ -1502,7 +1502,7 @@ def _render_and_compose(
 
 def _reel_produce_or_none(
     *, channel, topic, out_path, settings, secrets, music_root, templates_dir,
-    cache_dir, work_dir, log, llm_call, vision_call,
+    cache_dir, work_dir, log, llm_call, vision_call, seed: int = 0,
 ) -> "Path | None":
     """Kanal reel ise reel videoyu üretip out_path döndürür; değilse None."""
     reel = getattr(channel, "reel", None)
@@ -1526,7 +1526,7 @@ def _reel_produce_or_none(
         ffmpeg_path=settings.ffmpeg_path, browser=settings.playwright_browser,
         llm_claude_path=llm_call.claude_path, llm_model=llm_call.model,
         llm_backend=llm_call.backend, llm_api_key=llm_call.api_key,
-        vision_call=vision_call,
+        vision_call=vision_call, seed=seed,
     )
 
 

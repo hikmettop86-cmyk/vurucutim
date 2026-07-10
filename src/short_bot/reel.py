@@ -74,13 +74,18 @@ def produce_reel_video(
     browser: str = "chromium",
     llm_claude_path: str = "claude", llm_model: str = "default",
     llm_backend: str = "claude_cli", llm_api_key: str | None = None,
-    vision_call=None, deps: ReelDeps | None = None,
+    vision_call=None, seed: int = 0, deps: ReelDeps | None = None,
 ) -> Path:
     reel = getattr(channel, "reel", None)
     if reel is None or not reel.enabled:
         raise ValueError("produce_reel_video: channel.reel etkin değil")
     d = deps or ReelDeps()
     work_dir = Path(work_dir); work_dir.mkdir(parents=True, exist_ok=True)
+
+    # Varyasyon profili (deterministik: aynı seed → aynı profil). Reel etkin
+    # kontrolünden SONRA hesaplanır; saf fonksiyon (çağrı zincirine girmez).
+    from short_bot.reel_variation import build_variation_profile
+    profile = build_variation_profile(channel, seed)
 
     # 1) Preflight (LLM/TTS kredisi harcamadan)
     verdict = d.health_check(voice_id=reel.voice_id, api_key=ai33_api_key, tmp_dir=work_dir)
@@ -91,7 +96,8 @@ def produce_reel_video(
     # 2) Senaryo
     narration = d.write_reel_narration(topic, channel=channel,
                                        claude_path=llm_claude_path, model=llm_model,
-                                       backend=llm_backend, api_key=llm_api_key)
+                                       backend=llm_backend, api_key=llm_api_key,
+                                       hook_angle=profile.hook_angle)
     log.info(f"  reel: {narration.word_count()} kelime, {len(narration.beats)} beat")
 
     # 3) TTS
@@ -126,20 +132,21 @@ def produce_reel_video(
     frames_dir = work_dir / "frames"
     d.render_reel_overlay_frames(
         timeline, frames_dir, fps=fps, browser=browser, templates_dir=templates_dir,
-        highlight_color=reel.highlight_color, arrow_color=reel.arrow_color,
+        layout=profile.layout,
+        highlight_color=profile.accent, arrow_color=reel.arrow_color,
         arrow_frequency=reel.arrow_frequency if reel.arrows_enabled else "off",
-        flash=reel.transitions_flash, handle=channel.handle,
+        flash=("flash" in profile.transitions), handle=channel.handle,
     )
 
     # 7) Montaj
     cut_times = [timeline.seg_spans[i][0] for i in range(1, len(timeline.seg_spans))]
-    whoosh = Path("assets/sfx/whoosh.mp3") if reel.transitions_whoosh else None
+    whoosh = Path("assets/sfx/whoosh.mp3") if ("whoosh" in profile.transitions) else None
     d.assemble_reel(
         clip_paths=clip_paths, seg_spans=timeline.seg_spans, frames_dir=frames_dir,
         narration_path=mp3, music_path=music_path, out_path=out_path,
         cut_times=cut_times, duration_s=duration_s, fps=fps, ffmpeg_path=ffmpeg_path,
         music_volume=reel.music_volume,
         whoosh_path=whoosh if (whoosh and whoosh.exists()) else None,
-        zoom=reel.transitions_zoom,
+        zoom=("zoom" in profile.transitions),
     )
     return out_path
