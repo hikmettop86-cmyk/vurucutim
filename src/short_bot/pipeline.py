@@ -1075,21 +1075,17 @@ def _run_rss(*, channel, run_id, log, eng, settings,
         )
         bv = channel.bg_video
 
-        template_path = templates_dir / f"{archetype}.html.j2"
-        render_frames(job, template_path, frames_dir,
-                      fps=30, browser=settings.playwright_browser,
-                      ui_labels=ui_labels, dna_css=dna_css,
-                      animation_style=(effective_dna.animation_style
-                                        if effective_dna is not None else "none"))
-        compose_video(
-            frames_dir, music, out_path,
-            fps=30, ffmpeg_path=settings.ffmpeg_path,
-            sfx_overlays=sfx_overlays,
-            bg_video_path=bg_video_path,
-            bg_blur_px=bv.blur_px if bv else 30,
-            bg_dim=bv.dim if bv else 0.4,
-            fg_scale=bv.scale if (bv and bg_video_path) else 1.0,
-            duration_s=channel.duration_s,
+        script_call = resolve_ai_call(settings, secrets, "script")
+        _render_and_compose(
+            job=job, archetype=archetype, templates_dir=templates_dir,
+            frames_dir=frames_dir, music=music, out_path=out_path,
+            channel=channel, settings=settings, secrets=secrets,
+            ui_labels=ui_labels, dna_css=dna_css,
+            animation_style=(effective_dna.animation_style
+                             if effective_dna is not None else "none"),
+            sfx_overlays=sfx_overlays, bg_video_path=bg_video_path,
+            item=picked.item, body=body, script=script, bg_image_path=bg,
+            log=log, llm_call=script_call,
         )
         render_ms = int((time.perf_counter() - t0) * 1000)
         log.info(f"  → {out_path.name} ({render_ms}ms)")
@@ -1407,6 +1403,59 @@ def _run_feed(*, channel, run_id, log, eng, settings,
         finish_run(eng, run_id, status="no_candidates", short_id=None,
                    error=res.error)
     return res
+
+
+def _render_and_compose(
+    *, job, archetype, templates_dir, frames_dir, music, out_path,
+    channel, settings, secrets, ui_labels, dna_css, animation_style,
+    sfx_overlays, bg_video_path, item, body, script, bg_image_path, log,
+    llm_call,
+) -> Path:
+    """Kanal voiced ise seslendirmeli üretime devreder, değilse sessiz akış.
+
+    Sessiz yol bugünkü davranışla bit-bit aynıdır.
+    """
+    bv = channel.bg_video
+    voice = getattr(channel, "voice", None)
+
+    if voice is not None and voice.enabled:
+        from short_bot.tts.ai33_client import resolve_ai33_api_key
+        from short_bot.voiced import produce_voiced_video
+        log.info("  voiced mod: ai33 seslendirme")
+        return produce_voiced_video(
+            item=item, body=body, script=script,
+            bg_image_path=bg_image_path, music_path=music,
+            channel=channel, templates_dir=templates_dir,
+            work_dir=Path(frames_dir).parent, out_path=out_path,
+            api_key=resolve_ai33_api_key(secrets),
+            ffmpeg_path=settings.ffmpeg_path,
+            fps=30, browser=settings.playwright_browser,
+            ui_labels=ui_labels, dna_css=dna_css,
+            animation_style=animation_style,
+            sfx_overlays=sfx_overlays, bg_video_path=bg_video_path,
+            bg_blur_px=bv.blur_px if bv else 30,
+            bg_dim=bv.dim if bv else 0.4,
+            fg_scale=bv.scale if (bv and bg_video_path) else 1.0,
+            llm_claude_path=llm_call.claude_path, llm_model=llm_call.model,
+            llm_backend=llm_call.backend, llm_api_key=llm_call.api_key,
+        )
+
+    template_path = templates_dir / f"{archetype}.html.j2"
+    render_frames(job, template_path, frames_dir,
+                  fps=30, browser=settings.playwright_browser,
+                  ui_labels=ui_labels, dna_css=dna_css,
+                  animation_style=animation_style)
+    compose_video(
+        frames_dir, music, out_path,
+        fps=30, ffmpeg_path=settings.ffmpeg_path,
+        sfx_overlays=sfx_overlays,
+        bg_video_path=bg_video_path,
+        bg_blur_px=bv.blur_px if bv else 30,
+        bg_dim=bv.dim if bv else 0.4,
+        fg_scale=bv.scale if (bv and bg_video_path) else 1.0,
+        duration_s=channel.duration_s,
+    )
+    return out_path
 
 
 def _build_check_job(script, channel, *, music_path, ui_language):
