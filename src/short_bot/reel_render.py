@@ -12,11 +12,14 @@ WIDTH, HEIGHT = 1080, 1920
 
 
 def build_reel_overlay_html(
-    timeline: ReelTimeline, *, highlight_color: str = "#ffd400",
+    timeline: ReelTimeline, *, layout: str = "classic",
+    highlight_color: str = "#ffd400",
     arrow_color: str = "#ff2d2d", arrow_frequency: str = "beats",
     flash: bool = True, handle: str = "",
     templates_dir: Path | None = None,
 ) -> str:
+    if layout not in ("classic", "lower_left", "top_heavy"):
+        layout = "classic"
     templates_dir = Path(templates_dir) if templates_dir else Path("templates")
     env = Environment(loader=FileSystemLoader(str(templates_dir)),
                       autoescape=select_autoescape(["html"]))
@@ -39,6 +42,7 @@ def build_reel_overlay_html(
         arrow_segs = beat_segs
 
     return tpl.render(
+        layout=layout,
         highlight_color=highlight_color, arrow_color=arrow_color,
         hook=timeline.hook, close=timeline.close, handle=handle,
         words=words, cards=cards, duration_s=f"{timeline.duration_s:.3f}",

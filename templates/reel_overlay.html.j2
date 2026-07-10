@@ -20,7 +20,15 @@ html,body{width:1080px;height:1920px;overflow:hidden;background:transparent;
 .cap .w.vis{display:inline}
 .cap .w.hot{color:{{ highlight_color }};display:inline-block;transform:scale(1.09)}
 #handle{position:absolute;bottom:150px;left:0;right:0;text-align:center;font-size:44px;font-weight:800;text-shadow:0 3px 12px rgba(0,0,0,.9);opacity:.9}
+/* layout varyantları — marka aynı, konum/hiza farklı */
+.stage.lower_left .cap{text-align:left;left:60px;right:220px;bottom:360px}
+.stage.lower_left .big{text-align:left;left:60px;right:120px}
+.stage.lower_left .card{left:60px;transform:rotate(-3deg)}
+.stage.top_heavy .cap{bottom:auto;top:1180px}
+.stage.top_heavy .big{top:180px;font-size:118px}
+.stage.top_heavy .card{top:120px}
 </style></head><body>
+<div class="stage {{ layout | default('classic') }}">
 <div id="scrim"></div><div id="bar"></div>
 <svg id="arrow" viewBox="0 0 100 100"><path d="M50 4 L50 74 M50 74 L24 48 M50 74 L76 48" stroke="{{ arrow_color }}" stroke-width="14" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M50 4 L50 74 M50 74 L24 48 M50 74 L76 48" stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
 <div class="big" id="hook">{{ hook }}</div>
@@ -31,6 +39,7 @@ html,body{width:1080px;height:1920px;overflow:hidden;background:transparent;
 {% endfor %}</div>
 <div id="handle">{{ handle }}</div>
 <div id="flash"></div>
+</div>
 <script>
 const LEAD=0.08,CHUNK=3,DUR={{ duration_s }},LAST={{ last_seg }};
 const CUTS={{ cuts }};
