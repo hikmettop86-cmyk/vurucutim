@@ -1,4 +1,5 @@
-from short_bot.tts.ai33_client import health_check, list_voices
+from short_bot.tts.ai33_client import (Ai33Error, Ai33TimeoutError,
+                                       health_check, list_voices)
 from test_ai33_synthesize import FakeResponse, FakeSession, _clock
 
 
@@ -58,3 +59,15 @@ def test_list_voices_returns_items():
 
 def test_list_voices_no_key_returns_empty():
     assert list_voices(api_key="") == []
+
+
+def test_ai33_timeout_error_is_ai33_error_subclass():
+    """Ai33TimeoutError, Ai33Error alt sinifi olmali; boylece pytest.raises(Ai33Error) hala yakalar."""
+    assert issubclass(Ai33TimeoutError, Ai33Error)
+
+
+def test_health_check_error_on_plain_ai33_error(tmp_path):
+    """Timeout olmayan duz Ai33Error (or. task_id yok) -> 'error' (stalled degil)."""
+    sess = FakeSession(post_resp=FakeResponse(200, {"success": True}), task_resps=[])
+    assert health_check(voice_id="v", api_key="k", tmp_dir=tmp_path,
+                        session=sess, sleep=lambda s: None, now=_clock()) == "error"

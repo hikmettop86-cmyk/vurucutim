@@ -53,6 +53,10 @@ class Ai33RateLimitError(Ai33Error):
     """429 — hız sınırı veya kuyruk dolu."""
 
 
+class Ai33TimeoutError(Ai33Error):
+    """poll zaman aşımı — kuyruk takılı (task 'done'/'error' vermeden süre doldu)."""
+
+
 _STATUS_MESSAGES = {
     400: "geçersiz istek (voice_id veya text hatalı)",
     401: "geçersiz AI33_API_KEY veya yetersiz kredi",
@@ -105,51 +109,57 @@ def synthesize(
 
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
+    # Kendi açtığımız Session'ı kapatmak bizim sorumluluğumuz; enjekte edilene dokunma.
+    owns_session = session is None
     sess = session or _new_session()
     headers = {"xi-api-key": api_key}
 
-    resp = sess.post(
-        f"{base_url}/v3/text-to-speech",
-        headers=headers,
-        files={
-            "text": (None, text),
-            "voice_id": (None, normalize_voice_id(voice_id)),
-            "speed": (None, f"{speed:g}"),
-        },
-        timeout=POST_TIMEOUT_S,
-    )
-    _check_status(resp, "text-to-speech POST")
-    task_id = (resp.json() or {}).get("task_id")
-    if not task_id:
-        raise Ai33Error("ai33 yanıtında task_id yok")
+    try:
+        resp = sess.post(
+            f"{base_url}/v3/text-to-speech",
+            headers=headers,
+            files={
+                "text": (None, text),
+                "voice_id": (None, normalize_voice_id(voice_id)),
+                "speed": (None, f"{speed:g}"),
+            },
+            timeout=POST_TIMEOUT_S,
+        )
+        _check_status(resp, "text-to-speech POST")
+        task_id = (resp.json() or {}).get("task_id")
+        if not task_id:
+            raise Ai33Error("ai33 yanıtında task_id yok")
 
-    start = now()
-    while True:
-        if now() - start > poll_timeout_s:
-            raise Ai33Error(
-                f"ai33 poll timeout (~{poll_timeout_s / 60:.0f}dk), task={task_id}"
-            )
-        sleep(poll_interval_s)
-        r = sess.get(f"{base_url}/v1/task/{task_id}", headers=headers,
-                     timeout=TASK_TIMEOUT_S)
-        _check_status(r, "task poll")
-        task = r.json() or {}
-        status = task.get("status")
-        if status == "done":
-            meta = task.get("metadata") or {}
-            url = (meta.get("audio_url") or meta.get("output_uri")
-                   or task.get("output_uri") or task.get("audio_url"))
-            if not url:
-                raise Ai33Error(f"ai33 task bitti ama ses URL'i yok (task={task_id})")
-            audio = sess.get(url, timeout=DOWNLOAD_TIMEOUT_S)
-            _check_status(audio, "ses indirme")
-            out_path.write_bytes(audio.content)
-            return out_path
-        if status == "error":
-            raise Ai33Error(
-                f"ai33 task hatası: {task.get('error_message') or 'bilinmeyen hata'}"
-            )
-        # 'doing' | 'processing' | 'pending' → poll'a devam
+        start = now()
+        while True:
+            if now() - start > poll_timeout_s:
+                raise Ai33TimeoutError(
+                    f"ai33 poll timeout (~{poll_timeout_s / 60:.0f}dk), task={task_id}"
+                )
+            sleep(poll_interval_s)
+            r = sess.get(f"{base_url}/v1/task/{task_id}", headers=headers,
+                         timeout=TASK_TIMEOUT_S)
+            _check_status(r, "task poll")
+            task = r.json() or {}
+            status = task.get("status")
+            if status == "done":
+                meta = task.get("metadata") or {}
+                url = (meta.get("audio_url") or meta.get("output_uri")
+                       or task.get("output_uri") or task.get("audio_url"))
+                if not url:
+                    raise Ai33Error(f"ai33 task bitti ama ses URL'i yok (task={task_id})")
+                audio = sess.get(url, timeout=DOWNLOAD_TIMEOUT_S)
+                _check_status(audio, "ses indirme")
+                out_path.write_bytes(audio.content)
+                return out_path
+            if status == "error":
+                raise Ai33Error(
+                    f"ai33 task hatası: {task.get('error_message') or 'bilinmeyen hata'}"
+                )
+            # 'doing' | 'processing' | 'pending' → poll'a devam
+    finally:
+        if owns_session:
+            sess.close()
 
 
 HEALTH_TIMEOUT_S = 25.0
@@ -183,8 +193,10 @@ def health_check(
                    poll_interval_s=1.0, poll_timeout_s=timeout_s)
     except Ai33AuthError:
         return "auth"
-    except Ai33Error as e:
-        return "stalled" if "timeout" in str(e) else "error"
+    except Ai33TimeoutError:
+        return "stalled"
+    except Ai33Error:
+        return "error"
     except Exception:
         return "error"
     finally:
@@ -205,6 +217,8 @@ def list_voices(
     """Ses kütüphanesini listeler. Hata durumunda boş liste döner (UI dostu)."""
     if not api_key:
         return []
+    # Kendi açtığımız Session'ı kapatmak bizim sorumluluğumuz; enjekte edilene dokunma.
+    owns_session = session is None
     sess = session or _new_session()
     try:
         r = sess.get(
@@ -218,5 +232,8 @@ def list_voices(
         body = r.json() or {}
     except Exception:
         return []
+    finally:
+        if owns_session:
+            sess.close()
     items = body.get("data") if isinstance(body, dict) else body
     return list(items or [])

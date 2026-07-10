@@ -5,7 +5,8 @@ Gercek ag cagrisi YOK. sleep/now enjekte edilir -> testler aninda kosar.
 import pytest
 
 from short_bot.tts.ai33_client import (Ai33AuthError, Ai33Error,
-                                       Ai33RateLimitError, synthesize)
+                                       Ai33RateLimitError, Ai33TimeoutError,
+                                       synthesize)
 
 
 class FakeResponse:
@@ -128,6 +129,18 @@ def test_synthesize_poll_timeout_raises(tmp_path):
         task_resps=[FakeResponse(200, {"status": "doing"})] * 50,
     )
     with pytest.raises(Ai33Error, match="timeout"):
+        synthesize("x", voice_id="v", api_key="k", out_path=tmp_path / "n.mp3",
+                   session=sess, sleep=lambda s: None, now=_clock(),
+                   poll_timeout_s=5.0)
+
+
+def test_synthesize_poll_timeout_raises_timeout_error(tmp_path):
+    """Poll timeout artik Ai33TimeoutError firlatir (Ai33Error alt sinifi)."""
+    sess = FakeSession(
+        post_resp=FakeResponse(200, {"task_id": "t1"}),
+        task_resps=[FakeResponse(200, {"status": "doing"})] * 50,
+    )
+    with pytest.raises(Ai33TimeoutError, match="timeout"):
         synthesize("x", voice_id="v", api_key="k", out_path=tmp_path / "n.mp3",
                    session=sess, sleep=lambda s: None, now=_clock(),
                    poll_timeout_s=5.0)
