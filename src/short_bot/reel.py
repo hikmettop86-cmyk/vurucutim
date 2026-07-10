@@ -87,6 +87,10 @@ def produce_reel_video(
     from short_bot.reel_variation import build_variation_profile
     profile = build_variation_profile(channel, seed)
 
+    # Abone bitleri (deterministik: aynı seed → aynı seri/yorum/cta).
+    from short_bot.reel_subscribe import build_subscribe_bits
+    bits = build_subscribe_bits(channel, seed)
+
     # 1) Preflight (LLM/TTS kredisi harcamadan)
     verdict = d.health_check(voice_id=reel.voice_id, api_key=ai33_api_key, tmp_dir=work_dir)
     if verdict != "healthy":
@@ -97,7 +101,9 @@ def produce_reel_video(
     narration = d.write_reel_narration(topic, channel=channel,
                                        claude_path=llm_claude_path, model=llm_model,
                                        backend=llm_backend, api_key=llm_api_key,
-                                       hook_angle=profile.hook_angle)
+                                       hook_angle=profile.hook_angle,
+                                       series_directive=bits.series_directive,
+                                       comment_line=bits.comment_line)
     log.info(f"  reel: {narration.word_count()} kelime, {len(narration.beats)} beat")
 
     # 3) TTS
@@ -136,6 +142,7 @@ def produce_reel_video(
         highlight_color=profile.accent, arrow_color=reel.arrow_color,
         arrow_frequency=reel.arrow_frequency if reel.arrows_enabled else "off",
         flash=("flash" in profile.transitions), handle=channel.handle,
+        cta_text=bits.cta_text,
     )
 
     # 7) Montaj
