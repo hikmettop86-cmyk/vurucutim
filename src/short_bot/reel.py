@@ -85,11 +85,12 @@ def produce_reel_video(
     # 5) Beat başına footage
     clips_cache = work_dir / "clips"
     clip_paths: list[Path] = []
+    _first_q = next((q for q in timeline.seg_queries if q), "abstract background")
+    _last_q = next((q for q in reversed(timeline.seg_queries) if q), _first_q)
     for si, query in enumerate(timeline.seg_queries):
         if query is None:
-            # hook/close: komşu beat'in klibini kullan (ilk/son beat)
-            fallback_q = next((q for q in timeline.seg_queries if q), None)
-            query = fallback_q or "abstract background"
+            # hook → ilk beat'in görüntüsü, close → son beat'in görüntüsü
+            query = _first_q if si == 0 else _last_q
         clip = d.match_beat_clip(query, api_key=pexels_api_key, cache_dir=clips_cache,
                                  verify=reel.verify_footage, vision_call=vision_call)
         if clip is None:
@@ -106,7 +107,6 @@ def produce_reel_video(
     )
 
     # 7) Montaj
-    from short_bot.assets import pick_music
     cut_times = [timeline.seg_spans[i][0] for i in range(1, len(timeline.seg_spans))]
     whoosh = Path("assets/sfx/whoosh.mp3") if reel.transitions_whoosh else None
     d.assemble_reel(

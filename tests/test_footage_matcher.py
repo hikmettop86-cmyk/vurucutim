@@ -74,3 +74,65 @@ def test_match_returns_none_when_no_candidates(tmp_path):
     d, calls = _deps({})
     assert match_beat_clip("nothing", api_key="k", cache_dir=tmp_path,
                            verify=False, deps=d) is None
+
+
+# ── gerçek verify_clip_matches (vision) doğrulaması ──────────────────────
+def test_pexels_candidate_has_image_default():
+    from short_bot.pexels import PexelsCandidate
+    assert PexelsCandidate(id=1, url="u", duration_s=5).image == ""
+    assert PexelsCandidate(id=1, url="u", duration_s=5, image="http://x/p.jpg").image \
+        == "http://x/p.jpg"
+
+
+def test_verify_clip_matches_guards():
+    from short_bot.footage_matcher import verify_clip_matches
+    assert verify_clip_matches("", "bee") is True                       # thumbnail yok
+    assert verify_clip_matches("http://x/t.jpg", "bee", vision_call=None) is True  # vision yok
+
+
+def test_verify_clip_matches_vision_path(monkeypatch):
+    from short_bot.footage_matcher import _FootageVerdict, verify_clip_matches
+
+    class _Resp:
+        status_code = 200
+        content = b"\xff\xd8\xff-fake-jpeg"
+
+    monkeypatch.setattr("requests.get", lambda url, timeout=15: _Resp())
+
+    class _VC:
+        claude_path = "claude"; model = "gemini"; backend = "openrouter"; api_key = "k"
+
+    seen = {}
+
+    def fake_run_json(prompt, schema, **kw):
+        seen["prompt"] = prompt
+        seen["image_path"] = kw.get("image_path")
+        return _FootageVerdict(match=False, reason="alakasiz")
+
+    monkeypatch.setattr("short_bot.claude_cli.run_json", fake_run_json)
+    result = verify_clip_matches("http://x/thumb.jpg", "asma köprü", vision_call=_VC())
+    assert result is False
+    assert "asma köprü" in seen["prompt"]
+    assert seen["image_path"] is not None
+
+
+def test_match_passes_thumbnail_not_mp4(tmp_path):
+    """Vision doğrulama mp4'e değil, klibin THUMBNAIL'ına (image) gitmeli."""
+    class _CandImg:
+        id = 1; url = "https://x/a.mp4"; duration_s = 10; image = "https://x/poster.jpg"
+
+    calls = {"verify": []}
+
+    def search(q, key, **kw):
+        return [_CandImg()]
+
+    def verify(url, query, **kw):
+        calls["verify"].append(url); return True
+
+    def download(url, cache_dir, **kw):
+        p = Path(cache_dir) / "c.mp4"; p.write_bytes(b"mp4"); return p
+
+    d = FootageDeps(search_videos=search, verify_footage=verify, download_video=download)
+    match_beat_clip("bee", api_key="k", cache_dir=tmp_path, verify=True,
+                    vision_call=object(), deps=d)
+    assert calls["verify"] == ["https://x/poster.jpg"]
