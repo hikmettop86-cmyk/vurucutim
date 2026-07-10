@@ -15,7 +15,7 @@ def build_reel_overlay_html(
     timeline: ReelTimeline, *, layout: str = "classic",
     highlight_color: str = "#ffd400",
     arrow_color: str = "#ff2d2d", arrow_frequency: str = "beats",
-    flash: bool = True, handle: str = "",
+    flash: bool = True, handle: str = "", cta_text: str = "",
     templates_dir: Path | None = None,
 ) -> str:
     if layout not in ("classic", "lower_left", "top_heavy"):
@@ -45,6 +45,7 @@ def build_reel_overlay_html(
         layout=layout,
         highlight_color=highlight_color, arrow_color=arrow_color,
         hook=timeline.hook, close=timeline.close, handle=handle,
+        cta_text=cta_text,
         words=words, cards=cards, duration_s=f"{timeline.duration_s:.3f}",
         last_seg=last_seg, cuts=json.dumps(cuts),
         arrow_segs=json.dumps(arrow_segs), flash=flash,
