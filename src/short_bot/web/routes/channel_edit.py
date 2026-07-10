@@ -1,11 +1,13 @@
 from pathlib import Path
 
-from flask import (Blueprint, abort, current_app, flash, redirect,
+from flask import (Blueprint, abort, current_app, flash, jsonify, redirect,
                    render_template, request, url_for)
 
 from short_bot.config import ChannelConfig, load_channel, save_channel
 from short_bot.dna import build_css_override, generate_dna
 from short_bot.dna_smoke import smoke_render_dna
+from short_bot.pexels import load_secrets
+from short_bot.tts.ai33_client import list_voices, resolve_ai33_api_key
 
 bp = Blueprint("channel_edit", __name__)
 
@@ -76,6 +78,31 @@ def edit(slug):
                            yt_quota_today=yt_quota_today,
                            proxy_url=proxy_url or "",
                            all_feeds=all_feeds)
+
+
+@bp.route("/api/ai33/voices", methods=["GET"])
+def ai33_voices():
+    """ai33 ses kütüphanesini JSON döndürür (arayüzdeki datalist'i doldurmak için).
+
+    Anahtar yoksa 200 + boş liste + hata mesajı döner ki arayüz kullanıcıya
+    anlaşılır bir uyarı gösterebilsin. ``health_check`` ÇAĞIRMAZ — o kredi harcar.
+    """
+    secrets_path = Path(current_app.config.get("SHORTBOT_SECRETS_PATH")
+                        or "data/secrets.yaml")
+    secrets = load_secrets(secrets_path)
+    key = resolve_ai33_api_key(secrets)
+    if not key:
+        return jsonify({"voices": [], "error": "AI33_API_KEY tanımlı değil"})
+    voices = list_voices(api_key=key)
+    out = [
+        {
+            "voice_id": v.get("voice_id", ""),
+            "name": v.get("name", ""),
+            "language": v.get("language", ""),
+        }
+        for v in voices
+    ]
+    return jsonify({"voices": out})
 
 
 @bp.route("/channels/<slug>/music/init", methods=["POST"])
