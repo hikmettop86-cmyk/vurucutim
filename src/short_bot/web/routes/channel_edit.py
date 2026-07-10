@@ -405,6 +405,10 @@ def save(slug):
             music_volume=(old.music_volume if old else 0.10),
             verify_footage=request.form.get("reel_verify_footage") == "on" if reel_form_present
                            else (old.verify_footage if old else True),
+            layout=request.form.get("reel_layout", old.layout if old else "auto"),
+            hook_angle_vary=request.form.get("reel_hook_angle_vary") == "on",
+            accent_vary=request.form.get("reel_accent_vary") == "on",
+            transition_vary=request.form.get("reel_transition_vary") == "on",
         )
     else:
         new_reel = cfg.reel

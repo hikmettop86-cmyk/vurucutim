@@ -1393,7 +1393,7 @@
         </label>
         <label class="block"><span class="text-xs text-claude-muted uppercase">Kesme temposu</span>
           <select name="reel_cut_pacing" class="bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm w-full">
-            {% for p in ['slow','medium','fast'] %}<option value="{{ p }}"
+            {% for p in ['auto','slow','medium','fast'] %}<option value="{{ p }}"
               {% if c.reel and c.reel.cut_pacing==p %}selected{% endif %}>{{ p }}</option>{% endfor %}
           </select>
         </label>
@@ -1417,6 +1417,11 @@
         <label class="block"><span class="text-xs text-claude-muted uppercase">Ok rengi</span>
           <input type="color" name="reel_arrow_color" value="{{ c.reel.arrow_color if c.reel else '#ff2d2d' }}"
                  class="w-full h-10 rounded-lg border border-claude-border"></label>
+        <label class="block"><span class="text-xs text-claude-muted uppercase">Düzen (layout)</span>
+          <select name="reel_layout" class="bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm w-full">
+            {% for l in ['auto','classic','lower_left','top_heavy'] %}<option value="{{ l }}"
+              {% if c.reel and c.reel.layout==l %}selected{% endif %}>{{ l }}</option>{% endfor %}
+          </select></label>
       </div>
       <div class="flex flex-wrap gap-4 mt-3 text-sm">
         <label class="flex items-center gap-2"><input type="checkbox" name="reel_arrows_enabled"
@@ -1429,6 +1434,12 @@
           {% if not c.reel or c.reel.transitions_zoom %}checked{% endif %}> Zoom-punch</label>
         <label class="flex items-center gap-2"><input type="checkbox" name="reel_verify_footage"
           {% if not c.reel or c.reel.verify_footage %}checked{% endif %}> Vision doğrulama</label>
+        <label class="flex items-center gap-2"><input type="checkbox" name="reel_hook_angle_vary"
+          {% if not c.reel or c.reel.hook_angle_vary %}checked{% endif %}> Hook açısı varyasyonu</label>
+        <label class="flex items-center gap-2"><input type="checkbox" name="reel_accent_vary"
+          {% if not c.reel or c.reel.accent_vary %}checked{% endif %}> Vurgu rengi varyasyonu</label>
+        <label class="flex items-center gap-2"><input type="checkbox" name="reel_transition_vary"
+          {% if not c.reel or c.reel.transition_vary %}checked{% endif %}> Geçiş varyasyonu</label>
       </div>
     </div>
 
