@@ -140,6 +140,7 @@ class ReelConfig(BaseModel):
     series_title: str = ""
     cta_enabled: bool = True
     comment_question: bool = True
+    cta_text_custom: str = ""
 
     @field_validator("target_duration_s", mode="before")
     @classmethod
@@ -460,6 +461,7 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
             "series_title": cfg.reel.series_title,
             "cta_enabled": cfg.reel.cta_enabled,
             "comment_question": cfg.reel.comment_question,
+            "cta_text_custom": cfg.reel.cta_text_custom,
         }
     if cfg.dna is not None:
         # mode='json' → tuple becomes list, ready for YAML round-trip
