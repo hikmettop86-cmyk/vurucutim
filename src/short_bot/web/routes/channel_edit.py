@@ -307,6 +307,37 @@ def save(slug):
     else:
         new_trend_boost = cfg.trend_boost
 
+    # Voice (seslendirme). Form hiç voice alanı göndermediyse mevcut blok
+    # aynen korunur — aksi hâlde kaydetmek kanalı sessizce sessiz moda düşürür.
+    from short_bot.config import VoiceConfig
+    voice_form_present = any(k in request.form for k in (
+        "voice_enabled", "voice_id", "voice_speed", "voice_persona",
+        "voice_target_min", "voice_target_max",
+    ))
+    if voice_form_present:
+        v_enabled = request.form.get("voice_enabled") == "on"
+        v_id = (request.form.get("voice_id") or "").strip()
+        if v_enabled and not v_id:
+            flash("Seslendirmeyi açmak için bir ses seç (voice_id boş).", "error")
+            return redirect(url_for("channel_edit.edit", slug=slug))
+        old = cfg.voice
+        new_voice = VoiceConfig(
+            enabled=v_enabled,
+            voice_id=v_id or (old.voice_id if old else ""),
+            speed=_form_get_float("voice_speed", old.speed if old else 1.0),
+            persona=(request.form.get("voice_persona") or "").strip()
+                    or (old.persona if old else "enerjik, meraklı anlatıcı"),
+            target_duration_s=(
+                _form_get_int("voice_target_min",
+                              old.target_duration_s[0] if old else 45),
+                _form_get_int("voice_target_max",
+                              old.target_duration_s[1] if old else 60),
+            ),
+            music_volume=(old.music_volume if old else 0.12),
+        )
+    else:
+        new_voice = cfg.voice
+
     new_content_source = request.form.get("content_source", cfg.content_source)
     if new_content_source not in ("rss", "generator", "feed"):
         new_content_source = cfg.content_source
@@ -353,6 +384,7 @@ def save(slug):
         youtube=new_youtube,
         bg_video=new_bg_video,
         trend_boost=new_trend_boost,
+        voice=new_voice,
     )
     save_channel(path, new_cfg)
     flash("Kanal güncellendi.", "success")
