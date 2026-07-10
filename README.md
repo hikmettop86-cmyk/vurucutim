@@ -91,3 +91,8 @@ Gerekenler:
 Süre sesten okunur; `duration_s` yalnızca sessiz kanallarda geçerlidir.
 TTS ya da preflight başarısız olursa üretim durur — sessizce sessiz videoya
 düşülmez.
+
+Örnek bir voiced kanal YAML'ı: `tests/fixtures/voice_channel.yaml`. Kanal
+dosyaları kullanıcıya özeldir (`config/channels/*.yaml` git'e girmez), bu yüzden
+kendi kanalını panelden oluştur ya da bu örneği `config/channels/` altına
+kopyalayıp `voice_id`'yi kendi sesinle değiştir.
