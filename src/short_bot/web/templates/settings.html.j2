@@ -231,6 +231,29 @@
       {% endif %}
     </div>
 
+    <h2 class="font-serif text-lg font-bold mt-6 border-t border-claude-border pt-4">ai33 (Seslendirme / TTS)</h2>
+    <div class="bg-claude-surface border border-claude-border rounded-lg p-4">
+      {% if ai33_key_set %}
+        <div class="flex items-center gap-3">
+          <span class="font-mono text-sm">{{ ai33_key_masked }}</span>
+          <label class="text-xs flex items-center gap-1 text-claude-muted">
+            <input type="checkbox" name="ai33_api_key_clear" value="1"> Sil
+          </label>
+        </div>
+        <input type="password" name="ai33_api_key" placeholder="Yeni key gir (değiştir)"
+               autocomplete="new-password"
+               class="bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm w-full mt-2 text-claude-text">
+      {% else %}
+        <input type="password" name="ai33_api_key" value="" placeholder="sk_..."
+               autocomplete="new-password"
+               class="bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm w-full text-claude-text">
+        <div class="text-xs text-claude-muted mt-1">
+          <b>Seslendirmeli (voiced) kanallar</b> için gereklidir. ai33.pro (ElevenLabs altyapılı) TTS anahtarı.
+          Kanal → Düzenle → Seslendirme bölümünden ses seçebilmek için buraya gir. Boş bırak ve 'Sil' kutusunu işaretle → mevcut anahtarı sil.
+        </div>
+      {% endif %}
+    </div>
+
     <h2 class="font-serif text-lg font-bold mt-6 border-t border-claude-border pt-4">Trend Detection</h2>
     <div class="bg-claude-surface border border-claude-border rounded-lg p-4 space-y-3">
       <label class="flex items-center gap-2 text-sm">

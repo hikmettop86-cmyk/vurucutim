@@ -61,6 +61,7 @@ def view():
     openai_key_masked = _mask_key(secrets.get("openai_api_key", ""))
     youtube_key_masked = _mask_key(secrets.get("youtube_api_key", ""))
     openrouter_key_masked = _mask_key(secrets.get("openrouter_api_key", ""))
+    ai33_key_masked = _mask_key(secrets.get("ai33_api_key", ""))
     cache_dir = current_app.config.get("SHORTBOT_CACHE_DIR") or Path("data")
     return render_template("settings.html.j2", data=data, paths=paths,
                             pexels_key_masked=pexels_key_masked,
@@ -69,6 +70,8 @@ def view():
                             openai_key_set=bool(secrets.get("openai_api_key")),
                             youtube_key_masked=youtube_key_masked,
                             youtube_key_set=bool(secrets.get("youtube_api_key")),
+                            ai33_key_masked=ai33_key_masked,
+                            ai33_key_set=bool(secrets.get("ai33_api_key")),
                             ai_backend=data.get("ai_backend", "claude_cli"),
                             openrouter_models=data.get("openrouter_models", {}) or {},
                             openrouter_key_masked=openrouter_key_masked,
@@ -193,6 +196,16 @@ def save():
         _save_secrets(secrets)
     elif clear_or:
         secrets.pop("openrouter_api_key", None)
+        _save_secrets(secrets)
+
+    # ai33 API key — separate file (seslendirmeli/voiced kanallar için TTS)
+    new_ai33_key = request.form.get("ai33_api_key", "").strip()
+    clear_ai33 = request.form.get("ai33_api_key_clear") == "1"
+    if new_ai33_key:
+        secrets["ai33_api_key"] = new_ai33_key
+        _save_secrets(secrets)
+    elif clear_ai33:
+        secrets.pop("ai33_api_key", None)
         _save_secrets(secrets)
 
     # Reload in-memory Settings so trend boost / refresh cron / cache TTL
