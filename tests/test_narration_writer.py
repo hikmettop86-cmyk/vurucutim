@@ -60,14 +60,23 @@ def _narration(n_words: int) -> Narration:
 
 
 def test_word_budget_from_target_duration():
-    assert word_budget((45, 60)) == (112, 150)   # 45*2.5, 60*2.5
-    assert WORDS_PER_SECOND == 2.5
+    assert word_budget((45, 60)) == (99, 132)   # 45*2.2, 60*2.2
+    assert WORDS_PER_SECOND == 2.2
+
+
+def test_word_budget_matches_measured_tts_speed():
+    """Gercek ai33 kosumu: 70 kelime -> 31.4 sn (2.23 kelime/sn).
+    Butcenin ust siniri 60 sn hedefini asmamali."""
+    measured_wps = 70 / 31.4
+    _, hi_words = word_budget((45, 60))
+    assert hi_words / measured_wps <= 61.0
 
 
 def test_prompt_contains_persona_and_budget():
     p = build_narration_prompt(_Item(), "Haber govdesi burada.", _Channel())
     assert "enerjik, merakli anlatici" in p
-    assert "112" in p and "150" in p
+    lo_w, hi_w = word_budget(_Channel.voice.target_duration_s)
+    assert str(lo_w) in p and str(hi_w) in p
     assert "loop_close" in p
     assert "Merkez bankasi faizi indirdi" in p
 

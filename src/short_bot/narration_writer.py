@@ -5,8 +5,10 @@ from short_bot.claude_cli import run_json
 from short_bot.locale import LANGUAGE_NAMES
 from short_bot.narration import Narration
 
-# Türkçe/İngilizce doğal anlatım hızı (retake payı dahil değil).
-WORDS_PER_SECOND = 2.5
+# Ölçülmüş anlatım hızı: ai33/ElevenLabs Türkçe sesi, speed=1.0 → 70 kelime
+# 31.4 sn (2.23 kelime/sn). 2.5 varsayımı bütçeyi şişirip videoyu 67 sn'ye
+# taşıyordu; 2.2 hedef 45-60 sn bandını tutturuyor.
+WORDS_PER_SECOND = 2.2
 
 
 def word_budget(target_duration_s: tuple[int, int]) -> tuple[int, int]:
