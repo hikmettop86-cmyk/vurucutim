@@ -1,0 +1,45 @@
+slug: test-anlatici
+name: Test Anlatıcı
+enabled: false          # pilot: elle çalıştır, cron'a takılma
+keywords:
+  - son dakika
+  - ekonomi
+  - teknoloji
+language: tr
+schedule_cron: 0 9 * * *
+duration_s: 60          # sessiz yol için kullanılır; voiced'da süre sesten gelir
+min_score: 8.0
+max_candidates_per_run: 3
+max_age_hours: 24
+template: narrator
+colors:
+  primary: '#0ea5e9'
+  accent: '#facc15'
+  bg_gradient:
+    - '#0f172a'
+    - '#020617'
+handle: '@testanlatici'
+output_dir: output/test-anlatici
+cta:
+  enabled: false        # anlatım kendi loop kapanışıyla biter
+  text: ''
+  icons: []
+  duration_s: 0
+  show_handle: true
+voice:
+  enabled: true
+  # Yer tutucu: Task 16'da panelden/list_voices'tan gelen gerçek id ile değiştir.
+  # VoiceConfig doğrulaması enabled=true iken boş voice_id'yi reddeder.
+  voice_id: elevenlabs_PLACEHOLDER
+  speed: 1.0
+  persona: enerjik, meraklı anlatıcı
+  target_duration_s:
+    - 45
+    - 60
+  music_volume: 0.12
+youtube:
+  auto_upload: false
+  ai_content: true
+  category_id: '25'
+  privacy_status: private
+  min_score_for_upload: 9.0

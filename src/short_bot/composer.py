@@ -27,6 +27,8 @@ def compose_video(
     bg_dim: float = 0.4,
     fg_scale: float = 1.0,
     duration_s: int | None = None,
+    narration_path: Path | None = None,
+    narration_volume: float = 1.0,
 ) -> Path:
     """Compose final video.
 
@@ -51,9 +53,13 @@ def compose_video(
         if not Path(s.path).exists():
             raise FileNotFoundError(f"SFX not found: {s.path}")
 
+    if narration_path is not None and not Path(narration_path).exists():
+        raise FileNotFoundError(f"Narration not found: {narration_path}")
+
     if bg_video_path is None:
         cmd, video_map = _build_legacy_cmd(
             frames_dir, music_path, fps, ffmpeg_path, sfx_overlays, music_volume,
+            narration_path, narration_volume,
         )
     else:
         cmd, video_map = _build_bg_video_cmd(
@@ -61,6 +67,7 @@ def compose_video(
             fps=fps, ffmpeg_path=ffmpeg_path,
             sfx_overlays=sfx_overlays, music_volume=music_volume,
             bg_blur_px=bg_blur_px, bg_dim=bg_dim, fg_scale=fg_scale,
+            narration_path=narration_path, narration_volume=narration_volume,
         )
 
     # Global duration cap (defense-in-depth: relying on -shortest is fragile
@@ -90,19 +97,62 @@ def compose_video(
     return out_path
 
 
+def _build_voiced_audio_chain(
+    *, music_idx: int, narration_idx: int, sfx_start_idx: int,
+    sfx_overlays, music_volume: float, narration_volume: float,
+) -> str:
+    """Anlatım birinci girdi → amix duration=first çıktı süresini anlatıma bağlar.
+
+    normalize=0: amix varsayılan olarak her girdiyi 1/n ile böler; anlatımın
+    sesi yarıya düşmesin diye kapatılır. Müzik zaten music_volume ile kısık.
+    """
+    parts = [
+        f"[{narration_idx}:a]volume={narration_volume:g}[nar]",
+        f"[{music_idx}:a]volume={music_volume:g}[bgm]",
+    ]
+    labels = ["[nar]", "[bgm]"]
+    for i, s in enumerate(sfx_overlays):
+        tag = f"sfx{i}"
+        parts.append(
+            f"[{sfx_start_idx + i}:a]adelay={s.delay_ms}|{s.delay_ms},"
+            f"volume={s.volume}[{tag}]"
+        )
+        labels.append(f"[{tag}]")
+    parts.append(
+        f"{''.join(labels)}amix=inputs={len(labels)}:duration=first:"
+        f"dropout_transition=0:normalize=0[aout]"
+    )
+    return ";".join(parts)
+
+
 def _build_legacy_cmd(frames_dir, music_path, fps, ffmpeg_path,
-                      sfx_overlays, music_volume) -> tuple[list[str], str]:
-    """Single-stream pipeline (no bg video). Returns (cmd-prefix, video-map-label)."""
+                      sfx_overlays, music_volume,
+                      narration_path=None, narration_volume=1.0) -> tuple[list[str], str]:
+    """Single-stream pipeline (no bg video). Returns (cmd-prefix, video-map-label).
+
+    Inputs: 0 frames, 1 music, [2 narration], then SFX.
+    Anlatım varken müzik döngüye alınır (kısa mp3 uzun anlatımın altında bitmesin).
+    """
     cmd = [
         ffmpeg_path, "-y",
         "-framerate", str(fps),
         "-i", str(frames_dir / "frame_%05d.png"),
-        "-i", str(music_path),
     ]
+    if narration_path is not None:
+        cmd += ["-stream_loop", "-1"]
+    cmd += ["-i", str(music_path)]
+    if narration_path is not None:
+        cmd += ["-i", str(narration_path)]
     for s in sfx_overlays:
         cmd += ["-i", str(s.path)]
 
-    if not sfx_overlays:
+    if narration_path is not None:
+        filter_complex = _build_voiced_audio_chain(
+            music_idx=1, narration_idx=2, sfx_start_idx=3,
+            sfx_overlays=sfx_overlays, music_volume=music_volume,
+            narration_volume=narration_volume,
+        )
+    elif not sfx_overlays:
         filter_complex = f"[1:a]volume={music_volume}[aout]"
     else:
         parts = [f"[1:a]volume={music_volume}[bgm]"]
@@ -128,6 +178,7 @@ def _build_bg_video_cmd(
     frames_dir, music_path, bg_video_path, *,
     fps, ffmpeg_path, sfx_overlays, music_volume,
     bg_blur_px, bg_dim, fg_scale,
+    narration_path=None, narration_volume=1.0,
 ) -> tuple[list[str], str]:
     """Two-stream pipeline. Returns (cmd-prefix, video-map-label).
 
@@ -135,7 +186,8 @@ def _build_bg_video_cmd(
       0: bg video (looped)
       1: frame PNG seq
       2: music
-      3+: optional SFX
+      3: optional narration
+      4+: optional SFX
     """
     cmd = [
         ffmpeg_path, "-y",
@@ -143,8 +195,12 @@ def _build_bg_video_cmd(
         "-i", str(bg_video_path),
         "-framerate", str(fps),
         "-i", str(frames_dir / "frame_%05d.png"),
-        "-i", str(music_path),
     ]
+    if narration_path is not None:
+        cmd += ["-stream_loop", "-1"]
+    cmd += ["-i", str(music_path)]
+    if narration_path is not None:
+        cmd += ["-i", str(narration_path)]
     for s in sfx_overlays:
         cmd += ["-i", str(s.path)]
 
@@ -166,7 +222,13 @@ def _build_bg_video_cmd(
     overlay_chain = "[bg][fg]overlay=(W-w)/2:(H-h)/2:shortest=1:format=auto[outv]"
 
     # Audio (same logic as legacy, but music is input 2 and SFX 3+)
-    if not sfx_overlays:
+    if narration_path is not None:
+        audio_chain = _build_voiced_audio_chain(
+            music_idx=2, narration_idx=3, sfx_start_idx=4,
+            sfx_overlays=sfx_overlays, music_volume=music_volume,
+            narration_volume=narration_volume,
+        )
+    elif not sfx_overlays:
         audio_chain = f"[2:a]volume={music_volume}[aout]"
     else:
         parts = [f"[2:a]volume={music_volume}[bgm]"]

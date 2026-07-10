@@ -1286,6 +1286,97 @@
       </div>
     </div>
 
+    {# ── Card: Seslendirme (voiced üretim — ai33/ElevenLabs) ────────────── #}
+    <div class="bg-claude-surface border border-claude-border rounded-lg p-4 mt-4">
+      <div class="flex items-center justify-between mb-3">
+        <div class="text-xs text-claude-muted uppercase tracking-wider">Seslendirme</div>
+        <label class="flex items-center gap-2 text-sm">
+          <input type="checkbox" name="voice_enabled"
+                 {% if c.voice and c.voice.enabled %}checked{% endif %}>
+          Seslendirmeli üretim (voiced)
+        </label>
+      </div>
+      <div class="text-xs text-claude-subtle mb-3">
+        Seslendirmeli kanallarda süre sesten gelir; <code>duration_s</code> yok sayılır.
+      </div>
+      <div class="space-y-3">
+        <label class="text-xs block">
+          <span class="block text-claude-muted mb-1">Ses (voice_id)</span>
+          <div class="flex gap-2">
+            <input type="text" name="voice_id" list="ai33-voice-list"
+                   value="{{ c.voice.voice_id if c.voice else '' }}"
+                   class="bg-claude-surface-alt border border-claude-border px-2 py-1 rounded w-full text-sm text-claude-text">
+            <button type="button" id="btn-load-voices"
+                    class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border px-3 py-1 rounded text-xs whitespace-nowrap">
+              🔄 Sesleri yükle
+            </button>
+          </div>
+          <datalist id="ai33-voice-list"></datalist>
+          <span id="voice-load-status" class="text-[10px] block mt-1"></span>
+        </label>
+        <div class="grid grid-cols-2 gap-3">
+          <label class="text-xs">
+            <span class="block text-claude-muted mb-1">Hız (0.5–1.5)</span>
+            <input type="number" step="0.1" min="0.5" max="1.5" name="voice_speed"
+                   value="{{ c.voice.speed if c.voice else 1.0 }}"
+                   class="bg-claude-surface-alt border border-claude-border px-2 py-1 rounded w-full text-sm text-claude-text">
+          </label>
+          <label class="text-xs">
+            <span class="block text-claude-muted mb-1">Persona</span>
+            <input type="text" name="voice_persona"
+                   value="{{ c.voice.persona if c.voice else 'enerjik, meraklı anlatıcı' }}"
+                   class="bg-claude-surface-alt border border-claude-border px-2 py-1 rounded w-full text-sm text-claude-text">
+          </label>
+        </div>
+        <div>
+          <span class="block text-claude-muted text-xs mb-1">Hedef süre (sn)</span>
+          <div class="grid grid-cols-2 gap-3">
+            <input type="number" min="10" max="180" name="voice_target_min"
+                   value="{{ c.voice.target_duration_s[0] if c.voice else 45 }}"
+                   class="bg-claude-surface-alt border border-claude-border px-2 py-1 rounded w-full text-sm text-claude-text">
+            <input type="number" min="10" max="180" name="voice_target_max"
+                   value="{{ c.voice.target_duration_s[1] if c.voice else 60 }}"
+                   class="bg-claude-surface-alt border border-claude-border px-2 py-1 rounded w-full text-sm text-claude-text">
+          </div>
+        </div>
+      </div>
+      <script>
+      (function() {
+        const btn = document.getElementById('btn-load-voices');
+        if (!btn) return;
+        btn.addEventListener('click', async () => {
+          const status = document.getElementById('voice-load-status');
+          const dl = document.getElementById('ai33-voice-list');
+          status.textContent = 'Sesler yükleniyor…';
+          status.className = 'text-[10px] block mt-1 text-claude-muted';
+          try {
+            const r = await fetch('/api/ai33/voices');
+            const j = await r.json();
+            const voices = j.voices || [];
+            if (!voices.length) {
+              status.textContent = '⚠ ' + (j.error || 'Ses listesi alınamadı — API anahtarını kontrol et');
+              status.className = 'text-[10px] block mt-1 text-amber-600';
+              return;
+            }
+            dl.innerHTML = '';
+            for (const v of voices) {
+              const opt = document.createElement('option');
+              opt.value = v.voice_id;
+              const bits = [v.name, v.language].filter(Boolean).join(' · ');
+              opt.label = bits || v.voice_id;
+              dl.appendChild(opt);
+            }
+            status.textContent = '✓ ' + voices.length + ' ses yüklendi — girdiye tıklayıp seç';
+            status.className = 'text-[10px] block mt-1 text-green-600';
+          } catch (e) {
+            status.textContent = '⚠ Ses listesi alınamadı — API anahtarını kontrol et';
+            status.className = 'text-[10px] block mt-1 text-amber-600';
+          }
+        });
+      })();
+      </script>
+    </div>
+
     {# ── Generator test result (conditional, shown in Icerik tab) ──────── #}
     {% if c.content_source == 'generator' %}
     <div class="bg-white border border-claude-border rounded-xl shadow-soft mb-4 p-5">

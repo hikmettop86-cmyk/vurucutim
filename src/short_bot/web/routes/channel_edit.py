@@ -1,11 +1,13 @@
 from pathlib import Path
 
-from flask import (Blueprint, abort, current_app, flash, redirect,
+from flask import (Blueprint, abort, current_app, flash, jsonify, redirect,
                    render_template, request, url_for)
 
 from short_bot.config import ChannelConfig, load_channel, save_channel
 from short_bot.dna import build_css_override, generate_dna
 from short_bot.dna_smoke import smoke_render_dna
+from short_bot.pexels import load_secrets
+from short_bot.tts.ai33_client import list_voices, resolve_ai33_api_key
 
 bp = Blueprint("channel_edit", __name__)
 
@@ -76,6 +78,31 @@ def edit(slug):
                            yt_quota_today=yt_quota_today,
                            proxy_url=proxy_url or "",
                            all_feeds=all_feeds)
+
+
+@bp.route("/api/ai33/voices", methods=["GET"])
+def ai33_voices():
+    """ai33 ses kütüphanesini JSON döndürür (arayüzdeki datalist'i doldurmak için).
+
+    Anahtar yoksa 200 + boş liste + hata mesajı döner ki arayüz kullanıcıya
+    anlaşılır bir uyarı gösterebilsin. ``health_check`` ÇAĞIRMAZ — o kredi harcar.
+    """
+    secrets_path = Path(current_app.config.get("SHORTBOT_SECRETS_PATH")
+                        or "data/secrets.yaml")
+    secrets = load_secrets(secrets_path)
+    key = resolve_ai33_api_key(secrets)
+    if not key:
+        return jsonify({"voices": [], "error": "AI33_API_KEY tanımlı değil"})
+    voices = list_voices(api_key=key)
+    out = [
+        {
+            "voice_id": v.get("voice_id", ""),
+            "name": v.get("name", ""),
+            "language": v.get("language", ""),
+        }
+        for v in voices
+    ]
+    return jsonify({"voices": out})
 
 
 @bp.route("/channels/<slug>/music/init", methods=["POST"])
@@ -307,6 +334,38 @@ def save(slug):
     else:
         new_trend_boost = cfg.trend_boost
 
+    # Voice (seslendirme). Şablon text/number voice alanlarını (voice_id,
+    # voice_speed, ...) HER ZAMAN gönderir — boş olsalar bile. Bu yüzden
+    # "form alanı var mı" kontrolü yanıltıcıdır: sessiz bir kanala boş bir
+    # voice bloğu enjekte eder. Bunun yerine kullanıcının seslendirmeyi
+    # GERÇEKTEN kullandığı duruma bağlanırız: checkbox açık VEYA bir ses
+    # seçilmiş VEYA kanalın zaten bir voice bloğu var. Aksi hâlde bloğa
+    # dokunmayız (None ise None kalır — YAML kirlenmez).
+    from short_bot.config import VoiceConfig
+    v_enabled = request.form.get("voice_enabled") == "on"
+    v_id = (request.form.get("voice_id") or "").strip()
+    if v_enabled and not v_id:
+        flash("Seslendirmeyi açmak için bir ses seç (voice_id boş).", "error")
+        return redirect(url_for("channel_edit.edit", slug=slug))
+    if v_enabled or v_id or cfg.voice is not None:
+        old = cfg.voice
+        new_voice = VoiceConfig(
+            enabled=v_enabled,
+            voice_id=v_id or (old.voice_id if old else ""),
+            speed=_form_get_float("voice_speed", old.speed if old else 1.0),
+            persona=(request.form.get("voice_persona") or "").strip()
+                    or (old.persona if old else "enerjik, meraklı anlatıcı"),
+            target_duration_s=(
+                _form_get_int("voice_target_min",
+                              old.target_duration_s[0] if old else 45),
+                _form_get_int("voice_target_max",
+                              old.target_duration_s[1] if old else 60),
+            ),
+            music_volume=(old.music_volume if old else 0.12),
+        )
+    else:
+        new_voice = cfg.voice
+
     new_content_source = request.form.get("content_source", cfg.content_source)
     if new_content_source not in ("rss", "generator", "feed"):
         new_content_source = cfg.content_source
@@ -353,6 +412,7 @@ def save(slug):
         youtube=new_youtube,
         bg_video=new_bg_video,
         trend_boost=new_trend_boost,
+        voice=new_voice,
     )
     save_channel(path, new_cfg)
     flash("Kanal güncellendi.", "success")

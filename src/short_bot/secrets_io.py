@@ -77,6 +77,27 @@ def update_openai_api_key(secrets_path: Path, key: str | None) -> None:
     _atomic_write_yaml(p, data)
 
 
+def update_ai33_api_key(secrets_path: Path, key: str | None) -> None:
+    """Set or clear top-level ai33_api_key in secrets.yaml.
+
+    - key=str  → upsert
+    - key=None → remove
+
+    File created if missing. Other top-level keys are preserved.
+    """
+    p = Path(secrets_path)
+    data: dict = {}
+    if p.exists():
+        loaded = yaml.safe_load(p.read_text(encoding="utf-8"))
+        if isinstance(loaded, dict):
+            data = loaded
+    if key is None:
+        data.pop("ai33_api_key", None)
+    else:
+        data["ai33_api_key"] = key
+    _atomic_write_yaml(p, data)
+
+
 def update_youtube_api_key(secrets_path: Path, key: str | None) -> None:
     """Set or clear top-level youtube_api_key in secrets.yaml.
 

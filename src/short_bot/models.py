@@ -6,6 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from short_bot.narration import NarrationTimeline
 from short_bot.text_normalize import strip_non_turkish_diacritics
 
 
@@ -77,3 +78,6 @@ class RenderJob:
     cta_duration_s: int = 4
     cta_show_handle: bool = True
     rss_source: str | None = None   # shown as "Kaynak: <source>" overlay
+    # Doluysa video "voiced" modda render edilir: süre sesten gelir,
+    # her karede window.__seek(t_ms) çağrılır.
+    narration: NarrationTimeline | None = None

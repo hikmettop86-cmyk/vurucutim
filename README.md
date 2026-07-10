@@ -75,3 +75,24 @@ Features:
 - Logs tail with HTMX 2s polling
 
 Default port: 5005. Override with `--port` flag.
+
+## Seslendirmeli (voiced) kanallar
+
+Kanal YAML'ına `voice:` bloğu eklendiğinde video sessiz kinetik metin yerine
+seslendirmeli mikro-explainer olarak üretilir (`narrator` arketipi, karaoke
+altyazı, 45-60 sn).
+
+Gerekenler:
+
+1. `pip install -e ".[voice]"` — WhisperX kelime hizalaması için (torch içerir).
+2. `data/secrets.yaml` içine `ai33_api_key: sk_...` (veya `AI33_API_KEY` env var).
+3. Panelden **Kanal → Seslendirme** bölümünde ai33 ses kütüphanesinden bir ses seç.
+
+Süre sesten okunur; `duration_s` yalnızca sessiz kanallarda geçerlidir.
+TTS ya da preflight başarısız olursa üretim durur — sessizce sessiz videoya
+düşülmez.
+
+Örnek bir voiced kanal YAML'ı: `tests/fixtures/voice_channel.yaml`. Kanal
+dosyaları kullanıcıya özeldir (`config/channels/*.yaml` git'e girmez), bu yüzden
+kendi kanalını panelden oluştur ya da bu örneği `config/channels/` altına
+kopyalayıp `voice_id`'yi kendi sesinle değiştir.

@@ -98,7 +98,15 @@ def build_html(
             "show_handle": job.cta_show_handle,
         },
         rss_source=job.rss_source,
+        narration=job.narration,
     )
+
+
+def _total_frames(job: RenderJob, fps: int) -> int:
+    """Voiced işlerde süre sesten, değilse kanal ayarından gelir."""
+    if job.narration is not None:
+        return int(round(job.narration.duration_s * fps))
+    return job.duration_s * fps
 
 
 def render_frames(
@@ -117,7 +125,7 @@ def render_frames(
     html = build_html(job, template_path, ui_labels=ui_labels, dna_css=dna_css,
                       animation_style=animation_style)
 
-    total_frames = job.duration_s * fps
+    total_frames = _total_frames(job, fps)
 
     with sync_playwright() as p:
         browser_obj = getattr(p, browser).launch()
@@ -137,6 +145,8 @@ def render_frames(
                 "(t) => { document.getAnimations().forEach(a => { a.currentTime = t; }); }",
                 t_ms,
             )
+            if job.narration is not None:
+                page.evaluate("(t) => window.__seek && window.__seek(t)", t_ms)
             page.screenshot(path=str(out_dir / f"frame_{i:05d}.png"), omit_background=False)
 
         browser_obj.close()
