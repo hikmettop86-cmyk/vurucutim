@@ -1,6 +1,6 @@
 from short_bot.tts.ai33_client import (Ai33Error, Ai33TimeoutError,
                                        health_check, list_voices)
-from test_ai33_synthesize import FakeResponse, FakeSession, _clock
+from tests.test_ai33_synthesize import FakeResponse, FakeSession, _clock
 
 
 def test_health_check_healthy(tmp_path):
