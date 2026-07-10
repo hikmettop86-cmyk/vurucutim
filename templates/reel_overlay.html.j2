@@ -1,0 +1,58 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:1080px;height:1920px;overflow:hidden;background:transparent;
+  font-family:'Segoe UI',Arial,sans-serif;color:#fff}
+#flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+#bar{position:absolute;top:0;left:0;height:12px;width:0%;background:{{ highlight_color }};box-shadow:0 0 20px rgba(0,0,0,.4)}
+.big{position:absolute;top:300px;left:60px;right:60px;text-align:center;font-size:104px;font-weight:900;
+  line-height:1.05;letter-spacing:-2px;display:none;-webkit-text-stroke:3px #000;paint-order:stroke fill;text-shadow:0 8px 30px rgba(0,0,0,.9)}
+.big.on{display:block}
+.card{position:absolute;top:200px;left:50%;transform:translateX(-50%) rotate(-3deg);background:{{ highlight_color }};color:#111;
+  font-weight:900;font-size:54px;padding:16px 40px;border-radius:14px;text-transform:uppercase;white-space:nowrap;display:none;
+  box-shadow:0 14px 40px rgba(0,0,0,.55);border:4px solid #111}
+.card.on{display:block}
+#arrow{position:absolute;left:50%;top:560px;margin-left:-90px;width:180px;height:180px;display:none;filter:drop-shadow(0 8px 14px rgba(0,0,0,.6))}
+#arrow.on{display:block}
+#scrim{position:absolute;left:0;right:0;bottom:0;height:640px;background:linear-gradient(0deg,rgba(0,0,0,.6),rgba(0,0,0,0))}
+.cap{position:absolute;left:0;right:0;bottom:300px;padding:0 60px;text-align:center;font-size:82px;font-weight:900;
+  line-height:1.15;letter-spacing:-1px;-webkit-text-stroke:3px #000;paint-order:stroke fill;text-shadow:0 6px 26px rgba(0,0,0,.95)}
+.cap .w{display:none;margin:0 12px;color:#fff}
+.cap .w.vis{display:inline}
+.cap .w.hot{color:{{ highlight_color }};display:inline-block;transform:scale(1.09)}
+#handle{position:absolute;bottom:150px;left:0;right:0;text-align:center;font-size:44px;font-weight:800;text-shadow:0 3px 12px rgba(0,0,0,.9);opacity:.9}
+</style></head><body>
+<div id="scrim"></div><div id="bar"></div>
+<svg id="arrow" viewBox="0 0 100 100"><path d="M50 4 L50 74 M50 74 L24 48 M50 74 L76 48" stroke="{{ arrow_color }}" stroke-width="14" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M50 4 L50 74 M50 74 L24 48 M50 74 L76 48" stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+<div class="big" id="hook">{{ hook }}</div>
+<div class="big" id="close">{{ close }}</div>
+{% for c in cards %}<div class="card" data-s="{{ c.start }}" data-e="{{ c.end }}">{{ c.text }}</div>
+{% endfor %}
+<div class="cap">{% for w in words %}<span class="w" data-s="{{ w.start }}" data-e="{{ w.end }}" data-seg="{{ w.seg }}">{{ w.word }}</span>
+{% endfor %}</div>
+<div id="handle">{{ handle }}</div>
+<div id="flash"></div>
+<script>
+const LEAD=0.08,CHUNK=3,DUR={{ duration_s }},LAST={{ last_seg }};
+const CUTS={{ cuts }};
+const ARROWSEGS={{ arrow_segs }};
+const FLASH_ON={{ 'true' if flash else 'false' }};
+const W=[...document.querySelectorAll('.cap .w')],CARDS=[...document.querySelectorAll('.card')];
+const HOOK=document.getElementById('hook'),CLOSE=document.getElementById('close'),BAR=document.getElementById('bar');
+const FLASH=document.getElementById('flash'),ARROW=document.getElementById('arrow');
+let ch=-1,ps=null,ic=0;
+for(const w of W){const sg=+w.dataset.seg;if(sg!==ps||ic===CHUNK){ch++;ic=0;ps=sg;}w.dataset.chunk=ch;ic++;}
+window.__seek=function(tms){
+  const t=tms/1000,lead=t+LEAD;let seg=0,chk=-1;
+  for(const w of W){if(lead>=+w.dataset.s){seg=+w.dataset.seg;chk=+w.dataset.chunk;}}
+  const capOn=seg>0&&seg<LAST;
+  for(const w of W){const vis=capOn&&+w.dataset.chunk===chk;w.classList.toggle('vis',vis);w.classList.toggle('hot',vis&&lead>=+w.dataset.s&&t<+w.dataset.e);}
+  HOOK.classList.toggle('on',seg===0);CLOSE.classList.toggle('on',seg===LAST);
+  for(const c of CARDS){const s=+c.dataset.s,e=+c.dataset.e;c.classList.toggle('on',t>=s&&t<e);}
+  BAR.style.width=Math.min(100,(t/DUR)*100)+'%';
+  const showA=ARROWSEGS.includes(seg);ARROW.classList.toggle('on',showA);
+  if(showA)ARROW.style.transform='translateY('+(Math.sin(t*8)*22)+'px)';
+  let op=0;if(FLASH_ON){for(const ct of CUTS){const dt=t-ct;if(dt>=0&&dt<0.12)op=Math.max(op,1-dt/0.12);}}
+  FLASH.style.opacity=op*0.85;
+};
+window.__seek(0);
+</script></body></html>
