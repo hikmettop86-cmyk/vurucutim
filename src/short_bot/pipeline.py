@@ -1073,9 +1073,10 @@ def _run_rss(*, channel, run_id, log, eng, settings,
             channel=channel, cache_dir=cache_dir,
             secrets_path=secrets_path, log=log,
         )
-        bv = channel.bg_video
 
-        script_call = resolve_ai_call(settings, secrets, "script")
+        # bg_video (bv) ve script_call artık _render_and_compose içinde
+        # hesaplanıyor; script_call'ı yukarıda (write_script bloğunda) çözdüğümüz
+        # değeri yeniden kullanıyoruz — tekrar resolve_ai_call çağırmıyoruz.
         _render_and_compose(
             job=job, archetype=archetype, templates_dir=templates_dir,
             frames_dir=frames_dir, music=music, out_path=out_path,
@@ -1422,6 +1423,10 @@ def _render_and_compose(
         from short_bot.tts.ai33_client import resolve_ai33_api_key
         from short_bot.voiced import produce_voiced_video
         log.info("  voiced mod: ai33 seslendirme")
+        # CTA SFX zamanlaması channel.duration_s'e göre hesaplanır; voiced'da
+        # süre sesten gelir ve narrator şablonunda görsel CTA yok → SFX yanlış
+        # anda, görselsiz çalardı. Bu yüzden voiced dalda SFX'i baskılıyoruz.
+        log.info("  voiced: gorsel CTA yok, CTA SFX baskilandi")
         return produce_voiced_video(
             item=item, body=body, script=script,
             bg_image_path=bg_image_path, music_path=music,
@@ -1432,7 +1437,7 @@ def _render_and_compose(
             fps=30, browser=settings.playwright_browser,
             ui_labels=ui_labels, dna_css=dna_css,
             animation_style=animation_style,
-            sfx_overlays=sfx_overlays, bg_video_path=bg_video_path,
+            sfx_overlays=[], bg_video_path=bg_video_path,
             bg_blur_px=bv.blur_px if bv else 30,
             bg_dim=bv.dim if bv else 0.4,
             fg_scale=bv.scale if (bv and bg_video_path) else 1.0,

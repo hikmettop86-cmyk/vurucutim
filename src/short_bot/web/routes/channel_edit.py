@@ -334,19 +334,20 @@ def save(slug):
     else:
         new_trend_boost = cfg.trend_boost
 
-    # Voice (seslendirme). Form hiç voice alanı göndermediyse mevcut blok
-    # aynen korunur — aksi hâlde kaydetmek kanalı sessizce sessiz moda düşürür.
+    # Voice (seslendirme). Şablon text/number voice alanlarını (voice_id,
+    # voice_speed, ...) HER ZAMAN gönderir — boş olsalar bile. Bu yüzden
+    # "form alanı var mı" kontrolü yanıltıcıdır: sessiz bir kanala boş bir
+    # voice bloğu enjekte eder. Bunun yerine kullanıcının seslendirmeyi
+    # GERÇEKTEN kullandığı duruma bağlanırız: checkbox açık VEYA bir ses
+    # seçilmiş VEYA kanalın zaten bir voice bloğu var. Aksi hâlde bloğa
+    # dokunmayız (None ise None kalır — YAML kirlenmez).
     from short_bot.config import VoiceConfig
-    voice_form_present = any(k in request.form for k in (
-        "voice_enabled", "voice_id", "voice_speed", "voice_persona",
-        "voice_target_min", "voice_target_max",
-    ))
-    if voice_form_present:
-        v_enabled = request.form.get("voice_enabled") == "on"
-        v_id = (request.form.get("voice_id") or "").strip()
-        if v_enabled and not v_id:
-            flash("Seslendirmeyi açmak için bir ses seç (voice_id boş).", "error")
-            return redirect(url_for("channel_edit.edit", slug=slug))
+    v_enabled = request.form.get("voice_enabled") == "on"
+    v_id = (request.form.get("voice_id") or "").strip()
+    if v_enabled and not v_id:
+        flash("Seslendirmeyi açmak için bir ses seç (voice_id boş).", "error")
+        return redirect(url_for("channel_edit.edit", slug=slug))
+    if v_enabled or v_id or cfg.voice is not None:
         old = cfg.voice
         new_voice = VoiceConfig(
             enabled=v_enabled,

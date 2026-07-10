@@ -94,6 +94,28 @@ def test_voiced_passes_ai33_key_from_secrets(tmp_path, monkeypatch):
     assert captured["ffmpeg_path"] == "ffmpeg"
 
 
+def test_voiced_suppresses_cta_sfx(tmp_path, monkeypatch):
+    """Voiced: narrator sablonunda gorsel CTA yok -> CTA SFX baskilanmali.
+
+    CTA acik bir kanal stub'ina ve dolu bir sfx_overlays'e ragmen voiced dal
+    produce_voiced_video'ya bos liste ([]) gecmeli.
+    """
+    captured = {}
+    monkeypatch.setattr("short_bot.voiced.produce_voiced_video",
+                        lambda **kw: (captured.update(kw), kw["out_path"])[1])
+
+    class Voiced(_Channel):
+        cta_enabled = True
+        cta_text = "Takip et"
+        cta_icons = ["like"]
+        cta_duration_s = 2
+        voice = VoiceConfig(enabled=True, voice_id="elevenlabs_v1")
+
+    _render_and_compose(**_kwargs(tmp_path, channel=Voiced(),
+                                  sfx_overlays=[{"at": 0.0, "sfx": "whoosh"}]))
+    assert captured["sfx_overlays"] == []
+
+
 def test_voiced_disabled_block_still_silent(tmp_path, monkeypatch):
     seen = []
     monkeypatch.setattr("short_bot.pipeline.render_frames",
