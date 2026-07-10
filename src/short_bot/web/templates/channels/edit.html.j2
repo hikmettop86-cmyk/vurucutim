@@ -1447,9 +1447,9 @@
           <label class="flex items-center gap-2"><input type="checkbox" name="reel_series_enabled"
             {% if c.reel and c.reel.series_enabled %}checked{% endif %}> Seri modu</label>
           <label class="flex items-center gap-2"><input type="checkbox" name="reel_cta_enabled"
-            {% if c.reel and c.reel.cta_enabled %}checked{% endif %}> Abone CTA kartı</label>
+            {% if not c.reel or c.reel.cta_enabled %}checked{% endif %}> Abone CTA kartı</label>
           <label class="flex items-center gap-2"><input type="checkbox" name="reel_comment_question"
-            {% if c.reel and c.reel.comment_question %}checked{% endif %}> Yorum sorusu</label>
+            {% if not c.reel or c.reel.comment_question %}checked{% endif %}> Yorum sorusu</label>
         </div>
         <div class="grid grid-cols-2 gap-3">
           <label class="block"><span class="text-xs text-claude-muted uppercase">Seri başlığı</span>

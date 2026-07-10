@@ -135,7 +135,7 @@ class ReelConfig(BaseModel):
     hook_angle_vary: bool = True
     accent_vary: bool = True
     transition_vary: bool = True
-    # Faz 3 alanları (tanımlı, pipeline'da henüz pasif)
+    # Faz 3 abone mekanikleri (reel_subscribe üzerinden aktif)
     series_enabled: bool = False
     series_title: str = ""
     cta_enabled: bool = True
