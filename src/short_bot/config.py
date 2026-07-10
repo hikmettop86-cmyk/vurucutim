@@ -113,6 +113,46 @@ class VoiceConfig(BaseModel):
         return self
 
 
+class ReelConfig(BaseModel):
+    """Footage-sürüklü reel formatı ayarları. Blok yoksa kanal reel üretmez."""
+    enabled: bool = False
+    voice_id: str = ""
+    speed: float = Field(default=1.0, ge=0.5, le=1.5)
+    target_duration_s: tuple[int, int] = (25, 45)
+    cut_pacing: Literal["slow", "medium", "fast"] = "medium"
+    highlight_color: str = "#ffd400"
+    arrows_enabled: bool = True
+    arrow_color: str = "#ff2d2d"
+    arrow_frequency: Literal["off", "reveal", "beats"] = "beats"
+    transitions_flash: bool = True
+    transitions_whoosh: bool = True
+    transitions_zoom: bool = True
+    music_mood: Literal["upbeat", "neutral", "calm"] = "upbeat"
+    music_volume: float = Field(default=0.10, ge=0.0, le=1.0)
+    verify_footage: bool = True
+    # Faz 3 alanları (tanımlı, pipeline'da henüz pasif)
+    series_enabled: bool = False
+    series_title: str = ""
+    cta_enabled: bool = True
+    comment_question: bool = True
+
+    @field_validator("target_duration_s", mode="before")
+    @classmethod
+    def _coerce_tuple(cls, v):
+        return tuple(v) if isinstance(v, list) else v
+
+    @model_validator(mode="after")
+    def _check(self) -> "ReelConfig":
+        lo, hi = self.target_duration_s
+        if not (10 <= lo < hi <= 120):
+            raise ValueError(
+                f"target_duration_s must satisfy 10 <= lo < hi <= 120, got ({lo}, {hi})"
+            )
+        if self.enabled and not self.voice_id.strip():
+            raise ValueError("reel.enabled=true ise voice_id zorunlu")
+        return self
+
+
 @dataclass(frozen=True)
 class ChannelConfig:
     slug: str
@@ -153,6 +193,7 @@ class ChannelConfig:
     # made this a UI knob: 0 = original, 8 = old behavior, 20 = heavy frosted.
     bg_image_blur: int = 0
     voice: VoiceConfig | None = None
+    reel: "ReelConfig | None" = None
 
 
 def load_settings(path: Path) -> Settings:
@@ -262,6 +303,9 @@ def load_channel(path: Path) -> ChannelConfig:
     voice_data = data.get("voice")
     voice = VoiceConfig.model_validate(voice_data) if voice_data else None
 
+    reel_data = data.get("reel")
+    reel = ReelConfig.model_validate(reel_data) if reel_data else None
+
     cta = data.get("cta", {})
     return ChannelConfig(
         slug=slug,
@@ -296,6 +340,7 @@ def load_channel(path: Path) -> ChannelConfig:
         trend_boost=trend_boost,
         bg_image_blur=int(data.get("bg_image_blur", 0)),
         voice=voice,
+        reel=reel,
     )
 
 
@@ -384,6 +429,28 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
             "persona": cfg.voice.persona,
             "target_duration_s": list(cfg.voice.target_duration_s),
             "music_volume": cfg.voice.music_volume,
+        }
+    if cfg.reel is not None:
+        data["reel"] = {
+            "enabled": cfg.reel.enabled,
+            "voice_id": cfg.reel.voice_id,
+            "speed": cfg.reel.speed,
+            "target_duration_s": list(cfg.reel.target_duration_s),
+            "cut_pacing": cfg.reel.cut_pacing,
+            "highlight_color": cfg.reel.highlight_color,
+            "arrows_enabled": cfg.reel.arrows_enabled,
+            "arrow_color": cfg.reel.arrow_color,
+            "arrow_frequency": cfg.reel.arrow_frequency,
+            "transitions_flash": cfg.reel.transitions_flash,
+            "transitions_whoosh": cfg.reel.transitions_whoosh,
+            "transitions_zoom": cfg.reel.transitions_zoom,
+            "music_mood": cfg.reel.music_mood,
+            "music_volume": cfg.reel.music_volume,
+            "verify_footage": cfg.reel.verify_footage,
+            "series_enabled": cfg.reel.series_enabled,
+            "series_title": cfg.reel.series_title,
+            "cta_enabled": cfg.reel.cta_enabled,
+            "comment_question": cfg.reel.comment_question,
         }
     if cfg.dna is not None:
         # mode='json' → tuple becomes list, ready for YAML round-trip
