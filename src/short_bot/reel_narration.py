@@ -75,12 +75,15 @@ def _budget_feedback(actual: int, lo_w: int, hi_w: int) -> str:
 
 def write_reel_narration(topic: str, *, channel, claude_path: str = "claude",
                          model: str = "default", backend: str = "claude_cli",
-                         api_key: str | None = None) -> ReelNarration:
+                         api_key: str | None = None,
+                         hook_angle: str = "") -> ReelNarration:
     reel = getattr(channel, "reel", None)
     if reel is None:
         raise ValueError("write_reel_narration: channel.reel tanımlı değil")
     lo_w, hi_w = reel_word_budget(reel.target_duration_s)
     prompt = build_reel_prompt(topic, channel)
+    if hook_angle:
+        prompt = prompt + f"\n\nAÇILIŞ AÇISI: {hook_angle}\n"
     n = run_json(prompt, ReelNarration, claude_path=claude_path, model=model,
                  backend=backend, api_key=api_key, retries=3)
     if lo_w <= n.word_count() <= hi_w:
