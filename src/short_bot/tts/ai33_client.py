@@ -13,6 +13,8 @@ için ``short_bot.tts.align`` kullanılır.
 from __future__ import annotations
 
 import os
+import time
+from pathlib import Path
 
 BASE_URL = "https://api.ai33.pro"
 
@@ -30,3 +32,121 @@ def normalize_voice_id(voice_id: str) -> str:
     if not v:
         raise ValueError("voice_id boş olamaz")
     return v if v.startswith(_VOICE_PREFIXES) else f"elevenlabs_{v}"
+
+
+POLL_INTERVAL_S = 4.0
+POLL_TIMEOUT_S = 600.0     # 10 dk
+POST_TIMEOUT_S = 60.0
+TASK_TIMEOUT_S = 30.0
+DOWNLOAD_TIMEOUT_S = 180.0
+
+
+class Ai33Error(RuntimeError):
+    """ai33 istemcisinin taban hatası."""
+
+
+class Ai33AuthError(Ai33Error):
+    """401 — geçersiz API anahtarı veya yetersiz kredi."""
+
+
+class Ai33RateLimitError(Ai33Error):
+    """429 — hız sınırı veya kuyruk dolu."""
+
+
+_STATUS_MESSAGES = {
+    400: "geçersiz istek (voice_id veya text hatalı)",
+    401: "geçersiz AI33_API_KEY veya yetersiz kredi",
+    413: "istek çok büyük (>10MB)",
+    422: "geçersiz parametre",
+    429: "hız sınırı aşıldı veya kuyruk dolu",
+}
+
+
+def _check_status(resp, context: str) -> None:
+    code = resp.status_code
+    if 200 <= code < 300:
+        return
+    detail = _STATUS_MESSAGES.get(code) or f"HTTP {code}"
+    msg = f"ai33 {context}: {detail}"
+    if code == 401:
+        raise Ai33AuthError(msg)
+    if code == 429:
+        raise Ai33RateLimitError(msg)
+    raise Ai33Error(msg)
+
+
+def _new_session():
+    import requests
+    return requests.Session()
+
+
+def synthesize(
+    text: str,
+    *,
+    voice_id: str,
+    api_key: str,
+    out_path: "Path",
+    speed: float = 1.0,
+    base_url: str = BASE_URL,
+    session=None,
+    sleep=time.sleep,
+    now=time.monotonic,
+    poll_interval_s: float = POLL_INTERVAL_S,
+    poll_timeout_s: float = POLL_TIMEOUT_S,
+) -> "Path":
+    """Metni seslendirip mp3'ü ``out_path``'e yazar ve yolu döndürür.
+
+    session/sleep/now testler için enjekte edilebilir.
+    """
+    if not (text or "").strip():
+        raise ValueError("text boş olamaz")
+    if not api_key:
+        raise Ai33AuthError("AI33_API_KEY tanımlı değil")
+
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    sess = session or _new_session()
+    headers = {"xi-api-key": api_key}
+
+    resp = sess.post(
+        f"{base_url}/v3/text-to-speech",
+        headers=headers,
+        files={
+            "text": (None, text),
+            "voice_id": (None, normalize_voice_id(voice_id)),
+            "speed": (None, f"{speed:g}"),
+        },
+        timeout=POST_TIMEOUT_S,
+    )
+    _check_status(resp, "text-to-speech POST")
+    task_id = (resp.json() or {}).get("task_id")
+    if not task_id:
+        raise Ai33Error("ai33 yanıtında task_id yok")
+
+    start = now()
+    while True:
+        if now() - start > poll_timeout_s:
+            raise Ai33Error(
+                f"ai33 poll timeout (~{poll_timeout_s / 60:.0f}dk), task={task_id}"
+            )
+        sleep(poll_interval_s)
+        r = sess.get(f"{base_url}/v1/task/{task_id}", headers=headers,
+                     timeout=TASK_TIMEOUT_S)
+        _check_status(r, "task poll")
+        task = r.json() or {}
+        status = task.get("status")
+        if status == "done":
+            meta = task.get("metadata") or {}
+            url = (meta.get("audio_url") or meta.get("output_uri")
+                   or task.get("output_uri") or task.get("audio_url"))
+            if not url:
+                raise Ai33Error(f"ai33 task bitti ama ses URL'i yok (task={task_id})")
+            audio = sess.get(url, timeout=DOWNLOAD_TIMEOUT_S)
+            _check_status(audio, "ses indirme")
+            out_path.write_bytes(audio.content)
+            return out_path
+        if status == "error":
+            raise Ai33Error(
+                f"ai33 task hatası: {task.get('error_message') or 'bilinmeyen hata'}"
+            )
+        # 'doing' | 'processing' | 'pending' → poll'a devam
