@@ -119,7 +119,7 @@ class ReelConfig(BaseModel):
     voice_id: str = ""
     speed: float = Field(default=1.0, ge=0.5, le=1.5)
     target_duration_s: tuple[int, int] = (25, 45)
-    cut_pacing: Literal["slow", "medium", "fast"] = "medium"
+    cut_pacing: Literal["auto", "slow", "medium", "fast"] = "auto"
     highlight_color: str = "#ffd400"
     arrows_enabled: bool = True
     arrow_color: str = "#ff2d2d"
@@ -130,6 +130,11 @@ class ReelConfig(BaseModel):
     music_mood: Literal["upbeat", "neutral", "calm"] = "upbeat"
     music_volume: float = Field(default=0.10, ge=0.0, le=1.0)
     verify_footage: bool = True
+    # Faz 2 varyasyon knob'ları (per-video deterministik profil)
+    layout: Literal["auto", "classic", "lower_left", "top_heavy"] = "auto"
+    hook_angle_vary: bool = True
+    accent_vary: bool = True
+    transition_vary: bool = True
     # Faz 3 alanları (tanımlı, pipeline'da henüz pasif)
     series_enabled: bool = False
     series_title: str = ""
@@ -447,6 +452,10 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
             "music_mood": cfg.reel.music_mood,
             "music_volume": cfg.reel.music_volume,
             "verify_footage": cfg.reel.verify_footage,
+            "layout": cfg.reel.layout,
+            "hook_angle_vary": cfg.reel.hook_angle_vary,
+            "accent_vary": cfg.reel.accent_vary,
+            "transition_vary": cfg.reel.transition_vary,
             "series_enabled": cfg.reel.series_enabled,
             "series_title": cfg.reel.series_title,
             "cta_enabled": cfg.reel.cta_enabled,
