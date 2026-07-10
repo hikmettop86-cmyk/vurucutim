@@ -366,6 +366,58 @@ def save(slug):
     else:
         new_voice = cfg.voice
 
+    # Reel formatı — form hiç reel alanı göndermediyse mevcut blok korunur.
+    from short_bot.config import ReelConfig
+    reel_form_present = any(k in request.form for k in (
+        "reel_enabled", "reel_voice_id", "reel_cut_pacing", "reel_music_mood",
+        "reel_target_min", "reel_target_max", "reel_highlight_color",
+        "reel_arrows_enabled", "reel_verify_footage",
+    ))
+    r_enabled = request.form.get("reel_enabled") == "on"
+    r_id = (request.form.get("reel_voice_id") or "").strip()
+    if reel_form_present and (r_enabled or r_id or cfg.reel is not None):
+        if r_enabled and not r_id:
+            flash("Reel'i açmak için bir ses seç (reel_voice_id boş).", "error")
+            return redirect(url_for("channel_edit.edit", slug=slug))
+        old = cfg.reel
+        new_reel = ReelConfig(
+            enabled=r_enabled,
+            voice_id=r_id or (old.voice_id if old else ""),
+            speed=_form_get_float("reel_speed", old.speed if old else 1.0),
+            target_duration_s=(
+                _form_get_int("reel_target_min", old.target_duration_s[0] if old else 25),
+                _form_get_int("reel_target_max", old.target_duration_s[1] if old else 45)),
+            cut_pacing=request.form.get("reel_cut_pacing", old.cut_pacing if old else "medium"),
+            highlight_color=request.form.get("reel_highlight_color",
+                                             old.highlight_color if old else "#ffd400"),
+            arrows_enabled=request.form.get("reel_arrows_enabled") == "on"
+                           if reel_form_present else (old.arrows_enabled if old else True),
+            arrow_color=request.form.get("reel_arrow_color", old.arrow_color if old else "#ff2d2d"),
+            arrow_frequency=request.form.get("reel_arrow_frequency",
+                                             old.arrow_frequency if old else "beats"),
+            transitions_flash=request.form.get("reel_flash") == "on" if reel_form_present
+                              else (old.transitions_flash if old else True),
+            transitions_whoosh=request.form.get("reel_whoosh") == "on" if reel_form_present
+                               else (old.transitions_whoosh if old else True),
+            transitions_zoom=request.form.get("reel_zoom") == "on" if reel_form_present
+                             else (old.transitions_zoom if old else True),
+            music_mood=request.form.get("reel_music_mood", old.music_mood if old else "upbeat"),
+            music_volume=(old.music_volume if old else 0.10),
+            verify_footage=request.form.get("reel_verify_footage") == "on" if reel_form_present
+                           else (old.verify_footage if old else True),
+            layout=request.form.get("reel_layout", old.layout if old else "auto"),
+            hook_angle_vary=request.form.get("reel_hook_angle_vary") == "on",
+            accent_vary=request.form.get("reel_accent_vary") == "on",
+            transition_vary=request.form.get("reel_transition_vary") == "on",
+            series_enabled=request.form.get("reel_series_enabled") == "on",
+            series_title=request.form.get("reel_series_title", old.series_title if old else ""),
+            cta_enabled=request.form.get("reel_cta_enabled") == "on",
+            cta_text_custom=request.form.get("reel_cta_text_custom", old.cta_text_custom if old else ""),
+            comment_question=request.form.get("reel_comment_question") == "on",
+        )
+    else:
+        new_reel = cfg.reel
+
     new_content_source = request.form.get("content_source", cfg.content_source)
     if new_content_source not in ("rss", "generator", "feed"):
         new_content_source = cfg.content_source
@@ -413,6 +465,7 @@ def save(slug):
         bg_video=new_bg_video,
         trend_boost=new_trend_boost,
         voice=new_voice,
+        reel=new_reel,
     )
     save_channel(path, new_cfg)
     flash("Kanal güncellendi.", "success")

@@ -1,0 +1,47 @@
+slug: test-reel
+name: İlginç Bilgi (Reel Test)
+enabled: false
+keywords: [ilginc, bilgi]
+language: tr
+schedule_cron: 0 10 * * *
+duration_s: 40
+min_score: 7.0
+max_candidates_per_run: 3
+max_age_hours: 24
+template: newscast
+colors:
+  primary: '#0ea5e9'
+  accent: '#facc15'
+  bg_gradient: ['#0f172a', '#020617']
+handle: '@ilginc-bilgi'
+output_dir: output/test-reel
+content_source: generator
+generator:
+  topic: "ilginç bilimsel gerçekler, nasıl çalışır açıklamaları, doğa ve mühendislik"
+cta:
+  enabled: false
+  text: ''
+  icons: []
+  duration_s: 0
+  show_handle: true
+reel:
+  enabled: true
+  voice_id: elevenlabs_PLACEHOLDER
+  speed: 1.0
+  target_duration_s: [25, 45]
+  cut_pacing: medium
+  highlight_color: '#ffd400'
+  arrows_enabled: true
+  arrow_color: '#ff2d2d'
+  arrow_frequency: beats
+  transitions_flash: true
+  transitions_whoosh: true
+  transitions_zoom: true
+  music_mood: upbeat
+  verify_footage: true
+youtube:
+  auto_upload: false
+  ai_content: true
+  category_id: '27'
+  privacy_status: private
+  min_score_for_upload: 9.0

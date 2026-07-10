@@ -75,6 +75,7 @@ class PexelsCandidate(BaseModel):
     id: int
     url: str          # highest-resolution mp4 link
     duration_s: int
+    image: str = ""   # poster thumbnail URL (footage vision doğrulama için)
 
 
 def _pick_best_mp4(video_files: list[dict]) -> str | None:
@@ -134,6 +135,7 @@ def search_videos(
             id=int(v.get("id", 0)),
             url=url,
             duration_s=int(v.get("duration", 0)),
+            image=str(v.get("image", "") or ""),
         ))
     return out
 

@@ -1377,6 +1377,91 @@
       </script>
     </div>
 
+    {# ── Card: Reel formatı (footage-sürüklü) ──────────────────────────── #}
+    <div class="bg-claude-surface border border-claude-border rounded-lg p-4 mt-4">
+      <h3 class="font-serif text-lg font-bold mb-3">Reel formatı (footage-sürüklü)</h3>
+      <label class="flex items-center gap-2 text-sm mb-3">
+        <input type="checkbox" name="reel_enabled"
+               {% if c.reel and c.reel.enabled %}checked{% endif %}>
+        Reel üretimi (footage + hızlı kesme + karaoke). Süre sesten gelir.
+      </label>
+      <div class="grid grid-cols-2 gap-3">
+        <label class="block"><span class="text-xs text-claude-muted uppercase">ai33 sesi</span>
+          <input type="text" name="reel_voice_id" list="ai33-voice-list"
+                 value="{{ c.reel.voice_id if c.reel else '' }}"
+                 class="bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm w-full">
+        </label>
+        <label class="block"><span class="text-xs text-claude-muted uppercase">Kesme temposu</span>
+          <select name="reel_cut_pacing" class="bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm w-full">
+            {% for p in ['auto','slow','medium','fast'] %}<option value="{{ p }}"
+              {% if c.reel and c.reel.cut_pacing==p %}selected{% endif %}>{{ p }}</option>{% endfor %}
+          </select>
+        </label>
+        <label class="block"><span class="text-xs text-claude-muted uppercase">Hedef süre (sn)</span>
+          <span class="flex gap-2">
+            <input type="number" name="reel_target_min" value="{{ c.reel.target_duration_s[0] if c.reel else 25 }}"
+                   class="bg-claude-surface-alt border border-claude-border px-2 py-2 rounded-lg text-sm w-full">
+            <input type="number" name="reel_target_max" value="{{ c.reel.target_duration_s[1] if c.reel else 45 }}"
+                   class="bg-claude-surface-alt border border-claude-border px-2 py-2 rounded-lg text-sm w-full">
+          </span>
+        </label>
+        <label class="block"><span class="text-xs text-claude-muted uppercase">Müzik mood</span>
+          <select name="reel_music_mood" class="bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm w-full">
+            {% for m in ['upbeat','neutral','calm'] %}<option value="{{ m }}"
+              {% if c.reel and c.reel.music_mood==m %}selected{% endif %}>{{ m }}</option>{% endfor %}
+          </select>
+        </label>
+        <label class="block"><span class="text-xs text-claude-muted uppercase">Vurgu rengi</span>
+          <input type="color" name="reel_highlight_color" value="{{ c.reel.highlight_color if c.reel else '#ffd400' }}"
+                 class="w-full h-10 rounded-lg border border-claude-border"></label>
+        <label class="block"><span class="text-xs text-claude-muted uppercase">Ok rengi</span>
+          <input type="color" name="reel_arrow_color" value="{{ c.reel.arrow_color if c.reel else '#ff2d2d' }}"
+                 class="w-full h-10 rounded-lg border border-claude-border"></label>
+        <label class="block"><span class="text-xs text-claude-muted uppercase">Düzen (layout)</span>
+          <select name="reel_layout" class="bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm w-full">
+            {% for l in ['auto','classic','lower_left','top_heavy'] %}<option value="{{ l }}"
+              {% if c.reel and c.reel.layout==l %}selected{% endif %}>{{ l }}</option>{% endfor %}
+          </select></label>
+      </div>
+      <div class="flex flex-wrap gap-4 mt-3 text-sm">
+        <label class="flex items-center gap-2"><input type="checkbox" name="reel_arrows_enabled"
+          {% if not c.reel or c.reel.arrows_enabled %}checked{% endif %}> Oklar</label>
+        <label class="flex items-center gap-2"><input type="checkbox" name="reel_flash"
+          {% if not c.reel or c.reel.transitions_flash %}checked{% endif %}> Flash geçiş</label>
+        <label class="flex items-center gap-2"><input type="checkbox" name="reel_whoosh"
+          {% if not c.reel or c.reel.transitions_whoosh %}checked{% endif %}> Whoosh SFX</label>
+        <label class="flex items-center gap-2"><input type="checkbox" name="reel_zoom"
+          {% if not c.reel or c.reel.transitions_zoom %}checked{% endif %}> Zoom-punch</label>
+        <label class="flex items-center gap-2"><input type="checkbox" name="reel_verify_footage"
+          {% if not c.reel or c.reel.verify_footage %}checked{% endif %}> Vision doğrulama</label>
+        <label class="flex items-center gap-2"><input type="checkbox" name="reel_hook_angle_vary"
+          {% if not c.reel or c.reel.hook_angle_vary %}checked{% endif %}> Hook açısı varyasyonu</label>
+        <label class="flex items-center gap-2"><input type="checkbox" name="reel_accent_vary"
+          {% if not c.reel or c.reel.accent_vary %}checked{% endif %}> Vurgu rengi varyasyonu</label>
+        <label class="flex items-center gap-2"><input type="checkbox" name="reel_transition_vary"
+          {% if not c.reel or c.reel.transition_vary %}checked{% endif %}> Geçiş varyasyonu</label>
+      </div>
+      <div class="mt-3 border-t border-claude-border pt-3">
+        <div class="text-xs text-claude-muted uppercase mb-2">Abone mekanikleri</div>
+        <div class="flex flex-wrap gap-4 text-sm mb-2">
+          <label class="flex items-center gap-2"><input type="checkbox" name="reel_series_enabled"
+            {% if c.reel and c.reel.series_enabled %}checked{% endif %}> Seri modu</label>
+          <label class="flex items-center gap-2"><input type="checkbox" name="reel_cta_enabled"
+            {% if not c.reel or c.reel.cta_enabled %}checked{% endif %}> Abone CTA kartı</label>
+          <label class="flex items-center gap-2"><input type="checkbox" name="reel_comment_question"
+            {% if not c.reel or c.reel.comment_question %}checked{% endif %}> Yorum sorusu</label>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <label class="block"><span class="text-xs text-claude-muted uppercase">Seri başlığı</span>
+            <input type="text" name="reel_series_title" value="{{ c.reel.series_title if c.reel else '' }}"
+                   class="bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm w-full"></label>
+          <label class="block"><span class="text-xs text-claude-muted uppercase">CTA metni (boş=otomatik)</span>
+            <input type="text" name="reel_cta_text_custom" value="{{ c.reel.cta_text_custom if c.reel else '' }}"
+                   class="bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm w-full"></label>
+        </div>
+      </div>
+    </div>
+
     {# ── Generator test result (conditional, shown in Icerik tab) ──────── #}
     {% if c.content_source == 'generator' %}
     <div class="bg-white border border-claude-border rounded-xl shadow-soft mb-4 p-5">

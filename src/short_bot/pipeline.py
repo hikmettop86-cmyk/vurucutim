@@ -1211,6 +1211,43 @@ def _run_generator(*, channel, run_id, log, eng, settings,
         status="used", short_id=None,
     )
 
+    # Reel formatı: footage-sürüklü üretim (etkinse render/compose'u atla)
+    reel_call = resolve_ai_call(settings, secrets, "vision")
+    if getattr(channel, "reel", None) is not None and channel.reel.enabled:
+        out_dir = Path(channel.output_dir); out_dir.mkdir(parents=True, exist_ok=True)
+        reel_out = out_dir / f"{datetime.now(timezone.utc):%Y-%m-%d}_{_slugify(chosen_result.text)}.mp4"
+        with tempfile.TemporaryDirectory() as reel_tmp:
+            t0 = time.perf_counter()
+            _reel_produce_or_none(
+                channel=channel, topic=chosen_result.text, out_path=reel_out,
+                settings=settings, secrets=secrets, music_root=music_root,
+                templates_dir=templates_dir, cache_dir=cache_dir,
+                work_dir=Path(reel_tmp), log=log, llm_call=gen_call,
+                vision_call=reel_call, seed=generated_id,
+            )
+            render_ms = int((time.perf_counter() - t0) * 1000)
+        log.info(f"  → {reel_out.name} ({render_ms}ms)")
+        short_id = record_short(
+            eng, channel=channel.slug, rss_item_guid=None,
+            title=chosen_result.text[:80], file_path=str(reel_out),
+            duration_s=channel.duration_s,
+            script_json=chosen_result.script.model_dump_json(), render_ms=render_ms,
+        )
+        update_generated_short_id(eng, generated_id, short_id)
+        finish_run(eng, run_id, status="success", short_id=short_id, error=None)
+        yt_creds_root = (Path(eng.url.database).parent / "youtube_credentials").resolve() \
+            if eng.url.database else Path("data/youtube_credentials").resolve()
+        secrets_path2 = (Path(eng.url.database).parent / "secrets.yaml").resolve() \
+            if eng.url.database else Path("data/secrets.yaml").resolve()
+        _maybe_auto_upload(
+            eng=eng, short_id=short_id, channel=channel, picked_score=None, log=log,
+            yt_creds_root=yt_creds_root, claude_path=gen_call.claude_path,
+            model=gen_call.model, secrets_path=secrets_path2,
+            backend=gen_call.backend, api_key=gen_call.api_key,
+        )
+        log.info(f"=== success short_id={short_id} (reel) ===")
+        return RunResult(run_id=run_id, status="success", short_path=reel_out, error=None)
+
     # Phase 4: image
     log.info("[4/6] image search (Sonnet keywords)")
     images_cache = Path(cache_dir) / "images"
@@ -1461,6 +1498,36 @@ def _render_and_compose(
         duration_s=channel.duration_s,
     )
     return out_path
+
+
+def _reel_produce_or_none(
+    *, channel, topic, out_path, settings, secrets, music_root, templates_dir,
+    cache_dir, work_dir, log, llm_call, vision_call, seed: int = 0,
+) -> "Path | None":
+    """Kanal reel ise reel videoyu üretip out_path döndürür; değilse None."""
+    reel = getattr(channel, "reel", None)
+    if reel is None or not reel.enabled:
+        return None
+    from short_bot.assets import pick_music
+    from short_bot.reel import produce_reel_video
+    from short_bot.tts.ai33_client import resolve_ai33_api_key
+    from short_bot.pexels import resolve_pexels_api_key
+    log.info("  reel modu: footage-sürüklü üretim")
+    try:
+        music = pick_music(music_root, mood=reel.music_mood, channel_slug=channel.slug)
+    except FileNotFoundError:
+        log.warning("  reel: mood müziği bulunamadı, müziksiz devam")
+        music = None
+    return produce_reel_video(
+        topic=topic, channel=channel, templates_dir=templates_dir,
+        work_dir=Path(work_dir), out_path=out_path, music_path=music,
+        ai33_api_key=resolve_ai33_api_key(secrets),
+        pexels_api_key=resolve_pexels_api_key(secrets),
+        ffmpeg_path=settings.ffmpeg_path, browser=settings.playwright_browser,
+        llm_claude_path=llm_call.claude_path, llm_model=llm_call.model,
+        llm_backend=llm_call.backend, llm_api_key=llm_call.api_key,
+        vision_call=vision_call, seed=seed,
+    )
 
 
 def _build_check_job(script, channel, *, music_path, ui_language):
