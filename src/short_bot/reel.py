@@ -44,6 +44,29 @@ class ReelDeps:
     assemble_reel: Callable = _assemble
 
 
+def _match_with_fallback(d, query, *, topic_q, api_key, cache_dir, verify, vision_call):
+    """Footage eşleştirmeyi kademeli yedeklerle dener (footage = #1 risk).
+
+    Sıra: (1) tam sorgu, (2) ilk 2 kelime, (3) konu tohumu — hepsi vision'lı;
+    (4) son çare: ilk 2 kelime vision'sız (her zaman bir klip getirir).
+    """
+    words = query.split()
+    stages = [query]
+    if len(words) > 2:
+        stages.append(" ".join(words[:2]))
+    if topic_q and topic_q.lower() not in (s.lower() for s in stages):
+        stages.append(topic_q)
+    for q in stages:
+        clip = d.match_beat_clip(q, api_key=api_key, cache_dir=cache_dir,
+                                 verify=verify, vision_call=vision_call)
+        if clip is not None:
+            return clip
+    # son çare — vision'sız, en sade sorgu (boş dönmesin)
+    fallback = " ".join(words[:2]) if len(words) >= 2 else (words[0] if words else topic_q)
+    return d.match_beat_clip(fallback, api_key=api_key, cache_dir=cache_dir,
+                             verify=False, vision_call=None)
+
+
 def produce_reel_video(
     *, topic: str, channel, templates_dir: Path, work_dir: Path,
     out_path: Path, music_path: Path | None, ai33_api_key: str,
@@ -87,12 +110,14 @@ def produce_reel_video(
     clip_paths: list[Path] = []
     _first_q = next((q for q in timeline.seg_queries if q), "abstract background")
     _last_q = next((q for q in reversed(timeline.seg_queries) if q), _first_q)
+    _topic_q = (topic.split(",")[0].strip()[:40] or "nature")
     for si, query in enumerate(timeline.seg_queries):
         if query is None:
             # hook → ilk beat'in görüntüsü, close → son beat'in görüntüsü
             query = _first_q if si == 0 else _last_q
-        clip = d.match_beat_clip(query, api_key=pexels_api_key, cache_dir=clips_cache,
-                                 verify=reel.verify_footage, vision_call=vision_call)
+        clip = _match_with_fallback(
+            d, query, topic_q=_topic_q, api_key=pexels_api_key,
+            cache_dir=clips_cache, verify=reel.verify_footage, vision_call=vision_call)
         if clip is None:
             raise RuntimeError(f"reel: '{query}' için footage bulunamadı (segment {si}).")
         clip_paths.append(clip)

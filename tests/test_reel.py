@@ -100,3 +100,36 @@ def test_requires_reel_enabled(tmp_path):
         reel = None
     with pytest.raises(ValueError, match="reel"):
         _call(_deps([]), tmp_path, channel=NoReel())
+
+
+def test_match_with_fallback_simplifies_query(tmp_path):
+    from short_bot.reel import _match_with_fallback
+    tries = []
+
+    class D:
+        def match_beat_clip(self, q, **kw):
+            tries.append((q, kw.get("verify")))
+            return Path("clip.mp4") if q == "storm cloud" else None
+
+    clip = _match_with_fallback(
+        D(), "storm cloud interior ice crystals turbulence", topic_q="lightning",
+        api_key="k", cache_dir=tmp_path, verify=True, vision_call=object())
+    assert clip == Path("clip.mp4")
+    assert tries[0][0] == "storm cloud interior ice crystals turbulence"  # önce tam
+    assert tries[1][0] == "storm cloud"                                   # sonra ilk 2 kelime
+
+
+def test_match_with_fallback_last_resort_drops_vision(tmp_path):
+    from short_bot.reel import _match_with_fallback
+    tries = []
+
+    class D:
+        def match_beat_clip(self, q, **kw):
+            tries.append(kw.get("verify"))
+            return Path("c.mp4") if kw.get("verify") is False else None  # yalnız son çare
+
+    clip = _match_with_fallback(
+        D(), "very rare specific subject phrase", topic_q="nature",
+        api_key="k", cache_dir=tmp_path, verify=True, vision_call=object())
+    assert clip == Path("c.mp4")
+    assert tries[-1] is False        # son çağrı vision'sız (boş dönmesin)

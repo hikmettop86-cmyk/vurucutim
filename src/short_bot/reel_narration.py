@@ -47,9 +47,12 @@ OUTPUT a JSON object:
   under 2 seconds. Never start with a date.
 - "beats": 3-6 beats. Each beat:
     - "text": the spoken sentence(s) in {lang} for this beat
-    - "visual_query": a CONCRETE English stock-footage search query describing what
-      to SHOW during this beat (e.g. "suspension bridge steel cables closeup", NOT
-      "bridge"). It must depict the thing the sentence talks about. English only.
+    - "visual_query": a SHORT English stock-footage search query (2-4 COMMON words)
+      for what to SHOW during this beat. It MUST be a subject a generic stock library
+      (Pexels) actually has — e.g. "lightning storm", "storm clouds", "ocean waves",
+      "factory machine", "bee flower". Concrete but findable. AVOID rare compound
+      descriptions like "storm cloud interior ice crystals turbulence" — those return
+      zero results. English only.
     - "keyword": a SHORT ALL-CAPS on-screen tag in {lang} (max 40 chars, 1-3 words)
 - "close": LAST spoken sentence in {lang}. It must bridge back to the hook when the
   video loops. No "abone ol"/"subscribe".
