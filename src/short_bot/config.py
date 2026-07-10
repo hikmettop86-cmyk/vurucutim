@@ -5,7 +5,7 @@ import re
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 def _default_trends_settings() -> "TrendsSettings":
@@ -86,6 +86,33 @@ class TrendBoostConfig(BaseModel):
     region_override: str | None = None
 
 
+class VoiceConfig(BaseModel):
+    """Voiced (seslendirmeli) üretim ayarları. Blok yoksa kanal sessiz üretir."""
+    enabled: bool = False
+    voice_id: str = ""          # ai33 voice id (prefix'li ya da ham)
+    speed: float = Field(default=1.0, ge=0.5, le=1.5)
+    persona: str = "enerjik, meraklı anlatıcı"
+    target_duration_s: tuple[int, int] = (45, 60)
+    # Anlatım altındaki müzik seviyesi (~-18 dB).
+    music_volume: float = Field(default=0.12, ge=0.0, le=1.0)
+
+    @field_validator("target_duration_s", mode="before")
+    @classmethod
+    def _coerce_tuple(cls, v):
+        return tuple(v) if isinstance(v, list) else v
+
+    @model_validator(mode="after")
+    def _check(self) -> "VoiceConfig":
+        lo, hi = self.target_duration_s
+        if not (10 <= lo < hi <= 180):
+            raise ValueError(
+                f"target_duration_s must satisfy 10 <= lo < hi <= 180, got ({lo}, {hi})"
+            )
+        if self.enabled and not self.voice_id.strip():
+            raise ValueError("voice.enabled=true ise voice_id zorunlu")
+        return self
+
+
 @dataclass(frozen=True)
 class ChannelConfig:
     slug: str
@@ -125,6 +152,7 @@ class ChannelConfig:
     # baked-in 8px GaussianBlur was applied to every publisher photo. v0.6.3
     # made this a UI knob: 0 = original, 8 = old behavior, 20 = heavy frosted.
     bg_image_blur: int = 0
+    voice: VoiceConfig | None = None
 
 
 def load_settings(path: Path) -> Settings:
@@ -231,6 +259,9 @@ def load_channel(path: Path) -> ChannelConfig:
     trend_boost = (TrendBoostConfig.model_validate(trend_boost_data)
                    if trend_boost_data else None)
 
+    voice_data = data.get("voice")
+    voice = VoiceConfig.model_validate(voice_data) if voice_data else None
+
     cta = data.get("cta", {})
     return ChannelConfig(
         slug=slug,
@@ -264,6 +295,7 @@ def load_channel(path: Path) -> ChannelConfig:
         bg_video=bg_video,
         trend_boost=trend_boost,
         bg_image_blur=int(data.get("bg_image_blur", 0)),
+        voice=voice,
     )
 
 
@@ -344,6 +376,15 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
         data["trend_boost"] = tb
     if cfg.bg_image_blur:
         data["bg_image_blur"] = cfg.bg_image_blur
+    if cfg.voice is not None:
+        data["voice"] = {
+            "enabled": cfg.voice.enabled,
+            "voice_id": cfg.voice.voice_id,
+            "speed": cfg.voice.speed,
+            "persona": cfg.voice.persona,
+            "target_duration_s": list(cfg.voice.target_duration_s),
+            "music_volume": cfg.voice.music_volume,
+        }
     if cfg.dna is not None:
         # mode='json' → tuple becomes list, ready for YAML round-trip
         data["dna"] = cfg.dna.model_dump(mode="json")
