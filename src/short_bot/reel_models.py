@@ -74,3 +74,53 @@ class ReelTimeline:
     duration_s: float
     hook: str
     close: str
+
+
+def _proportional(words: list[str], duration_s: float) -> list[tuple[float, float]]:
+    weights = [max(1, len(w)) for w in words]
+    total = sum(weights)
+    out, cursor = [], 0.0
+    for i, w in enumerate(weights):
+        span = duration_s * w / total
+        end = duration_s if i == len(weights) - 1 else cursor + span
+        out.append((cursor, end))
+        cursor = end
+    return out
+
+
+def build_reel_timeline(narration: "ReelNarration", asr_words: list[TimedWord],
+                        *, duration_s: float) -> "ReelTimeline":
+    if duration_s <= 0:
+        raise ValueError(f"duration_s pozitif olmalı, got {duration_s}")
+
+    words_flat: list[str] = []
+    segs_flat: list[int] = []
+    for seg_idx, seg_text in enumerate(narration.segments()):
+        for w in seg_text.split():
+            words_flat.append(w)
+            segs_flat.append(seg_idx)
+
+    if len(asr_words) == len(words_flat) and asr_words:
+        times = [(w.start_s, w.end_s) for w in asr_words]
+    else:
+        times = _proportional(words_flat, duration_s)
+
+    timed = [TimedWord(word=w, start_s=t[0], end_s=t[1], seg=s)
+             for w, s, t in zip(words_flat, segs_flat, times)]
+
+    n_segs = len(narration.segments())
+    seg_spans: list[tuple[float, float]] = []
+    for si in range(n_segs):
+        chunk = [tw for tw in timed if tw.seg == si]
+        if chunk:
+            seg_spans.append((chunk[0].start_s, chunk[-1].end_s))
+        else:
+            prev = seg_spans[-1][1] if seg_spans else 0.0
+            seg_spans.append((prev, prev))
+
+    return ReelTimeline(
+        words=timed, seg_spans=seg_spans,
+        seg_queries=narration.segment_queries(),
+        seg_keywords=narration.segment_keywords(),
+        duration_s=duration_s, hook=narration.hook, close=narration.close,
+    )
