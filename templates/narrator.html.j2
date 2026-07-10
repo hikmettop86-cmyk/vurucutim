@@ -54,11 +54,12 @@
   }
   .card.on { display: block; }
 
-  /* Karaoke altyazı bloğu — sadece aktif segmentin kelimeleri görünür. */
+  /* Karaoke altyazı bloğu — aynı anda yalnızca kısa bir kelime penceresi.
+     Tüm cümleyi basmak 1080px'e sığmıyor ve okunmuyor. */
   .caption {
     position: absolute; left: 60px; right: 60px; bottom: 420px;
-    font-size: 74px; font-weight: 800; line-height: 1.22;
-    text-align: center; text-wrap: balance;
+    font-size: 70px; font-weight: 800; line-height: 1.22;
+    text-align: center; text-wrap: balance; white-space: normal;
     text-shadow: 0 6px 28px rgba(0,0,0,.75);
   }
   .caption .w { display: none; margin: 0 10px; color: #f8fafc; }
@@ -87,7 +88,10 @@
   {% endfor %}
 
   <div class="caption">
-    {% for w in narration.words %}<span class="w" data-s="{{ w.start_s }}" data-e="{{ w.end_s }}" data-seg="{{ w.seg }}">{{ w.word }}</span>{% endfor %}
+    {# span'lar arasındaki boşluk ŞART: bitişik yazılırsa tarayıcı hepsini tek
+       bir kelime sayar, satır kaydırmaz ve metin ekrandan taşar. #}
+    {% for w in narration.words %}<span class="w" data-s="{{ w.start_s }}" data-e="{{ w.end_s }}" data-seg="{{ w.seg }}">{{ w.word }}</span>
+    {% endfor %}
   </div>
 
   <div class="handle">{{ handle }}</div>
@@ -97,6 +101,10 @@
 // Karaoke sürücüsü. renderer.py her kare için __seek(t_ms) çağırır.
 // LEAD_MS: kelime söylenmeden hemen önce yanar — göz sesi yakalasın.
 const LEAD_MS = 80;
+// Ekranda aynı anda duracak kelime sayısı. Bir beat cümlesi 15+ kelime
+// olabiliyor; hepsini basmak okunmaz bir duvar yaratıyor.
+const CHUNK_SIZE = 3;
+
 const WORDS = Array.from(document.querySelectorAll('.caption .w'));
 const CARDS = Array.from(document.querySelectorAll('.card'));
 const HOOK = document.getElementById('__hook');
@@ -105,21 +113,40 @@ const CLOSE_SEG = parseInt(CLOSE.dataset.seg, 10);
 const PROGRESS = document.getElementById('__progress');
 const DURATION_S = {{ narration.duration_s }};
 
+// Kelimeleri segment içinde CHUNK_SIZE'lık pencerelere böl. Pencere hiçbir
+// zaman segment sınırını aşmaz, yoksa iki farklı cümle aynı anda görünürdü.
+let _chunk = -1, _prevSeg = null, _inChunk = 0;
+for (const w of WORDS) {
+  const seg = parseInt(w.dataset.seg, 10);
+  if (seg !== _prevSeg || _inChunk === CHUNK_SIZE) {
+    _chunk += 1; _inChunk = 0; _prevSeg = seg;
+  }
+  w.dataset.chunk = _chunk;
+  _inChunk += 1;
+}
+
 window.__seek = function (tMs) {
   const t = tMs / 1000;
   const lead = t + LEAD_MS / 1000;
 
-  // Aktif segment: o an konuşulan kelimenin segmenti.
-  let activeSeg = 0;
+  // Aktif kelime: başlangıcı geçilmiş SON kelime.
+  let activeSeg = 0, activeChunk = -1;
   for (const w of WORDS) {
-    if (lead >= parseFloat(w.dataset.s)) activeSeg = parseInt(w.dataset.seg, 10);
+    if (lead >= parseFloat(w.dataset.s)) {
+      activeSeg = parseInt(w.dataset.seg, 10);
+      activeChunk = parseInt(w.dataset.chunk, 10);
+    }
   }
+
+  // Hook ve loop_close kendi büyük başlıklarında görünür; altyazı onları
+  // tekrar etmesin — aynı metni iki kez basmak ekranı boğuyordu.
+  const captionOn = activeSeg > 0 && activeSeg < CLOSE_SEG;
 
   for (const w of WORDS) {
     const s = parseFloat(w.dataset.s), e = parseFloat(w.dataset.e);
-    const inSeg = parseInt(w.dataset.seg, 10) === activeSeg;
-    w.classList.toggle('vis', inSeg);
-    w.classList.toggle('hot', inSeg && lead >= s && t < e);
+    const vis = captionOn && parseInt(w.dataset.chunk, 10) === activeChunk;
+    w.classList.toggle('vis', vis);
+    w.classList.toggle('hot', vis && lead >= s && t < e);
   }
 
   // Hook yalnızca segment 0 boyunca büyük başlık olarak durur.
