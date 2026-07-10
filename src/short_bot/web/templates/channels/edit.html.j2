@@ -1441,6 +1441,25 @@
         <label class="flex items-center gap-2"><input type="checkbox" name="reel_transition_vary"
           {% if not c.reel or c.reel.transition_vary %}checked{% endif %}> Geçiş varyasyonu</label>
       </div>
+      <div class="mt-3 border-t border-claude-border pt-3">
+        <div class="text-xs text-claude-muted uppercase mb-2">Abone mekanikleri</div>
+        <div class="flex flex-wrap gap-4 text-sm mb-2">
+          <label class="flex items-center gap-2"><input type="checkbox" name="reel_series_enabled"
+            {% if c.reel and c.reel.series_enabled %}checked{% endif %}> Seri modu</label>
+          <label class="flex items-center gap-2"><input type="checkbox" name="reel_cta_enabled"
+            {% if c.reel and c.reel.cta_enabled %}checked{% endif %}> Abone CTA kartı</label>
+          <label class="flex items-center gap-2"><input type="checkbox" name="reel_comment_question"
+            {% if c.reel and c.reel.comment_question %}checked{% endif %}> Yorum sorusu</label>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <label class="block"><span class="text-xs text-claude-muted uppercase">Seri başlığı</span>
+            <input type="text" name="reel_series_title" value="{{ c.reel.series_title if c.reel else '' }}"
+                   class="bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm w-full"></label>
+          <label class="block"><span class="text-xs text-claude-muted uppercase">CTA metni (boş=otomatik)</span>
+            <input type="text" name="reel_cta_text_custom" value="{{ c.reel.cta_text_custom if c.reel else '' }}"
+                   class="bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm w-full"></label>
+        </div>
+      </div>
     </div>
 
     {# ── Generator test result (conditional, shown in Icerik tab) ──────── #}

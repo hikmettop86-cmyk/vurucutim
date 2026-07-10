@@ -409,6 +409,11 @@ def save(slug):
             hook_angle_vary=request.form.get("reel_hook_angle_vary") == "on",
             accent_vary=request.form.get("reel_accent_vary") == "on",
             transition_vary=request.form.get("reel_transition_vary") == "on",
+            series_enabled=request.form.get("reel_series_enabled") == "on",
+            series_title=request.form.get("reel_series_title", old.series_title if old else ""),
+            cta_enabled=request.form.get("reel_cta_enabled") == "on",
+            cta_text_custom=request.form.get("reel_cta_text_custom", old.cta_text_custom if old else ""),
+            comment_question=request.form.get("reel_comment_question") == "on",
         )
     else:
         new_reel = cfg.reel
