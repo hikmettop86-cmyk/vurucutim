@@ -164,7 +164,7 @@ def produce_reel_video(
         layout=profile.layout,
         highlight_color=profile.accent, arrow_color=reel.arrow_color,
         arrow_frequency=reel.arrow_frequency if reel.arrows_enabled else "off",
-        flash=("flash" in profile.transitions), handle=channel.handle,
+        cut_effect=profile.cut_effect, handle=channel.handle,
         cta_text=bits.cta_text,
         font=reel.font,
         markers=markers,

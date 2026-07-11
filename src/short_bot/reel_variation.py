@@ -28,6 +28,8 @@ _TRANSITION_SETS = (
 _CUT_PACINGS = ("medium", "fast", "medium", "slow")
 _MARKER_KITS = (("arrow",), ("ring",), ("arrow", "ring"), ("pulse", "box"),
                 ("box",), ("ring", "pulse"), ("spotlight",), ("underline", "arrow"))
+# Kesme geçiş efekti çeşitliliği (overlay CUTS'ta uygulanır); seed'e göre seçilir.
+CUT_EFFECTS = ("flash", "glitch", "rgbsplit", "lightleak")
 
 
 @dataclass(frozen=True)
@@ -38,6 +40,7 @@ class VariationProfile:
     transitions: tuple[str, ...]
     cut_pacing: str
     marker_kit: tuple[str, ...] = ()
+    cut_effect: str = "flash"
 
 
 def _idx(seed: int, salt: str, n: int) -> int:
@@ -80,11 +83,13 @@ def build_variation_profile(channel, seed: int) -> VariationProfile:
 
     if getattr(reel, "transition_vary", True):
         transitions = _TRANSITION_SETS[_idx(seed, "trans", len(_TRANSITION_SETS))]
+        cut_effect = CUT_EFFECTS[_idx(seed, "cuteffect", len(CUT_EFFECTS))]
     else:
         transitions = tuple(
             t for t, on in (("flash", reel.transitions_flash),
                             ("whoosh", reel.transitions_whoosh),
                             ("zoom", reel.transitions_zoom)) if on)
+        cut_effect = "flash"
 
     if reel.cut_pacing == "auto":
         cut_pacing = _CUT_PACINGS[_idx(seed, "pace", len(_CUT_PACINGS))]
@@ -95,4 +100,4 @@ def build_variation_profile(channel, seed: int) -> VariationProfile:
 
     return VariationProfile(layout=layout, hook_angle=hook_angle, accent=accent,
                             transitions=transitions, cut_pacing=cut_pacing,
-                            marker_kit=marker_kit)
+                            marker_kit=marker_kit, cut_effect=cut_effect)

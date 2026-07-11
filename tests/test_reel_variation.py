@@ -79,3 +79,9 @@ def test_variation_has_marker_kit():
     kit = build_variation_profile(ch, 7).marker_kit
     assert kit                                 # kit boş değil
     assert set(kit) <= set(MARKER_TYPES)       # MARKER_TYPES alt kümesi
+
+
+def test_variation_has_cut_effect():
+    from short_bot.reel_variation import build_variation_profile, CUT_EFFECTS
+    ch = _Ch()
+    assert build_variation_profile(ch, 7).cut_effect in CUT_EFFECTS

@@ -4,6 +4,15 @@
 html,body{width:1080px;height:1920px;overflow:hidden;background:transparent;
   font-family:'{{ font }}','Segoe UI',Arial,sans-serif;color:#fff}
 #flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+/* kesme geçiş efekti katmanları — tür seed'e göre (flash/glitch/rgbsplit/lightleak) */
+#rgbsplit{position:absolute;inset:0;pointer-events:none;opacity:0;mix-blend-mode:screen;
+  background:linear-gradient(90deg,rgba(255,0,64,.55),rgba(255,0,64,0) 14%),
+    linear-gradient(270deg,rgba(0,170,255,.55),rgba(0,170,255,0) 14%)}
+#lightleak{position:absolute;inset:0;pointer-events:none;opacity:0;mix-blend-mode:screen;
+  background:radial-gradient(120% 62% at 82% 14%,rgba(255,178,64,.9),rgba(255,86,0,.28) 42%,rgba(0,0,0,0) 72%)}
+#glitch{position:absolute;inset:0;pointer-events:none;opacity:0;mix-blend-mode:screen;
+  background:repeating-linear-gradient(0deg,rgba(255,0,90,.35) 0 2px,rgba(0,0,0,0) 2px 5px,
+    rgba(0,205,255,.35) 5px 7px,rgba(0,0,0,0) 7px 12px)}
 #bar{position:absolute;top:0;left:0;height:12px;width:0%;background:{{ hot_color }};box-shadow:0 0 20px rgba(0,0,0,.4)}
 .big{position:absolute;top:300px;left:60px;right:60px;text-align:center;font-size:104px;font-weight:900;
   line-height:1.05;letter-spacing:-2px;display:none;-webkit-text-stroke:3px #000;paint-order:stroke fill;text-shadow:0 8px 30px rgba(0,0,0,.9)}
@@ -71,6 +80,7 @@ html,body{width:1080px;height:1920px;overflow:hidden;background:transparent;
 {% endfor %}</div>
 <div id="handle">{{ handle }}</div>
 {% if cta_text %}<div id="cta">🔔 {{ cta_text }}</div>{% endif %}
+<div id="rgbsplit"></div><div id="lightleak"></div><div id="glitch"></div>
 <div id="flash"></div>
 </div>
 <script>
@@ -80,10 +90,11 @@ const ARROWSEGS={{ arrow_segs }};   // legacy: belirteçler artık MARKERS'tan g
 const MARKERS={{ markers }};
 const MK={};for(const m of MARKERS){MK[m.seg]=m;}
 const MCLS={arrow:'mk-arrow',ring:'mk-ring',pulse:'mk-pulse',box:'mk-box',spotlight:'mk-spot',underline:'mk-under'};
-const FLASH_ON={{ 'true' if flash else 'false' }};
+const CUT_EFFECT='{{ cut_effect }}';   // kesme efekti türü (flash|glitch|rgbsplit|lightleak|none)
 const W=[...document.querySelectorAll('.cap .w')],CARDS=[...document.querySelectorAll('.card')];
 const HOOK=document.getElementById('hook'),CLOSE=document.getElementById('close'),BAR=document.getElementById('bar');
 const FLASH=document.getElementById('flash'),MLAYER=document.getElementById('markers');
+const RGB=document.getElementById('rgbsplit'),LEAK=document.getElementById('lightleak'),GLITCH=document.getElementById('glitch');
 const CTA=document.getElementById('cta');
 let ch=-1,ps=null,ic=0,mkSeg=-999;
 for(const w of W){const sg=+w.dataset.seg;if(sg!==ps||ic===CHUNK){ch++;ic=0;ps=sg;}w.dataset.chunk=ch;ic++;}
@@ -98,8 +109,14 @@ window.__seek=function(tms){
   const m=MK[seg];
   if(m){if(seg!==mkSeg){MLAYER.innerHTML='<div class="mk '+(MCLS[m.type]||'mk-arrow')+'" style="left:'+(m.x*1080)+'px;top:'+(m.y*1920)+'px"></div>';mkSeg=seg;}}
   else if(mkSeg!==-999){MLAYER.innerHTML='';mkSeg=-999;}
-  let op=0;if(FLASH_ON){for(const ct of CUTS){const dt=t-ct;if(dt>=0&&dt<0.12)op=Math.max(op,1-dt/0.12);}}
-  FLASH.style.opacity=op*0.85;
+  let op=0;if(CUT_EFFECT!=='none'){for(const ct of CUTS){const dt=t-ct;if(dt>=0&&dt<0.12)op=Math.max(op,1-dt/0.12);}}
+  // seçilen efekti kesme yakınlığı (op) ile uygula; op seek-driven → deterministik
+  FLASH.style.opacity=(CUT_EFFECT==='flash')?op*0.85:0;
+  RGB.style.opacity=(CUT_EFFECT==='rgbsplit')?op:0;
+  RGB.style.transform=(CUT_EFFECT==='rgbsplit'&&op>0)?('translateX('+(op*12)+'px)'):'';
+  LEAK.style.opacity=(CUT_EFFECT==='lightleak')?op*0.9:0;
+  GLITCH.style.opacity=(CUT_EFFECT==='glitch')?op:0;
+  GLITCH.style.transform=(CUT_EFFECT==='glitch'&&op>0)?('translateX('+(((Math.floor(t*90)%2)?1:-1)*op*9)+'px)'):'';
   if(CTA){CTA.classList.toggle('on', t >= DUR - CTA_S);}
 };
 window.__seek(0);

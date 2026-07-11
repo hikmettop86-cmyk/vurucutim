@@ -45,6 +45,16 @@ def test_arrow_off_frequency_hides_arrow():
     assert "ARROWSEGS=[]" in html.replace(" ", "")
 
 
+def test_overlay_cut_effect_glitch():
+    html = build_reel_overlay_html(_timeline(), cut_effect="glitch")
+    assert "glitch" in html
+
+
+def test_overlay_cut_effect_flash_backcompat():
+    html = build_reel_overlay_html(_timeline(), cut_effect="flash")
+    assert "flash" in html.lower()
+
+
 @pytest.fixture(scope="module")
 def browser():
     with sync_playwright() as p:

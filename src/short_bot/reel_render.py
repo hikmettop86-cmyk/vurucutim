@@ -28,13 +28,20 @@ def build_reel_overlay_html(
     timeline: ReelTimeline, *, layout: str = "classic",
     highlight_color: str = "#ffd400",
     arrow_color: str = "#ff2d2d", arrow_frequency: str = "beats",
-    flash: bool = True, handle: str = "", cta_text: str = "",
+    flash: bool = True, cut_effect: str = "flash",
+    handle: str = "", cta_text: str = "",
     font: str = "Montserrat",
     markers: list | None = None,
     templates_dir: Path | None = None,
 ) -> str:
     if layout not in ("classic", "lower_left", "top_heavy"):
         layout = "classic"
+    # cut_effect: kesmede uygulanan efekt TÜRÜ (flash/glitch/rgbsplit/lightleak/none).
+    # flash: geriye-uyum ana anahtarı — flash=False iken hiçbir kesme efekti gösterilmez.
+    if cut_effect not in ("flash", "glitch", "rgbsplit", "lightleak", "none"):
+        cut_effect = "flash"
+    if not flash:
+        cut_effect = "none"
     templates_dir = Path(templates_dir) if templates_dir else Path("templates")
     env = Environment(loader=FileSystemLoader(str(templates_dir)),
                       autoescape=select_autoescape(["html"]))
@@ -66,7 +73,7 @@ def build_reel_overlay_html(
         font=font, font_import=_FONT_IMPORTS.get(font, _FONT_IMPORTS["Montserrat"]),
         words=words, cards=cards, duration_s=f"{timeline.duration_s:.3f}",
         last_seg=last_seg, cuts=json.dumps(cuts),
-        arrow_segs=json.dumps(arrow_segs), flash=flash,
+        arrow_segs=json.dumps(arrow_segs), flash=flash, cut_effect=cut_effect,
         markers=json.dumps(markers or []),
     )
 
