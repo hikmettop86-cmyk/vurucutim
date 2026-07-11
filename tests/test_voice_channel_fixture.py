@@ -42,4 +42,5 @@ def test_voice_extra_declared_in_pyproject():
     data = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     extras = data["project"]["optional-dependencies"]
     assert "voice" in extras
-    assert any("whisperx" in dep for dep in extras["voice"])
+    # Kelime senkronu artık faster-whisper (whisperx bırakıldı); voice buna yönlenir.
+    assert any("faster-whisper" in dep for dep in extras["voice"])
