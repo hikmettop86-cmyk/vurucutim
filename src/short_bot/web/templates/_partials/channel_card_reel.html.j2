@@ -54,7 +54,7 @@
       <button hx-post="/shorts/run-now" hx-vals='{"slug": "{{ c.slug }}"}'
               hx-on::after-request="if (event.detail.successful) window.location.href='/activity?channel={{ c.slug }}'"
               class="px-2 py-1 text-claude-accent hover:bg-claude-accent-soft rounded text-xs" title="Şimdi reel üret">▶</button>
-      <a href="/channels/{{ c.slug }}/edit" class="px-2 py-1 text-claude-text hover:bg-claude-surface-alt rounded text-xs">Düzenle</a>
+      <a href="/channels/{{ c.slug }}/edit-reel" class="px-2 py-1 text-claude-text hover:bg-claude-surface-alt rounded text-xs">Düzenle</a>
     </div>
   </div>
 </div>

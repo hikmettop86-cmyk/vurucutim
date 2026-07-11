@@ -111,3 +111,54 @@ def test_edit_reel_full_page_tabs_and_values(tmp_path):
     # niş bulucu + önizleme
     assert "reelPickNiche" in body
     assert 'id="niche-results"' in body
+
+
+def test_edit_reel_post_preserves_dna_updates_reel(tmp_path):
+    c, cfg_dir = _client(tmp_path)
+    _make_reel_channel(c, cfg_dir)
+    from short_bot.config import load_channel
+    before = load_channel(cfg_dir / "channels" / "reel-kanal.yaml")
+    r = c.post("/channels/reel-kanal/edit-reel", data={
+        "reel_enabled": "on", "reel_voice_id": "NEWVOICE123",
+        "reel_highlight_color": "#ff0000", "reel_cut_pacing": "fast",
+        "reel_music_mood": "calm", "reel_layout": "classic",
+        "reel_target_min": "20", "reel_target_max": "40",
+        "generator_topic": "yeni konu tohumu en az on karakter",
+        "schedule_cron": "0 9 * * *", "handle": "@yeni", "language": "en",
+        "enabled": "1",
+    })
+    assert r.status_code in (200, 302)
+    after = load_channel(cfg_dir / "channels" / "reel-kanal.yaml")
+    # reel güncellendi
+    assert after.reel.voice_id == "NEWVOICE123"
+    assert after.reel.highlight_color == "#ff0000"
+    assert after.reel.cut_pacing == "fast"
+    assert after.generator.topic.startswith("yeni konu")
+    assert after.schedule_cron == "0 9 * * *"
+    assert after.language == "en"
+    # DNA/arketip/renk KORUNDU (reel-güvenli)
+    assert after.dna is not None
+    assert after.dna.palette.header_top_color == before.dna.palette.header_top_color
+    assert after.template == before.template
+    assert after.colors == before.colors
+
+
+def test_edit_reel_post_empty_voice_no_save(tmp_path):
+    c, cfg_dir = _client(tmp_path)
+    _make_reel_channel(c, cfg_dir)
+    from short_bot.config import load_channel
+    before_topic = load_channel(cfg_dir / "channels" / "reel-kanal.yaml").generator.topic
+    r = c.post("/channels/reel-kanal/edit-reel", data={
+        "reel_enabled": "on", "reel_voice_id": "",
+        "generator_topic": "bambaska bir konu on karakterden fazla",
+    })
+    assert r.status_code in (200, 302)
+    after = load_channel(cfg_dir / "channels" / "reel-kanal.yaml")
+    assert after.generator.topic == before_topic  # kaydedilmedi
+
+
+def test_reel_card_edit_link_goes_to_edit_reel(tmp_path):
+    c, cfg_dir = _client(tmp_path)
+    _make_reel_channel(c, cfg_dir)
+    body = c.get("/channels").data.decode("utf-8")
+    assert "/channels/reel-kanal/edit-reel" in body

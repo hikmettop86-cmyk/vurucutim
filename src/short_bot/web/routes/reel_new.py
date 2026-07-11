@@ -202,7 +202,7 @@ def create():
             flash(f"'{name}' oluşturuldu ama üretim başlatılamadı: {e}", "error")
     else:
         flash(f"'{name}' reel kanalı oluşturuldu.", "success")
-    return redirect(url_for("channel_edit.edit", slug=slug))
+    return redirect(url_for("reel_edit.edit_reel", slug=slug))
 
 
 # ── Niş bulucu — NexLev + AI modları (arka plan iş + HTMX poll) ──────────────
