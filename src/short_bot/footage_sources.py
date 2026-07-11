@@ -81,13 +81,22 @@ class PixabaySource:
         return _pexels_download(cand.url, cache_dir)   # düz HTTP GET; URL agnostik
 
 
-def build_footage_sources(priority, *, pexels_key="", pixabay_key=""):
+def build_footage_sources(priority, *, pexels_key="", pixabay_key="",
+                          storyblocks_session=None):
     """`priority` sırasına göre, anahtarı olan (available) kaynakları döndürür.
 
     Hiçbiri kullanılamıyorsa geriye-uyum için [PexelsSource(pexels_key)] döner.
+    ``storyblocks_session`` yoksa Storyblocks (available()=False) atlanır.
     """
+    def _mk_storyblocks():
+        # Fonksiyon-içi import: footage_sources import edilirken playwright/
+        # storyblocks_source YÜKLENMESIN (circular + tembel tarayıcı).
+        from short_bot.storyblocks_source import StoryblocksSource
+        return StoryblocksSource(session_path=storyblocks_session)
+
     reg = {"pexels": lambda: PexelsSource(pexels_key),
-           "pixabay": lambda: PixabaySource(pixabay_key)}
+           "pixabay": lambda: PixabaySource(pixabay_key),
+           "storyblocks": _mk_storyblocks}
     out = []
     for name in (priority or ["pexels"]):
         mk = reg.get(name)

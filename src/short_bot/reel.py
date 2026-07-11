@@ -81,6 +81,7 @@ def produce_reel_video(
     out_path: Path, music_path: Path | None, ai33_api_key: str,
     pexels_api_key: str, pixabay_api_key: str = "",
     footage_priority: list | None = None,
+    storyblocks_session: str | None = None,
     ffmpeg_path: str = "ffmpeg", fps: int = 30,
     browser: str = "chromium",
     llm_claude_path: str = "claude", llm_model: str = "default",
@@ -135,7 +136,8 @@ def produce_reel_video(
     # sıradaki denenir. Anahtarları olmayan kaynaklar atlanır.
     sources = build_footage_sources(
         footage_priority or ["pexels"],
-        pexels_key=pexels_api_key, pixabay_key=pixabay_api_key)
+        pexels_key=pexels_api_key, pixabay_key=pixabay_api_key,
+        storyblocks_session=storyblocks_session)
     footage_deps = FootageDeps(sources=sources)
     clips_cache = work_dir / "clips"
     clip_paths: list[Path] = []
