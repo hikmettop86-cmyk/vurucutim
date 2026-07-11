@@ -197,3 +197,25 @@ def test_channel_list_shows_reel_badge(tmp_path):
     r = c.get("/channels")
     body = r.data.decode("utf-8")
     assert "🎬" in body
+
+
+def test_reel_post_invalid_pacing_fails_before_dna(tmp_path):
+    """Geçersiz Literal (cut_pacing) ücretli DNA çağrısından ÖNCE hata vermeli:
+    kanal yazılmaz VE generate_dna hiç çağrılmaz (kredi harcanmaz)."""
+    c = _client(tmp_path)
+    dna_calls = []
+
+    def _rec(**kwargs):
+        dna_calls.append(kwargs)
+        return _fake_dna()
+
+    with patch("short_bot.web.routes.reel_new.generate_dna", _rec):
+        r = c.post("/channels/new-reel", data={
+            "name": "Bozuk Tempo", "language": "tr",
+            "topic": "uzay ve gezegenler hakkında ilginç bilgiler",
+            "voice_id": "Q2IX97JeHBY3vNGzgM5s",
+            "cut_pacing": "xyz",  # ReelConfig Literal dışı
+        })
+    assert r.status_code in (200, 302)
+    assert not (tmp_path / "config" / "channels" / "bozuk-tempo.yaml").exists()
+    assert dna_calls == []

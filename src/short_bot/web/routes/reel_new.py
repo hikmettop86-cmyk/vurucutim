@@ -4,6 +4,7 @@ from pathlib import Path
 
 from flask import (Blueprint, current_app, flash, redirect,
                    render_template, request, url_for)
+from pydantic import ValidationError
 
 from short_bot.config import (ChannelConfig, GeneratorConfig, ReelConfig,
                               load_channel, resolve_ai_call, save_channel)
@@ -107,6 +108,28 @@ def create():
     channels_dir = cfg_dir / "channels"
     slug = _unique_slug(_slug_from_name(name), channels_dir)
 
+    # Reel config'i ücretli DNA çağrısından ÖNCE kur: bozuk bir Literal değer
+    # (ör. elle hazırlanmış cut_pacing) kredi harcamadan hızlıca hata versin.
+    highlight = (request.form.get("highlight_color", "") or "").strip() or "#38bdf8"
+    variation_on = request.form.get("variation_on") == "on"
+    try:
+        reel = ReelConfig(
+            enabled=True,
+            voice_id=voice_id,
+            highlight_color=highlight,
+            cut_pacing=request.form.get("cut_pacing", "auto"),
+            music_mood=request.form.get("music_mood", "upbeat"),
+            hook_angle_vary=variation_on,
+            accent_vary=variation_on,
+            transition_vary=variation_on,
+            cta_enabled=request.form.get("cta_enabled") == "on",
+            comment_question=request.form.get("comment_question") == "on",
+            series_enabled=request.form.get("series_enabled") == "on",
+        )
+    except ValidationError as e:
+        flash(f"Reel ayarları geçersiz: {e}", "error")
+        return redirect(url_for("reel_new.form"))
+
     settings = current_app.config["SHORTBOT_SETTINGS"]
     secrets_path = current_app.config.get("SHORTBOT_SECRETS_PATH")
     secrets = _load_secrets(Path(secrets_path)) if secrets_path else {}
@@ -121,22 +144,6 @@ def create():
     except Exception as e:
         flash(f"DNA üretimi başarısız: {e}", "error")
         return redirect(url_for("reel_new.form"))
-
-    highlight = (request.form.get("highlight_color", "") or "").strip() or "#38bdf8"
-    variation_on = request.form.get("variation_on") == "on"
-    reel = ReelConfig(
-        enabled=True,
-        voice_id=voice_id,
-        highlight_color=highlight,
-        cut_pacing=request.form.get("cut_pacing", "auto"),
-        music_mood=request.form.get("music_mood", "upbeat"),
-        hook_angle_vary=variation_on,
-        accent_vary=variation_on,
-        transition_vary=variation_on,
-        cta_enabled=request.form.get("cta_enabled") == "on",
-        comment_question=request.form.get("comment_question") == "on",
-        series_enabled=request.form.get("series_enabled") == "on",
-    )
 
     # DNA CSS override (arketip önizlemesi için; reel çıktısı kullanmaz ama parite)
     css_path = templates_dir / "css" / f"{slug}.css"
@@ -178,9 +185,9 @@ def create():
                 logs_dir=current_app.config["SHORTBOT_LOGS_DIR"],
                 trigger="manual",
             )
-            flash(f"'{name}' oluşturuldu — ilk video arka planda üretiliyor.", "ok")
+            flash(f"'{name}' oluşturuldu — ilk video arka planda üretiliyor.", "success")
         except Exception as e:
             flash(f"'{name}' oluşturuldu ama üretim başlatılamadı: {e}", "error")
     else:
-        flash(f"'{name}' reel kanalı oluşturuldu.", "ok")
+        flash(f"'{name}' reel kanalı oluşturuldu.", "success")
     return redirect(url_for("channel_edit.edit", slug=slug))
