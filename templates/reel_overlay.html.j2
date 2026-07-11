@@ -12,8 +12,34 @@ html,body{width:1080px;height:1920px;overflow:hidden;background:transparent;
   font-weight:900;font-size:54px;padding:16px 40px;border-radius:14px;text-transform:uppercase;white-space:nowrap;display:none;
   box-shadow:0 14px 40px rgba(0,0,0,.55);border:4px solid rgba(0,0,0,.35)}
 .card.on{display:block}
-#arrow{position:absolute;left:50%;top:560px;margin-left:-90px;width:180px;height:180px;display:none;filter:drop-shadow(0 8px 14px rgba(0,0,0,.6))}
-#arrow.on{display:block}
+/* belirteç katmanı — nesnenin (x,y) konumuna 6 tür; renk {{ arrow_color }}, siyah kontur/gölge */
+#markers{position:absolute;inset:0;pointer-events:none}
+#markers .mk{position:absolute}
+.mk-arrow{width:0;height:0;border-left:46px solid transparent;border-right:46px solid transparent;
+  border-top:74px solid {{ arrow_color }};transform:translate(-50%,-112%);
+  filter:drop-shadow(0 0 3px #000) drop-shadow(0 6px 8px rgba(0,0,0,.75));
+  animation:mk-arrow-bob .9s ease-in-out infinite alternate}
+@keyframes mk-arrow-bob{0%{transform:translate(-50%,-120%)}100%{transform:translate(-50%,-100%)}}
+.mk-ring{width:190px;height:190px;border:16px solid {{ arrow_color }};border-radius:50%;
+  transform:translate(-50%,-50%);box-shadow:0 0 0 5px rgba(0,0,0,.6),inset 0 0 0 5px rgba(0,0,0,.6),0 8px 24px rgba(0,0,0,.5);
+  animation:mk-ring-pulse 1.1s ease-in-out infinite}
+@keyframes mk-ring-pulse{0%,100%{transform:translate(-50%,-50%) scale(1);opacity:.95}50%{transform:translate(-50%,-50%) scale(1.12);opacity:.72}}
+.mk-pulse{width:46px;height:46px;border-radius:50%;background:{{ arrow_color }};
+  transform:translate(-50%,-50%);box-shadow:0 0 0 6px rgba(0,0,0,.4),0 0 26px 10px {{ arrow_color }};
+  animation:mk-pulse-dot 1.05s ease-out infinite}
+@keyframes mk-pulse-dot{0%{transform:translate(-50%,-50%) scale(.7);opacity:1}100%{transform:translate(-50%,-50%) scale(1.9);opacity:0}}
+.mk-box{width:230px;height:230px;border:14px solid {{ arrow_color }};border-radius:18px;
+  transform:translate(-50%,-50%);box-shadow:0 0 0 5px rgba(0,0,0,.6),inset 0 0 0 5px rgba(0,0,0,.6);
+  animation:mk-box-pop .45s cubic-bezier(.2,1.4,.4,1) both}
+@keyframes mk-box-pop{0%{transform:translate(-50%,-50%) scale(.55);opacity:0}100%{transform:translate(-50%,-50%) scale(1);opacity:1}}
+.mk-spot{width:360px;height:360px;border-radius:50%;transform:translate(-50%,-50%);
+  border:6px solid {{ arrow_color }};box-shadow:0 0 0 3000px rgba(0,0,0,.42),inset 0 0 60px 20px rgba(0,0,0,.4);
+  animation:mk-spot-in .4s ease-out both}
+@keyframes mk-spot-in{0%{opacity:0}100%{opacity:1}}
+.mk-under{width:210px;height:18px;background:{{ arrow_color }};border-radius:9px;
+  transform:translate(-50%,34px);box-shadow:0 0 0 4px rgba(0,0,0,.55),0 6px 16px rgba(0,0,0,.6);
+  animation:mk-under-grow .4s ease-out both}
+@keyframes mk-under-grow{0%{transform:translate(-50%,34px) scaleX(0)}100%{transform:translate(-50%,34px) scaleX(1)}}
 #scrim{position:absolute;left:0;right:0;bottom:0;height:640px;background:linear-gradient(0deg,rgba(0,0,0,.6),rgba(0,0,0,0))}
 .cap{position:absolute;left:0;right:0;bottom:300px;padding:0 60px;text-align:center;font-size:82px;font-weight:900;
   line-height:1.15;letter-spacing:-1px;-webkit-text-stroke:3px #000;paint-order:stroke fill;text-shadow:0 6px 26px rgba(0,0,0,.95)}
@@ -36,7 +62,7 @@ html,body{width:1080px;height:1920px;overflow:hidden;background:transparent;
 </style></head><body>
 <div class="stage {{ layout | default('classic') }}">
 <div id="scrim"></div><div id="bar"></div>
-<svg id="arrow" viewBox="0 0 100 100"><path d="M50 4 L50 74 M50 74 L24 48 M50 74 L76 48" stroke="{{ arrow_color }}" stroke-width="14" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M50 4 L50 74 M50 74 L24 48 M50 74 L76 48" stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+<div id="markers"></div>
 <div class="big" id="hook">{{ hook }}</div>
 <div class="big" id="close">{{ close }}</div>
 {% for c in cards %}<div class="card" data-s="{{ c.start }}" data-e="{{ c.end }}">{{ c.text }}</div>
@@ -50,13 +76,16 @@ html,body{width:1080px;height:1920px;overflow:hidden;background:transparent;
 <script>
 const LEAD=0.08,CHUNK=3,DUR={{ duration_s }},LAST={{ last_seg }},CTA_S=2.5;
 const CUTS={{ cuts }};
-const ARROWSEGS={{ arrow_segs }};
+const ARROWSEGS={{ arrow_segs }};   // legacy: belirteçler artık MARKERS'tan gelir
+const MARKERS={{ markers }};
+const MK={};for(const m of MARKERS){MK[m.seg]=m;}
+const MCLS={arrow:'mk-arrow',ring:'mk-ring',pulse:'mk-pulse',box:'mk-box',spotlight:'mk-spot',underline:'mk-under'};
 const FLASH_ON={{ 'true' if flash else 'false' }};
 const W=[...document.querySelectorAll('.cap .w')],CARDS=[...document.querySelectorAll('.card')];
 const HOOK=document.getElementById('hook'),CLOSE=document.getElementById('close'),BAR=document.getElementById('bar');
-const FLASH=document.getElementById('flash'),ARROW=document.getElementById('arrow');
+const FLASH=document.getElementById('flash'),MLAYER=document.getElementById('markers');
 const CTA=document.getElementById('cta');
-let ch=-1,ps=null,ic=0;
+let ch=-1,ps=null,ic=0,mkSeg=-999;
 for(const w of W){const sg=+w.dataset.seg;if(sg!==ps||ic===CHUNK){ch++;ic=0;ps=sg;}w.dataset.chunk=ch;ic++;}
 window.__seek=function(tms){
   const t=tms/1000,lead=t+LEAD;let seg=0,chk=-1;
@@ -66,8 +95,9 @@ window.__seek=function(tms){
   HOOK.classList.toggle('on',seg===0);CLOSE.classList.toggle('on',seg===LAST);
   for(const c of CARDS){const s=+c.dataset.s,e=+c.dataset.e;c.classList.toggle('on',t>=s&&t<e);}
   BAR.style.width=Math.min(100,(t/DUR)*100)+'%';
-  const showA=ARROWSEGS.includes(seg);ARROW.classList.toggle('on',showA);
-  if(showA)ARROW.style.transform='translateY('+(Math.sin(t*8)*22)+'px)';
+  const m=MK[seg];
+  if(m){if(seg!==mkSeg){MLAYER.innerHTML='<div class="mk '+(MCLS[m.type]||'mk-arrow')+'" style="left:'+(m.x*1080)+'px;top:'+(m.y*1920)+'px"></div>';mkSeg=seg;}}
+  else if(mkSeg!==-999){MLAYER.innerHTML='';mkSeg=-999;}
   let op=0;if(FLASH_ON){for(const ct of CUTS){const dt=t-ct;if(dt>=0&&dt<0.12)op=Math.max(op,1-dt/0.12);}}
   FLASH.style.opacity=op*0.85;
   if(CTA){CTA.classList.toggle('on', t >= DUR - CTA_S);}

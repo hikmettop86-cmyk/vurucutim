@@ -30,6 +30,7 @@ def build_reel_overlay_html(
     arrow_color: str = "#ff2d2d", arrow_frequency: str = "beats",
     flash: bool = True, handle: str = "", cta_text: str = "",
     font: str = "Montserrat",
+    markers: list | None = None,
     templates_dir: Path | None = None,
 ) -> str:
     if layout not in ("classic", "lower_left", "top_heavy"):
@@ -66,6 +67,7 @@ def build_reel_overlay_html(
         words=words, cards=cards, duration_s=f"{timeline.duration_s:.3f}",
         last_seg=last_seg, cuts=json.dumps(cuts),
         arrow_segs=json.dumps(arrow_segs), flash=flash,
+        markers=json.dumps(markers or []),
     )
 
 

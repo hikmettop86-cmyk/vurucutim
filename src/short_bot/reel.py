@@ -12,8 +12,11 @@ from pathlib import Path
 from typing import Callable
 
 from short_bot.audio_probe import probe_duration_s as _probe
+from short_bot.footage_matcher import SubjectPos
+from short_bot.footage_matcher import locate_subject as _locate
 from short_bot.footage_matcher import match_beat_clip as _match
 from short_bot.reel_assembler import assemble_reel as _assemble
+from short_bot.reel_markers import _marker_worthy_segs, build_markers
 from short_bot.reel_models import build_reel_timeline
 from short_bot.reel_narration import write_reel_narration as _write_narr
 from short_bot.reel_render import render_reel_overlay_frames as _render
@@ -40,6 +43,7 @@ class ReelDeps:
     probe_duration_s: Callable = _probe
     transcribe_words: Callable = _transcribe
     match_beat_clip: Callable = _match
+    locate_subject: Callable = _locate
     render_reel_overlay_frames: Callable = _render
     assemble_reel: Callable = _assemble
 
@@ -119,12 +123,17 @@ def produce_reel_video(
     timeline = build_reel_timeline(narration, words, duration_s=duration_s)
     log.info(f"  reel: ses {duration_s:.1f}s, {len(timeline.words)} kelime")
 
-    # 5) Beat başına footage
+    # 5) Beat başına footage (+ belirteç-uygun segmentlerde nesne konumu)
     clips_cache = work_dir / "clips"
     clip_paths: list[Path] = []
+    seg_positions: list[SubjectPos] = []
     _first_q = next((q for q in timeline.seg_queries if q), "abstract background")
     _last_q = next((q for q in reversed(timeline.seg_queries) if q), _first_q)
     _topic_q = (topic.split(",")[0].strip()[:40] or "nature")
+    # Belirteç-uygun segmentleri ÖNCE hesapla → yalnız onlarda vision konum çağır
+    # (hook/close ve 'off'/kapalı durumda gereksiz vision maliyeti yok).
+    worthy = (set(_marker_worthy_segs(len(timeline.seg_queries), reel.arrow_frequency))
+              if reel.arrows_enabled else set())
     for si, query in enumerate(timeline.seg_queries):
         if query is None:
             # hook → ilk beat'in görüntüsü, close → son beat'in görüntüsü
@@ -135,6 +144,17 @@ def produce_reel_video(
         if clip is None:
             raise RuntimeError(f"reel: '{query}' için footage bulunamadı (segment {si}).")
         clip_paths.append(clip)
+        if si in worthy:
+            pos = d.locate_subject(clip, query, vision_call=vision_call,
+                                   ffmpeg_path=ffmpeg_path)
+        else:
+            pos = SubjectPos(found=False)
+        seg_positions.append(pos)
+
+    # Belirteçler: nesne konumuna göre per-segment (kapalıysa boş → arrow_frequency='off')
+    markers = (build_markers(seg_positions, marker_kit=profile.marker_kit,
+                             frequency=reel.arrow_frequency, seed=seed)
+               if reel.arrows_enabled else [])
 
     # 6) Overlay render
     frames_dir = work_dir / "frames"
@@ -146,6 +166,7 @@ def produce_reel_video(
         flash=("flash" in profile.transitions), handle=channel.handle,
         cta_text=bits.cta_text,
         font=reel.font,
+        markers=markers,
     )
 
     # 7) Montaj
