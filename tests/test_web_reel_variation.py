@@ -51,7 +51,8 @@ def _form(**over):
 
 
 def test_edit_page_shows_variation_fields(app):
-    body = app.test_client().get("/channels/test-reel/edit").data.decode("utf-8")
+    # Reel kanalları artık reel-özel düzenleme sayfasını kullanır (/edit → /edit-reel).
+    body = app.test_client().get("/channels/test-reel/edit-reel").data.decode("utf-8")
     assert 'name="reel_layout"' in body
     assert 'name="reel_hook_angle_vary"' in body
 

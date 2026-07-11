@@ -51,7 +51,8 @@ def _form(**over):
 
 
 def test_edit_shows_subscribe_fields(app):
-    body = app.test_client().get("/channels/test-reel/edit").data.decode("utf-8")
+    # Reel kanalları artık reel-özel düzenleme sayfasını kullanır (/edit → /edit-reel).
+    body = app.test_client().get("/channels/test-reel/edit-reel").data.decode("utf-8")
     assert 'name="reel_series_enabled"' in body
     assert 'name="reel_series_title"' in body
     assert 'name="reel_cta_enabled"' in body
