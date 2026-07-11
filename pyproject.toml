@@ -41,10 +41,12 @@ dev = [
     "pytest-cov>=4.1",
     "pytest-mock>=3.12",
 ]
-voice = [
-    "whisperx>=3.1",
-]
+# Kelime-seviyesi karaoke senkronu (reel + voiced). whisperx yerine faster-whisper
+# kullanılıyor; 'voice' geriye-uyumluluk için aynı bağımlılığa yönlendirildi.
 whisper = [
+    "faster-whisper>=1.0",
+]
+voice = [
     "faster-whisper>=1.0",
 ]
 

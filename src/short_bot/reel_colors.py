@@ -33,8 +33,17 @@ def luminance(hex_str: str) -> float:
 
 
 def contrast_text(bg_hex: str) -> str:
-    """Zemine göre okunur yazı rengi: koyu zemin→beyaz, açık zemin→koyu."""
-    return "#ffffff" if luminance(bg_hex) < 0.4 else "#111111"
+    """Zemine göre en okunur yazı rengi (beyaz vs koyu) — WCAG kontrast oranıyla.
+
+    Sabit luminans eşiği yerine, beyaz ve koyu (#111) yazının gerçek kontrast
+    oranını karşılaştırıp yükseğini seçer. Kesişim ~0.19 luminans; böylece
+    orta-ton accent'lerde (ör. teal #14b8a6) koyu yazı doğru seçilir.
+    """
+    lum = luminance(bg_hex)
+    dark_lum = luminance("#111111")
+    white_ratio = (1.0 + 0.05) / (lum + 0.05)
+    dark_ratio = (lum + 0.05) / (dark_lum + 0.05)
+    return "#ffffff" if white_ratio >= dark_ratio else "#111111"
 
 
 def ensure_bright(hex_str: str, keep_lum: float = 0.4, target_lum: float = 0.55) -> str:

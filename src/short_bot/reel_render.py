@@ -81,7 +81,14 @@ def render_reel_overlay_frames(
     with sync_playwright() as p:
         b = getattr(p, browser).launch()
         pg = b.new_page(viewport={"width": WIDTH, "height": HEIGHT}, device_scale_factor=1)
-        pg.set_content(html, wait_until="networkidle")
+        # Font @import ağ isteği yaptığı için networkidle'ı sınırla: yavaş/erişilemez
+        # ağda bekleme render'ı ÇÖKERTMESİN — içerik yine yüklü, font sistem
+        # fontuna düşer (kozmetik). 8sn yeterli, sonra devam.
+        try:
+            pg.set_content(html, wait_until="networkidle", timeout=8000)
+        except Exception:
+            pass  # DOM zaten set edildi; font yüklenemedIyse fallback font kullanılır
+
         for i in range(total):
             pg.evaluate("(t)=>window.__seek(t)", int(i / fps * 1000))
             pg.screenshot(path=str(out_dir / f"f_{i:05d}.png"), omit_background=True)
