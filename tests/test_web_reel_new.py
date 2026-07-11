@@ -255,13 +255,33 @@ def test_reel_wizard_chip_click_uses_key_only(tmp_path):
     assert "okyanus devleri" in body
 
 
-def test_niche_wizard_has_find_button(tmp_path):
+def test_niche_wizard_has_both_finders_and_langs(tmp_path):
     c = _client(tmp_path)
     body = c.get("/channels/new-reel").data.decode("utf-8")
-    assert "Niş Bul" in body
+    assert "NexLev Niş Bulucu" in body
+    assert "AI Niş Bulucu" in body
     assert 'hx-post="/channels/new-reel/find-niches"' in body
     assert 'id="niche-results"' in body
     assert "reelPickNiche" in body
+    # çok dilli dropdown
+    for code in ('value="de"', 'value="es"', 'value="fr"'):
+        assert code in body
+
+
+def test_niche_find_ai_mode_uses_find_niches_ai(tmp_path):
+    c = _client(tmp_path)
+    with patch("short_bot.web.routes.reel_new.threading.Thread", _SyncThread), \
+         patch("short_bot.web.routes.reel_new.find_niches_ai",
+               return_value=_NICHE_SAMPLE) as ai_mock, \
+         patch("short_bot.web.routes.reel_new.find_niches") as nex_mock:
+        r1 = c.post("/channels/new-reel/find-niches",
+                    data={"topic": "bilim", "mode": "ai", "language": "de"})
+        job_id = re.search(r"niche-status/([0-9a-f]+)", r1.data.decode("utf-8")).group(1)
+        r2 = c.get(f"/channels/new-reel/niche-status/{job_id}")
+    assert ai_mock.called
+    assert not nex_mock.called
+    assert ai_mock.call_args.kwargs.get("language") == "de"
+    assert "İnsan Vücudu" in r2.data.decode("utf-8")
 
 
 def test_niche_find_start_returns_running(tmp_path):

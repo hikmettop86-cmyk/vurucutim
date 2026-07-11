@@ -34,14 +34,24 @@
                   class="px-4 py-1.5 rounded-full border text-sm">{{ p.label }}</button>
           {% endfor %}
         </div>
-        <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center justify-between mb-2 gap-2 flex-wrap">
           <label class="block text-xs text-claude-muted uppercase tracking-wide">Konu tohumu (LLM bu sınırda üretir)</label>
-          <button type="button"
-                  hx-post="/channels/new-reel/find-niches"
-                  hx-include="[name='topic']"
-                  hx-target="#niche-results" hx-swap="innerHTML"
-                  class="text-xs bg-claude-surface border border-claude-accent text-claude-accent hover:bg-claude-accent-soft px-3 py-1 rounded-lg"
-                  title="Claude + NexLev verisiyle kârlı niş önerileri getirir (~1-2 dk)">🔎 Niş Bul (NexLev)</button>
+          <div class="flex gap-2">
+            <button type="button"
+                    hx-post="/channels/new-reel/find-niches"
+                    hx-include="[name='topic'],[name='language']"
+                    hx-vals='{"mode":"nexlev"}'
+                    hx-target="#niche-results" hx-swap="innerHTML"
+                    class="text-xs bg-claude-surface border border-claude-accent text-claude-accent hover:bg-claude-accent-soft px-3 py-1 rounded-lg"
+                    title="Claude CLI + NexLev canlı verisiyle kârlı niş önerileri (~1-2 dk)">🔎 NexLev Niş Bulucu</button>
+            <button type="button"
+                    hx-post="/channels/new-reel/find-niches"
+                    hx-include="[name='topic'],[name='language']"
+                    hx-vals='{"mode":"ai"}'
+                    hx-target="#niche-results" hx-swap="innerHTML"
+                    class="text-xs bg-claude-surface border border-claude-border text-claude-text hover:bg-claude-surface-alt px-3 py-1 rounded-lg"
+                    title="Claude aboneliği varsa Opus, yoksa OpenRouter ile AI niş fikirleri (~1 dk)">🤖 AI Niş Bulucu</button>
+          </div>
         </div>
         <textarea name="topic" x-model="topic" rows="2"
                   class="w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm"
@@ -59,6 +69,9 @@
             <select name="language" class="w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
               <option value="tr">Türkçe</option>
               <option value="en">English</option>
+              <option value="de">Deutsch</option>
+              <option value="es">Español</option>
+              <option value="fr">Français</option>
             </select>
           </div>
         </div>

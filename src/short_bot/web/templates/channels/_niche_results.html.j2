@@ -1,3 +1,4 @@
+{% set src = 'AI' if mode == 'ai' else 'NexLev' %}
 {% if status == "running" %}
 {# Kendi kendini yenileyen poll: 4sn sonra durum endpoint'ini çekip yerine geçer.
    İş bitince 'done'/'error' render edilir (hx-trigger yok → poll durur). #}
@@ -5,16 +6,20 @@
      hx-trigger="load delay:4s" hx-swap="outerHTML"
      class="mt-3 p-4 rounded-lg bg-claude-surface-alt text-sm text-claude-muted flex items-center gap-2">
   <span class="inline-block w-4 h-4 border-2 border-claude-accent border-t-transparent rounded-full animate-spin"></span>
-  NexLev verisiyle niş aranıyor… (~1-2 dk sürebilir)
+  {{ src }} ile niş aranıyor… (~1-2 dk sürebilir)
 </div>
 {% elif status == "error" %}
 <div class="mt-3 p-4 rounded-lg bg-red-100 text-red-800 text-sm">
   Niş bulunamadı: {{ error }}
-  <div class="text-xs mt-1 text-red-600">İpucu: Claude CLI'ye NexLev MCP bağlı olmalı (<code>claude mcp list</code>).</div>
+  {% if mode == 'ai' %}
+  <div class="text-xs mt-1 text-red-600">İpucu: Claude aboneliği yoksa OpenRouter anahtarı gerekir (Ayarlar).</div>
+  {% else %}
+  <div class="text-xs mt-1 text-red-600">İpucu: Claude CLI'ye NexLev MCP bağlı olmalı (<code>claude mcp list</code>). AI Niş Bulucu'yu da deneyebilirsin.</div>
+  {% endif %}
 </div>
 {% else %}
 <div class="mt-3 space-y-2">
-  <div class="text-xs text-claude-muted uppercase tracking-wide">NexLev verisiyle öneriler — birine tıkla</div>
+  <div class="text-xs text-claude-muted uppercase tracking-wide">{{ src }} önerileri — birine tıkla</div>
   {% for n in niches %}
   <div class="p-3 rounded-lg border border-claude-border bg-white">
     <div class="flex items-start justify-between gap-3">
