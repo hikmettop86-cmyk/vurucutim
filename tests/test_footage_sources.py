@@ -1,0 +1,43 @@
+from pathlib import Path
+from short_bot.footage_sources import (FootageCandidate, PexelsSource,
+                                       PixabaySource)
+
+
+def test_pixabay_parses(monkeypatch):
+    def fake_get(url, timeout=None, **k):
+        class R:
+            status_code = 200
+            def json(self):
+                return {"hits": [{"id": 7, "duration": 12,
+                    "videos": {"large": {"url": "http://v/large.mp4", "width": 1920,
+                                         "height": 1080, "thumbnail": "http://t.jpg"}}}]}
+        return R()
+    import short_bot.footage_sources as fs
+    monkeypatch.setattr(fs.requests, "get", fake_get)
+    src = PixabaySource(api_key="k")
+    cands = src.search("kedi", max_results=15, orientation="portrait")
+    assert len(cands) == 1
+    assert cands[0].url == "http://v/large.mp4"
+    assert cands[0].duration_s == 12
+    assert cands[0].image == "http://t.jpg"
+    assert cands[0].source == "pixabay" and cands[0].ident == "7"
+
+
+def test_pixabay_empty_and_unavailable(monkeypatch):
+    import short_bot.footage_sources as fs
+    monkeypatch.setattr(fs.requests, "get",
+                        lambda *a, **k: type("R", (), {"status_code": 200,
+                        "json": lambda s: {"hits": []}})())
+    assert PixabaySource(api_key="k").search("x", max_results=5, orientation="portrait") == []
+    assert PixabaySource(api_key="").available() is False
+
+
+def test_pexels_source_wraps(monkeypatch):
+    import short_bot.footage_sources as fs
+    from short_bot.pexels import PexelsCandidate
+    monkeypatch.setattr(fs, "_pexels_search",
+        lambda q, key, **k: [PexelsCandidate(id=1, url="http://p.mp4", duration_s=8, image="http://pi.jpg")])
+    src = PexelsSource(api_key="k")
+    cands = src.search("x", max_results=5, orientation="portrait")
+    assert cands[0].url == "http://p.mp4" and cands[0].source == "pexels"
+    assert PexelsSource(api_key="").available() is False
