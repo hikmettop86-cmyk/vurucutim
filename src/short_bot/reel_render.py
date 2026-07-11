@@ -6,6 +6,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from short_bot.reel_colors import contrast_text, ensure_bright
 from short_bot.reel_models import ReelTimeline
 
 WIDTH, HEIGHT = 1080, 1920
@@ -44,6 +45,8 @@ def build_reel_overlay_html(
     return tpl.render(
         layout=layout,
         highlight_color=highlight_color, arrow_color=arrow_color,
+        chip_text=contrast_text(highlight_color),
+        hot_color=ensure_bright(highlight_color),
         hook=timeline.hook, close=timeline.close, handle=handle,
         cta_text=cta_text,
         words=words, cards=cards, duration_s=f"{timeline.duration_s:.3f}",

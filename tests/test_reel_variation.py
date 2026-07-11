@@ -56,3 +56,18 @@ def test_transitions_subset():
     fixed = _Ch(transition_vary=False, transitions_flash=True,
                 transitions_whoosh=False, transitions_zoom=True)
     assert set(build_variation_profile(fixed, 1).transitions) == {"flash", "zoom"}
+
+
+def test_accent_variants_excludes_dark_primary():
+    from short_bot.reel_variation import _accent_variants
+
+    class _R:
+        highlight_color = "#38bdf8"
+
+    class _C:
+        reel = _R()
+        colors = {"accent": "#2de2e6", "primary": "#0a2540"}
+
+    variants = _accent_variants(_C())
+    assert "#0a2540" not in variants           # koyu primary elendi
+    assert "#38bdf8" in variants

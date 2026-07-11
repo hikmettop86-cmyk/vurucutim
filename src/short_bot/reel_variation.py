@@ -42,13 +42,17 @@ def _idx(seed: int, salt: str, n: int) -> int:
 
 
 def _accent_variants(channel) -> tuple[str, ...]:
+    from short_bot.reel_colors import ensure_bright, luminance
     reel = channel.reel
     colors = getattr(channel, "colors", {}) or {}
-    out = [reel.highlight_color]
-    for c in (colors.get("accent"), colors.get("primary")):
-        if c and c not in out:
+    cands = [reel.highlight_color, colors.get("accent"), colors.get("primary")]
+    out: list[str] = []
+    for c in cands:
+        if c and c not in out and luminance(c) >= 0.30:
             out.append(c)
-    return tuple(out) or (reel.highlight_color,)
+    if not out:
+        out = [ensure_bright(reel.highlight_color)]
+    return tuple(out)
 
 
 def build_variation_profile(channel, seed: int) -> VariationProfile:
