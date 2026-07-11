@@ -41,3 +41,23 @@ def test_pexels_source_wraps(monkeypatch):
     cands = src.search("x", max_results=5, orientation="portrait")
     assert cands[0].url == "http://p.mp4" and cands[0].source == "pexels"
     assert PexelsSource(api_key="").available() is False
+
+
+def test_build_footage_sources_priority_and_gating():
+    from short_bot.footage_sources import build_footage_sources
+    # her iki anahtar var → öncelik sırası korunur
+    srcs = build_footage_sources(["pixabay", "pexels"], pexels_key="p", pixabay_key="x")
+    assert [s.name for s in srcs] == ["pixabay", "pexels"]
+    # sadece pexels anahtarı → pixabay/storyblocks elenir
+    srcs = build_footage_sources(["storyblocks", "pixabay", "pexels"],
+                                 pexels_key="p", pixabay_key="")
+    assert [s.name for s in srcs] == ["pexels"]
+
+
+def test_build_footage_sources_fallback():
+    from short_bot.footage_sources import build_footage_sources
+    # boş öncelik → pexels fallback
+    assert [s.name for s in build_footage_sources([], pexels_key="p")] == ["pexels"]
+    # hepsi kullanılamaz (anahtar yok) → yine [PexelsSource] fallback (tek eleman)
+    out = build_footage_sources(["pixabay"], pexels_key="", pixabay_key="")
+    assert len(out) == 1 and out[0].name == "pexels"

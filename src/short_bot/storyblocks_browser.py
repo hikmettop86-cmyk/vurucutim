@@ -69,25 +69,31 @@ def _ensure_context(session_path):
         return _ctx
     from playwright.sync_api import sync_playwright
 
-    _pw = sync_playwright().start()
-    anti_detect = ["--disable-blink-features=AutomationControlled"]
-    ignore_defaults = ["--enable-automation"]
+    # Kısmi başlatma (ör. bozuk storage_state → new_context patlar) süreç sızıntısı
+    # bırakmasın: hata olursa close() ile _pw/_browser'ı kapat + tekili sıfırla.
     try:
-        _browser = _pw.chromium.launch(
-            channel="chrome", headless=True,
-            args=anti_detect, ignore_default_args=ignore_defaults)
+        _pw = sync_playwright().start()
+        anti_detect = ["--disable-blink-features=AutomationControlled"]
+        ignore_defaults = ["--enable-automation"]
+        try:
+            _browser = _pw.chromium.launch(
+                channel="chrome", headless=True,
+                args=anti_detect, ignore_default_args=ignore_defaults)
+        except Exception:
+            _browser = _pw.chromium.launch(
+                headless=True, args=anti_detect, ignore_default_args=ignore_defaults)
+        _ctx = _browser.new_context(
+            storage_state=str(session_path),
+            user_agent=_USER_AGENT,
+            accept_downloads=True,
+        )
+        # navigator.webdriver'ı gizle (faceless-2 stealth init script'i).
+        _ctx.add_init_script(
+            "Object.defineProperty(navigator,'webdriver',{get:()=>undefined})")
+        return _ctx
     except Exception:
-        _browser = _pw.chromium.launch(
-            headless=True, args=anti_detect, ignore_default_args=ignore_defaults)
-    _ctx = _browser.new_context(
-        storage_state=str(session_path),
-        user_agent=_USER_AGENT,
-        accept_downloads=True,
-    )
-    # navigator.webdriver'ı gizle (faceless-2 stealth init script'i).
-    _ctx.add_init_script(
-        "Object.defineProperty(navigator,'webdriver',{get:()=>undefined})")
-    return _ctx
+        close()   # kısmi _pw/_browser'ı kapat, tekili sıfırla → sonraki çağrı temiz kurar
+        raise
 
 
 def with_page(session_path, fn):
@@ -100,8 +106,14 @@ def with_page(session_path, fn):
         return None
     with _sema:
         with _lock:
-            ctx = _ensure_context(session_path)
-            page = ctx.new_page()
+            try:
+                ctx = _ensure_context(session_path)
+                page = ctx.new_page()
+            except Exception:
+                # başlatma / ölü context (tarayıcı çökmüş) → tekili sıfırla ki
+                # bir sonraki çağrı taze bir tarayıcı kursun (kalıcı devre-dışı olmasın)
+                close()
+                raise
             try:
                 return fn(page)
             finally:

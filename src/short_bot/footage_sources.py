@@ -67,15 +67,20 @@ class PixabaySource:
             return []
         out = []
         for h in hits:
-            vids = h.get("videos", {}) or {}
-            vd = vids.get("large") or vids.get("medium") or vids.get("small") or {}
-            url = vd.get("url", "")
-            if not url:
+            try:  # bozuk tek bir hit tüm sayfayı düşürmesin
+                if not isinstance(h, dict):
+                    continue
+                vids = h.get("videos", {}) or {}
+                vd = vids.get("large") or vids.get("medium") or vids.get("small") or {}
+                url = vd.get("url", "")
+                if not url:
+                    continue
+                out.append(FootageCandidate(
+                    url=url, duration_s=int(h.get("duration", 0) or 0),
+                    image=str(vd.get("thumbnail", "") or ""),
+                    source="pixabay", ident=str(h.get("id", ""))))
+            except Exception:
                 continue
-            out.append(FootageCandidate(
-                url=url, duration_s=int(h.get("duration", 0) or 0),
-                image=str(vd.get("thumbnail", "") or ""),
-                source="pixabay", ident=str(h.get("id", ""))))
         return out
     def download(self, cand, cache_dir):
         return _pexels_download(cand.url, cache_dir)   # düz HTTP GET; URL agnostik
