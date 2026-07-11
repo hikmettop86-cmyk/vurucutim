@@ -164,5 +164,23 @@ def create():
     yaml_path = channels_dir / f"{slug}.yaml"
     save_channel(yaml_path, cfg)
 
-    flash(f"'{name}' reel kanalı oluşturuldu.", "ok")
+    if request.form.get("produce_now") == "1":
+        try:
+            channel = load_channel(yaml_path)
+            launch_pipeline(
+                channel=channel,
+                settings=settings,
+                db_path=current_app.config["SHORTBOT_DB_PATH"],
+                music_root=current_app.config["SHORTBOT_MUSIC_ROOT"],
+                templates_dir=templates_dir,
+                cache_dir=current_app.config["SHORTBOT_CACHE_DIR"],
+                lock_dir=current_app.config["SHORTBOT_LOCK_DIR"],
+                logs_dir=current_app.config["SHORTBOT_LOGS_DIR"],
+                trigger="manual",
+            )
+            flash(f"'{name}' oluşturuldu — ilk video arka planda üretiliyor.", "ok")
+        except Exception as e:
+            flash(f"'{name}' oluşturuldu ama üretim başlatılamadı: {e}", "error")
+    else:
+        flash(f"'{name}' reel kanalı oluşturuldu.", "ok")
     return redirect(url_for("channel_edit.edit", slug=slug))

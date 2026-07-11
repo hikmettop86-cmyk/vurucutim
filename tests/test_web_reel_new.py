@@ -137,3 +137,39 @@ def test_reel_post_slug_collision_gets_suffix(tmp_path):
     ch = tmp_path / "config" / "channels"
     assert (ch / "balina-dunyasi.yaml").exists()
     assert (ch / "balina-dunyasi-2.yaml").exists()
+
+
+def test_reel_post_produce_now_launches_pipeline(tmp_path):
+    c = _client(tmp_path)
+    calls = []
+    def _fake_launch(**kwargs):
+        calls.append(kwargs)
+        return None
+    with patch("short_bot.web.routes.reel_new.generate_dna", return_value=_fake_dna()), \
+         patch("short_bot.web.routes.reel_new.launch_pipeline", _fake_launch):
+        c.post("/channels/new-reel", data={
+            "name": "Hemen Üret", "language": "tr",
+            "topic": "bilim ve doğa hakkında ilginç bilgiler",
+            "voice_id": "Q2IX97JeHBY3vNGzgM5s",
+            "highlight_color": "#38bdf8",
+            "produce_now": "1",
+        })
+    assert len(calls) == 1
+    assert calls[0]["channel"].slug == "hemen-uret"
+    assert calls[0]["trigger"] == "manual"
+
+
+def test_reel_post_no_produce_now_does_not_launch(tmp_path):
+    c = _client(tmp_path)
+    calls = []
+    with patch("short_bot.web.routes.reel_new.generate_dna", return_value=_fake_dna()), \
+         patch("short_bot.web.routes.reel_new.launch_pipeline",
+               lambda **k: calls.append(k)):
+        c.post("/channels/new-reel", data={
+            "name": "Sonra Üret", "language": "tr",
+            "topic": "tarih hakkında ilginç bilgiler",
+            "voice_id": "Q2IX97JeHBY3vNGzgM5s",
+            "highlight_color": "#38bdf8",
+            "produce_now": "0",
+        })
+    assert calls == []
