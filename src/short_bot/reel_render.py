@@ -100,6 +100,10 @@ def render_reel_overlay_frames(
 
         for i in range(total):
             pg.evaluate("(t)=>window.__seek(t)", int(i / fps * 1000))
-            pg.screenshot(path=str(out_dir / f"f_{i:05d}.png"), omit_background=True)
+            # animations="disabled": marker CSS animasyonları duvar-saatiyle koşup
+            # deterministikliği bozmasın (aynı seed → aynı kareler). Belirteçler
+            # yerinde/görünür kalır; geçiş efektleri JS/seek güdümlü, etkilenmez.
+            pg.screenshot(path=str(out_dir / f"f_{i:05d}.png"),
+                          omit_background=True, animations="disabled")
         b.close()
     return total

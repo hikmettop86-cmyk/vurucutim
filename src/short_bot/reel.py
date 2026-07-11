@@ -173,7 +173,9 @@ def produce_reel_video(
     # 7) Montaj
     cut_times = [timeline.seg_spans[i][0] for i in range(1, len(timeline.seg_spans))]
     sfx_dir = Path("assets/sfx")
-    pool = discover_sfx(sfx_dir) if ("whoosh" in profile.transitions) else []
+    # SFX kanal bayrağıyla açık/kapalı (per-video varyasyon setine bağlı DEĞİL) —
+    # açıksa HER video havuzdan çeşitli SFX alır (kullanıcı: "aynı sfx" şikâyeti).
+    pool = discover_sfx(sfx_dir) if reel.transitions_whoosh else []
     sfx_at_cut = pick_sfx_per_cut(pool, seed, len(cut_times))
     d.assemble_reel(
         clip_paths=clip_paths, seg_spans=timeline.seg_spans, frames_dir=frames_dir,
