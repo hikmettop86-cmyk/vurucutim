@@ -1,0 +1,36 @@
+{% if status == "running" %}
+{# Kendi kendini yenileyen poll: 4sn sonra durum endpoint'ini çekip yerine geçer.
+   İş bitince 'done'/'error' render edilir (hx-trigger yok → poll durur). #}
+<div hx-get="/channels/new-reel/niche-status/{{ job_id }}"
+     hx-trigger="load delay:4s" hx-swap="outerHTML"
+     class="mt-3 p-4 rounded-lg bg-claude-surface-alt text-sm text-claude-muted flex items-center gap-2">
+  <span class="inline-block w-4 h-4 border-2 border-claude-accent border-t-transparent rounded-full animate-spin"></span>
+  NexLev verisiyle niş aranıyor… (~1-2 dk sürebilir)
+</div>
+{% elif status == "error" %}
+<div class="mt-3 p-4 rounded-lg bg-red-100 text-red-800 text-sm">
+  Niş bulunamadı: {{ error }}
+  <div class="text-xs mt-1 text-red-600">İpucu: Claude CLI'ye NexLev MCP bağlı olmalı (<code>claude mcp list</code>).</div>
+</div>
+{% else %}
+<div class="mt-3 space-y-2">
+  <div class="text-xs text-claude-muted uppercase tracking-wide">NexLev verisiyle öneriler — birine tıkla</div>
+  {% for n in niches %}
+  <div class="p-3 rounded-lg border border-claude-border bg-white">
+    <div class="flex items-start justify-between gap-3">
+      <div class="min-w-0">
+        <div class="font-semibold text-sm">{{ n.nis }}</div>
+        <div class="text-xs text-claude-muted mt-0.5">{{ n.neden }}</div>
+        <div class="text-xs text-claude-text mt-1 italic">"{{ n.konu_tohumu }}"</div>
+      </div>
+      {# data-* Jinja auto-escape ile güvenli (tırnak/Türkçe kırmaz);
+         onclick native → HTMX-swap edilen içerikte Alpine init'e bağımlı değil. #}
+      <button type="button"
+              data-topic="{{ n.konu_tohumu }}" data-name="{{ n.nis }}"
+              onclick="reelPickNiche(this)"
+              class="flex-none bg-claude-accent hover:bg-claude-accent-hover text-white text-xs px-3 py-1.5 rounded-lg">Kullan</button>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}

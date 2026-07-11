@@ -1,7 +1,26 @@
+import re
 from unittest.mock import patch
 
 from short_bot.web import create_app
 from short_bot.dna import DnaPalette, DnaFonts, DnaTone, DnaSpec
+
+
+class _SyncThread:
+    """threading.Thread yerine: target'ı start()'ta senkron çalıştırır (deterministik test)."""
+    def __init__(self, target=None, args=(), kwargs=None, daemon=None):
+        self._t, self._a, self._k = target, args, kwargs or {}
+
+    def start(self):
+        if self._t:
+            self._t(*self._a, **self._k)
+
+
+_NICHE_SAMPLE = [
+    {"nis": "İnsan Vücudu", "neden": "Stay Education outlier 31.",
+     "konu_tohumu": "Nefesini 60 saniye tutunca ne olur?"},
+    {"nis": "Savaş Tarihi", "neden": "The Art Of War 1.6M abone.",
+     "konu_tohumu": "Bu tankın gizli kusuru neydi?"},
+]
 
 
 def _client(tmp_path):
@@ -234,3 +253,56 @@ def test_reel_wizard_chip_click_uses_key_only(tmp_path):
     # Topic verisi ayrı JSON island'da:
     assert 'id="niche-data"' in body
     assert "okyanus devleri" in body
+
+
+def test_niche_wizard_has_find_button(tmp_path):
+    c = _client(tmp_path)
+    body = c.get("/channels/new-reel").data.decode("utf-8")
+    assert "Niş Bul" in body
+    assert 'hx-post="/channels/new-reel/find-niches"' in body
+    assert 'id="niche-results"' in body
+    assert "reelPickNiche" in body
+
+
+def test_niche_find_start_returns_running(tmp_path):
+    c = _client(tmp_path)
+    with patch("short_bot.web.routes.reel_new.threading.Thread", _SyncThread), \
+         patch("short_bot.web.routes.reel_new.find_niches", return_value=_NICHE_SAMPLE):
+        r = c.post("/channels/new-reel/find-niches", data={"topic": "bilim gerçekleri"})
+    assert r.status_code == 200
+    body = r.data.decode("utf-8")
+    assert "aranıyor" in body
+    assert "/channels/new-reel/niche-status/" in body
+
+
+def test_niche_status_done_renders_cards(tmp_path):
+    c = _client(tmp_path)
+    with patch("short_bot.web.routes.reel_new.threading.Thread", _SyncThread), \
+         patch("short_bot.web.routes.reel_new.find_niches", return_value=_NICHE_SAMPLE):
+        r1 = c.post("/channels/new-reel/find-niches", data={"topic": "bilim"})
+        job_id = re.search(r"niche-status/([0-9a-f]+)", r1.data.decode("utf-8")).group(1)
+        r2 = c.get(f"/channels/new-reel/niche-status/{job_id}")
+    body = r2.data.decode("utf-8")
+    assert "İnsan Vücudu" in body
+    assert "Nefesini 60 saniye" in body
+    assert "reelPickNiche" in body
+
+
+def test_niche_status_unknown_job_shows_error(tmp_path):
+    c = _client(tmp_path)
+    r = c.get("/channels/new-reel/niche-status/deadbeef00")
+    assert r.status_code == 200
+    assert "bulunamadı" in r.data.decode("utf-8")
+
+
+def test_niche_find_error_surfaces_to_user(tmp_path):
+    c = _client(tmp_path)
+    with patch("short_bot.web.routes.reel_new.threading.Thread", _SyncThread), \
+         patch("short_bot.web.routes.reel_new.find_niches",
+               side_effect=RuntimeError("claude CLI bulunamadı: claude")):
+        r1 = c.post("/channels/new-reel/find-niches", data={"topic": "x"})
+        job_id = re.search(r"niche-status/([0-9a-f]+)", r1.data.decode("utf-8")).group(1)
+        r2 = c.get(f"/channels/new-reel/niche-status/{job_id}")
+    body = r2.data.decode("utf-8")
+    assert "Niş bulunamadı" in body
+    assert "claude CLI bulunamadı" in body

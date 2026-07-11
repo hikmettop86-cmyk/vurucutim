@@ -1,5 +1,7 @@
 import re
+import threading
 import unicodedata
+import uuid
 from pathlib import Path
 
 from flask import (Blueprint, current_app, flash, redirect,
@@ -11,6 +13,7 @@ from short_bot.config import (ChannelConfig, GeneratorConfig, ReelConfig,
 from short_bot.dna import build_css_override, generate_dna
 from short_bot.locale import RSS_LOCALES, SUPPORTED_LANGUAGES
 from short_bot.pexels import load_secrets as _load_secrets
+from short_bot.web.niche_finder import find_niches
 from short_bot.web.runs import launch_pipeline
 
 bp = Blueprint("reel_new", __name__)
@@ -200,3 +203,53 @@ def create():
     else:
         flash(f"'{name}' reel kanalı oluşturuldu.", "success")
     return redirect(url_for("channel_edit.edit", slug=slug))
+
+
+# ── NexLev-destekli niş bulucu (arka plan iş + HTMX poll) ────────────────────
+# Tek kullanıcılı masaüstü panel → bellek içi iş kaydı yeterli.
+_niche_jobs: dict = {}
+_niche_jobs_lock = threading.Lock()
+
+
+def _set_job(job_id: str, **fields) -> None:
+    with _niche_jobs_lock:
+        _niche_jobs.setdefault(job_id, {}).update(fields)
+
+
+def _get_job(job_id: str):
+    with _niche_jobs_lock:
+        job = _niche_jobs.get(job_id)
+        return dict(job) if job else None
+
+
+def _run_niche_job(job_id: str, query: str, claude_path: str) -> None:
+    try:
+        niches = find_niches(query, claude_path=claude_path)
+        _set_job(job_id, status="done", niches=niches)
+    except Exception as e:  # noqa: BLE001 — hata mesajı kullanıcıya gösterilir
+        _set_job(job_id, status="error", error=str(e))
+
+
+@bp.route("/channels/new-reel/find-niches", methods=["POST"])
+def find_niches_start():
+    query = (request.form.get("niche_query") or request.form.get("topic") or "").strip()
+    settings = current_app.config["SHORTBOT_SETTINGS"]
+    claude_path = getattr(settings, "claude_cli_path", "claude") or "claude"
+    job_id = uuid.uuid4().hex
+    _set_job(job_id, status="running", niches=None, error=None)
+    threading.Thread(target=_run_niche_job, args=(job_id, query, claude_path),
+                     daemon=True).start()
+    return render_template("channels/_niche_results.html.j2",
+                           job_id=job_id, status="running", niches=None, error=None)
+
+
+@bp.route("/channels/new-reel/niche-status/<job_id>")
+def find_niches_status(job_id):
+    job = _get_job(job_id)
+    if not job:
+        return render_template("channels/_niche_results.html.j2",
+                               job_id=job_id, status="error",
+                               niches=None, error="Niş arama işi bulunamadı.")
+    return render_template("channels/_niche_results.html.j2",
+                           job_id=job_id, status=job.get("status"),
+                           niches=job.get("niches"), error=job.get("error"))

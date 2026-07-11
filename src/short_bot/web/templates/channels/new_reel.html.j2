@@ -1,7 +1,9 @@
 {% extends "base.html.j2" %}
 {% block title %}Vurucu TİM — Reel Kanalı Oluştur{% endblock %}
 {% block content %}
-<div x-data="reelWizard()" class="max-w-5xl mx-auto">
+<div x-data="reelWizard()"
+     @niche-selected.window="topic = $event.detail.topic; if (!name) { name = $event.detail.name }; niche = ''"
+     class="max-w-5xl mx-auto">
   <div class="flex items-center gap-3 mb-1">
     <h1 class="font-serif text-3xl font-bold">Reel Kanalı Oluştur</h1>
     <span class="bg-claude-accent text-white text-xs font-semibold px-3 py-1 rounded-full">🎬 footage'lı ilginç bilgiler</span>
@@ -32,10 +34,19 @@
                   class="px-4 py-1.5 rounded-full border text-sm">{{ p.label }}</button>
           {% endfor %}
         </div>
-        <label class="block text-xs text-claude-muted uppercase tracking-wide mb-2">Konu tohumu (LLM bu sınırda üretir)</label>
+        <div class="flex items-center justify-between mb-2">
+          <label class="block text-xs text-claude-muted uppercase tracking-wide">Konu tohumu (LLM bu sınırda üretir)</label>
+          <button type="button"
+                  hx-post="/channels/new-reel/find-niches"
+                  hx-include="[name='topic']"
+                  hx-target="#niche-results" hx-swap="innerHTML"
+                  class="text-xs bg-claude-surface border border-claude-accent text-claude-accent hover:bg-claude-accent-soft px-3 py-1 rounded-lg"
+                  title="Claude + NexLev verisiyle kârlı niş önerileri getirir (~1-2 dk)">🔎 Niş Bul (NexLev)</button>
+        </div>
         <textarea name="topic" x-model="topic" rows="2"
                   class="w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm"
                   placeholder="ör. uzay, gezegenler, kara delikler ve evrenin sırları hakkında ilginç bilgiler"></textarea>
+        <div id="niche-results"></div>
         <div class="grid grid-cols-2 gap-4 mt-4">
           <div>
             <label class="block text-xs text-claude-muted uppercase tracking-wide mb-2">Kanal adı</label>
@@ -155,6 +166,14 @@
 
 <script id="niche-data" type="application/json">{{ niche_presets|tojson }}</script>
 <script>
+// NexLev niş kartındaki "Kullan" → sihirbaz Alpine köküne olay yollar.
+// Native onclick + window olayı: HTMX ile sonradan eklenen içerikte Alpine
+// init'e bağımlı değil (data-* Jinja auto-escape ile tırnak-güvenli).
+function reelPickNiche(btn) {
+  window.dispatchEvent(new CustomEvent('niche-selected', {
+    detail: { topic: btn.dataset.topic || '', name: btn.dataset.name || '' }
+  }));
+}
 function reelWizard() {
   return {
     niche: '', topic: '', name: '', voiceId: '', voicesError: '',
