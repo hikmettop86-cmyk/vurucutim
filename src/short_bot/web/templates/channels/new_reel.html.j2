@@ -1,0 +1,187 @@
+{% extends "base.html.j2" %}
+{% block title %}Vurucu TİM — Reel Kanalı Oluştur{% endblock %}
+{% block content %}
+<div x-data="reelWizard()" class="max-w-5xl mx-auto">
+  <div class="flex items-center gap-3 mb-1">
+    <h1 class="font-serif text-3xl font-bold">Reel Kanalı Oluştur</h1>
+    <span class="bg-claude-accent text-white text-xs font-semibold px-3 py-1 rounded-full">🎬 footage'lı ilginç bilgiler</span>
+  </div>
+  <p class="text-claude-muted mb-6">Niş'ini seç, kanalını dakikalar içinde kur — gerisini sistem halleder.</p>
+
+  {% if not pexels_key_set %}
+  <div class="mb-4 px-4 py-2 rounded-lg text-sm bg-yellow-100 text-yellow-800">
+    ⚠ Pexels API anahtarı tanımlı değil — reel footage indirilemez. Ayarlar'dan ekleyebilirsin.
+  </div>
+  {% endif %}
+
+  <form method="post" action="/channels/new-reel"
+        class="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 items-start">
+    <div class="space-y-5">
+
+      {# 1. Niş & Konu #}
+      <section class="bg-claude-surface border border-claude-border rounded-xl p-5">
+        <h2 class="font-semibold text-claude-accent mb-4 flex items-center gap-2">
+          <span class="bg-claude-accent text-white w-6 h-6 rounded-md inline-flex items-center justify-center text-sm">1</span>
+          Niş &amp; Konu
+        </h2>
+        <label class="block text-xs text-claude-muted uppercase tracking-wide mb-2">Hazır niş (birini seç ya da kendi konunu yaz)</label>
+        <div class="flex flex-wrap gap-2 mb-4">
+          {% for p in niche_presets %}
+          <button type="button" @click="pick('{{ p.key }}', {{ p.topic|tojson }})"
+                  :class="niche === '{{ p.key }}' ? 'bg-claude-accent text-white border-claude-accent' : 'bg-white text-claude-text border-claude-border'"
+                  class="px-4 py-1.5 rounded-full border text-sm">{{ p.label }}</button>
+          {% endfor %}
+        </div>
+        <label class="block text-xs text-claude-muted uppercase tracking-wide mb-2">Konu tohumu (LLM bu sınırda üretir)</label>
+        <textarea name="topic" x-model="topic" rows="2"
+                  class="w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm"
+                  placeholder="ör. uzay, gezegenler, kara delikler ve evrenin sırları hakkında ilginç bilgiler"></textarea>
+        <div class="grid grid-cols-2 gap-4 mt-4">
+          <div>
+            <label class="block text-xs text-claude-muted uppercase tracking-wide mb-2">Kanal adı</label>
+            <input type="text" name="name" x-model="name"
+                   class="w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm"
+                   placeholder="Evrenin Sırları">
+          </div>
+          <div>
+            <label class="block text-xs text-claude-muted uppercase tracking-wide mb-2">Dil</label>
+            <select name="language" class="w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+              <option value="tr">Türkçe</option>
+              <option value="en">English</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      {# 2. Ses & Marka #}
+      <section class="bg-claude-surface border border-claude-border rounded-xl p-5">
+        <h2 class="font-semibold text-claude-accent mb-4 flex items-center gap-2">
+          <span class="bg-claude-accent text-white w-6 h-6 rounded-md inline-flex items-center justify-center text-sm">2</span>
+          Ses &amp; Marka
+        </h2>
+        <label class="block text-xs text-claude-muted uppercase tracking-wide mb-2">Seslendirme (ai33)</label>
+        <input type="text" name="voice_id" list="ai33-voice-list" x-model="voiceId"
+               class="w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm"
+               placeholder="ses seç ya da voice_id yapıştır">
+        <datalist id="ai33-voice-list"></datalist>
+        <p class="text-xs text-red-600 mt-1" x-show="voicesError" x-text="voicesError"></p>
+        <label class="block text-xs text-claude-muted uppercase tracking-wide mb-2 mt-4">Marka rengi (altyazı vurgusu)</label>
+        <input type="hidden" name="highlight_color" x-model="highlight">
+        <div class="flex gap-3">
+          <template x-for="col in swatches" :key="col">
+            <button type="button" @click="highlight = col" :style="`background:${col}`"
+                    :class="highlight === col ? 'ring-2 ring-offset-2 ring-claude-text' : ''"
+                    class="w-10 h-10 rounded-lg border border-claude-border"></button>
+          </template>
+        </div>
+      </section>
+
+      {# 3. Format #}
+      <section class="bg-claude-surface border border-claude-border rounded-xl p-5">
+        <h2 class="font-semibold text-claude-accent mb-4 flex items-center gap-2">
+          <span class="bg-claude-accent text-white w-6 h-6 rounded-md inline-flex items-center justify-center text-sm">3</span>
+          Format <span class="text-xs text-claude-muted font-normal">(varsayılanlar hazır)</span>
+        </h2>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs text-claude-muted uppercase tracking-wide mb-2">Kesme temposu</label>
+            <select name="cut_pacing" class="w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+              <option value="auto">Otomatik (her video farklı)</option>
+              <option value="slow">Yavaş</option>
+              <option value="medium">Orta</option>
+              <option value="fast">Hızlı</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-claude-muted uppercase tracking-wide mb-2">Müzik</label>
+            <select name="music_mood" class="w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+              <option value="upbeat">Enerjik</option>
+              <option value="neutral">Nötr</option>
+              <option value="calm">Sakin</option>
+            </select>
+          </div>
+        </div>
+        <p class="text-xs text-claude-muted mt-3">Video süresi 25–45 sn, düzen otomatik. İnce ayarları sonra kanal düzenleme sayfasından yapabilirsin.</p>
+      </section>
+
+      {# 4. Varyasyon & Abone #}
+      <section class="bg-claude-surface border border-claude-border rounded-xl p-5">
+        <h2 class="font-semibold text-claude-accent mb-4 flex items-center gap-2">
+          <span class="bg-claude-accent text-white w-6 h-6 rounded-md inline-flex items-center justify-center text-sm">4</span>
+          Varyasyon &amp; Abone
+        </h2>
+        <div class="space-y-3 text-sm">
+          <label class="flex items-start justify-between gap-3">
+            <span>Her video farklı görünsün <small class="block text-claude-muted">layout/renk/geçiş otomatik değişir — otomasyon belli olmaz</small></span>
+            <input type="checkbox" name="variation_on" checked class="mt-1">
+          </label>
+          <label class="flex items-start justify-between gap-3">
+            <span>Abone kartı <small class="block text-claude-muted">video sonunda "ABONE OL" çağrısı</small></span>
+            <input type="checkbox" name="cta_enabled" checked class="mt-1">
+          </label>
+          <label class="flex items-start justify-between gap-3">
+            <span>Yorum sorusu <small class="block text-claude-muted">kapanışta "hangisi seni şaşırttı?" — yorum getirir</small></span>
+            <input type="checkbox" name="comment_question" checked class="mt-1">
+          </label>
+          <label class="flex items-start justify-between gap-3">
+            <span>Seri modu <small class="block text-claude-muted">numaralı seri + "sonraki bölüm" teaser'ı</small></span>
+            <input type="checkbox" name="series_enabled" class="mt-1">
+          </label>
+        </div>
+      </section>
+    </div>
+
+    {# Sağ önizleme + aksiyonlar #}
+    <aside class="lg:sticky lg:top-6 space-y-3">
+      <div class="bg-claude-surface border border-claude-border rounded-xl p-4 text-center">
+        <div class="text-xs text-claude-muted uppercase tracking-wide mb-3">Canlı önizleme</div>
+        <div class="mx-auto rounded-2xl overflow-hidden relative" style="width:200px;height:356px;background:linear-gradient(160deg,#0a2540,#04121f)">
+          <div class="absolute top-6 left-1/2 -translate-x-1/2 text-xs font-bold px-3 py-1 rounded"
+               :style="`background:${highlight};color:#04121f`" x-text="(name || 'KANAL').toUpperCase()"></div>
+          <div class="absolute left-0 right-0 px-3 font-black text-white text-lg" style="bottom:70px;text-shadow:0 2px 6px #000">
+            ışığı bile <span :style="`color:${highlight}`">yutar</span>
+          </div>
+          <div class="absolute left-0 right-0 text-xs text-slate-200" style="bottom:26px" x-text="'@' + slug()"></div>
+        </div>
+      </div>
+      <button type="submit" name="produce_now" value="0"
+              class="w-full bg-claude-accent hover:bg-claude-accent-hover text-white font-semibold py-3 rounded-lg">✨ Kanalı Oluştur</button>
+      <button type="submit" name="produce_now" value="1"
+              class="w-full bg-white border border-claude-border text-claude-text py-3 rounded-lg text-sm hover:bg-claude-surface-alt">Oluştur + İlk videoyu üret</button>
+      <p class="text-xs text-claude-muted text-center">Marka (ses, renk, stil) sabit kalır; içerik her videoda değişir.</p>
+    </aside>
+  </form>
+</div>
+
+<script>
+function reelWizard() {
+  return {
+    niche: '', topic: '', name: '', voiceId: '', voicesError: '',
+    highlight: '#38bdf8',
+    swatches: ['#8b5cf6', '#38bdf8', '#2de2e6', '#ffd400', '#ff5a5a', '#22c55e'],
+    pick(key, topic) { this.niche = key; this.topic = topic; },
+    slug() {
+      return (this.name || 'kanal').toLowerCase()
+        .normalize('NFKD').replace(/[̀-ͯ]/g, '')
+        .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'kanal';
+    },
+    async loadVoices() {
+      try {
+        const r = await fetch('/api/ai33/voices');
+        const data = await r.json();
+        if (data.error) { this.voicesError = data.error; return; }
+        const dl = document.getElementById('ai33-voice-list');
+        dl.innerHTML = '';
+        (data.voices || []).forEach(v => {
+          const opt = document.createElement('option');
+          opt.value = v.voice_id;
+          opt.label = [v.name, v.language].filter(Boolean).join(' · ') || v.voice_id;
+          dl.appendChild(opt);
+        });
+      } catch (e) { this.voicesError = 'Ses listesi yüklenemedi.'; }
+    },
+    init() { this.loadVoices(); }
+  };
+}
+</script>
+{% endblock %}
