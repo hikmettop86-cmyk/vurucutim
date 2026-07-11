@@ -51,3 +51,49 @@ def test_reel_wizard_get_renders_key_fields(tmp_path):
     # niş çipleri
     assert "Balinalar" in body
     assert "Uzay" in body
+
+
+def test_reel_post_writes_channel_yaml(tmp_path):
+    c = _client(tmp_path)
+    with patch("short_bot.web.routes.reel_new.generate_dna", return_value=_fake_dna()):
+        r = c.post("/channels/new-reel", data={
+            "name": "Evrenin Sırları", "language": "tr",
+            "topic": "uzay, gezegenler ve kara delikler hakkında ilginç bilgiler",
+            "voice_id": "Q2IX97JeHBY3vNGzgM5s",
+            "highlight_color": "#38bdf8",
+            "cut_pacing": "auto", "music_mood": "upbeat",
+            "variation_on": "on", "cta_enabled": "on",
+            "comment_question": "on",
+            "produce_now": "0",
+        })
+    assert r.status_code in (200, 302)
+    yaml_path = tmp_path / "config" / "channels" / "evrenin-sirlari.yaml"
+    assert yaml_path.exists()
+    contents = yaml_path.read_text(encoding="utf-8")
+    assert "content_source: generator" in contents
+    assert "generator:" in contents
+    assert "kara delikler" in contents
+    assert "reel:" in contents
+    assert "enabled: true" in contents
+    assert "Q2IX97JeHBY3vNGzgM5s" in contents
+    assert "#38bdf8" in contents
+
+
+def test_reel_post_variation_off_sets_vary_false(tmp_path):
+    c = _client(tmp_path)
+    with patch("short_bot.web.routes.reel_new.generate_dna", return_value=_fake_dna()):
+        c.post("/channels/new-reel", data={
+            "name": "Sakin Kanal", "language": "tr",
+            "topic": "doğa ve vahşi yaşam hakkında ilginç bilgiler",
+            "voice_id": "Q2IX97JeHBY3vNGzgM5s",
+            "highlight_color": "#38bdf8",
+            # variation_on / cta_enabled / comment_question GÖNDERİLMEDİ → kapalı
+            "produce_now": "0",
+        })
+    from short_bot.config import load_channel
+    cfg = load_channel(tmp_path / "config" / "channels" / "sakin-kanal.yaml")
+    assert cfg.reel.hook_angle_vary is False
+    assert cfg.reel.accent_vary is False
+    assert cfg.reel.transition_vary is False
+    assert cfg.reel.cta_enabled is False
+    assert cfg.reel.comment_question is False
