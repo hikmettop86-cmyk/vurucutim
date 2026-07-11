@@ -1,7 +1,8 @@
 <!doctype html><html><head><meta charset="utf-8"><style>
+@import url('{{ font_import }}');
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{width:1080px;height:1920px;overflow:hidden;background:transparent;
-  font-family:'Segoe UI',Arial,sans-serif;color:#fff}
+  font-family:'{{ font }}','Segoe UI',Arial,sans-serif;color:#fff}
 #flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
 #bar{position:absolute;top:0;left:0;height:12px;width:0%;background:{{ hot_color }};box-shadow:0 0 20px rgba(0,0,0,.4)}
 .big{position:absolute;top:300px;left:60px;right:60px;text-align:center;font-size:104px;font-weight:900;

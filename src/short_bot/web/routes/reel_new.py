@@ -131,6 +131,7 @@ def create():
             highlight_color=highlight,
             cut_pacing=request.form.get("cut_pacing", "auto"),
             music_mood=request.form.get("music_mood", "upbeat"),
+            font=request.form.get("reel_font", "Montserrat"),
             hook_angle_vary=variation_on,
             accent_vary=variation_on,
             transition_vary=variation_on,

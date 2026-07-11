@@ -124,6 +124,13 @@
               <option value="calm">Sakin</option>
             </select>
           </div>
+          <div>
+            <label class="block text-xs text-claude-muted uppercase tracking-wide mb-2">Yazı tipi (altyazı fontu)</label>
+            <select name="reel_font" class="w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+              {% for f in ['Montserrat','Anton','Bebas Neue','Oswald','Poppins','Inter','Archivo Black'] %}
+              <option value="{{ f }}">{{ f }}</option>{% endfor %}
+            </select>
+          </div>
         </div>
         <p class="text-xs text-claude-muted mt-3">Video süresi 25–45 sn, düzen otomatik. İnce ayarları sonra kanal düzenleme sayfasından yapabilirsin.</p>
       </section>

@@ -11,12 +11,25 @@ from short_bot.reel_models import ReelTimeline
 
 WIDTH, HEIGHT = 1080, 1920
 
+# Kanal-bazlı overlay fontları (7 küratörlü Google font). Anahtarlar
+# ReelConfig.font Literal'iyle birebir; her biri kalın/ağır ağırlık yükler.
+_FONT_IMPORTS = {
+    "Montserrat": "https://fonts.googleapis.com/css2?family=Montserrat:wght@900&display=swap",
+    "Anton": "https://fonts.googleapis.com/css2?family=Anton&display=swap",
+    "Bebas Neue": "https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap",
+    "Oswald": "https://fonts.googleapis.com/css2?family=Oswald:wght@700&display=swap",
+    "Poppins": "https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap",
+    "Inter": "https://fonts.googleapis.com/css2?family=Inter:wght@900&display=swap",
+    "Archivo Black": "https://fonts.googleapis.com/css2?family=Archivo+Black&display=swap",
+}
+
 
 def build_reel_overlay_html(
     timeline: ReelTimeline, *, layout: str = "classic",
     highlight_color: str = "#ffd400",
     arrow_color: str = "#ff2d2d", arrow_frequency: str = "beats",
     flash: bool = True, handle: str = "", cta_text: str = "",
+    font: str = "Montserrat",
     templates_dir: Path | None = None,
 ) -> str:
     if layout not in ("classic", "lower_left", "top_heavy"):
@@ -49,6 +62,7 @@ def build_reel_overlay_html(
         hot_color=ensure_bright(highlight_color),
         hook=timeline.hook, close=timeline.close, handle=handle,
         cta_text=cta_text,
+        font=font, font_import=_FONT_IMPORTS.get(font, _FONT_IMPORTS["Montserrat"]),
         words=words, cards=cards, duration_s=f"{timeline.duration_s:.3f}",
         last_seg=last_seg, cuts=json.dumps(cuts),
         arrow_segs=json.dumps(arrow_segs), flash=flash,

@@ -168,6 +168,13 @@
               </select>
             </label>
             <label class="block">
+              <span class="text-xs text-claude-muted uppercase tracking-wide">Yazı tipi (font)</span>
+              <select name="reel_font" class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+                {% for f in ['Montserrat','Anton','Bebas Neue','Oswald','Poppins','Inter','Archivo Black'] %}<option value="{{ f }}"
+                  {% if c.reel and c.reel.font == f %}selected{% endif %}>{{ f }}</option>{% endfor %}
+              </select>
+            </label>
+            <label class="block">
               <span class="text-xs text-claude-muted uppercase tracking-wide">Düzen (layout)</span>
               <select name="reel_layout" class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
                 {% for l in ['auto','classic','lower_left','top_heavy'] %}<option value="{{ l }}"

@@ -129,6 +129,8 @@ class ReelConfig(BaseModel):
     transitions_zoom: bool = True
     music_mood: Literal["upbeat", "neutral", "calm"] = "upbeat"
     music_volume: float = Field(default=0.10, ge=0.0, le=1.0)
+    font: Literal["Montserrat", "Anton", "Bebas Neue", "Oswald",
+                  "Poppins", "Inter", "Archivo Black"] = "Montserrat"
     verify_footage: bool = True
     # Faz 2 varyasyon knob'ları (per-video deterministik profil)
     layout: Literal["auto", "classic", "lower_left", "top_heavy"] = "auto"
@@ -452,6 +454,7 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
             "transitions_zoom": cfg.reel.transitions_zoom,
             "music_mood": cfg.reel.music_mood,
             "music_volume": cfg.reel.music_volume,
+            "font": cfg.reel.font,
             "verify_footage": cfg.reel.verify_footage,
             "layout": cfg.reel.layout,
             "hook_angle_vary": cfg.reel.hook_angle_vary,

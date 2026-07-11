@@ -108,6 +108,7 @@ def save_reel(slug):
             transitions_whoosh=request.form.get("reel_whoosh") == "on",
             transitions_zoom=request.form.get("reel_zoom") == "on",
             music_mood=request.form.get("reel_music_mood", old.music_mood if old else "upbeat"),
+            font=request.form.get("reel_font", old.font if old else "Montserrat"),
             verify_footage=request.form.get("reel_verify_footage") == "on",
             layout=request.form.get("reel_layout", old.layout if old else "auto"),
             hook_angle_vary=request.form.get("reel_hook_angle_vary") == "on",

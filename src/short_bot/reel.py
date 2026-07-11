@@ -143,6 +143,7 @@ def produce_reel_video(
         arrow_frequency=reel.arrow_frequency if reel.arrows_enabled else "off",
         flash=("flash" in profile.transitions), handle=channel.handle,
         cta_text=bits.cta_text,
+        font=reel.font,
     )
 
     # 7) Montaj
