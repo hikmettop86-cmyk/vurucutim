@@ -27,7 +27,7 @@
         <label class="block text-xs text-claude-muted uppercase tracking-wide mb-2">Hazır niş (birini seç ya da kendi konunu yaz)</label>
         <div class="flex flex-wrap gap-2 mb-4">
           {% for p in niche_presets %}
-          <button type="button" @click="pick('{{ p.key }}', {{ p.topic|tojson }})"
+          <button type="button" @click="pick('{{ p.key }}')"
                   :class="niche === '{{ p.key }}' ? 'bg-claude-accent text-white border-claude-accent' : 'bg-white text-claude-text border-claude-border'"
                   class="px-4 py-1.5 rounded-full border text-sm">{{ p.label }}</button>
           {% endfor %}
@@ -153,13 +153,15 @@
   </form>
 </div>
 
+<script id="niche-data" type="application/json">{{ niche_presets|tojson }}</script>
 <script>
 function reelWizard() {
   return {
     niche: '', topic: '', name: '', voiceId: '', voicesError: '',
     highlight: '#38bdf8',
     swatches: ['#8b5cf6', '#38bdf8', '#2de2e6', '#ffd400', '#ff5a5a', '#22c55e'],
-    pick(key, topic) { this.niche = key; this.topic = topic; },
+    presetTopics: {},
+    pick(key) { this.niche = key; if (this.presetTopics[key]) this.topic = this.presetTopics[key]; },
     slug() {
       return (this.name || 'kanal').toLowerCase()
         .normalize('NFKD').replace(/[̀-ͯ]/g, '')
@@ -180,7 +182,13 @@ function reelWizard() {
         });
       } catch (e) { this.voicesError = 'Ses listesi yüklenemedi.'; }
     },
-    init() { this.loadVoices(); }
+    init() {
+      try {
+        const presets = JSON.parse(document.getElementById('niche-data').textContent);
+        presets.forEach(p => { this.presetTopics[p.key] = p.topic; });
+      } catch (e) { /* presetTopics boş kalır, çipler yine niche'i işaretler */ }
+      this.loadVoices();
+    }
   };
 }
 </script>

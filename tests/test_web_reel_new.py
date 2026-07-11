@@ -219,3 +219,18 @@ def test_reel_post_invalid_pacing_fails_before_dna(tmp_path):
     assert r.status_code in (200, 302)
     assert not (tmp_path / "config" / "channels" / "bozuk-tempo.yaml").exists()
     assert dna_calls == []
+
+
+def test_reel_wizard_chip_click_uses_key_only(tmp_path):
+    """Regression: niş çip @click'i topic'i tojson ile GEÇMEMELİ — çift tırnak
+    HTML niteliğini erken kapatıp tıklamayı bozuyordu. Sadece key geçilir; topic
+    ayrı bir JSON data island'dan okunur."""
+    c = _client(tmp_path)
+    body = c.get("/channels/new-reel").data.decode("utf-8")
+    # Tek argümanlı, güvenli çağrı:
+    assert "pick('balinalar')" in body
+    # Kırık iki-argümanlı biçim OLMAMALI:
+    assert "pick('balinalar', " not in body
+    # Topic verisi ayrı JSON island'da:
+    assert 'id="niche-data"' in body
+    assert "deniz memelileri" in body
