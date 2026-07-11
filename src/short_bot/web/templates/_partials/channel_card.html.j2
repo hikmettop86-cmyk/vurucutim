@@ -26,6 +26,9 @@
       {% else %}
         <span class="text-claude-muted text-xs">📰 RSS</span>
       {% endif %}
+      {% if c.reel and c.reel.enabled %}
+        <span class="text-xs" title="Reel">🎬 Reel</span>
+      {% endif %}
     </div>
   </div>
 

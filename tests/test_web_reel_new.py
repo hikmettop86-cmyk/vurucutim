@@ -173,3 +173,27 @@ def test_reel_post_no_produce_now_does_not_launch(tmp_path):
             "produce_now": "0",
         })
     assert calls == []
+
+
+def test_channel_list_has_reel_button(tmp_path):
+    c = _client(tmp_path)
+    r = c.get("/channels")
+    assert r.status_code == 200
+    body = r.data.decode("utf-8")
+    assert "/channels/new-reel" in body
+    assert "Reel" in body
+
+
+def test_channel_list_shows_reel_badge(tmp_path):
+    c = _client(tmp_path)
+    # önce reel kanalı oluştur
+    with patch("short_bot.web.routes.reel_new.generate_dna", return_value=_fake_dna()):
+        c.post("/channels/new-reel", data={
+            "name": "Reel Kanal", "language": "tr",
+            "topic": "uzay ve gezegenler hakkında ilginç bilgiler",
+            "voice_id": "Q2IX97JeHBY3vNGzgM5s",
+            "highlight_color": "#38bdf8",
+        })
+    r = c.get("/channels")
+    body = r.data.decode("utf-8")
+    assert "🎬" in body

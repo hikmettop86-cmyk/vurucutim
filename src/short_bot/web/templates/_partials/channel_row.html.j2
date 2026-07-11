@@ -7,6 +7,9 @@
     {% else %}
       <span title="RSS" class="text-claude-muted ml-1">📰</span>
     {% endif %}
+    {% if c.reel and c.reel.enabled %}
+      <span title="Reel (footage'lı ilginç bilgiler)" class="ml-1">🎬</span>
+    {% endif %}
   </td>
   <td class="p-3">{{ c.name }}</td>
   <td class="p-3">{{ c.language }}</td>
