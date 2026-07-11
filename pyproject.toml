@@ -44,6 +44,9 @@ dev = [
 voice = [
     "whisperx>=3.1",
 ]
+whisper = [
+    "faster-whisper>=1.0",
+]
 
 [project.scripts]
 short-bot = "short_bot.cli:main"

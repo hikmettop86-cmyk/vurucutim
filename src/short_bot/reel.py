@@ -74,6 +74,7 @@ def produce_reel_video(
     browser: str = "chromium",
     llm_claude_path: str = "claude", llm_model: str = "default",
     llm_backend: str = "claude_cli", llm_api_key: str | None = None,
+    whisper_quality: str = "auto", whisper_device: str = "auto",
     vision_call=None, seed: int = 0, deps: ReelDeps | None = None,
 ) -> Path:
     reel = getattr(channel, "reel", None)
@@ -113,7 +114,8 @@ def produce_reel_video(
 
     # 4) Süre + hizalama + zaman çizelgesi
     duration_s = d.probe_duration_s(mp3, ffprobe_path="ffprobe")
-    words = d.transcribe_words(mp3, language=channel.language)
+    words = d.transcribe_words(mp3, language=channel.language,
+                               quality=whisper_quality, device=whisper_device)
     timeline = build_reel_timeline(narration, words, duration_s=duration_s)
     log.info(f"  reel: ses {duration_s:.1f}s, {len(timeline.words)} kelime")
 

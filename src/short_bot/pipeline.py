@@ -1526,6 +1526,8 @@ def _reel_produce_or_none(
         ffmpeg_path=settings.ffmpeg_path, browser=settings.playwright_browser,
         llm_claude_path=llm_call.claude_path, llm_model=llm_call.model,
         llm_backend=llm_call.backend, llm_api_key=llm_call.api_key,
+        whisper_quality=getattr(settings, "whisper_quality", "auto"),
+        whisper_device=getattr(settings, "whisper_device", "auto"),
         vision_call=vision_call, seed=seed,
     )
 

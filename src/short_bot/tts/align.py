@@ -1,8 +1,12 @@
 """Anlatım sesinin kelime-seviyesi hizalaması.
 
 ai33/ElevenLabs v3 timestamp döndürmediği için mp3 yeniden transkript edilip
-WhisperX forced-alignment ile kelime zamanları çıkarılır. WhisperX ağır bir
-bağımlılıktır (torch): ``pip install short-bot[voice]``.
+faster-whisper ile kelime zamanları çıkarılır. faster-whisper opsiyonel bir
+bağımlılıktır: ``pip install short-bot[whisper]``. Kurulu değilse çağıran
+orantılı dağıtıma düşer (video yine üretilir, senkron kabalaşır).
+
+Cihaz otomatik seçilir (CUDA varsa GPU, yoksa CPU) ve kalite kademesi
+buna göre ayarlanır; ``quality``/``device`` ile elle geçilebilir.
 """
 from __future__ import annotations
 
@@ -14,54 +18,88 @@ from short_bot.narration import Narration, NarrationTimeline, TimedBeat, TimedWo
 log = logging.getLogger(__name__)
 
 
+def _detect_device(device: str) -> str:
+    """``auto`` ise CUDA cihazı var mı diye bakar; yoksa CPU'ya düşer."""
+    if device != "auto":
+        return device
+    try:
+        import ctranslate2
+        if ctranslate2.get_cuda_device_count() > 0:
+            return "cuda"
+    except Exception:
+        pass
+    return "cpu"
+
+
+def _resolve_whisper(quality: str, device: str) -> tuple[str, str, str]:
+    """(model_size, device, compute_type) üçlüsünü kalite + cihaza göre türetir."""
+    dev = _detect_device(device)
+    ct = "float16" if dev == "cuda" else "int8"
+    if quality == "high":
+        ms = "large-v3"
+    elif quality == "medium":
+        ms = "medium"
+    elif quality == "low":
+        ms = "base"
+    else:  # auto — GPU varsa büyük model, yoksa hızlı olsun
+        ms = "large-v3" if dev == "cuda" else "base"
+    return ms, dev, ct
+
+
+def _import_model():
+    """faster-whisper ``WhisperModel``'i döndürür; kurulu değilse ``None``."""
+    try:
+        from faster_whisper import WhisperModel
+        return WhisperModel
+    except ImportError:
+        return None
+
+
 def transcribe_words(
     audio_path: Path,
     *,
     language: str,
-    model_size: str = "small",
-    device: str = "cpu",
-    compute_type: str = "int8",
-    _whisperx=None,
+    quality: str = "auto",
+    device: str = "auto",
+    _model=None,
 ) -> list[TimedWord]:
     """mp3'ten kelime-seviyesi zaman damgaları çıkarır.
 
-    Align modeli o dil için yoksa boş liste döner — çağıran orantılı dağıtıma
-    düşer (video yine üretilir, senkron kabalaşır).
-    ``_whisperx`` testler için enjekte edilir.
+    faster-whisper kurulu değilse, model yüklenemezse ya da ``quality="off"``
+    ise boş liste döner — çağıran orantılı dağıtıma düşer (video yine üretilir,
+    senkron kabalaşır). ``_model`` testler için enjekte edilir.
     """
-    wx = _whisperx
-    if wx is None:
-        try:
-            import whisperx as wx  # type: ignore[no-redef]
-        except ImportError:
+    if quality == "off":
+        return []
+    model = _model
+    if model is None:
+        WhisperModel = _import_model()
+        if WhisperModel is None:
             log.warning(
-                "whisperx kurulu değil — kelime senkronu orantılı dağıtıma düşecek. "
-                "Kurulum: pip install short-bot[voice]"
+                "faster-whisper kurulu değil — kelime senkronu orantılı "
+                "dağıtıma düşecek. Kurulum: pip install short-bot[whisper]"
             )
             return []
-
-    audio = wx.load_audio(str(audio_path))
-    model = wx.load_model(model_size, device, compute_type=compute_type,
-                          language=language)
-    result = model.transcribe(audio, language=language)
-
+        ms, dev, ct = _resolve_whisper(quality, device)
+        try:
+            model = WhisperModel(ms, device=dev, compute_type=ct)
+        except Exception as e:
+            log.warning(f"faster-whisper model yüklenemedi ({e}) — orantılı dağıtım.")
+            return []
     try:
-        align_model, metadata = wx.load_align_model(language_code=language,
-                                                    device=device)
+        segments, _info = model.transcribe(str(audio_path), language=language,
+                                           word_timestamps=True)
+        out: list[TimedWord] = []
+        for seg in segments:
+            for w in (getattr(seg, "words", None) or []):
+                if w.start is None or w.end is None:
+                    continue    # bazı kelimelere zaman verilemeyebilir
+                out.append(TimedWord(word=str(w.word).strip(), start_s=float(w.start),
+                                     end_s=float(w.end), seg=-1))
+        return out
     except Exception as e:
-        log.warning(f"whisperx align modeli yok ({language}): {e}")
+        log.warning(f"faster-whisper transcribe hatası ({e}) — orantılı dağıtım.")
         return []
-
-    aligned = wx.align(result["segments"], align_model, metadata, audio, device,
-                       return_char_alignments=False)
-
-    out: list[TimedWord] = []
-    for w in aligned.get("word_segments", []):
-        if w.get("start") is None or w.get("end") is None:
-            continue    # WhisperX bazı kelimelere zaman veremez
-        out.append(TimedWord(word=str(w["word"]), start_s=float(w["start"]),
-                             end_s=float(w["end"]), seg=-1))
-    return out
 
 
 def _segment_word_counts(narration: Narration) -> list[int]:

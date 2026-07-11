@@ -42,6 +42,8 @@ class Settings:
     ai_backend: str = "claude_cli"
     openrouter_models: dict = field(default_factory=dict)
     trends: TrendsSettings = field(default_factory=_default_trends_settings)
+    whisper_quality: str = "auto"
+    whisper_device: str = "auto"
 
 
 @dataclass(frozen=True)
@@ -207,6 +209,7 @@ class ChannelConfig:
 def load_settings(path: Path) -> Settings:
     data = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
     web = data.get("web", {})
+    wh_data = data.get("whisper", {}) or {}
     tr_data = data.get("trends", {}) or {}
     trends = TrendsSettings(
         enabled=bool(tr_data.get("enabled", False)),
@@ -227,6 +230,8 @@ def load_settings(path: Path) -> Settings:
         ai_backend=data.get("ai_backend", "claude_cli"),
         openrouter_models=dict(data.get("openrouter_models", {})),
         trends=trends,
+        whisper_quality=wh_data.get("quality", "auto"),
+        whisper_device=wh_data.get("device", "auto"),
     )
 
 

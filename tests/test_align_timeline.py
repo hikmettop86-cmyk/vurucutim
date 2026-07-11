@@ -83,35 +83,27 @@ def test_timeline_rejects_nonpositive_duration():
         build_timeline(_narration(), [], duration_s=0.0)
 
 
+class _FWord:
+    def __init__(self, word, start, end):
+        self.word, self.start, self.end = word, start, end
+
+
+class _FSeg:
+    def __init__(self, words):
+        self.words = words
+
+
 def test_transcribe_words_uses_injected_backend(tmp_path):
-    """WhisperX enjekte edilebilir -> torch olmadan test edilir."""
+    """faster-whisper modeli enjekte edilebilir -> torch olmadan test edilir."""
     audio = tmp_path / "a.mp3"
     audio.write_bytes(b"fake")
 
-    class FakeWhisperx:
-        @staticmethod
-        def load_model(*a, **kw):
-            class M:
-                def transcribe(self, audio_arr, **kw):
-                    return {"segments": [{"text": "bir iki"}], "language": "tr"}
-            return M()
+    class FakeModel:
+        def transcribe(self, audio, language=None, word_timestamps=False, **kw):
+            seg = _FSeg([_FWord("bir", 0.0, 0.4), _FWord("iki", 0.4, 0.9)])
+            return [seg], {"language": language}
 
-        @staticmethod
-        def load_audio(path):
-            return [0.0]
-
-        @staticmethod
-        def load_align_model(language_code, device):
-            return "model", {"meta": True}
-
-        @staticmethod
-        def align(segments, model, metadata, audio, device, return_char_alignments):
-            return {"word_segments": [
-                {"word": "bir", "start": 0.0, "end": 0.4},
-                {"word": "iki", "start": 0.4, "end": 0.9},
-            ]}
-
-    words = transcribe_words(audio, language="tr", _whisperx=FakeWhisperx)
+    words = transcribe_words(audio, language="tr", _model=FakeModel())
     assert [w.word for w in words] == ["bir", "iki"]
     assert words[1].start_s == 0.4
 
@@ -120,28 +112,13 @@ def test_transcribe_words_skips_words_without_timestamps(tmp_path):
     audio = tmp_path / "a.mp3"
     audio.write_bytes(b"fake")
 
-    class FakeWhisperx:
-        @staticmethod
-        def load_model(*a, **kw):
-            class M:
-                def transcribe(self, audio_arr, **kw):
-                    return {"segments": [], "language": "tr"}
-            return M()
+    class FakeModel:
+        def transcribe(self, audio, language=None, word_timestamps=False, **kw):
+            seg = _FSeg([
+                _FWord("bir", 0.0, 0.4),
+                _FWord("eksik", None, None),          # start/end yok -> atlanir
+            ])
+            return [seg], {"language": language}
 
-        @staticmethod
-        def load_audio(path):
-            return [0.0]
-
-        @staticmethod
-        def load_align_model(language_code, device):
-            return "m", {}
-
-        @staticmethod
-        def align(*a, **kw):
-            return {"word_segments": [
-                {"word": "bir", "start": 0.0, "end": 0.4},
-                {"word": "eksik"},                       # start/end yok -> atlanir
-            ]}
-
-    words = transcribe_words(audio, language="tr", _whisperx=FakeWhisperx)
+    words = transcribe_words(audio, language="tr", _model=FakeModel())
     assert [w.word for w in words] == ["bir"]
