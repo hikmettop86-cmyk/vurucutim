@@ -87,3 +87,27 @@ def test_old_edit_reel_channel_redirects_to_edit_reel(tmp_path):
     r = c.get("/channels/reel-kanal/edit")
     assert r.status_code == 302
     assert "/channels/reel-kanal/edit-reel" in r.headers["Location"]
+
+
+def test_edit_reel_full_page_tabs_and_values(tmp_path):
+    c, cfg_dir = _client(tmp_path)
+    _make_reel_channel(c, cfg_dir)
+    body = c.get("/channels/reel-kanal/edit-reel").data.decode("utf-8")
+    # 4 sekme
+    for lbl in ("Kimlik", "Konu", "Format", "Varyasyon", "Abone", "YouTube"):
+        assert lbl in body
+    # mevcut değerler dolu
+    assert "Q2IX97JeHBY3vNGzgM5s" in body     # reel_voice_id
+    assert "#38bdf8" in body                   # reel_highlight_color
+    assert "uzay ve gezegenler" in body        # generator_topic
+    # paylaşılan alanlar
+    assert 'name="schedule_cron"' in body
+    assert 'name="handle"' in body
+    assert 'name="language"' in body
+    # varyasyon/abone + youtube form adları
+    assert 'name="reel_cta_enabled"' in body
+    assert 'name="reel_hook_angle_vary"' in body
+    assert 'name="yt_privacy_status"' in body
+    # niş bulucu + önizleme
+    assert "reelPickNiche" in body
+    assert 'id="niche-results"' in body

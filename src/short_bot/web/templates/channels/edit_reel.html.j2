@@ -1,14 +1,365 @@
 {% extends "base.html.j2" %}
 {% block title %}Reel Düzenle — {{ c.name }}{% endblock %}
 {% block content %}
-<h1 class="font-serif text-2xl font-bold mb-4">🎬 {{ c.name }} — Reel Düzenle</h1>
-<form method="post" action="/channels/{{ c.slug }}/edit-reel">
-  <input type="hidden" name="reel_enabled" value="on">
-  <input type="text" name="reel_voice_id" value="{{ c.reel.voice_id }}">
-  <input type="color" name="reel_highlight_color" value="{{ c.reel.highlight_color }}">
-  <textarea name="generator_topic">{{ c.generator.topic if c.generator else '' }}</textarea>
-  <button type="button">🔎 NexLev Niş Bulucu</button>
-  <button type="button">🤖 AI Niş Bulucu</button>
-  <button type="submit">Kaydet</button>
-</form>
+<div x-data="reelEditWizard()"
+     @niche-selected.window="topic = $event.detail.topic; if (!name) { name = $event.detail.name }"
+     class="max-w-6xl mx-auto">
+
+  <div class="flex items-center gap-3 mb-1">
+    <h1 class="font-serif text-3xl font-bold">🎬 {{ c.name }} — Reel Düzenle</h1>
+    <span class="bg-claude-accent text-white text-xs font-semibold px-3 py-1 rounded-full">footage'lı ilginç bilgiler</span>
+  </div>
+  <p class="text-claude-muted mb-6">Reel kanalının marka, konu, format ve abone ayarları. Kaydet → sadece reel + paylaşılan alanlar güncellenir; DNA/arketip/renk korunur.</p>
+
+  {% if not pexels_key_set %}
+  <div class="mb-4 px-4 py-2 rounded-lg text-sm bg-yellow-100 text-yellow-800">
+    ⚠ Pexels API anahtarı tanımlı değil — reel footage indirilemez. Ayarlar'dan ekleyebilirsin.
+  </div>
+  {% endif %}
+
+  <div class="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6 items-start">
+
+    {# ── Sol: canlı reel önizleme (Alpine highlight + name'e bağlı) ─────── #}
+    <aside class="lg:sticky lg:top-6 space-y-3">
+      <div class="bg-claude-surface border border-claude-border rounded-xl p-4 text-center">
+        <div class="text-xs text-claude-muted uppercase tracking-wide mb-3">Canlı önizleme</div>
+        <div class="mx-auto rounded-2xl overflow-hidden relative" style="width:200px;height:356px;background:linear-gradient(160deg,#0a2540,#04121f)">
+          <div class="absolute top-6 left-1/2 -translate-x-1/2 text-xs font-bold px-3 py-1 rounded"
+               :style="`background:${highlight};color:#04121f`" x-text="(name || 'KANAL').toUpperCase()"></div>
+          <div class="absolute left-0 right-0 px-3 font-black text-white text-lg" style="bottom:70px;text-shadow:0 2px 6px #000">
+            ışığı bile <span :style="`color:${highlight}`">yutar</span>
+          </div>
+          <div class="absolute left-0 right-0 text-xs text-slate-200" style="bottom:26px" x-text="'@' + slug()"></div>
+        </div>
+        <p class="text-xs text-claude-muted mt-3">Marka (ses, renk, stil) sabit; içerik her videoda değişir.</p>
+      </div>
+    </aside>
+
+    {# ── Sağ: sekmeli form ──────────────────────────────────────────────── #}
+    <form method="post" action="/channels/{{ c.slug }}/edit-reel" class="space-y-4">
+      <input type="hidden" name="reel_enabled" value="on">
+      {# Niş bulucu hx-include için gizli 'topic' ikizi (kaydetme handler'ı yok sayar) #}
+      <input type="hidden" name="topic" x-model="topic">
+
+      {# Sekme çubuğu #}
+      <div class="flex flex-wrap gap-1 bg-claude-surface border border-claude-border rounded-xl p-1">
+        <button type="button" @click="currentTab = 'kimlik'"
+                :class="currentTab === 'kimlik' ? 'bg-claude-accent text-white' : 'text-claude-text hover:bg-claude-surface-alt'"
+                class="flex-1 px-3 py-2 rounded-lg text-sm font-medium">Kimlik</button>
+        <button type="button" @click="currentTab = 'format'"
+                :class="currentTab === 'format' ? 'bg-claude-accent text-white' : 'text-claude-text hover:bg-claude-surface-alt'"
+                class="flex-1 px-3 py-2 rounded-lg text-sm font-medium">Konu &amp; Format</button>
+        <button type="button" @click="currentTab = 'varyasyon'"
+                :class="currentTab === 'varyasyon' ? 'bg-claude-accent text-white' : 'text-claude-text hover:bg-claude-surface-alt'"
+                class="flex-1 px-3 py-2 rounded-lg text-sm font-medium">Varyasyon &amp; Abone</button>
+        <button type="button" @click="currentTab = 'youtube'"
+                :class="currentTab === 'youtube' ? 'bg-claude-accent text-white' : 'text-claude-text hover:bg-claude-surface-alt'"
+                class="flex-1 px-3 py-2 rounded-lg text-sm font-medium">YouTube</button>
+      </div>
+
+      {# ── TAB: Kimlik ──────────────────────────────────────────────────── #}
+      <section x-show="currentTab === 'kimlik'" x-cloak
+               class="bg-claude-surface border border-claude-border rounded-xl p-5 space-y-4">
+        <h2 class="font-semibold text-claude-accent">Kimlik</h2>
+        <div class="grid grid-cols-2 gap-4">
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase tracking-wide">Kanal adı</span>
+            <input type="text" name="name" x-model="name" value="{{ c.name }}"
+                   class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+          </label>
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase tracking-wide">Handle</span>
+            <input type="text" name="handle" value="{{ c.handle }}"
+                   class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+          </label>
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase tracking-wide">Dil</span>
+            <select name="language" class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+              <option value="tr" {% if c.language == 'tr' %}selected{% endif %}>Türkçe</option>
+              <option value="en" {% if c.language == 'en' %}selected{% endif %}>English</option>
+              <option value="de" {% if c.language == 'de' %}selected{% endif %}>Deutsch</option>
+              <option value="es" {% if c.language == 'es' %}selected{% endif %}>Español</option>
+              <option value="fr" {% if c.language == 'fr' %}selected{% endif %}>Français</option>
+            </select>
+          </label>
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase tracking-wide">Yayın cron</span>
+            <input type="text" name="schedule_cron" value="{{ c.schedule_cron }}"
+                   class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm font-mono">
+          </label>
+        </div>
+        <label class="flex items-center gap-2 text-sm">
+          <input type="checkbox" name="enabled" value="1" {% if c.enabled %}checked{% endif %}>
+          Kanal aktif (zamanlanmış üretim çalışır)
+        </label>
+      </section>
+
+      {# ── TAB: Konu & Format ───────────────────────────────────────────── #}
+      <section x-show="currentTab === 'format'" x-cloak class="space-y-4">
+
+        {# Konu + niş bulucu #}
+        <div class="bg-claude-surface border border-claude-border rounded-xl p-5">
+          <h2 class="font-semibold text-claude-accent mb-3">Konu</h2>
+          <div class="flex items-center justify-between mb-2 gap-2 flex-wrap">
+            <label class="block text-xs text-claude-muted uppercase tracking-wide">Konu tohumu (LLM bu sınırda üretir)</label>
+            <div class="flex gap-2">
+              <button type="button"
+                      hx-post="/channels/new-reel/find-niches"
+                      hx-include="[name='topic'],[name='language']"
+                      hx-vals='{"mode":"nexlev"}'
+                      hx-target="#niche-results" hx-swap="innerHTML"
+                      class="text-xs bg-claude-surface border border-claude-accent text-claude-accent hover:bg-claude-accent-soft px-3 py-1 rounded-lg"
+                      title="Claude CLI + NexLev canlı verisiyle kârlı niş önerileri (~1-2 dk)">🔎 NexLev Niş Bulucu</button>
+              <button type="button"
+                      hx-post="/channels/new-reel/find-niches"
+                      hx-include="[name='topic'],[name='language']"
+                      hx-vals='{"mode":"ai"}'
+                      hx-target="#niche-results" hx-swap="innerHTML"
+                      class="text-xs bg-claude-surface border border-claude-border text-claude-text hover:bg-claude-surface-alt px-3 py-1 rounded-lg"
+                      title="Claude aboneliği varsa Opus, yoksa OpenRouter ile AI niş fikirleri (~1 dk)">🤖 AI Niş Bulucu</button>
+            </div>
+          </div>
+          <textarea name="generator_topic" x-model="topic" rows="3"
+                    class="w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm"
+                    placeholder="ör. uzay, gezegenler, kara delikler ve evrenin sırları hakkında ilginç bilgiler">{{ c.generator.topic if c.generator else '' }}</textarea>
+          <div id="niche-results"></div>
+        </div>
+
+        {# Reel formatı — hepsi mevcut değerle dolu #}
+        <div class="bg-claude-surface border border-claude-border rounded-xl p-5">
+          <h2 class="font-semibold text-claude-accent mb-3">Reel formatı</h2>
+          <div class="grid grid-cols-2 gap-4">
+            <label class="block">
+              <span class="text-xs text-claude-muted uppercase tracking-wide">ai33 sesi</span>
+              <input type="text" name="reel_voice_id" list="ai33-voice-list" x-model="voiceId"
+                     value="{{ c.reel.voice_id if c.reel else '' }}"
+                     class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm"
+                     placeholder="ses seç ya da voice_id yapıştır">
+              <datalist id="ai33-voice-list"></datalist>
+              <span class="text-xs text-red-600" x-show="voicesError" x-text="voicesError"></span>
+            </label>
+            <label class="block">
+              <span class="text-xs text-claude-muted uppercase tracking-wide">Vurgu rengi (altyazı)</span>
+              <input type="color" name="reel_highlight_color" x-model="highlight"
+                     value="{{ c.reel.highlight_color if c.reel else '#ffd400' }}"
+                     class="mt-1 w-full h-10 rounded-lg border border-claude-border">
+            </label>
+            <label class="block">
+              <span class="text-xs text-claude-muted uppercase tracking-wide">Hedef süre (sn)</span>
+              <span class="mt-1 flex gap-2">
+                <input type="number" name="reel_target_min" value="{{ c.reel.target_duration_s[0] if c.reel else 25 }}"
+                       class="w-full bg-white border border-claude-border rounded-lg px-2 py-2 text-sm">
+                <input type="number" name="reel_target_max" value="{{ c.reel.target_duration_s[1] if c.reel else 45 }}"
+                       class="w-full bg-white border border-claude-border rounded-lg px-2 py-2 text-sm">
+              </span>
+            </label>
+            <label class="block">
+              <span class="text-xs text-claude-muted uppercase tracking-wide">Kesme temposu</span>
+              <select name="reel_cut_pacing" class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+                {% for p in ['auto','slow','medium','fast'] %}<option value="{{ p }}"
+                  {% if c.reel and c.reel.cut_pacing == p %}selected{% endif %}>{{ p }}</option>{% endfor %}
+              </select>
+            </label>
+            <label class="block">
+              <span class="text-xs text-claude-muted uppercase tracking-wide">Müzik mood</span>
+              <select name="reel_music_mood" class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+                {% for m in ['upbeat','neutral','calm'] %}<option value="{{ m }}"
+                  {% if c.reel and c.reel.music_mood == m %}selected{% endif %}>{{ m }}</option>{% endfor %}
+              </select>
+            </label>
+            <label class="block">
+              <span class="text-xs text-claude-muted uppercase tracking-wide">Düzen (layout)</span>
+              <select name="reel_layout" class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+                {% for l in ['auto','classic','lower_left','top_heavy'] %}<option value="{{ l }}"
+                  {% if c.reel and c.reel.layout == l %}selected{% endif %}>{{ l }}</option>{% endfor %}
+              </select>
+            </label>
+            <label class="block">
+              <span class="text-xs text-claude-muted uppercase tracking-wide">Ok rengi</span>
+              <input type="color" name="reel_arrow_color" value="{{ c.reel.arrow_color if c.reel else '#ff2d2d' }}"
+                     class="mt-1 w-full h-10 rounded-lg border border-claude-border">
+            </label>
+            <label class="block">
+              <span class="text-xs text-claude-muted uppercase tracking-wide">Ok sıklığı</span>
+              <select name="reel_arrow_frequency" class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+                {% for f in ['off','reveal','beats'] %}<option value="{{ f }}"
+                  {% if c.reel and c.reel.arrow_frequency == f %}selected{% endif %}>{{ f }}</option>{% endfor %}
+              </select>
+            </label>
+          </div>
+          <div class="flex flex-wrap gap-4 mt-4 text-sm">
+            <label class="flex items-center gap-2"><input type="checkbox" name="reel_arrows_enabled"
+              {% if not c.reel or c.reel.arrows_enabled %}checked{% endif %}> Oklar</label>
+            <label class="flex items-center gap-2"><input type="checkbox" name="reel_flash"
+              {% if not c.reel or c.reel.transitions_flash %}checked{% endif %}> Flash geçiş</label>
+            <label class="flex items-center gap-2"><input type="checkbox" name="reel_whoosh"
+              {% if not c.reel or c.reel.transitions_whoosh %}checked{% endif %}> Whoosh SFX</label>
+            <label class="flex items-center gap-2"><input type="checkbox" name="reel_zoom"
+              {% if not c.reel or c.reel.transitions_zoom %}checked{% endif %}> Zoom-punch</label>
+            <label class="flex items-center gap-2"><input type="checkbox" name="reel_verify_footage"
+              {% if not c.reel or c.reel.verify_footage %}checked{% endif %}> Vision doğrulama</label>
+          </div>
+        </div>
+      </section>
+
+      {# ── TAB: Varyasyon & Abone ───────────────────────────────────────── #}
+      <section x-show="currentTab === 'varyasyon'" x-cloak
+               class="bg-claude-surface border border-claude-border rounded-xl p-5 space-y-4">
+        <h2 class="font-semibold text-claude-accent">Varyasyon &amp; Abone</h2>
+
+        {# Tek "Her video farklı görünsün" → üç varyasyon knob'unu birlikte yönetir.
+           Master checkbox x-model="variationOn"; üç gizli checkbox :checked ile bağlı,
+           statik {% if %}checked de var (JS'siz durumda mevcut değeri korur). #}
+        <label class="flex items-start justify-between gap-3 text-sm">
+          <span>Her video farklı görünsün
+            <small class="block text-claude-muted">layout/renk/geçiş otomatik değişir — otomasyon belli olmaz</small></span>
+          <input type="checkbox" x-model="variationOn" class="mt-1">
+        </label>
+        <div class="hidden">
+          <input type="checkbox" name="reel_hook_angle_vary" :checked="variationOn"
+                 {% if not c.reel or c.reel.hook_angle_vary %}checked{% endif %}>
+          <input type="checkbox" name="reel_accent_vary" :checked="variationOn"
+                 {% if not c.reel or c.reel.accent_vary %}checked{% endif %}>
+          <input type="checkbox" name="reel_transition_vary" :checked="variationOn"
+                 {% if not c.reel or c.reel.transition_vary %}checked{% endif %}>
+        </div>
+
+        <div class="border-t border-claude-border pt-4 space-y-3">
+          <div class="text-xs text-claude-muted uppercase tracking-wide">Abone mekanikleri</div>
+          <label class="flex items-start justify-between gap-3 text-sm">
+            <span>Abone CTA kartı <small class="block text-claude-muted">video sonunda "ABONE OL" çağrısı</small></span>
+            <input type="checkbox" name="reel_cta_enabled"
+                   {% if not c.reel or c.reel.cta_enabled %}checked{% endif %} class="mt-1">
+          </label>
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase tracking-wide">CTA metni (boş = otomatik)</span>
+            <input type="text" name="reel_cta_text_custom" value="{{ c.reel.cta_text_custom if c.reel else '' }}"
+                   class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+          </label>
+          <label class="flex items-start justify-between gap-3 text-sm">
+            <span>Yorum sorusu <small class="block text-claude-muted">kapanışta "hangisi seni şaşırttı?" — yorum getirir</small></span>
+            <input type="checkbox" name="reel_comment_question"
+                   {% if not c.reel or c.reel.comment_question %}checked{% endif %} class="mt-1">
+          </label>
+          <label class="flex items-start justify-between gap-3 text-sm">
+            <span>Seri modu <small class="block text-claude-muted">numaralı seri + "sonraki bölüm" teaser'ı</small></span>
+            <input type="checkbox" name="reel_series_enabled"
+                   {% if c.reel and c.reel.series_enabled %}checked{% endif %} class="mt-1">
+          </label>
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase tracking-wide">Seri başlığı</span>
+            <input type="text" name="reel_series_title" value="{{ c.reel.series_title if c.reel else '' }}"
+                   class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+          </label>
+        </div>
+      </section>
+
+      {# ── TAB: YouTube ─────────────────────────────────────────────────── #}
+      <section x-show="currentTab === 'youtube'" x-cloak
+               class="bg-claude-surface border border-claude-border rounded-xl p-5 space-y-4">
+        <h2 class="font-semibold text-claude-accent">YouTube</h2>
+        <div class="text-sm">
+          {% if yt_connected %}
+          <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-claude-success/10 text-claude-success">
+            <span class="w-1.5 h-1.5 rounded-full bg-claude-success"></span> YouTube bağlı
+          </span>
+          {% else %}
+          <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-yellow-100 text-yellow-800">
+            ⚠ YouTube bağlı değil — yükleme için kanal düzenleme/YouTube sayfasından bağla
+          </span>
+          {% endif %}
+        </div>
+        <label class="flex items-center gap-2 text-sm">
+          <input type="checkbox" name="yt_auto_upload" value="1"
+                 {% if c.youtube and c.youtube.auto_upload %}checked{% endif %}>
+          Otomatik yükleme (üretilen videolar YouTube'a çıksın)
+        </label>
+        <div class="grid grid-cols-2 gap-4">
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase tracking-wide">Gizlilik</span>
+            <select name="yt_privacy_status" class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+              {% set _priv = c.youtube.privacy_status if c.youtube else 'public' %}
+              <option value="public" {% if _priv == 'public' %}selected{% endif %}>Herkese açık</option>
+              <option value="unlisted" {% if _priv == 'unlisted' %}selected{% endif %}>Liste dışı</option>
+              <option value="private" {% if _priv == 'private' %}selected{% endif %}>Gizli</option>
+            </select>
+          </label>
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase tracking-wide">Kategori ID</span>
+            <input type="text" name="yt_category_id" value="{{ c.youtube.category_id if c.youtube else '24' }}"
+                   class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+          </label>
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase tracking-wide">Min. skor (yükleme eşiği)</span>
+            <input type="number" step="0.1" min="0" max="10" name="yt_min_score_for_upload"
+                   value="{{ c.youtube.min_score_for_upload if c.youtube else 8.0 }}"
+                   class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+          </label>
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase tracking-wide">Yükleme cron preset (boş = kapalı)</span>
+            <input type="text" name="yt_cron_preset" value="{{ c.youtube.cron_preset if c.youtube and c.youtube.cron_preset else '' }}"
+                   class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+          </label>
+        </div>
+      </section>
+
+      {# ── Kaydet ───────────────────────────────────────────────────────── #}
+      <div class="sticky bottom-0 bg-claude-bg/95 backdrop-blur border-t border-claude-border pt-3 pb-3 -mx-1 px-1 z-20">
+        <button type="submit"
+                class="w-full bg-claude-accent hover:bg-claude-accent-hover text-white font-semibold py-3 rounded-lg shadow-soft">💾 Kaydet</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script id="niche-data" type="application/json">{{ (niche_presets if niche_presets is defined else [])|tojson }}</script>
+<script>
+// NexLev/AI niş kartındaki "Kullan" → Alpine köküne olay yollar.
+// Native onclick + window olayı: HTMX ile sonradan eklenen içerikte Alpine
+// init'e bağımlı değil (data-* Jinja auto-escape ile tırnak-güvenli).
+function reelPickNiche(btn) {
+  window.dispatchEvent(new CustomEvent('niche-selected', {
+    detail: { topic: btn.dataset.topic || '', name: btn.dataset.name || '' }
+  }));
+}
+function reelEditWizard() {
+  return {
+    currentTab: 'kimlik',
+    topic: {{ (c.generator.topic if c.generator else '')|tojson }},
+    name: {{ c.name|tojson }},
+    voiceId: {{ (c.reel.voice_id if c.reel else '')|tojson }},
+    highlight: {{ (c.reel.highlight_color if c.reel else '#ffd400')|tojson }},
+    variationOn: {{ (c.reel.hook_angle_vary if c.reel else True)|tojson }},
+    voicesError: '',
+    presetTopics: {},
+    slug() {
+      return (this.name || 'kanal').toLowerCase()
+        .normalize('NFKD').replace(/[̀-ͯ]/g, '')
+        .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'kanal';
+    },
+    async loadVoices() {
+      try {
+        const r = await fetch('/api/ai33/voices');
+        const data = await r.json();
+        if (data.error) { this.voicesError = data.error; return; }
+        const dl = document.getElementById('ai33-voice-list');
+        dl.innerHTML = '';
+        (data.voices || []).forEach(v => {
+          const opt = document.createElement('option');
+          opt.value = v.voice_id;
+          opt.label = [v.name, v.language].filter(Boolean).join(' · ') || v.voice_id;
+          dl.appendChild(opt);
+        });
+      } catch (e) { this.voicesError = 'Ses listesi yüklenemedi.'; }
+    },
+    init() {
+      try {
+        const presets = JSON.parse(document.getElementById('niche-data').textContent);
+        (presets || []).forEach(p => { this.presetTopics[p.key] = p.topic; });
+      } catch (e) { /* presetTopics boş kalır */ }
+      this.loadVoices();
+    }
+  };
+}
+</script>
 {% endblock %}
