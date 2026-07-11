@@ -97,3 +97,43 @@ def test_reel_post_variation_off_sets_vary_false(tmp_path):
     assert cfg.reel.transition_vary is False
     assert cfg.reel.cta_enabled is False
     assert cfg.reel.comment_question is False
+
+
+def test_reel_post_empty_voice_no_channel(tmp_path):
+    c = _client(tmp_path)
+    with patch("short_bot.web.routes.reel_new.generate_dna", return_value=_fake_dna()):
+        r = c.post("/channels/new-reel", data={
+            "name": "Sessiz Kanal", "language": "tr",
+            "topic": "uzay ve gezegenler hakkında ilginç bilgiler",
+            "voice_id": "",
+        })
+    assert r.status_code in (200, 302)
+    assert not (tmp_path / "config" / "channels" / "sessiz-kanal.yaml").exists()
+
+
+def test_reel_post_short_topic_no_channel(tmp_path):
+    c = _client(tmp_path)
+    with patch("short_bot.web.routes.reel_new.generate_dna", return_value=_fake_dna()):
+        r = c.post("/channels/new-reel", data={
+            "name": "Kisa Konu", "language": "tr",
+            "topic": "uzay",  # < 10 karakter
+            "voice_id": "Q2IX97JeHBY3vNGzgM5s",
+        })
+    assert r.status_code in (200, 302)
+    assert not (tmp_path / "config" / "channels" / "kisa-konu.yaml").exists()
+
+
+def test_reel_post_slug_collision_gets_suffix(tmp_path):
+    c = _client(tmp_path)
+    with patch("short_bot.web.routes.reel_new.generate_dna", return_value=_fake_dna()):
+        data = {
+            "name": "Balina Dünyası", "language": "tr",
+            "topic": "balinalar ve deniz memelileri hakkında ilginç bilgiler",
+            "voice_id": "Q2IX97JeHBY3vNGzgM5s",
+            "highlight_color": "#38bdf8",
+        }
+        c.post("/channels/new-reel", data=dict(data))
+        c.post("/channels/new-reel", data=dict(data))
+    ch = tmp_path / "config" / "channels"
+    assert (ch / "balina-dunyasi.yaml").exists()
+    assert (ch / "balina-dunyasi-2.yaml").exists()
