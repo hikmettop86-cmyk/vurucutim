@@ -1,0 +1,12 @@
+{# YouTube aksiyon yardımcı formları — ana kaydet formunun DIŞINDA tutulur
+   (HTML5 iç içe form yasak). Kaydet formundaki butonlar bunlara form="<id>" ile
+   bağlanır. Gereken context: c. #}
+<form id="yt-disconnect-form" method="POST"
+      action="/channels/{{ c.slug }}/youtube/disconnect" class="hidden"></form>
+<form id="yt-connect-form" method="POST"
+      action="/channels/{{ c.slug }}/youtube/connect" class="hidden"></form>
+<form id="yt-upload-secrets-form" method="POST"
+      action="/channels/{{ c.slug }}/youtube/upload-secrets"
+      enctype="multipart/form-data" class="hidden"></form>
+<form id="yt-reset-form" method="POST"
+      action="/channels/{{ c.slug }}/youtube/reset" class="hidden"></form>

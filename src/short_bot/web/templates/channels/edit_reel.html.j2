@@ -258,16 +258,18 @@
       <section x-show="currentTab === 'youtube'" x-cloak
                class="bg-claude-surface border border-claude-border rounded-xl p-5 space-y-4">
         <h2 class="font-semibold text-claude-accent">YouTube</h2>
-        <div class="text-sm">
+        <div class="text-sm space-y-3">
           {% if yt_connected %}
           <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-claude-success/10 text-claude-success">
             <span class="w-1.5 h-1.5 rounded-full bg-claude-success"></span> YouTube bağlı
           </span>
           {% else %}
           <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-yellow-100 text-yellow-800">
-            ⚠ YouTube bağlı değil — yükleme için kanal düzenleme/YouTube sayfasından bağla
+            ⚠ YouTube bağlı değil — aşağıdan bağla
           </span>
           {% endif %}
+          {# Bağla / bağlantıyı kes / client_secrets yükle #}
+          {% include "_partials/youtube_connect.html.j2" %}
         </div>
         <label class="flex items-center gap-2 text-sm">
           <input type="checkbox" name="yt_auto_upload" value="1"
@@ -362,4 +364,7 @@ function reelEditWizard() {
   };
 }
 </script>
+
+{# YouTube aksiyon formları — ana kaydet formunun DIŞINDA (iç içe form yasak) #}
+{% include "_partials/youtube_hidden_forms.html.j2" %}
 {% endblock %}

@@ -53,16 +53,25 @@ def edit_reel(slug):
             pexels_key_set = False
 
     yt_connected = False
+    yt_info = None
+    yt_has_secrets = False
+    yt_secrets_abs = ""
     yt_root = current_app.config.get("SHORTBOT_YT_CREDS_DIR")
     if yt_root:
         try:
             from short_bot.youtube import auth as _yt_auth
             yt_connected = bool(_yt_auth.has_credentials(yt_root, slug))
+            if yt_connected:
+                yt_info = _yt_auth.load_channel_info(yt_root, slug)
+            yt_has_secrets = (yt_root / slug / "client_secrets.json").is_file()
+            yt_secrets_abs = str((yt_root / slug).resolve())
         except Exception:
-            yt_connected = False
+            yt_info = None
 
     return render_template("channels/edit_reel.html.j2", c=cfg,
-                           pexels_key_set=pexels_key_set, yt_connected=yt_connected)
+                           pexels_key_set=pexels_key_set, yt_connected=yt_connected,
+                           yt_info=yt_info, yt_has_secrets=yt_has_secrets,
+                           yt_secrets_abs=yt_secrets_abs)
 
 
 @bp.route("/channels/<slug>/edit-reel", methods=["POST"])

@@ -162,3 +162,15 @@ def test_reel_card_edit_link_goes_to_edit_reel(tmp_path):
     _make_reel_channel(c, cfg_dir)
     body = c.get("/channels").data.decode("utf-8")
     assert "/channels/reel-kanal/edit-reel" in body
+
+
+def test_edit_reel_youtube_connect_ui_present(tmp_path):
+    """Reel edit YouTube sekmesi gerçek bağlama yerini içermeli:
+    client_secrets yükleme + connect/disconnect gizli formları."""
+    c, cfg_dir = _client(tmp_path)
+    _make_reel_channel(c, cfg_dir)
+    body = c.get("/channels/reel-kanal/edit-reel").data.decode("utf-8")
+    assert 'id="yt-connect-form"' in body
+    assert "/channels/reel-kanal/youtube/connect" in body
+    assert "/channels/reel-kanal/youtube/upload-secrets" in body
+    assert 'name="client_secrets"' in body
