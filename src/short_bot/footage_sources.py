@@ -79,3 +79,22 @@ class PixabaySource:
         return out
     def download(self, cand, cache_dir):
         return _pexels_download(cand.url, cache_dir)   # düz HTTP GET; URL agnostik
+
+
+def build_footage_sources(priority, *, pexels_key="", pixabay_key=""):
+    """`priority` sırasına göre, anahtarı olan (available) kaynakları döndürür.
+
+    Hiçbiri kullanılamıyorsa geriye-uyum için [PexelsSource(pexels_key)] döner.
+    """
+    reg = {"pexels": lambda: PexelsSource(pexels_key),
+           "pixabay": lambda: PixabaySource(pixabay_key)}
+    out = []
+    for name in (priority or ["pexels"]):
+        mk = reg.get(name)
+        if mk:
+            s = mk()
+            if s.available():
+                out.append(s)
+    if not out:
+        out = [PexelsSource(pexels_key)]
+    return out

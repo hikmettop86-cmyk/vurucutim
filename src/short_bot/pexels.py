@@ -28,6 +28,11 @@ def resolve_pexels_api_key(secrets: dict) -> str:
     return os.environ.get("PEXELS_API_KEY") or secrets.get("pexels_api_key") or ""
 
 
+def resolve_pixabay_api_key(secrets: dict) -> str:
+    """Resolve the Pixabay API key. Env var PIXABAY_API_KEY beats secrets dict."""
+    return os.environ.get("PIXABAY_API_KEY") or secrets.get("pixabay_api_key") or ""
+
+
 def resolve_openai_api_key(secrets: dict) -> str:
     """Resolve the OpenAI API key. Env var OPENAI_API_KEY beats secrets dict."""
     return os.environ.get("OPENAI_API_KEY") or secrets.get("openai_api_key") or ""

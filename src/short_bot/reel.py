@@ -12,9 +12,10 @@ from pathlib import Path
 from typing import Callable
 
 from short_bot.audio_probe import probe_duration_s as _probe
-from short_bot.footage_matcher import SubjectPos
+from short_bot.footage_matcher import FootageDeps, SubjectPos
 from short_bot.footage_matcher import locate_subject as _locate
 from short_bot.footage_matcher import match_beat_clip as _match
+from short_bot.footage_sources import build_footage_sources
 from short_bot.reel_assembler import assemble_reel as _assemble
 from short_bot.reel_markers import _marker_worthy_segs, build_markers
 from short_bot.reel_models import build_reel_timeline
@@ -49,11 +50,13 @@ class ReelDeps:
     assemble_reel: Callable = _assemble
 
 
-def _match_with_fallback(d, query, *, topic_q, api_key, cache_dir, verify, vision_call):
+def _match_with_fallback(d, query, *, topic_q, api_key, cache_dir, verify,
+                         vision_call, footage_deps=None):
     """Footage eşleştirmeyi kademeli yedeklerle dener (footage = #1 risk).
 
     Sıra: (1) tam sorgu, (2) ilk 2 kelime, (3) konu tohumu — hepsi vision'lı;
     (4) son çare: ilk 2 kelime vision'sız (her zaman bir klip getirir).
+    ``footage_deps`` kaynak zincirini (öncelik-sıralı) taşır.
     """
     words = query.split()
     stages = [query]
@@ -63,19 +66,22 @@ def _match_with_fallback(d, query, *, topic_q, api_key, cache_dir, verify, visio
         stages.append(topic_q)
     for q in stages:
         clip = d.match_beat_clip(q, api_key=api_key, cache_dir=cache_dir,
-                                 verify=verify, vision_call=vision_call)
+                                 verify=verify, vision_call=vision_call,
+                                 deps=footage_deps)
         if clip is not None:
             return clip
     # son çare — vision'sız, en sade sorgu (boş dönmesin)
     fallback = " ".join(words[:2]) if len(words) >= 2 else (words[0] if words else topic_q)
     return d.match_beat_clip(fallback, api_key=api_key, cache_dir=cache_dir,
-                             verify=False, vision_call=None)
+                             verify=False, vision_call=None, deps=footage_deps)
 
 
 def produce_reel_video(
     *, topic: str, channel, templates_dir: Path, work_dir: Path,
     out_path: Path, music_path: Path | None, ai33_api_key: str,
-    pexels_api_key: str, ffmpeg_path: str = "ffmpeg", fps: int = 30,
+    pexels_api_key: str, pixabay_api_key: str = "",
+    footage_priority: list | None = None,
+    ffmpeg_path: str = "ffmpeg", fps: int = 30,
     browser: str = "chromium",
     llm_claude_path: str = "claude", llm_model: str = "default",
     llm_backend: str = "claude_cli", llm_api_key: str | None = None,
@@ -125,6 +131,12 @@ def produce_reel_video(
     log.info(f"  reel: ses {duration_s:.1f}s, {len(timeline.words)} kelime")
 
     # 5) Beat başına footage (+ belirteç-uygun segmentlerde nesne konumu)
+    # Öncelik-sıralı kaynak zinciri (Pexels + opsiyonel Pixabay): biri bulamazsa
+    # sıradaki denenir. Anahtarları olmayan kaynaklar atlanır.
+    sources = build_footage_sources(
+        footage_priority or ["pexels"],
+        pexels_key=pexels_api_key, pixabay_key=pixabay_api_key)
+    footage_deps = FootageDeps(sources=sources)
     clips_cache = work_dir / "clips"
     clip_paths: list[Path] = []
     seg_positions: list[SubjectPos] = []
@@ -141,7 +153,8 @@ def produce_reel_video(
             query = _first_q if si == 0 else _last_q
         clip = _match_with_fallback(
             d, query, topic_q=_topic_q, api_key=pexels_api_key,
-            cache_dir=clips_cache, verify=reel.verify_footage, vision_call=vision_call)
+            cache_dir=clips_cache, verify=reel.verify_footage, vision_call=vision_call,
+            footage_deps=footage_deps)
         if clip is None:
             raise RuntimeError(f"reel: '{query}' için footage bulunamadı (segment {si}).")
         clip_paths.append(clip)

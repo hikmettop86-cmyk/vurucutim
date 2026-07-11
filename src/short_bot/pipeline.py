@@ -1511,7 +1511,7 @@ def _reel_produce_or_none(
     from short_bot.assets import pick_music
     from short_bot.reel import produce_reel_video
     from short_bot.tts.ai33_client import resolve_ai33_api_key
-    from short_bot.pexels import resolve_pexels_api_key
+    from short_bot.pexels import resolve_pexels_api_key, resolve_pixabay_api_key
     log.info("  reel modu: footage-sürüklü üretim")
     try:
         music = pick_music(music_root, mood=reel.music_mood, channel_slug=channel.slug)
@@ -1523,6 +1523,8 @@ def _reel_produce_or_none(
         work_dir=Path(work_dir), out_path=out_path, music_path=music,
         ai33_api_key=resolve_ai33_api_key(secrets),
         pexels_api_key=resolve_pexels_api_key(secrets),
+        pixabay_api_key=resolve_pixabay_api_key(secrets),
+        footage_priority=getattr(settings, "footage_priority", ["pexels"]),
         ffmpeg_path=settings.ffmpeg_path, browser=settings.playwright_browser,
         llm_claude_path=llm_call.claude_path, llm_model=llm_call.model,
         llm_backend=llm_call.backend, llm_api_key=llm_call.api_key,

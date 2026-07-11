@@ -44,6 +44,7 @@ class Settings:
     trends: TrendsSettings = field(default_factory=_default_trends_settings)
     whisper_quality: str = "auto"
     whisper_device: str = "auto"
+    footage_priority: list = field(default_factory=lambda: ["pexels"])
 
 
 @dataclass(frozen=True)
@@ -211,6 +212,7 @@ def load_settings(path: Path) -> Settings:
     web = data.get("web", {})
     wh_data = data.get("whisper", {}) or {}
     tr_data = data.get("trends", {}) or {}
+    ft_data = data.get("footage", {}) or {}
     trends = TrendsSettings(
         enabled=bool(tr_data.get("enabled", False)),
         refresh_minutes=int(tr_data.get("refresh_minutes", 60)),
@@ -232,6 +234,7 @@ def load_settings(path: Path) -> Settings:
         trends=trends,
         whisper_quality=wh_data.get("quality", "auto"),
         whisper_device=wh_data.get("device", "auto"),
+        footage_priority=list(ft_data.get("priority", ["pexels"])),
     )
 
 
