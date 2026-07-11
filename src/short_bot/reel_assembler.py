@@ -37,7 +37,7 @@ def assemble_reel(
     frames_dir: Path, narration_path: Path, music_path: Path | None,
     out_path: Path, cut_times: list[float], duration_s: float,
     fps: int = 30, ffmpeg_path: str = "ffmpeg", music_volume: float = 0.10,
-    narration_volume: float = 1.0, whoosh_path: Path | None = None,
+    narration_volume: float = 1.0, sfx_at_cut: list | None = None,
     zoom: bool = True,
 ) -> Path:
     """Segment klipleri + overlay + ses → mp4. clip_paths ve seg_spans aynı boyda."""
@@ -78,9 +78,11 @@ def assemble_reel(
             parts.append(f"[{idx}:a]volume={music_volume:g}[bgm]")
             labels.append("[bgm]")
             idx += 1
-        if whoosh_path is not None and cut_times:
+        if sfx_at_cut and cut_times:
             for k, ct in enumerate(cut_times):
-                cmd += ["-i", str(whoosh_path)]
+                if k >= len(sfx_at_cut) or sfx_at_cut[k] is None:
+                    continue
+                cmd += ["-i", str(sfx_at_cut[k])]
                 parts.append(f"[{idx}:a]adelay={int(ct*1000)}|{int(ct*1000)},volume=0.6[wh{k}]")
                 labels.append(f"[wh{k}]")
                 idx += 1

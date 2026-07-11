@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
+import short_bot.reel_assembler as reel_assembler
 from short_bot.reel_assembler import assemble_reel
 
 
@@ -37,7 +38,7 @@ def test_assemble_produces_video_with_audio(tmp_path):
         clip_paths=clips, seg_spans=spans, frames_dir=frames,
         narration_path=narration, music_path=music, out_path=out,
         cut_times=[1.0, 2.0], duration_s=3.0, fps=30,
-        music_volume=0.1, whoosh_path=None, zoom=True,
+        music_volume=0.1, sfx_at_cut=None, zoom=True,
     )
     assert result == out and out.exists() and out.stat().st_size > 0
 
@@ -58,6 +59,74 @@ def test_assemble_missing_clip_raises(tmp_path):
             narration_path=Path(__file__).parent / "fixtures" / "music_sample_2s.mp3",
             music_path=None, out_path=tmp_path / "o.mp4",
             cut_times=[], duration_s=1.0)
+
+
+def test_assemble_mixes_sfx_per_cut(tmp_path, monkeypatch):
+    """sfx_at_cut'taki her SFX kesme anına adelay+volume=0.6 ile mixlenir."""
+    clips = []
+    for i in range(3):
+        c = tmp_path / f"c{i}.mp4"
+        c.write_bytes(b"x")
+        clips.append(c)
+    narration = Path(__file__).parent / "fixtures" / "music_sample_2s.mp3"
+    sfx_a = tmp_path / "a.mp3"; sfx_a.write_bytes(b"a")
+    sfx_b = tmp_path / "b.mp3"; sfx_b.write_bytes(b"b")
+
+    cmds = []
+
+    def fake_run(cmd):
+        cmds.append(list(cmd))
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(reel_assembler, "_run", fake_run)
+
+    assemble_reel(
+        clip_paths=clips, seg_spans=[(0.0, 1.0), (1.0, 2.0), (2.0, 3.0)],
+        frames_dir=tmp_path / "frames", narration_path=narration,
+        music_path=None, out_path=tmp_path / "out.mp4",
+        cut_times=[1.0, 2.0], duration_s=3.0,
+        sfx_at_cut=[sfx_a, sfx_b], zoom=False,
+    )
+
+    final = next(c for c in cmds if "-filter_complex" in c)
+    # her SFX final montaj komutunda -i girdisi olarak yer alır
+    assert str(sfx_a) in final and str(sfx_b) in final
+    fc = final[final.index("-filter_complex") + 1]
+    assert "adelay=1000|1000,volume=0.6" in fc
+    assert "adelay=2000|2000,volume=0.6" in fc
+
+
+def test_assemble_skips_none_sfx(tmp_path, monkeypatch):
+    """sfx_at_cut'ta None olan kesme atlanır; diğer SFX yine mixlenir."""
+    clips = []
+    for i in range(3):
+        c = tmp_path / f"c{i}.mp4"
+        c.write_bytes(b"x")
+        clips.append(c)
+    narration = Path(__file__).parent / "fixtures" / "music_sample_2s.mp3"
+    sfx_b = tmp_path / "b.mp3"; sfx_b.write_bytes(b"b")
+
+    cmds = []
+
+    def fake_run(cmd):
+        cmds.append(list(cmd))
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(reel_assembler, "_run", fake_run)
+
+    assemble_reel(
+        clip_paths=clips, seg_spans=[(0.0, 1.0), (1.0, 2.0), (2.0, 3.0)],
+        frames_dir=tmp_path / "frames", narration_path=narration,
+        music_path=None, out_path=tmp_path / "out.mp4",
+        cut_times=[1.0, 2.0], duration_s=3.0,
+        sfx_at_cut=[None, sfx_b], zoom=False,
+    )
+
+    final = next(c for c in cmds if "-filter_complex" in c)
+    fc = final[final.index("-filter_complex") + 1]
+    assert str(sfx_b) in final
+    assert "adelay=1000|1000" not in fc      # ilk kesme (None) atlandı
+    assert "adelay=2000|2000,volume=0.6" in fc
 
 
 def test_assemble_zoom_fallback_on_failure(tmp_path, monkeypatch):

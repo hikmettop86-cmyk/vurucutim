@@ -20,6 +20,7 @@ from short_bot.reel_markers import _marker_worthy_segs, build_markers
 from short_bot.reel_models import build_reel_timeline
 from short_bot.reel_narration import write_reel_narration as _write_narr
 from short_bot.reel_render import render_reel_overlay_frames as _render
+from short_bot.reel_sfx import discover_sfx, pick_sfx_per_cut
 from short_bot.tts.ai33_client import health_check as _health
 from short_bot.tts.ai33_client import synthesize as _synth
 from short_bot.tts.align import transcribe_words as _transcribe
@@ -171,13 +172,15 @@ def produce_reel_video(
 
     # 7) Montaj
     cut_times = [timeline.seg_spans[i][0] for i in range(1, len(timeline.seg_spans))]
-    whoosh = Path("assets/sfx/whoosh.mp3") if ("whoosh" in profile.transitions) else None
+    sfx_dir = Path("assets/sfx")
+    pool = discover_sfx(sfx_dir) if ("whoosh" in profile.transitions) else []
+    sfx_at_cut = pick_sfx_per_cut(pool, seed, len(cut_times))
     d.assemble_reel(
         clip_paths=clip_paths, seg_spans=timeline.seg_spans, frames_dir=frames_dir,
         narration_path=mp3, music_path=music_path, out_path=out_path,
         cut_times=cut_times, duration_s=duration_s, fps=fps, ffmpeg_path=ffmpeg_path,
         music_volume=reel.music_volume,
-        whoosh_path=whoosh if (whoosh and whoosh.exists()) else None,
+        sfx_at_cut=sfx_at_cut,
         zoom=("zoom" in profile.transitions),
     )
     return out_path
