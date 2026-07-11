@@ -9,6 +9,7 @@ from typing import Callable
 
 from pydantic import BaseModel
 
+from short_bot.claude_cli import run_json
 from short_bot.pexels import download_video as _download_video
 from short_bot.pexels import search_videos as _search_videos
 
@@ -69,11 +70,69 @@ def verify_clip_matches(image_url: str, query: str, *, vision_call=None) -> bool
             thumb.unlink(missing_ok=True)
 
 
+class SubjectPos(BaseModel):
+    found: bool = False
+    x: float = 0.5
+    y: float = 0.5
+
+
+class _LocateVerdict(BaseModel):
+    found: bool = False
+    x: float = 0.5
+    y: float = 0.5
+
+
+def _extract_cropped_frame(clip: Path, ffmpeg_path: str, out: Path) -> Path | None:
+    """Klibin ~ortasından 9:16 cover-crop'lu, ≤384px kare çıkarır."""
+    import subprocess
+    vf = ("scale=1080:1920:force_original_aspect_ratio=increase,"
+          "crop=1080:1920,scale=384:-1")
+    try:
+        p = subprocess.run([ffmpeg_path, "-y", "-ss", "1", "-i", str(clip),
+                            "-vf", vf, "-frames:v", "1", str(out)],
+                           capture_output=True, timeout=30)
+        return out if out.exists() and out.stat().st_size > 0 else None
+    except Exception:
+        return None
+
+
+def locate_subject(clip_path, query, *, vision_call=None, ffmpeg_path="ffmpeg") -> SubjectPos:
+    """Klibin final-kare görünümünde ana nesnenin normalize (x,y) merkezini bulur.
+    vision yok/hata/found=false → SubjectPos(found=False)."""
+    if vision_call is None:
+        return SubjectPos(found=False)
+    import tempfile
+    frame: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tf:
+            frame = Path(tf.name)
+        if _extract_cropped_frame(Path(clip_path), ffmpeg_path, frame) is None:
+            return SubjectPos(found=False)
+        prompt = (
+            f'Bu 9:16 kare şu nesneyi içeriyor mu: "{query}"? İçeriyorsa nesnenin '
+            f'MERKEZİNİ normalize koordinatla ver (sol-üst 0,0; sağ-alt 1,1).\n'
+            f'SADECE JSON: {{"found": true|false, "x": 0.0..1.0, "y": 0.0..1.0}}'
+        )
+        v = run_json(prompt, _LocateVerdict, claude_path=vision_call.claude_path,
+                     model=vision_call.model, backend=vision_call.backend,
+                     api_key=vision_call.api_key, image_path=frame,
+                     retries=1, timeout_s=45)
+        x = min(1.0, max(0.0, float(v.x))); y = min(1.0, max(0.0, float(v.y)))
+        return SubjectPos(found=bool(v.found), x=x, y=y)
+    except Exception as e:
+        log.warning(f"locate_subject hatası: {e}")
+        return SubjectPos(found=False)
+    finally:
+        if frame is not None:
+            frame.unlink(missing_ok=True)
+
+
 @dataclass(frozen=True)
 class FootageDeps:
     search_videos: Callable = _search_videos
     download_video: Callable = _download_video
     verify_footage: Callable = verify_clip_matches   # (image_url, query, *, vision_call) -> bool
+    locate_subject: Callable = locate_subject
 
 
 def match_beat_clip(query: str, *, api_key: str, cache_dir: Path,

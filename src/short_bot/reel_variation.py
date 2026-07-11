@@ -8,6 +8,8 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass
 
+from short_bot.reel_markers import MARKER_TYPES
+
 LAYOUTS = ("classic", "lower_left", "top_heavy")
 HOOK_ANGLES = (
     "Açılışı bir SORU olarak kur (merak boşluğu).",
@@ -24,6 +26,8 @@ _TRANSITION_SETS = (
     ("zoom",),
 )
 _CUT_PACINGS = ("medium", "fast", "medium", "slow")
+_MARKER_KITS = (("arrow",), ("ring",), ("arrow", "ring"), ("pulse", "box"),
+                ("box",), ("ring", "pulse"), ("spotlight",), ("underline", "arrow"))
 
 
 @dataclass(frozen=True)
@@ -33,6 +37,7 @@ class VariationProfile:
     accent: str
     transitions: tuple[str, ...]
     cut_pacing: str
+    marker_kit: tuple[str, ...] = ()
 
 
 def _idx(seed: int, salt: str, n: int) -> int:
@@ -86,5 +91,8 @@ def build_variation_profile(channel, seed: int) -> VariationProfile:
     else:
         cut_pacing = reel.cut_pacing
 
+    marker_kit = _MARKER_KITS[_idx(seed, "marker", len(_MARKER_KITS))]
+
     return VariationProfile(layout=layout, hook_angle=hook_angle, accent=accent,
-                            transitions=transitions, cut_pacing=cut_pacing)
+                            transitions=transitions, cut_pacing=cut_pacing,
+                            marker_kit=marker_kit)

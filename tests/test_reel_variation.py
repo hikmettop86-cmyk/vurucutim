@@ -71,3 +71,11 @@ def test_accent_variants_excludes_dark_primary():
     variants = _accent_variants(_C())
     assert "#0a2540" not in variants           # koyu primary elendi
     assert "#38bdf8" in variants
+
+
+def test_variation_has_marker_kit():
+    from short_bot.reel_variation import build_variation_profile, MARKER_TYPES
+    ch = _Ch()
+    kit = build_variation_profile(ch, 7).marker_kit
+    assert kit                                 # kit boş değil
+    assert set(kit) <= set(MARKER_TYPES)       # MARKER_TYPES alt kümesi
