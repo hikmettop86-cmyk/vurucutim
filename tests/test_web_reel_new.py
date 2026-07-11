@@ -218,6 +218,25 @@ def test_channel_list_shows_reel_badge(tmp_path):
     assert "🎬" in body
 
 
+def test_reel_channel_card_is_distinct(tmp_path):
+    """Reel kanalı, standart karttan görsel/işlevsel olarak ayrık render edilmeli:
+    kart rozeti '🎬 REEL', reel'e özgü çipler (süre + abone kartı), satırda 'Reel'."""
+    c = _client(tmp_path)
+    with patch("short_bot.web.routes.reel_new.generate_dna", return_value=_fake_dna()):
+        c.post("/channels/new-reel", data={
+            "name": "Ayrik Reel", "language": "tr",
+            "topic": "uzay ve gezegenler hakkında ilginç bilgiler",
+            "voice_id": "Q2IX97JeHBY3vNGzgM5s", "highlight_color": "#38bdf8",
+            "cta_enabled": "on",
+        })
+    body = c.get("/channels").data.decode("utf-8")
+    assert "🎬 REEL" in body          # ayrık kart rozeti (kart görünümü)
+    assert "🎬 Reel" in body          # satır göstergesi (tablo görünümü)
+    assert "abone kartı" in body      # reel'e özgü özellik çipi
+    assert "25-45sn" in body          # reel süre çipi (standart kartta yok)
+    assert "#38bdf8" in body          # marka rengi kenarlık/şerit
+
+
 def test_reel_post_invalid_pacing_fails_before_dna(tmp_path):
     """Geçersiz Literal (cut_pacing) ücretli DNA çağrısından ÖNCE hata vermeli:
     kanal yazılmaz VE generate_dna hiç çağrılmaz (kredi harcanmaz)."""

@@ -1,0 +1,60 @@
+{# Reel kanalına özel kart — standart kanal kartından görsel/işlevsel olarak ayrı.
+   Marka rengi kenarlık + üst şerit, reel özellik çipleri, abone/varyasyon rozetleri. #}
+<div class="bg-white border-2 rounded-xl shadow-soft overflow-hidden hover:shadow-card transition-shadow"
+     style="border-color: {{ c.reel.highlight_color }}"
+     id="channel-card-{{ c.slug }}"
+     x-show="!search || '{{ c.slug }}'.toLowerCase().includes(search.toLowerCase()) || '{{ c.name|e }}'.toLowerCase().includes(search.toLowerCase())">
+  <div class="h-1.5" style="background: {{ c.reel.highlight_color }}"></div>
+  <div class="p-5">
+    <div class="flex items-start justify-between mb-3 gap-2">
+      <div class="min-w-0 flex-1">
+        <a href="/channels/{{ c.slug }}/edit" class="block group">
+          <h3 class="font-serif font-bold text-lg text-claude-text group-hover:text-claude-accent truncate">{{ c.name }}</h3>
+          <p class="font-mono text-xs text-claude-muted truncate">{{ c.slug }}</p>
+        </a>
+      </div>
+      <span class="flex-none bg-claude-accent text-white text-xs font-bold px-2 py-1 rounded-lg">🎬 REEL</span>
+    </div>
+
+    {% if c.generator and c.generator.topic %}
+    <p class="text-xs text-claude-muted mb-3 truncate" title="{{ c.generator.topic }}">{{ c.generator.topic }}</p>
+    {% endif %}
+
+    {# Reel format çipleri #}
+    <div class="flex flex-wrap gap-1.5 mb-2 text-xs">
+      <span class="inline-flex items-center gap-1 bg-claude-surface-alt px-2 py-0.5 rounded-full">
+        <span class="w-3 h-3 rounded-full inline-block" style="background: {{ c.reel.highlight_color }}"></span> marka
+      </span>
+      <span class="bg-claude-surface-alt px-2 py-0.5 rounded-full">⏱ {{ c.reel.target_duration_s[0] }}-{{ c.reel.target_duration_s[1] }}sn</span>
+      <span class="bg-claude-surface-alt px-2 py-0.5 rounded-full">✂ {{ c.reel.cut_pacing }}</span>
+      <span class="bg-claude-surface-alt px-2 py-0.5 rounded-full">🎵 {{ c.reel.music_mood }}</span>
+      <span class="bg-claude-surface-alt px-2 py-0.5 rounded-full">🌐 {{ c.language|upper }}</span>
+    </div>
+
+    {# Otomasyon-gizleme + abone mekanikleri #}
+    <div class="flex flex-wrap gap-1.5 mb-3 text-[11px]">
+      {% if c.reel.hook_angle_vary or c.reel.accent_vary or c.reel.transition_vary %}
+        <span class="bg-green-100 text-green-800 px-2 py-0.5 rounded-full" title="Her video farklı görünür — otomasyon belli olmaz">🔀 varyasyon</span>
+      {% endif %}
+      {% if c.reel.cta_enabled %}<span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">🔔 abone kartı</span>{% endif %}
+      {% if c.reel.comment_question %}<span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">💬 yorum sorusu</span>{% endif %}
+      {% if c.reel.series_enabled %}<span class="bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full">📺 seri</span>{% endif %}
+    </div>
+
+    <div class="text-xs text-claude-muted mb-4 truncate">🎙 ses: <span class="font-mono">{{ c.reel.voice_id or '—' }}</span></div>
+
+    {# Aksiyonlar #}
+    <div class="flex items-center gap-2 pt-3 border-t border-claude-border">
+      <button hx-post="/channels/{{ c.slug }}/toggle"
+              hx-target="#channel-card-{{ c.slug }}" hx-swap="outerHTML"
+              class="flex-1 px-2 py-1 rounded text-xs
+                     {% if c.enabled %}bg-claude-success text-white hover:opacity-90{% else %}bg-claude-surface-alt text-claude-muted hover:text-claude-text{% endif %}">
+        {{ '● Açık' if c.enabled else '○ Kapalı' }}
+      </button>
+      <button hx-post="/shorts/run-now" hx-vals='{"slug": "{{ c.slug }}"}'
+              hx-on::after-request="if (event.detail.successful) window.location.href='/activity?channel={{ c.slug }}'"
+              class="px-2 py-1 text-claude-accent hover:bg-claude-accent-soft rounded text-xs" title="Şimdi reel üret">▶</button>
+      <a href="/channels/{{ c.slug }}/edit" class="px-2 py-1 text-claude-text hover:bg-claude-surface-alt rounded text-xs">Düzenle</a>
+    </div>
+  </div>
+</div>

@@ -1,3 +1,6 @@
+{% if c.reel and c.reel.enabled %}
+{% include "_partials/channel_card_reel.html.j2" %}
+{% else %}
 <div class="bg-white border border-claude-border rounded-xl shadow-soft p-5 hover:shadow-card transition-shadow"
      id="channel-card-{{ c.slug }}"
      x-show="!search || '{{ c.slug }}'.toLowerCase().includes(search.toLowerCase()) || '{{ c.name|e }}'.toLowerCase().includes(search.toLowerCase())">
@@ -25,9 +28,6 @@
         <span class="text-claude-accent text-xs">✨ Generator</span>
       {% else %}
         <span class="text-claude-muted text-xs">📰 RSS</span>
-      {% endif %}
-      {% if c.reel and c.reel.enabled %}
-        <span class="text-xs" title="Reel">🎬 Reel</span>
       {% endif %}
     </div>
   </div>
@@ -75,3 +75,4 @@
     </a>
   </div>
 </div>
+{% endif %}

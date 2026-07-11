@@ -1,4 +1,5 @@
 <tr class="border-b border-claude-border hover:bg-claude-surface-alt" id="channel-{{ c.slug }}"
+    {% if c.reel and c.reel.enabled %}style="border-left: 3px solid {{ c.reel.highlight_color }}"{% endif %}
     x-show="!search || '{{ c.slug }}'.toLowerCase().includes(search.toLowerCase()) || '{{ c.name|e }}'.toLowerCase().includes(search.toLowerCase())">
   <td class="p-3 font-mono text-xs">
     {{ c.slug }}
@@ -13,7 +14,14 @@
   </td>
   <td class="p-3">{{ c.name }}</td>
   <td class="p-3">{{ c.language }}</td>
-  <td class="p-3 text-claude-muted">{{ c.template }}</td>
+  <td class="p-3 text-claude-muted">
+    {% if c.reel and c.reel.enabled %}
+      <span class="font-semibold" style="color: {{ c.reel.highlight_color }}">🎬 Reel</span>
+      <span class="text-xs">· {{ c.reel.target_duration_s[0] }}-{{ c.reel.target_duration_s[1] }}sn</span>
+    {% else %}
+      {{ c.template }}
+    {% endif %}
+  </td>
   <td class="p-3">
     <span class="font-mono text-xs text-claude-muted" title="{{ c.schedule_cron }}">
       {{ c.schedule_cron|cron_human }}
