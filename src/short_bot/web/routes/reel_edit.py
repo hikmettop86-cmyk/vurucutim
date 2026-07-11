@@ -118,6 +118,7 @@ def save_reel(slug):
             cta_enabled=request.form.get("reel_cta_enabled") == "on",
             cta_text_custom=request.form.get("reel_cta_text_custom", old.cta_text_custom if old else ""),
             comment_question=request.form.get("reel_comment_question") == "on",
+            music_volume=(old.music_volume if old else 0.10),
         )
     except Exception as e:  # pydantic ValidationError vb.
         flash(f"Reel ayarları geçersiz: {e}", "error")
@@ -139,6 +140,7 @@ def save_reel(slug):
             topic=topic,
             forbidden_lookback=(cfg.generator.forbidden_lookback if cfg.generator else 50),
             max_retries=(cfg.generator.max_retries if cfg.generator else 3),
+            fuzzy_threshold=(cfg.generator.fuzzy_threshold if cfg.generator else None),
         )
 
     new_youtube = cfg.youtube

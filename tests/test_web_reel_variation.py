@@ -59,7 +59,7 @@ def test_edit_page_shows_variation_fields(app):
 
 def test_post_sets_variation(app):
     path = _path(app)
-    app.test_client().post("/channels/test-reel/edit", data=_form(
+    app.test_client().post("/channels/test-reel/edit-reel", data=_form(
         reel_layout="top_heavy", reel_accent_vary="on"))
     cfg = load_channel(path)
     assert cfg.reel.layout == "top_heavy"
@@ -69,7 +69,7 @@ def test_post_sets_variation(app):
 def test_post_variation_checkboxes_unchecked(app):
     path = _path(app)
     # checkbox gönderilmezse False
-    app.test_client().post("/channels/test-reel/edit", data=_form(reel_layout="auto"))
+    app.test_client().post("/channels/test-reel/edit-reel", data=_form(reel_layout="auto"))
     cfg = load_channel(path)
     assert cfg.reel.hook_angle_vary is False
     assert cfg.reel.accent_vary is False

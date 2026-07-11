@@ -19,12 +19,25 @@ class GeneratorResult(BaseModel):
         pattern=r"^[a-zçğıöşü]+$",   # Turkish lowercase, single word
     )
     script: Script
-    image_keywords: list[str] = Field(min_length=2, max_length=8)
+    image_keywords: list[str] = Field(min_length=1, max_length=8)
 
     @field_validator("text", mode="before")
     @classmethod
     def _normalize_text(cls, v):
         return strip_non_turkish_diacritics(v) if isinstance(v, str) else v
+
+    @field_validator("image_keywords", mode="before")
+    @classmethod
+    def _coerce_keywords(cls, v):
+        # LLM bazen liste yerine tek string döndürüyor
+        # (ör. "frill-necked lizard running on water"). Ayırıcı varsa böl,
+        # yoksa tek arama ifadesi olarak listeye sar — üretim çökmesin.
+        if isinstance(v, str):
+            for sep in (";", "\n", "|", "/"):
+                v = v.replace(sep, ",")
+            parts = [p.strip() for p in v.split(",") if p.strip()]
+            return parts or [v.strip()]
+        return v
 
 
 from short_bot.config import ChannelConfig

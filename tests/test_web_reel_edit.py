@@ -174,3 +174,36 @@ def test_edit_reel_youtube_connect_ui_present(tmp_path):
     assert "/channels/reel-kanal/youtube/connect" in body
     assert "/channels/reel-kanal/youtube/upload-secrets" in body
     assert 'name="client_secrets"' in body
+
+
+def test_edit_reel_post_preserves_music_volume_and_fuzzy(tmp_path):
+    """Reel-güvenli save, formda olmayan nested alanları (music_volume,
+    generator.fuzzy_threshold) sıfırlamamalı (review Important #1)."""
+    from dataclasses import replace
+    from short_bot.config import load_channel, save_channel
+    c, cfg_dir = _client(tmp_path)
+    _make_reel_channel(c, cfg_dir)
+    p = cfg_dir / "channels" / "reel-kanal.yaml"
+    cfg = load_channel(p)
+    cfg = replace(
+        cfg,
+        reel=cfg.reel.model_copy(update={"music_volume": 0.30}),
+        generator=replace(cfg.generator, fuzzy_threshold=77.0),
+    )
+    save_channel(p, cfg)
+    c.post("/channels/reel-kanal/edit-reel", data={
+        "reel_enabled": "on", "reel_voice_id": "V", "reel_highlight_color": "#111111",
+        "generator_topic": cfg.generator.topic,
+    })
+    after = load_channel(p)
+    assert after.reel.music_volume == 0.30
+    assert after.generator.fuzzy_threshold == 77.0
+
+
+def test_post_edit_on_reel_channel_redirects_to_edit_reel(tmp_path):
+    """Bayat /edit POST'u reel kanalda reel-güvenli sayfaya yönlenir (savunma)."""
+    c, cfg_dir = _client(tmp_path)
+    _make_reel_channel(c, cfg_dir)
+    r = c.post("/channels/reel-kanal/edit", data={"schedule_cron": "0 5 * * *"})
+    assert r.status_code == 302
+    assert "/channels/reel-kanal/edit-reel" in r.headers["Location"]

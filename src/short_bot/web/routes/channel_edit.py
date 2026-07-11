@@ -165,6 +165,10 @@ def save(slug):
     if not path.exists():
         abort(404)
     cfg = load_channel(path)
+    # Reel kanalları reel-özel (reel-güvenli) save'i kullanır. Bayat sekmeden
+    # gelen bir POST'un DNA/CTA'yı bozmasını engelle (savunma derinliği).
+    if cfg.reel and cfg.reel.enabled:
+        return redirect(url_for("reel_edit.edit_reel", slug=slug))
 
     keywords = _form_get_list("keywords") or list(cfg.keywords)
 

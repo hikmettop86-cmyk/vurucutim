@@ -61,7 +61,7 @@ def test_edit_shows_subscribe_fields(app):
 
 def test_post_sets_subscribe(app):
     path = _path(app)
-    app.test_client().post("/channels/test-reel/edit", data=_form(
+    app.test_client().post("/channels/test-reel/edit-reel", data=_form(
         reel_series_enabled="on", reel_series_title="Doğanın Sırları",
         reel_cta_enabled="on", reel_cta_text_custom="TAKİP ET",
         reel_comment_question="on"))
