@@ -17,29 +17,38 @@ bp = Blueprint("reel_new", __name__)
 
 # Hazır niş presetleri: çip etiketi + LLM'e verilecek konu tohumu (topic seed).
 # Konu, generator üretimini bu sınırda tutar; kullanıcı yine de serbest yazabilir.
+# Nişler NexLev verisiyle seçildi (2026-07): footage'lı ilginç-bilgiler alanında
+# kârlı/büyüyen İngilizce formatlar; Türkçe'de rekabet ~yok (arbitraj fırsatı).
 NICHE_PRESETS = [
-    {"key": "balinalar", "label": "🐳 Balinalar",
-     "topic": "balinalar ve deniz memelileri hakkında ilginç bilgiler: mavi balina, "
-              "katil balina (orka), balina göçü, ekolokasyon, balina şarkıları, "
-              "derin deniz dalışı ve okyanus yaşamı"},
+    {"key": "insan-vucudu", "label": "🧠 İnsan Vücudu",
+     "topic": "insan vücudu ve sağlık hakkında merak uyandıran gerçekler: vücut "
+              "nasıl iyileşir, uykusuzlukta ne olur, uzayda hayatta kalabilir "
+              "misin, beyin ve organların şaşırtıcı yetenekleri"},
+    {"key": "savas-tarihi", "label": "⚔️ Savaş Tarihi",
+     "topic": "askeri tarihten merak konuları: bir silahın, taktiğin, komutanın "
+              "ya da savaşın arkasındaki bilinmeyen detaylar, antik ve modern "
+              "savaşlardan şaşırtıcı gerçekler"},
+    {"key": "nasil-calisir", "label": "⚙️ Nasıl Çalışır",
+     "topic": "günlük hayattaki 'bu neden böyle / nasıl çalışır' merakları: uçakta "
+              "neden kulak ağrır, köprüler neden titreşir, makineler ve icatlar "
+              "nasıl çalışır, hayat kurtaran mühendislik harikaları"},
+    {"key": "cografya", "label": "🗺️ Coğrafya",
+     "topic": "coğrafya ve harita merakları: uçaklar neden bazı bölgelerden uçmaz, "
+              "dünyanın en tehlikeli yerleri, ülkeler ve şehirler hakkında az "
+              "bilinen şaşırtıcı gerçekler"},
+    {"key": "hayvanlar", "label": "🐳 Hayvanlar",
+     "topic": "hayvanlar ve vahşi yaşam hakkında şaşırtıcı gerçekler: en zeki "
+              "canlılar, tuhaf hayvan davranışları, okyanus devleri, dokunamayacağın "
+              "canlılar ve doğanın olağanüstü örnekleri"},
     {"key": "uzay", "label": "🌌 Uzay",
      "topic": "uzay, gezegenler, kara delikler, evrenin sırları, astronomi ve "
               "galaksiler hakkında merak uyandıran ilginç bilgiler"},
-    {"key": "tarih", "label": "🏛️ Tarih",
-     "topic": "tarihten ilginç olaylar, antik uygarlıklar, kayıp şehirler, ünlü "
-              "figürler ve az bilinen tarihi gerçekler"},
-    {"key": "bilim", "label": "🔬 Bilim",
-     "topic": "günlük hayattaki bilim, fizik, kimya ve biyolojiden şaşırtıcı "
-              "gerçekler ve 'nasıl çalışır' açıklamaları"},
-    {"key": "doga", "label": "🌿 Doğa",
-     "topic": "doğa, vahşi yaşam, hayvanlar, bitkiler ve gezegenimizin olağanüstü "
-              "olayları hakkında ilginç bilgiler"},
-    {"key": "muhendislik", "label": "⚙️ Mühendislik",
-     "topic": "mühendislik harikaları, dev yapılar, makineler, teknoloji ve bunların "
-              "nasıl inşa edildiğine dair ilginç bilgiler"},
+    {"key": "bilim", "label": "🔬 Bilim & Deney",
+     "topic": "görsel bilim ve deney gerçekleri: kimya tepkimeleri, fizik olayları, "
+              "'nasıl' ve 'neden' açıklamaları, günlük hayattaki şaşırtıcı bilim"},
     {"key": "ilginc", "label": "💡 İlginç Bilgiler",
-     "topic": "bilim, doğa, uzay ve mühendislikten merak uyandıran ilginç gerçekler "
-              "ve az bilinen bilgiler"},
+     "topic": "günlük hayattan ve bilimden merak uyandıran ilginç gerçekler ve az "
+              "bilinen bilgiler"},
 ]
 
 

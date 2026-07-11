@@ -49,7 +49,7 @@ def test_reel_wizard_get_renders_key_fields(tmp_path):
     assert 'name="cta_enabled"' in body
     assert 'name="produce_now"' in body
     # niş çipleri
-    assert "Balinalar" in body
+    assert "Hayvanlar" in body
     assert "Uzay" in body
 
 
@@ -228,9 +228,9 @@ def test_reel_wizard_chip_click_uses_key_only(tmp_path):
     c = _client(tmp_path)
     body = c.get("/channels/new-reel").data.decode("utf-8")
     # Tek argümanlı, güvenli çağrı:
-    assert "pick('balinalar')" in body
+    assert "pick('hayvanlar')" in body
     # Kırık iki-argümanlı biçim OLMAMALI:
-    assert "pick('balinalar', " not in body
+    assert "pick('hayvanlar', " not in body
     # Topic verisi ayrı JSON island'da:
     assert 'id="niche-data"' in body
-    assert "deniz memelileri" in body
+    assert "okyanus devleri" in body
