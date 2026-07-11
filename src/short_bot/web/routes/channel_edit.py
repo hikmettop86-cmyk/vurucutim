@@ -22,6 +22,8 @@ def edit(slug):
     if not path.exists():
         abort(404)
     cfg = load_channel(path)
+    if cfg.reel and cfg.reel.enabled:
+        return redirect(url_for("reel_edit.edit_reel", slug=slug))
     from short_bot.dna import ARCHETYPES
     from short_bot.web.cron_describe import describe_cron
     from short_bot.web.models import Run

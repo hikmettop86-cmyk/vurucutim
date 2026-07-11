@@ -1,0 +1,14 @@
+{% extends "base.html.j2" %}
+{% block title %}Reel Düzenle — {{ c.name }}{% endblock %}
+{% block content %}
+<h1 class="font-serif text-2xl font-bold mb-4">🎬 {{ c.name }} — Reel Düzenle</h1>
+<form method="post" action="/channels/{{ c.slug }}/edit-reel">
+  <input type="hidden" name="reel_enabled" value="on">
+  <input type="text" name="reel_voice_id" value="{{ c.reel.voice_id }}">
+  <input type="color" name="reel_highlight_color" value="{{ c.reel.highlight_color }}">
+  <textarea name="generator_topic">{{ c.generator.topic if c.generator else '' }}</textarea>
+  <button type="button">🔎 NexLev Niş Bulucu</button>
+  <button type="button">🤖 AI Niş Bulucu</button>
+  <button type="submit">Kaydet</button>
+</form>
+{% endblock %}
