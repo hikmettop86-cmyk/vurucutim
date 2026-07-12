@@ -28,10 +28,27 @@ _LANG_NAMES = {"tr": "Türkçe", "en": "İngilizce", "de": "Almanca",
                "es": "İspanyolca", "fr": "Fransızca"}
 
 
+def _short_query(niche_query: str, max_len: int = 90) -> str:
+    """Uzun/talimatlı kanal konusunu kısa niş sorgusuna indir.
+
+    generator.topic tam bir yönerge olabilir ("...gerilim kurarak anlat") —
+    NexLev'e talimat değil NİŞ lazım; ilk cümle/iki-nokta öncesi + uzunluk katı.
+    Uzun sorgu Claude'u sınırsız keşfe sürüklüyor (bilim kanalı 600s'te bile
+    timeout; kısa sorguda balinalar ~4dk)."""
+    q = (niche_query or "").strip()
+    for sep in ("—", ":", ".", "\n"):
+        head = q.split(sep)[0].strip()
+        if len(head) >= 20:
+            q = head
+    return q[:max_len]
+
+
 def _prompt(niche_query: str, count: int, lang: str) -> str:
     return f"""NexLev araçlarıyla şu nişte KÜÇÜK kanallarda PATLAMIŞ (outlier)
 YouTube Shorts videolarını bul: "{niche_query}"
 
+HIZLI OL: en fazla 3 NexLev arama çağrısı yap; derin inceleme yapma; ilk güçlü
+sonuçlarla yetin.
 Küçük kanal + çok izlenme = kanıtlanmış konu. En güçlü {count} videoyu seç.
 Her biri için SADECE şu JSON dizisini döndür (başka metin YOK):
 [{{"topic": "<{lang} tek cümlelik konu fikri — bu konuda video üretilecek>",
@@ -91,13 +108,14 @@ def mine_topics(niche_query: str, *, language: str = "tr",
                 count: int = 12, timeout: int = 600,
                 run=subprocess.run) -> list[dict]:
     """NexLev'den outlier shorts madenciliği. Hata → RuntimeError/ValueError."""
-    niche_query = (niche_query or "").strip() or "ilginç bilgiler"
+    niche_query = _short_query(niche_query) or "ilginç bilgiler"
     lang = _LANG_NAMES.get(language, "Türkçe")
     cmd = [claude_path, "-p", _prompt(niche_query, int(count), lang),
            "--allowedTools", _ALLOWED_TOOLS,
-           "--output-format", "json"]
-    if model:
-        cmd += ["--model", model]
+           "--output-format", "json",
+           # Madencilik arama+özet işi — hızlı model yeterli; varsayılan (opus)
+           # uzun agentic keşifte 600s'i aşıyor.
+           "--model", model or "sonnet"]
     try:
         proc = run(cmd, capture_output=True, text=True,
                    timeout=timeout, encoding="utf-8")
