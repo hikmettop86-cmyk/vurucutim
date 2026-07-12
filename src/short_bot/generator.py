@@ -20,6 +20,7 @@ class GeneratorResult(BaseModel):
     )
     script: Script
     image_keywords: list[str] = Field(min_length=1, max_length=8)
+    bank_id: int | None = None   # seçilen kanıtlanmış-konu kaydı (banka rotasyonu)
 
     @field_validator("text", mode="before")
     @classmethod
@@ -51,6 +52,7 @@ def build_generator_prompt(
     dna: DnaSpec,
     forbidden_texts: list[str],
     topic_distribution: dict[str, int],
+    proven_topics: list[dict] | None = None,
 ) -> str:
     ph = get_phrases(channel.language)
     if channel.generator is None:
@@ -83,6 +85,27 @@ def build_generator_prompt(
             lines.append(f"- {tag}: {count}{marker}")
         rotation_block = f"\n{ph['topic_rotation']}:\n" + "\n".join(lines) + "\n"
 
+    def _fmt_n(n: int) -> str:
+        if n >= 1_000_000:
+            return f"{n / 1_000_000:.1f}M".replace(".0M", "M")
+        if n >= 1_000:
+            return f"{n // 1_000}K"
+        return str(n)
+
+    proven_block = ""
+    if proven_topics:
+        lines = "\n".join(
+            f"- [id={t['id']}] {t['topic']}  "
+            f"(kanıt: {_fmt_n(int(t.get('views', 0)))} izlenme / "
+            f"{_fmt_n(int(t.get('subs', 0)))} abonelik kanal)"
+            for t in proven_topics)
+        proven_block = (
+            "\nKANITLANMIŞ KONULAR (nişinde küçük kanallarda patlamış "
+            "videolardan damıtıldı):\n" + lines + "\n"
+            'Bu konulardan BİRİNİ seç ya da çok yakın bir varyasyonunu üret ve '
+            'çıktına "bank_id": <seçtiğin id> ekle. Hiçbiri kanala uymuyorsa '
+            'serbest üret, "bank_id": null bırak.\n')
+
     forbidden_tone = ", ".join(dna.tone.forbidden) if dna.tone.forbidden else "—"
 
     return f"""Sen "{channel.name}" kanalı için kısa, vurucu içerik üreten bir yazarsın.
@@ -98,7 +121,7 @@ def build_generator_prompt(
 - Body max chars: {dna.tone.body_max_chars}
 
 {ph['task']}: 1 yeni içerik üret (1 short = 1 üretim).
-{forbidden_block}{rotation_block}
+{forbidden_block}{rotation_block}{proven_block}
 topic_tag: tek kelime, lowercase, Türkçe (sabir/umut/ayrilik gibi). Az kullanılmış / hiç kullanılmamış temalardan birini seç.
 
 {ph['output_intro']}:
@@ -195,11 +218,13 @@ def generate_quote(
     model: str = "sonnet",
     backend: str = "claude_cli",
     api_key: str | None = None,
+    proven_topics: list[dict] | None = None,
 ) -> GeneratorResult:
     prompt = build_generator_prompt(
         channel=channel, dna=dna,
         forbidden_texts=forbidden_texts,
         topic_distribution=topic_distribution,
+        proven_topics=proven_topics,
     )
     return run_json(
         prompt, GeneratorResult,
