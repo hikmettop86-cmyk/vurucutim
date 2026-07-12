@@ -40,10 +40,10 @@
             <button type="button"
                     hx-post="/channels/new-reel/find-niches"
                     hx-include="[name='topic'],[name='language']"
-                    hx-vals='{"mode":"nexlev"}'
+                    hx-vals='{"mode":"data"}'
                     hx-target="#niche-results" hx-swap="innerHTML"
                     class="text-xs bg-claude-surface border border-claude-accent text-claude-accent hover:bg-claude-accent-soft px-3 py-1 rounded-lg"
-                    title="Claude CLI + NexLev canlı verisiyle kârlı niş önerileri (~1-2 dk)">🔎 NexLev Niş Bulucu</button>
+                    title="LLM aday üretir, YouTube outlier verisi kanıtlar ve sıralar (~1 dk)">📊 Veri-Destekli Niş Bulucu</button>
             <button type="button"
                     hx-post="/channels/new-reel/find-niches"
                     hx-include="[name='topic'],[name='language']"
@@ -186,7 +186,7 @@
 
 <script id="niche-data" type="application/json">{{ niche_presets|tojson }}</script>
 <script>
-// NexLev niş kartındaki "Kullan" → sihirbaz Alpine köküne olay yollar.
+// Niş kartındaki "Kullan" → sihirbaz Alpine köküne olay yollar.
 // Native onclick + window olayı: HTMX ile sonradan eklenen içerikte Alpine
 // init'e bağımlı değil (data-* Jinja auto-escape ile tırnak-güvenli).
 function reelPickNiche(btn) {

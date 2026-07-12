@@ -8,7 +8,7 @@
 
   <form method="post" action="/channels/{{ slug }}/topic-bank/refresh" class="mb-4">
     <button class="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-semibold">
-      🔄 Yenile (NexLev)</button>
+      🔄 Yenile (YouTube)</button>
   </form>
 
   {% with messages = get_flashed_messages() %}
@@ -18,7 +18,7 @@
   {% endwith %}
 
   {% if not rows %}
-    <p class="opacity-60 text-sm">Banka boş — "Yenile (NexLev)" ile doldurun.
+    <p class="opacity-60 text-sm">Banka boş — "Yenile (YouTube)" ile doldurun.
       Sorgu birkaç dakika sürebilir.</p>
   {% else %}
   <table class="w-full text-sm">

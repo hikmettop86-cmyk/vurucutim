@@ -13,7 +13,7 @@ from short_bot.config import (ChannelConfig, GeneratorConfig, ReelConfig,
 from short_bot.dna import build_css_override, generate_dna
 from short_bot.locale import RSS_LOCALES, SUPPORTED_LANGUAGES
 from short_bot.pexels import load_secrets as _load_secrets
-from short_bot.web.niche_finder import find_niches, find_niches_ai
+from short_bot.web.niche_finder import find_niches_ai, find_niches_data
 from short_bot.web.runs import launch_pipeline
 
 bp = Blueprint("reel_new", __name__)
@@ -206,7 +206,7 @@ def create():
     return redirect(url_for("reel_edit.edit_reel", slug=slug))
 
 
-# ── Niş bulucu — NexLev + AI modları (arka plan iş + HTMX poll) ──────────────
+# ── Niş bulucu — Veri-Destekli + AI modları (arka plan iş + HTMX poll) ──────
 # Tek kullanıcılı masaüstü panel → bellek içi iş kaydı yeterli.
 _niche_jobs: dict = {}
 _niche_jobs_lock = threading.Lock()
@@ -224,13 +224,17 @@ def _get_job(job_id: str):
 
 
 def _run_niche_job(job_id: str, mode: str, query: str, language: str,
-                   claude_path: str, or_model, or_key) -> None:
+                   claude_path: str, or_model, or_key, api_keys=None) -> None:
     try:
         if mode == "ai":
             niches = find_niches_ai(query, language=language, claude_path=claude_path,
                                     openrouter_model=or_model, openrouter_key=or_key)
         else:
-            niches = find_niches(query, language=language, claude_path=claude_path)
+            niches = find_niches_data(query, language=language,
+                                      api_keys=api_keys or [],
+                                      claude_path=claude_path,
+                                      openrouter_model=or_model,
+                                      openrouter_key=or_key)
         _set_job(job_id, status="done", niches=niches)
     except Exception as e:  # noqa: BLE001 — hata mesajı kullanıcıya gösterilir
         _set_job(job_id, status="error", error=str(e))
@@ -238,7 +242,8 @@ def _run_niche_job(job_id: str, mode: str, query: str, language: str,
 
 @bp.route("/channels/new-reel/find-niches", methods=["POST"])
 def find_niches_start():
-    mode = "ai" if request.form.get("mode") == "ai" else "nexlev"
+    # "data": LLM adayları + YouTube outlier kanıtı (eski NexLev modunun yerine)
+    mode = "ai" if request.form.get("mode") == "ai" else "data"
     query = (request.form.get("niche_query") or request.form.get("topic") or "").strip()
     language = request.form.get("language", "tr").strip()
     if language not in SUPPORTED_LANGUAGES:
@@ -252,12 +257,15 @@ def find_niches_start():
     or_key = secrets.get("openrouter_api_key") or None
     or_models = getattr(settings, "openrouter_models", {}) or {}
     or_model = or_models.get("default") or or_models.get("script") or or_models.get("dna")
+    from short_bot.yt_outliers import resolve_youtube_api_keys
+    api_keys = resolve_youtube_api_keys(secrets)
 
     job_id = uuid.uuid4().hex
     _set_job(job_id, status="running", niches=None, error=None, mode=mode)
     threading.Thread(
         target=_run_niche_job,
-        args=(job_id, mode, query, language, claude_path, or_model, or_key),
+        args=(job_id, mode, query, language, claude_path, or_model, or_key,
+              api_keys),
         daemon=True,
     ).start()
     return render_template("channels/_niche_results.html.j2",
@@ -270,9 +278,9 @@ def find_niches_status(job_id):
     job = _get_job(job_id)
     if not job:
         return render_template("channels/_niche_results.html.j2",
-                               job_id=job_id, status="error", mode="nexlev",
+                               job_id=job_id, status="error", mode="data",
                                niches=None, error="Niş arama işi bulunamadı.")
     return render_template("channels/_niche_results.html.j2",
                            job_id=job_id, status=job.get("status"),
-                           mode=job.get("mode", "nexlev"),
+                           mode=job.get("mode", "data"),
                            niches=job.get("niches"), error=job.get("error"))

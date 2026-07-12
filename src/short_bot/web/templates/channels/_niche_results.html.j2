@@ -1,4 +1,4 @@
-{% set src = 'AI' if mode == 'ai' else 'NexLev' %}
+{% set src = 'AI' if mode == 'ai' else 'Veri-Destekli' %}
 {% if status == "running" %}
 {# Kendi kendini yenileyen poll: 4sn sonra durum endpoint'ini çekip yerine geçer.
    İş bitince 'done'/'error' render edilir (hx-trigger yok → poll durur). #}
@@ -14,7 +14,7 @@
   {% if mode == 'ai' %}
   <div class="text-xs mt-1 text-red-600">İpucu: Claude aboneliği yoksa OpenRouter anahtarı gerekir (Ayarlar).</div>
   {% else %}
-  <div class="text-xs mt-1 text-red-600">İpucu: Claude CLI'ye NexLev MCP bağlı olmalı (<code>claude mcp list</code>). AI Niş Bulucu'yu da deneyebilirsin.</div>
+  <div class="text-xs mt-1 text-red-600">İpucu: YouTube Data API anahtarı gerekir (Ayarlar). AI Niş Bulucu'yu da deneyebilirsin.</div>
   {% endif %}
 </div>
 {% else %}

@@ -152,7 +152,7 @@ def init_scheduler(app):
         """Pazartesi 05:00: generator'lı kanalların konu bankasını tazele.
 
         Yalnız `bank_last_refresh` 7 günden eski (ya da hiç yok) kanallar için
-        NexLev madenciliği koşar. Tek kanalın hatası kalanları durdurmaz."""
+        YouTube API madenciliği koşar. Tek kanalın hatası kalanları durdurmaz."""
         try:
             import yaml
             from datetime import datetime, timedelta, timezone
@@ -164,7 +164,6 @@ def init_scheduler(app):
             eng = init_db(app.config["SHORTBOT_DB_PATH"])
             cfg_dir = app.config["SHORTBOT_CONFIG_DIR"]
             settings = app.config["SHORTBOT_SETTINGS"]
-            claude_path = settings.claude_cli_path
             try:
                 sp = app.config["SHORTBOT_SECRETS_PATH"]
                 secrets = (yaml.safe_load(sp.read_text(encoding="utf-8"))
@@ -172,6 +171,9 @@ def init_scheduler(app):
             except Exception:
                 secrets = {}
             api_keys = resolve_youtube_api_keys(secrets)
+            if not api_keys:
+                _LOG.info("[topic-bank] haftalık: YouTube API anahtarı yok — atlandı")
+                return
             try:
                 llm_call = resolve_ai_call(settings, secrets, "default")
             except Exception:
@@ -191,7 +193,6 @@ def init_scheduler(app):
                                    "search_query_template", "") or ""
                     res = refresh_topic_bank(eng, cfg.slug, cfg.generator.topic,
                                              language=cfg.language,
-                                             claude_path=claude_path,
                                              api_keys=api_keys,
                                              anchor=derive_footage_anchor(tmpl),
                                              llm_call=llm_call,

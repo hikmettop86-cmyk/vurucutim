@@ -160,8 +160,8 @@ channel_insights = Table(
     Column("data_json", Text, nullable=False),
 )
 
-# Kanıtlanmış-konu bankası: NexLev outlier madenciliğinden damıtılmış konu
-# fikirleri. Üretim anında NexLev'e GİDİLMEZ — bu tablo okunur (spec:
+# Kanıtlanmış-konu bankası: YouTube outlier madenciliğinden damıtılmış konu
+# fikirleri. Üretim anında API'ye GİDİLMEZ — bu tablo okunur (spec:
 # docs/superpowers/specs/2026-07-12-topic-bank-design.md).
 topic_bank = Table(
     "topic_bank", metadata,

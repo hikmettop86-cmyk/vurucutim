@@ -1,7 +1,7 @@
-"""Kanıtlanmış-konu bankası paneli: listele / NexLev'den yenile / reddet.
+"""Kanıtlanmış-konu bankası paneli: listele / YouTube API'den yenile / reddet.
 
-Yenileme daemon thread'de koşar (Storyblocks connect deseni) — NexLev claude-CLI
-köprüsü dakikalar sürebilir; istek hemen döner, sonuç loglanır.
+Yenileme daemon thread'de koşar; istek hemen döner, sonuç loglanır (YouTube
+API ile genellikle <1 dk).
 """
 from __future__ import annotations
 
@@ -41,8 +41,8 @@ def page(slug):
 def _miner_kwargs(cfg) -> dict:
     """YouTube-API backend girdileri: çoklu anahtar + EN çıpa + damıtma LLM'i.
 
-    Anahtar varsa madenci saniyeler içinde biter (bedava 10K birim × anahtar);
-    yoksa/patlarsa NexLev CLI'ya düşer (refresh_topic_bank backend='auto')."""
+    Madenci bedava 10K birim × anahtar kotasıyla saniyeler içinde biter;
+    anahtar yoksa rota net hatayla durur (NexLev kaldırıldı)."""
     import yaml
     from short_bot.config import resolve_ai_call
     from short_bot.reel_relevance import derive_footage_anchor
@@ -70,28 +70,27 @@ def refresh(slug):
     cfg = _load_cfg(slug)
     niche_query = (cfg.generator.topic if cfg.generator else "") or cfg.name
     db_path = current_app.config["SHORTBOT_DB_PATH"]
-    claude_path = current_app.config["SHORTBOT_SETTINGS"].claude_cli_path
     language = cfg.language
     miner_kw = _miner_kwargs(cfg)
+    if not miner_kw["api_keys"]:
+        # NexLev kaldırıldı — tek backend YouTube API; anahtar yoksa iş başlatma.
+        flash("YouTube API anahtarı yok — Ayarlar → YouTube Data API bölümünden "
+              "anahtar ekleyin.", "error")
+        return redirect(url_for("topic_bank.page", slug=slug))
 
     def _job():
         try:
             eng = init_db(db_path)
             res = refresh_topic_bank(eng, slug, niche_query,
-                                     language=language, claude_path=claude_path,
-                                     **miner_kw)
+                                     language=language, **miner_kw)
             _LOG.info(f"[topic-bank] {slug}: +{res['added']} "
                       f"(dup atlanan {res['skipped_dup']})")
         except Exception as e:  # noqa: BLE001 — thread paneli düşürmesin
             _LOG.warning(f"[topic-bank] {slug} yenileme hatası: {e}")
 
     _start_thread(_job)
-    msg = ("Konu bankası yenileme başlatıldı — YouTube API ile genellikle 1 dk "
-           "içinde biter; sayfayı sonra yenileyin."
-           if miner_kw["api_keys"] else
-           "Konu bankası yenileme başlatıldı — YouTube API anahtarı yok, NexLev "
-           "sorgusu birkaç dakika sürebilir; sayfayı sonra yenileyin.")
-    flash(msg, "info")
+    flash("Konu bankası yenileme başlatıldı — YouTube API ile genellikle 1 dk "
+          "içinde biter; sayfayı sonra yenileyin.", "info")
     return redirect(url_for("topic_bank.page", slug=slug))
 
 
