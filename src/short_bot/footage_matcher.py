@@ -39,10 +39,14 @@ def _judge_prompt(query: str, context: str = "") -> str:
     # kelimeyi DÜZ anlıyor → bakteriyofaj videosuna ESKRİMCİ geldi. Bağlam verilince
     # vision "bu klip bu videoya ait mi?" diye de bakar ve konu-dışını eler.
     ctx = (f'\nVİDEONUN KONUSU: "{context}"\n'
-           f'3) BAĞLAM: Bu görüntü YUKARIDAKİ KONUYA ait bir videoda anlamlı mı? '
-           f'Arama kelimesi tesadüfen uysa bile konuyla ilgisizse matches=false ver '
-           f'— ör. konu "bakteriyofaj virüsü" iken arama "invisible warrior" diye '
-           f'ESKRİMCİ getirdiyse bu KONUYA AİT DEĞİL, reddet.\n') if context else ""
+           f'3) BAĞLAM: Bu görüntü YUKARIDAKİ KONUNUN DÜNYASINA ait mi?\n'
+           f'   REDDET (matches=false): arama kelimesi tesadüfen uysa bile klip '
+           f'tamamen BAŞKA bir dünyadan geliyorsa — ör. konu "bakteriyofaj virüsü" '
+           f'iken arama "invisible warrior" diye ESKRİMCİ getirdiyse. Metafor '
+           f'tuzağıdır, reddet.\n'
+           f'   KABUL ET: aynı alandan destekleyici b-roll — ör. tıp/mikrobiyoloji '
+           f'konusunda doktor, hastane, laboratuvar, hasta, ilaç, mikroskop görüntüsü '
+           f'konunun ANA öznesi olmasa da videoya AİTTİR, kabul et.\n') if context else ""
     return (
         f'Bu görüntüyü bir YouTube Shorts videosunda B-ROLL olarak kullanacağız.\n'
         f'1) ARAMAYI KARŞILIYOR MU: "{query}"?\n'
