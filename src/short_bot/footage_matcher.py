@@ -26,22 +26,30 @@ MAX_PER_SOURCE = 3     # tek kaynaktan en fazla kaç aday denenir (Storyblocks t
 
 
 class _FootageVerdict(BaseModel):
-    """Vision'ın TEK çağrıda döndürdüğü tarif + KATI eşleşme yargısı."""
+    """Vision'ın TEK çağrıda döndürdüğü tarif + KATI eşleşme + GÖRSEL KALİTE yargısı."""
     content: str = ""
     matches: bool = False
+    clear: bool = True     # görüntü net/okunaklı mı (çok karanlık/bulanık DEĞİL)
     reason: str = ""
 
 
 def _judge_prompt(query: str) -> str:
     return (
-        f'Bu görüntü şu aramayı KARŞILIYOR MU: "{query}"?\n'
-        f'KATI OL: sorgunun ANA ÖZNESİ görüntüde gerçekten görünmeli. Yalnızca '
+        f'Bu görüntüyü bir YouTube Shorts videosunda B-ROLL olarak kullanacağız.\n'
+        f'1) ARAMAYI KARŞILIYOR MU: "{query}"?\n'
+        f'   KATI OL: sorgunun ANA ÖZNESİ görüntüde gerçekten görünmeli. Yalnızca '
         f'genel kategori uyuyorsa HAYIR de — ör. "balina yavrusu" istenip insan '
-        f'bebeği, "beyin anatomisi" istenip rastgele bir el görülüyorsa false.\n'
-        f'İllüstrasyon/3D render/animasyon da SAYILIR (konuyu gösteriyorsa true).\n'
+        f'bebeği, "beyin anatomisi" istenip rastgele bir el görülüyorsa matches=false.\n'
+        f'   İllüstrasyon/3D render/animasyon da SAYILIR (konuyu gösteriyorsa true).\n'
+        f'2) GÖRSEL KALİTE (clear): Görüntü NET ve OKUNAKLI mı? İzleyici ne '
+        f'gördüğünü anlayabiliyor mu? Şunlarda clear=false ver: neredeyse tamamen '
+        f'karanlık/siyah, ne olduğu seçilemeyen bulanık kütle, aşırı pozlanmış, '
+        f'boş/anlamsız kare, ağır filigran/yazı kaplı. (Karanlık AMA net bir sahne '
+        f'— ör. siyah zeminde parlayan mikroplar — clear=true.)\n'
         f'Ayrıca gördüğünü 1 kısa İngilizce cümleyle tarif et.\n'
         f'SADECE JSON: {{"content": "<English description>", '
-        f'"matches": true|false, "reason": "<kısa Türkçe gerekçe>"}}'
+        f'"matches": true|false, "clear": true|false, '
+        f'"reason": "<kısa Türkçe gerekçe>"}}'
     )
 
 
@@ -147,10 +155,11 @@ def verify_clip_frame_matches(clip_path, query: str, *, vision_call=None, pool=N
         if v is None:
             log.info(f"  footage frame-gate: vision yanıt vermedi → fail-open | q='{query}'")
             return True
-        tag = "ok" if v.matches else "UYMUYOR"
+        ok = bool(v.matches) and bool(v.clear)
+        tag = "ok" if ok else ("BULANIK/KARANLIK" if v.matches else "UYMUYOR")
         log.info(f"  footage frame-gate [{tag}] q='{query}': '{(v.content or '')[:60]}'"
-                 + (f" ({v.reason[:40]})" if not v.matches and v.reason else ""))
-        return bool(v.matches)
+                 + (f" ({v.reason[:40]})" if not ok and v.reason else ""))
+        return ok
     except Exception as e:
         log.warning(f"clip frame gate hatası: {e}")
         return True
@@ -186,10 +195,13 @@ def verify_clip_matches(image_url: str, query: str, *, vision_call=None, pool=No
         if v is None:
             log.info(f"  footage gate: vision yanıt vermedi → fail-open | q='{query}'")
             return True
-        tag = "ok" if v.matches else "UYMUYOR"
+        # matches VE clear — konuya uysa bile KARANLIK/BULANIK klip retention
+        # öldürür (gerçek hata: 6sn boyunca ne olduğu anlaşılmayan siyah kütle).
+        ok = bool(v.matches) and bool(v.clear)
+        tag = "ok" if ok else ("BULANIK/KARANLIK" if v.matches else "UYMUYOR")
         log.info(f"  footage gate [{tag}] q='{query}': '{(v.content or '')[:60]}'"
-                 + (f" ({v.reason[:40]})" if not v.matches and v.reason else ""))
-        return bool(v.matches)
+                 + (f" ({v.reason[:40]})" if not ok and v.reason else ""))
+        return ok
     except Exception as e:
         log.warning(f"footage gate hatası: {e}")
         return True
