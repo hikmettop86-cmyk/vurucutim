@@ -87,6 +87,12 @@ KURALLAR (ÇOK ÖNEMLİ):
   İYİ:  "6 milyon yıllık insan evriminde vücudumuzda hâlâ duran 3 işe yaramaz organ"
 - Başlık bir liste/derleme ise ("Top 10…", "Famous Scientists…") içinden EN
   çarpıcı TEK gerçeği seç ve iddiaya çevir.
+- FORMAT UYUMU (EN ÖNEMLİ ELEME): konu, stok görüntü + seslendirmeyle anlatılan
+  40 saniyelik faceless "ilginç bilgi" videosuna uymalı — yani TEK, DOĞRULANABİLİR,
+  şaşırtıcı GERÇEK. Şunları ATLA: film/dizi özetleri ve kurgu sahneler, aşk/dram
+  hikâyeleri ve kişi-odaklı anlatılar (ör. "X ile Y'nin aşkı imparatorluğu nasıl
+  değiştirdi"), vlog/tepki/meme içerikleri, hikâye anlatımı gerektiren konular.
+  Test: izleyici 40 saniyede "vay be, bunu bilmiyordum" diyebilecek mi? Hayırsa ATLA.
 - HEDEF KİTLE: {lang} konuşan GENEL izleyici. Konu onun merakını çekmeli —
   evrensel merak (uzay, insan vücudu, tarihin şok anları, gizemler) İYİ;
   fazla akademik/teknik konular (ör. "Mock Theta Fonksiyonu"), başka ülkeye
