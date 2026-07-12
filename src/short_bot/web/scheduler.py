@@ -154,12 +154,28 @@ def init_scheduler(app):
         Yalnız `bank_last_refresh` 7 günden eski (ya da hiç yok) kanallar için
         NexLev madenciliği koşar. Tek kanalın hatası kalanları durdurmaz."""
         try:
+            import yaml
             from datetime import datetime, timedelta, timezone
+            from short_bot.config import resolve_ai_call
             from short_bot.db import bank_last_refresh
+            from short_bot.reel_relevance import derive_footage_anchor
             from short_bot.topic_miner import refresh_topic_bank
+            from short_bot.yt_outliers import resolve_youtube_api_keys
             eng = init_db(app.config["SHORTBOT_DB_PATH"])
             cfg_dir = app.config["SHORTBOT_CONFIG_DIR"]
-            claude_path = app.config["SHORTBOT_SETTINGS"].claude_cli_path
+            settings = app.config["SHORTBOT_SETTINGS"]
+            claude_path = settings.claude_cli_path
+            try:
+                sp = app.config["SHORTBOT_SECRETS_PATH"]
+                secrets = (yaml.safe_load(sp.read_text(encoding="utf-8"))
+                           if sp.exists() else {}) or {}
+            except Exception:
+                secrets = {}
+            api_keys = resolve_youtube_api_keys(secrets)
+            try:
+                llm_call = resolve_ai_call(settings, secrets, "default")
+            except Exception:
+                llm_call = None
             cutoff = datetime.now(timezone.utc) - timedelta(days=7)
             for cfg in list_channels(cfg_dir / "channels"):
                 try:
@@ -171,9 +187,14 @@ def init_scheduler(app):
                             last = last.replace(tzinfo=timezone.utc)
                         if last > cutoff:
                             continue
+                    tmpl = getattr(getattr(cfg, "dna", None),
+                                   "search_query_template", "") or ""
                     res = refresh_topic_bank(eng, cfg.slug, cfg.generator.topic,
                                              language=cfg.language,
-                                             claude_path=claude_path)
+                                             claude_path=claude_path,
+                                             api_keys=api_keys,
+                                             anchor=derive_footage_anchor(tmpl),
+                                             llm_call=llm_call)
                     _LOG.info(f"[topic-bank] haftalık {cfg.slug}: +{res['added']}")
                 except Exception as e:  # noqa: BLE001
                     _LOG.warning(f"[topic-bank] haftalık {cfg.slug}: {e}")
