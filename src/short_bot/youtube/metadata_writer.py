@@ -24,9 +24,19 @@ class YoutubeMetadata(BaseModel):
 
 def build_metadata_prompt(*, channel, script: dict,
                           rss_source: str | None,
-                          rss_link: str | None) -> str:
+                          rss_link: str | None,
+                          hook_patterns=None) -> str:
     """Compose the prompt for Sonnet. Returns a string."""
     lang_name = LANGUAGE_NAMES.get(channel.language, channel.language)
+
+    hook_block = ""
+    if hook_patterns:
+        pats = "\n".join(f"- {p}" for p in hook_patterns)
+        hook_block = (f"KANITLANMIŞ BAŞLIK ÖRÜNTÜLERİ (nişte patlamış videolardan):\n"
+                      f"{pats}\n"
+                      f"CTR kuralları: İlk 3 kelime vurucu olsun; merak boşluğu "
+                      f"bırak; mümkünse somut sayı kullan. Kanal tonunun "
+                      f"yasaklarına uy.\n\n")
 
     if rss_source and rss_link:
         source_block = (
@@ -61,7 +71,7 @@ KANAL:
 - Mood: {script.get("mood", "")}
 
 {source_block}
-
+{hook_block}
 GÖREV: Aşağıdaki kurallara göre title + description + tags üret.
 
 TITLE KURALLARI:
@@ -109,12 +119,14 @@ def generate_youtube_metadata(*, channel, script: dict,
                               claude_path: str = "claude",
                               model: str = "sonnet",
                               backend: str = "claude_cli",
-                              api_key: str | None = None) -> YoutubeMetadata:
+                              api_key: str | None = None,
+                              hook_patterns=None) -> YoutubeMetadata:
     """Call Sonnet to produce metadata. Raises ClaudeCliError on failure —
     callers should fall back to non-LLM build_snippet."""
     prompt = build_metadata_prompt(
         channel=channel, script=script,
         rss_source=rss_source, rss_link=rss_link,
+        hook_patterns=hook_patterns,
     )
     return run_json(
         prompt, YoutubeMetadata,

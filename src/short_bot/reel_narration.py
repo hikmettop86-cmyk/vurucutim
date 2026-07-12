@@ -31,10 +31,16 @@ def _language_name(code: str) -> str:
     return _PROMPT_LANGUAGE_NAMES.get(code, "Turkish")
 
 
-def build_reel_prompt(topic: str, channel) -> str:
+def build_reel_prompt(topic: str, channel, hook_patterns=None) -> str:
     lo_w, hi_w = reel_word_budget(channel.reel.target_duration_s)
     lo_s, hi_s = channel.reel.target_duration_s
     lang = _language_name(channel.language)
+    hook_block = ""
+    if hook_patterns:
+        pats = "\n".join(f"- {p}" for p in hook_patterns)
+        hook_block = (f"\nKANITLANMIŞ HOOK ÖRÜNTÜLERİ (nişinde patlamış "
+                      f"videolardan):\n{pats}\n"
+                      f"Hook cümleni bu örüntülerden birine uydur.\n")
     return f"""You are writing a fast-paced, footage-driven "interesting facts /
 how it works" vertical short ({lo_s}-{hi_s} seconds). It will be narrated by a
 text-to-speech voice with karaoke subtitles, over stock footage clips that change
@@ -64,7 +70,7 @@ HARD RULES:
   evergreen — machines, nature, science, industry — NOT a specific named event).
 - Plain spoken language, no markdown/emoji/brackets. Add a genuinely interesting
   angle, not a dry list.
-Return ONLY the JSON object."""
+{hook_block}Return ONLY the JSON object."""
 
 
 def _budget_feedback(actual: int, lo_w: int, hi_w: int) -> str:
@@ -77,12 +83,13 @@ def write_reel_narration(topic: str, *, channel, claude_path: str = "claude",
                          model: str = "default", backend: str = "claude_cli",
                          api_key: str | None = None,
                          hook_angle: str = "", series_directive: str = "",
-                         comment_line: str = "") -> ReelNarration:
+                         comment_line: str = "",
+                         hook_patterns=None) -> ReelNarration:
     reel = getattr(channel, "reel", None)
     if reel is None:
         raise ValueError("write_reel_narration: channel.reel tanımlı değil")
     lo_w, hi_w = reel_word_budget(reel.target_duration_s)
-    prompt = build_reel_prompt(topic, channel)
+    prompt = build_reel_prompt(topic, channel, hook_patterns=hook_patterns)
     if hook_angle:
         prompt = prompt + f"\n\nAÇILIŞ AÇISI: {hook_angle}\n"
     if series_directive:
