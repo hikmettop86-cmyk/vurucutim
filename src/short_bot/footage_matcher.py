@@ -22,6 +22,36 @@ class _FootageDescription(BaseModel):
     content: str = ""
 
 
+_DESCRIBE_PROMPT = (
+    "Bu görüntü NE gösteriyor? SADECE gördüğün somut nesneleri/sahneyi "
+    "1-2 kısa İngilizce cümleyle tarif et. Genel kategori değil SPESİFİK ol "
+    "(ör. 'a kitchen counter' değil 'a person chopping onions on a wooden "
+    "board'). İngilizce yaz.\n"
+    'SADECE JSON: {"content": "<English description>"}'
+)
+
+
+def _describe_image_file(path: Path, *, vision_call) -> str:
+    """Yerel bir görüntü dosyasını vision ile İngilizce tarif eder (≤384px küçültür)."""
+    from short_bot.claude_cli import run_json
+    try:
+        try:  # maliyeti dipte tutmak için ≤384px'e küçült
+            from PIL import Image
+            im = Image.open(path)
+            im.thumbnail((384, 384))
+            im.convert("RGB").save(path, "JPEG")
+        except Exception:
+            pass
+        v = run_json(_DESCRIBE_PROMPT, _FootageDescription,
+                     claude_path=vision_call.claude_path, model=vision_call.model,
+                     backend=vision_call.backend, api_key=vision_call.api_key,
+                     image_path=path, retries=1, timeout_s=45)
+        return (v.content or "").strip()
+    except Exception as e:
+        log.warning(f"footage describe hatası: {e}")
+        return ""
+
+
 def describe_footage(image_url: str, *, vision_call=None) -> str:
     """Thumbnail'ın NE gösterdiğini vision ile İngilizce tarif eder (yes/no DEĞİL).
 
@@ -31,8 +61,6 @@ def describe_footage(image_url: str, *, vision_call=None) -> str:
     if not image_url or vision_call is None:
         return ""
     import requests
-
-    from short_bot.claude_cli import run_json
     thumb: Path | None = None
     try:
         r = requests.get(image_url, timeout=15)
@@ -41,31 +69,45 @@ def describe_footage(image_url: str, *, vision_call=None) -> str:
         with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tf:
             tf.write(r.content)
             thumb = Path(tf.name)
-        try:  # maliyeti dipte tutmak için ≤384px'e küçült
-            from PIL import Image
-            im = Image.open(thumb)
-            im.thumbnail((384, 384))
-            im.convert("RGB").save(thumb, "JPEG")
-        except Exception:
-            pass
-        prompt = (
-            "Bu görüntü NE gösteriyor? SADECE gördüğün somut nesneleri/sahneyi "
-            "1-2 kısa İngilizce cümleyle tarif et. Genel kategori değil SPESİFİK ol "
-            "(ör. 'a kitchen counter' değil 'a person chopping onions on a wooden "
-            "board'). İngilizce yaz.\n"
-            'SADECE JSON: {"content": "<English description>"}'
-        )
-        v = run_json(prompt, _FootageDescription, claude_path=vision_call.claude_path,
-                     model=vision_call.model, backend=vision_call.backend,
-                     api_key=vision_call.api_key, image_path=thumb,
-                     retries=1, timeout_s=45)
-        return (v.content or "").strip()
+        return _describe_image_file(thumb, vision_call=vision_call)
     except Exception as e:
         log.warning(f"footage describe hatası: {e}")
         return ""
     finally:
         if thumb is not None:
             thumb.unlink(missing_ok=True)
+
+
+def verify_clip_frame_matches(clip_path, query: str, *, vision_call=None, pool=None,
+                              ffmpeg_path: str = "ffmpeg") -> bool:
+    """Thumbnail'ı OLMAYAN kaynaklar (ör. Storyblocks kazıma) için: indirilen
+    klibin ~ortasından 9:16 kare çıkar → describe → analyze_scene(pool) off-topic mi.
+
+    vision yok / pool yok / kare çıkmadı / tarif boş / hata → True (fail-open;
+    üretim ASLA gate yüzünden bloklanmaz). Off-topic ise False (çağıran klibi siler)."""
+    if vision_call is None or not pool:
+        return True
+    frame: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tf:
+            frame = Path(tf.name)
+        if _extract_cropped_frame(Path(clip_path), ffmpeg_path, frame) is None:
+            return True
+        desc = _describe_image_file(frame, vision_call=vision_call)
+        if not desc:
+            log.info(f"  footage frame-gate: tarif BOŞ → fail-open | q='{query}'")
+            return True
+        from short_bot.reel_relevance import analyze_scene
+        res = analyze_scene(desc, pool)
+        tag = "OFF-TOPIC" if res["off_topic"] else "ok"
+        log.info(f"  footage frame-gate [{tag}] hits={res['hits']} q='{query}': '{desc[:70]}'")
+        return not res["off_topic"]
+    except Exception as e:
+        log.warning(f"clip frame gate hatası: {e}")
+        return True
+    finally:
+        if frame is not None:
+            frame.unlink(missing_ok=True)
 
 
 def verify_clip_matches(image_url: str, query: str, *, vision_call=None, pool=None) -> bool:
@@ -78,10 +120,16 @@ def verify_clip_matches(image_url: str, query: str, *, vision_call=None, pool=No
     if not image_url or vision_call is None:
         return True
     desc = describe_footage(image_url, vision_call=vision_call)
-    if not desc or not pool:
+    if not desc:
+        log.info(f"  footage gate: tarif BOŞ (vision hata/timeout) → fail-open kabul | q='{query}'")
+        return True
+    if not pool:
         return True
     from short_bot.reel_relevance import analyze_scene
-    return not analyze_scene(desc, pool)["off_topic"]
+    res = analyze_scene(desc, pool)
+    tag = "OFF-TOPIC" if res["off_topic"] else "ok"
+    log.info(f"  footage gate [{tag}] hits={res['hits']} q='{query}': '{desc[:70]}'")
+    return not res["off_topic"]
 
 
 class SubjectPos(BaseModel):
@@ -154,19 +202,25 @@ def locate_subject(clip_path, query, *, vision_call=None, ffmpeg_path="ffmpeg") 
 class FootageDeps:
     # Öncelik-sıralı kaynak zinciri; ilki bulamazsa sıradaki denenir.
     sources: list = field(default_factory=lambda: [PexelsSource()])
-    verify_footage: Callable = verify_clip_matches   # (image_url, query, *, vision_call) -> bool
+    verify_footage: Callable = verify_clip_matches   # (image_url, query, *, vision_call, pool) -> bool
+    verify_clip_frame: Callable = verify_clip_frame_matches  # thumbnail'sız kaynak için kare-gate
     locate_subject: Callable = locate_subject
 
 
 def match_beat_clip(query: str, *, api_key: str = "", cache_dir: Path,
                     verify: bool = True, vision_call=None,
-                    deps: FootageDeps | None = None, topic_pool=None) -> Path | None:
+                    deps: FootageDeps | None = None, topic_pool=None,
+                    ffmpeg_path: str = "ffmpeg") -> Path | None:
     """Sorguya uyan tek klibi kaynak zincirinden indirip yolunu döndürür.
 
     Kaynakları ``deps.sources`` öncelik sırasında dener: kullanılamayanı atlar,
     her kaynak için portrait+landscape yönelimini dener, süresi ``MIN_CLIP_S``
-    altındakileri eler, (isteğe bağlı) THUMBNAIL üstünde vision doğrular, ilk
-    başarılı indirmeyi döndürür. Hepsi tükenirse None.
+    altındakileri eler, ilk başarılı indirmeyi döndürür. Hepsi tükenirse None.
+
+    ALAKA GATE iki yollu: THUMBNAIL varsa indirmeden ÖNCE thumbnail üstünde
+    doğrular (ucuz); thumbnail YOKSA (ör. Storyblocks kazıma) indirdikten SONRA
+    klip KARESİ üstünde doğrular (off-topic → sil, sıradaki aday). Böylece
+    thumbnail'sız kaynaklar gate'i ATLAYAMAZ.
 
     ``api_key`` parametresi geriye-uyum için durur; anahtarları kaynaklar taşır.
     """
@@ -187,8 +241,9 @@ def match_beat_clip(query: str, *, api_key: str = "", cache_dir: Path,
                 cands = []
             cands = [c for c in cands if getattr(c, "duration_s", 0) >= MIN_CLIP_S]
             for c in cands:
-                if verify and d.verify_footage is not None:
-                    thumb_url = getattr(c, "image", "") or ""
+                thumb_url = getattr(c, "image", "") or ""
+                # 1) Pre-download gate — THUMBNAIL varsa (ucuz, indirmeden ele)
+                if verify and d.verify_footage is not None and thumb_url:
                     try:
                         ok = d.verify_footage(thumb_url, query,
                                               vision_call=vision_call, pool=topic_pool)
@@ -202,6 +257,23 @@ def match_beat_clip(query: str, *, api_key: str = "", cache_dir: Path,
                 except Exception as e:
                     log.warning(f"{getattr(source, 'name', '?')} indirme hatası: {e}")
                     clip = None
-                if clip is not None:
-                    return clip
+                if clip is None:
+                    continue
+                # 2) Post-download gate — THUMBNAIL YOKSA klip karesinde doğrula
+                # (Storyblocks kazıma thumb üretmez → aksi hâlde gate'i atlardı).
+                if (verify and not thumb_url and topic_pool
+                        and getattr(d, "verify_clip_frame", None) is not None):
+                    try:
+                        ok2 = d.verify_clip_frame(clip, query, vision_call=vision_call,
+                                                  pool=topic_pool, ffmpeg_path=ffmpeg_path)
+                    except Exception as e:
+                        log.warning(f"clip frame gate hatası: {e}")
+                        ok2 = True
+                    if not ok2:
+                        try:
+                            Path(clip).unlink()
+                        except Exception:
+                            pass
+                        continue
+                return clip
     return None
