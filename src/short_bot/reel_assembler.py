@@ -18,13 +18,24 @@ def _run(cmd) -> subprocess.CompletedProcess:
                           encoding="utf-8", errors="replace")
 
 
+# Açılış kalıp-kırıcı: sert zoom-punch (1.25 → 1.0, ~1.5sn). İzleyici ilk
+# saniyede kalır ya da kaçar — düz açılış retention sızdırır.
+_PUNCH = ("zoompan=z='if(lte(on,45),1.25-0.0055*on,1.0)'"
+          ":x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s=1080x1920:fps=30")
+
+
 def _normalize_segment(clip: Path, span_s: float, out: Path, *, fps: int,
-                       ffmpeg: str, zoom: bool) -> None:
+                       ffmpeg: str, zoom: bool, start_s: float = 0.0,
+                       punch: bool = False) -> None:
     base = f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H}"
-    vf_zoom = f"{base},{_ZOOMPAN},format=yuv420p"
+    zoom_f = _PUNCH if punch else _ZOOMPAN
+    vf_zoom = f"{base},{zoom_f},format=yuv420p"
     vf_plain = f"{base},fps={fps},format=yuv420p"
-    for vf in ([vf_zoom, vf_plain] if zoom else [vf_plain]):
-        p = _run([ffmpeg, "-y", "-stream_loop", "-1", "-i", str(clip),
+    # start_s: AYNI klibin farklı anından başla (alt-kesim çeşitliliği) — hızlı
+    # kesimde bir beat'in alt-kesimleri aynı klibi tekrar kullanabilir.
+    seek = ["-ss", f"{start_s:.3f}"] if start_s > 0 else []
+    for vf in ([vf_zoom, vf_plain] if (zoom or punch) else [vf_plain]):
+        p = _run([ffmpeg, "-y", "-stream_loop", "-1", *seek, "-i", str(clip),
                   "-t", f"{span_s:.3f}", "-vf", vf, "-an",
                   "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", str(out)])
         if p.returncode == 0:
@@ -38,7 +49,8 @@ def assemble_reel(
     out_path: Path, cut_times: list[float], duration_s: float,
     fps: int = 30, ffmpeg_path: str = "ffmpeg", music_volume: float = 0.10,
     narration_volume: float = 1.0, sfx_at_cut: list | None = None,
-    zoom: bool = True,
+    zoom: bool = True, clip_starts: list | None = None,
+    hook_punch: bool = False,
 ) -> Path:
     """Segment klipleri + overlay + ses → mp4. clip_paths ve seg_spans aynı boyda."""
     out_path = Path(out_path)
@@ -52,11 +64,14 @@ def assemble_reel(
     with tempfile.TemporaryDirectory() as td:
         td = Path(td)
         seg_files = []
+        starts = list(clip_starts or [])
         for i, (clip, (a, b)) in enumerate(zip(clip_paths, seg_spans)):
             span = max(0.5, b - a)
             sf = td / f"seg_{i}.mp4"
             _normalize_segment(Path(clip), span, sf, fps=fps,
-                               ffmpeg=ffmpeg_path, zoom=zoom)
+                               ffmpeg=ffmpeg_path, zoom=zoom,
+                               start_s=(starts[i] if i < len(starts) else 0.0),
+                               punch=(hook_punch and i == 0))
             seg_files.append(sf)
         lst = td / "concat.txt"
         lst.write_text("".join(f"file '{f.as_posix()}'\n" for f in seg_files),

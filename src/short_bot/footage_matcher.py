@@ -276,8 +276,8 @@ class FootageDeps:
 def match_beat_clip(query: str, *, api_key: str = "", cache_dir: Path,
                     verify: bool = True, vision_call=None,
                     deps: FootageDeps | None = None, topic_pool=None,
-                    ffmpeg_path: str = "ffmpeg", budget: dict | None = None
-                    ) -> Path | None:
+                    ffmpeg_path: str = "ffmpeg", budget: dict | None = None,
+                    exclude: set | None = None) -> Path | None:
     """Sorguya uyan tek klibi kaynak zincirinden indirip yolunu döndürür.
 
     Kaynakları ``deps.sources`` öncelik sırasında dener; her kaynak için
@@ -327,6 +327,8 @@ def match_beat_clip(query: str, *, api_key: str = "", cache_dir: Path,
             for c in cands:
                 if tried_from_source >= MAX_PER_SOURCE or not _budget_left():
                     break
+                if exclude and (getattr(c, "url", "") in exclude):
+                    continue    # bu klip bu beat için ZATEN alındı (çoklu klip)
                 tried_from_source += 1
                 thumb_url = getattr(c, "image", "") or ""
                 # 1) Pre-download gate — THUMBNAIL varsa (ucuz, indirmeden ele)
