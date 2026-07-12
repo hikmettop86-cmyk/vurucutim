@@ -134,13 +134,25 @@ def mine_topics(niche_query: str, *, language: str = "tr",
     return _parse_topics(result_text)
 
 
+def mine_topics_with_retry(niche_query: str, *, retries: int = 1, **kw) -> list[dict]:
+    """mine_topics + parse-hatasında retry. Model bazen JSON yerine düzyazı
+    döndürüyor (tek seferlik dalgalanma) — bir tekrar genellikle kurtarır."""
+    last: Exception | None = None
+    for _ in range(retries + 1):
+        try:
+            return mine_topics(niche_query, **kw)
+        except ValueError as e:
+            last = e
+    raise last
+
+
 def refresh_topic_bank(eng, channel_slug: str, niche_query: str, *,
                        language: str = "tr", claude_path: str = "claude",
                        model: str | None = None, run=subprocess.run) -> dict:
     """mine → mevcut bankaya fuzzy-dedup → insert. {"added": N, "skipped_dup": M}."""
     from short_bot.db import all_bank_topics, insert_bank_topics
-    mined = mine_topics(niche_query, language=language, claude_path=claude_path,
-                        model=model, run=run)
+    mined = mine_topics_with_retry(niche_query, language=language,
+                                   claude_path=claude_path, model=model, run=run)
     existing = [r["topic"] for r in all_bank_topics(eng, channel_slug)]
     fresh, dup = [], 0
     for r in mined:
