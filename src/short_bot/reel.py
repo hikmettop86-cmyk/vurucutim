@@ -51,11 +51,12 @@ class ReelDeps:
 
 
 def _match_with_fallback(d, query, *, topic_q, api_key, cache_dir, verify,
-                         vision_call, footage_deps=None):
-    """Footage eşleştirmeyi kademeli yedeklerle dener (footage = #1 risk).
+                         vision_call, footage_deps=None, topic_pool=None, anchor=""):
+    """Footage eşleştirmeyi kademeli, KONUDA-KALAN yedeklerle dener.
 
-    Sıra: (1) tam sorgu, (2) ilk 2 kelime, (3) konu tohumu — hepsi vision'lı;
-    (4) son çare: ilk 2 kelime vision'sız (her zaman bir klip getirir).
+    Sıra: (1) tam sorgu, (2) ilk 2 kelime, (3) konu tohumu, (4) kanal çıpası —
+    hepsi vision + topic_pool gate'li. Son çare (5): çıpa sorgusu vision'sız
+    (arama TERİMİ çıpa olduğundan sonuç konuda; ham ilk-2-kelime garbage grab YOK).
     ``footage_deps`` kaynak zincirini (öncelik-sıralı) taşır.
     """
     words = query.split()
@@ -64,16 +65,19 @@ def _match_with_fallback(d, query, *, topic_q, api_key, cache_dir, verify,
         stages.append(" ".join(words[:2]))
     if topic_q and topic_q.lower() not in (s.lower() for s in stages):
         stages.append(topic_q)
+    if anchor and anchor.lower() not in (s.lower() for s in stages):
+        stages.append(anchor)
     for q in stages:
         clip = d.match_beat_clip(q, api_key=api_key, cache_dir=cache_dir,
                                  verify=verify, vision_call=vision_call,
-                                 deps=footage_deps)
+                                 deps=footage_deps, topic_pool=topic_pool)
         if clip is not None:
             return clip
-    # son çare — vision'sız, en sade sorgu (boş dönmesin)
-    fallback = " ".join(words[:2]) if len(words) >= 2 else (words[0] if words else topic_q)
-    return d.match_beat_clip(fallback, api_key=api_key, cache_dir=cache_dir,
-                             verify=False, vision_call=None, deps=footage_deps)
+    # son çare — çıpa sorgusu vision'sız (konuda kalır); çıpa yoksa ilk-2-kelime
+    last_q = anchor or (" ".join(words[:2]) if len(words) >= 2 else (words[0] if words else topic_q))
+    return d.match_beat_clip(last_q, api_key=api_key, cache_dir=cache_dir,
+                             verify=False, vision_call=None, deps=footage_deps,
+                             topic_pool=None)
 
 
 def produce_reel_video(
@@ -139,6 +143,14 @@ def produce_reel_video(
         pexels_key=pexels_api_key, pixabay_key=pixabay_api_key,
         storyblocks_session=storyblocks_session)
     footage_deps = FootageDeps(sources=sources)
+    # Konu-havuzu + kanal çıpası (footage alaka gate'i için). Çıpa boşsa
+    # dna.search_query_template'ten İngilizce token türetilir (ör. "whale ocean").
+    from short_bot.reel_relevance import build_topic_pool, derive_footage_anchor
+    anchor = (getattr(reel, "footage_anchor", "") or "").strip()
+    if not anchor:
+        tmpl = getattr(getattr(channel, "dna", None), "search_query_template", "") or ""
+        anchor = derive_footage_anchor(tmpl)
+    topic_pool = build_topic_pool([b.visual_query for b in narration.beats], anchor=anchor)
     clips_cache = work_dir / "clips"
     clip_paths: list[Path] = []
     seg_positions: list[SubjectPos] = []
@@ -156,7 +168,7 @@ def produce_reel_video(
         clip = _match_with_fallback(
             d, query, topic_q=_topic_q, api_key=pexels_api_key,
             cache_dir=clips_cache, verify=reel.verify_footage, vision_call=vision_call,
-            footage_deps=footage_deps)
+            footage_deps=footage_deps, topic_pool=topic_pool, anchor=anchor)
         if clip is None:
             raise RuntimeError(f"reel: '{query}' için footage bulunamadı (segment {si}).")
         clip_paths.append(clip)
