@@ -64,35 +64,54 @@ def _add_plurals(pool: set[str]) -> set[str]:
     return pool
 
 
-def build_topic_pool(visual_queries, anchor: str = "", extra_texts=()) -> "set[str] | None":
-    """EN beat sorguları + kanal çıpası + ekstra metinlerden konu havuzu.
+def build_topic_pool(visual_queries, anchor: str = "", extra_texts=(),
+                     min_beat_freq: int = 2) -> "set[str] | None":
+    """Anchor-baskın konu havuzu: çıpa kelimeleri + ≥min_beat_freq tekrar eden
+    beat kelimeleri. Tek-seferlik YUMUŞAK kelimeler ('baby', 'tropical') havuza
+    GİRMEZ — aksi hâlde 'baby whale' sorgusu havuza 'baby' sokup insan-bebeği
+    footage'ını (ratio~0.33) geçirirdi. Domain kelimeleri (whale/ocean) yüksek-
+    isabetli sinyaldir; footage-sürüklü kanalda emin olunmayan beat güvenle çıpaya
+    düşer (faceless-2 buildTopicPool minFreq=2 + otoriter-alan mantığı).
 
-    Havuz MIN_POOL kelimeden azsa None (zayıf havuzla over-fire yerine gate pasif).
+    ``anchor`` boş + havuz MIN_POOL altı → None (zayıf, çıpasız havuzla over-fire
+    yerine gate pasif). ``anchor`` varsa küçük havuz bile kullanılır (yüksek isabet).
     """
-    pool: set[str] = set()
+    anchor_words = extract_topic_words(anchor)
+    freq: dict[str, int] = {}
     for q in (visual_queries or []):
-        pool |= extract_topic_words(q)
-    pool |= extract_topic_words(anchor)
+        for w in extract_topic_words(q):
+            freq[w] = freq.get(w, 0) + 1
+    recurring = {w for w, c in freq.items() if c >= min_beat_freq}
+    pool: set[str] = set(anchor_words) | recurring
     for t in (extra_texts or ()):
         pool |= extract_topic_words(t)
-    if len(pool) < MIN_POOL:
+    if not pool:
+        return None
+    if not anchor_words and len(pool) < MIN_POOL:
         return None
     return _add_plurals(pool)
 
 
-def analyze_scene(description: str, pool, threshold: float = 0.2) -> dict:
-    """Vision-tarifini havuza vur. off_topic = (desc∩pool)/|desc| < threshold.
+def analyze_scene(description: str, pool, min_hits: int = 1) -> dict:
+    """Vision-tarifini anchor-baskın havuza vur: off_topic = domain kelimesi YOK.
+
+    Havuz yüksek-isabetli (anchor + tekrar edenler) olduğundan karar ORAN değil
+    İSABET-SAYISI temellidir: tarif en az ``min_hits`` domain kelimesi içermeli.
+    Uzunluğa duyarsız — insan-bebeği/tatil-plajı (0 isabet) off; iceberg 'ocean'
+    (1 isabet, oran~0.17) on-topic KALIR (kutup besleme alanı balina konusunda).
 
     description boş → no-vision (pasif); pool boş/None → no-topic (pasif).
     """
     desc_words = extract_topic_words(description)
     if not desc_words:
-        return {"off_topic": False, "ratio": None, "reason": "no-vision"}
+        return {"off_topic": False, "ratio": None, "hits": 0, "reason": "no-vision"}
     if not pool:
-        return {"off_topic": False, "ratio": None, "reason": "no-topic"}
-    ratio = overlap_ratio(desc_words, pool)
-    off = ratio < threshold
-    return {"off_topic": off, "ratio": ratio, "reason": "off-topic" if off else "ok"}
+        return {"off_topic": False, "ratio": None, "hits": 0, "reason": "no-topic"}
+    hits = sum(1 for w in desc_words if w in pool)
+    ratio = hits / len(desc_words)
+    off = hits < min_hits
+    return {"off_topic": off, "ratio": ratio, "hits": hits,
+            "reason": "off-topic" if off else "ok"}
 
 
 def derive_footage_anchor(search_query_template: str) -> str:
