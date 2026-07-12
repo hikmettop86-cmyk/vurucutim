@@ -62,7 +62,8 @@ def _miner_kwargs(cfg) -> dict:
     return {"api_keys": resolve_youtube_api_keys(secrets),
             "anchor": derive_footage_anchor(tmpl),
             "llm_call": llm_call,
-            "keywords": list(getattr(cfg, "keywords", None) or [])}
+            "keywords": list(getattr(cfg, "keywords", None) or []),
+            "reference_channels": list(getattr(cfg, "reference_channels", None) or [])}
 
 
 @bp.post("/channels/<slug>/topic-bank/refresh")
@@ -99,4 +100,26 @@ def reject(slug, topic_id):
     _load_cfg(slug)
     eng = init_db(current_app.config["SHORTBOT_DB_PATH"])
     reject_bank_topic(eng, topic_id)
+    return redirect(url_for("topic_bank.page", slug=slug))
+
+
+@bp.post("/channels/<slug>/topic-bank/refs")
+def save_refs(slug):
+    """Referans/rakip kanal listesini kanal YAML'ına yazar (her satır bir kanal)."""
+    import dataclasses
+
+    from flask import request
+
+    from short_bot.config import save_channel
+    cfg = _load_cfg(slug)
+    raw = request.form.get("reference_channels", "")
+    refs, seen = [], set()
+    for line in raw.splitlines():
+        s = line.strip()
+        if s and s not in seen:
+            seen.add(s); refs.append(s)
+    path = current_app.config["SHORTBOT_CONFIG_DIR"] / "channels" / f"{slug}.yaml"
+    save_channel(path, dataclasses.replace(cfg, reference_channels=refs))
+    flash(f"Referans kanallar kaydedildi ({len(refs)} kanal). Yenile'ye basınca "
+          f"öncelikle bu kanalların patlamaları madenlenecek.", "info")
     return redirect(url_for("topic_bank.page", slug=slug))

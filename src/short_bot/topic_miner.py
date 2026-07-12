@@ -159,19 +159,41 @@ def _apply_tier(rows: list[dict], tier: dict) -> list[dict]:
 
 def mine_topics_via_api(niche_query: str, *, api_keys: list, language: str = "tr",
                         anchor: str = "", llm_call=None, count: int = 12,
-                        keywords=None, http_get=None) -> list[dict]:
-    """YouTube Data API ile outlier madenciliği (~102 birim/arama).
+                        keywords=None, reference_channels=None,
+                        http_get=None) -> list[dict]:
+    """YouTube Data API ile outlier madenciliği.
 
-    Akış: kısa arama sorguları (keywords/LLM) → outlier havuzu (+ EN çıpa) →
-    kademeli filtre → LLM tek çağrıyla {lang} konu fikrine damıtma. ``llm_call``
-    yoksa mekanik fallback: başlık aynen topic olur (üretim durmaz).
+    Akış: (0) OPSİYONEL referans kanallar — kanalın KENDİ medyanına göre patlayan
+    shorts'lar (format+kitle garantili, ~3 birim/kanal, tier filtresine girmez;
+    yeterse arama hiç yapılmaz) → (1) kısa arama sorguları (keywords/LLM) →
+    outlier havuzu (+ EN çıpa, ~102 birim/arama) → kademeli filtre → LLM tek
+    çağrıyla {lang} konu fikrine damıtma. ``llm_call`` yoksa mekanik fallback:
+    başlık aynen topic olur (üretim durmaz).
     """
-    from short_bot.yt_outliers import search_outlier_shorts
+    from short_bot.yt_outliers import channel_outlier_shorts, search_outlier_shorts
+    # 0) Referans kanallar — kanıt en güçlü kaynak, havuzun başına.
+    ref_rows, seen_ids = [], set()
+    for ref in (reference_channels or [])[:10]:
+        try:
+            found = channel_outlier_shorts(ref, api_keys=api_keys, limit=count,
+                                           http_get=http_get)
+        except Exception as e:
+            log.info(f"topic_miner: referans kanal atlandı ({ref!r}): {e}")
+            continue
+        for r in found:
+            if r["video_id"] not in seen_ids:
+                seen_ids.add(r["video_id"]); ref_rows.append(r)
+    ref_rows.sort(key=lambda r: r.get("ratio", 0), reverse=True)
+    if len(ref_rows) >= count:
+        log.info(f"topic_miner: referans kanallar {len(ref_rows)} outlier verdi "
+                 f"→ arama atlanıyor (kota tasarrufu)")
+        rows = ref_rows[:count]
+        return _distill(rows, language, llm_call, count)
+    # 1) Arama havuzu (HAM çek; kademeler yerelde — ekstra birim yakılmaz).
     queries = _search_queries(niche_query, language, llm_call, keywords=keywords)
     if anchor and all(anchor.lower() != q.lower() for q in queries):
         queries.append(anchor)
-    # Havuzu HAM çek (filtre yok) — kademeler yerelde uygulanır, ekstra birim yakılmaz.
-    pool, seen_ids = [], set()
+    pool = []
     for qi, q in enumerate(queries[:4]):
         lang_q = "en" if (anchor and q == anchor) else language
         try:
@@ -180,8 +202,8 @@ def mine_topics_via_api(niche_query: str, *, api_keys: list, language: str = "tr
                                           min_views=1_000, max_subs=10**12,
                                           min_ratio=0.0)
         except Exception as e:
-            if qi == 0 and not pool:
-                raise   # ilk arama bile yoksa (kota/ağ) net hata
+            if qi == 0 and not pool and not ref_rows:
+                raise   # hiçbir kaynak yoksa (kota/ağ) net hata
             log.info(f"topic_miner: '{q}' araması atlandı: {e}")
             continue
         for r in found:
@@ -194,9 +216,15 @@ def mine_topics_via_api(niche_query: str, *, api_keys: list, language: str = "tr
             break
         log.info("topic_miner: filtre kademesi gevşetiliyor (0 outlier)")
     rows.sort(key=lambda r: r.get("ratio", 0), reverse=True)
-    rows = rows[:count]
+    # Referans satırları ÖNCE (format-kanıtlı), arama satırları tamamlar.
+    rows = (ref_rows + rows)[:count]
     if not rows:
         raise ValueError("YouTube API'de bu niş için outlier bulunamadı")
+    return _distill(rows, language, llm_call, count)
+
+
+def _distill(rows: list[dict], language: str, llm_call, count: int) -> list[dict]:
+    """Outlier satırlarını LLM ile hedef-dil konu iddialarına damıt (ya da mekanik)."""
     if llm_call is None:
         return [{"topic": r["source_title"], "source_title": r["source_title"],
                  "views": r["views"], "subs": r["subs"], "hook_pattern": ""}
@@ -227,7 +255,7 @@ def mine_topics_via_api(niche_query: str, *, api_keys: list, language: str = "tr
 def refresh_topic_bank(eng, channel_slug: str, niche_query: str, *,
                        language: str = "tr", api_keys: list | None = None,
                        anchor: str = "", llm_call=None, http_get=None,
-                       keywords=None, **_compat) -> dict:
+                       keywords=None, reference_channels=None, **_compat) -> dict:
     """mine → mevcut bankaya fuzzy-dedup → insert. {"added": N, "skipped_dup": M}.
 
     Tek backend: YouTube Data API (``api_keys`` zorunlu — yoksa net Türkçe hata;
@@ -242,7 +270,8 @@ def refresh_topic_bank(eng, channel_slug: str, niche_query: str, *,
     mined = mine_topics_via_api(niche_query, api_keys=api_keys,
                                 language=language, anchor=anchor,
                                 llm_call=llm_call, http_get=http_get,
-                                keywords=keywords)
+                                keywords=keywords,
+                                reference_channels=reference_channels)
     log.info(f"topic_miner: youtube_api → {len(mined)} konu")
     existing = [r["topic"] for r in all_bank_topics(eng, channel_slug)]
     fresh, dup = [], 0

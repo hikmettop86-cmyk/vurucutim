@@ -91,6 +91,123 @@ def _get_with_rotation(path: str, params: dict, api_keys: list[str], *,
     raise RuntimeError(f"YouTube API hata (HTTP {last_status})")
 
 
+def parse_channel_ref(ref: str) -> "tuple[str, str] | None":
+    """URL/@handle/UC-id → ('id'|'handle', değer). Anlaşılamazsa None.
+
+    Kabul edilen biçimler: https://www.youtube.com/@X[/shorts], @X, X (handle
+    varsayılır), https://www.youtube.com/channel/UC.../..., UC... (24 char id)."""
+    import re
+    s = (ref or "").strip()
+    if not s:
+        return None
+    m = re.search(r"youtube\.com/channel/(UC[\w-]{22})", s)
+    if m:
+        return ("id", m.group(1))
+    if re.fullmatch(r"UC[\w-]{22}", s):
+        return ("id", s)
+    m = re.search(r"youtube\.com/@([\w.\-]+)", s)
+    if m:
+        return ("handle", m.group(1))
+    if s.startswith("@"):
+        return ("handle", s[1:])
+    if re.fullmatch(r"[\w.\-]+", s):
+        return ("handle", s)
+    return None
+
+
+def _iso_duration_s(iso: str) -> int:
+    """ISO8601 süre → saniye (PT1M23S → 83). Bozuksa 0."""
+    import re
+    m = re.fullmatch(r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?", iso or "")
+    if not m:
+        return 0
+    h, mi, s = (int(x or 0) for x in m.groups())
+    return h * 3600 + mi * 60 + s
+
+
+# Shorts süresi üst sınırı (YouTube 2024+: 3 dk'ya kadar shorts olabilir).
+SHORTS_MAX_S = 185
+# Kanal-içi patlama eşiği: video, kanalın medyan izlenmesinin en az bu katı.
+CHANNEL_OUTLIER_X = 3.0
+
+
+def channel_outlier_shorts(channel_ref: str, *, api_keys: list[str],
+                           limit: int = 12, min_views: int = 10_000,
+                           http_get=None) -> list[dict]:
+    """Referans kanalın KENDİ medyanına göre patlayan shorts'ları (~3 birim).
+
+    Akış: kanal çöz (handle/id, 1 birim) → uploads playlist son 50 video
+    (1 birim) → stats+süre (1 birim) → shorts'ları ayıkla → medyan izlenme →
+    ``views >= CHANNEL_OUTLIER_X × medyan`` olanlar (ratio = views/medyan).
+    Dönüş search_outlier_shorts ile aynı şekil (+``ref_channel`` alanı).
+    """
+    if http_get is None:
+        import requests
+        http_get = requests.get
+    parsed = parse_channel_ref(channel_ref)
+    if parsed is None:
+        log.info(f"yt_outliers: referans kanal anlaşılamadı: {channel_ref!r}")
+        return []
+    kind, val = parsed
+    params = {"part": "contentDetails,statistics"}
+    params["id" if kind == "id" else "forHandle"] = val if kind == "id" else f"@{val}"
+    ch = _get_with_rotation("channels", params, api_keys, http_get=http_get)
+    items = ch.get("items") or []
+    if not items:
+        log.info(f"yt_outliers: referans kanal bulunamadı: {channel_ref!r}")
+        return []
+    info = items[0]
+    uploads = (((info.get("contentDetails") or {}).get("relatedPlaylists") or {})
+               .get("uploads") or "")
+    try:
+        subs = int((info.get("statistics") or {}).get("subscriberCount", 0))
+    except (ValueError, TypeError):
+        subs = 0
+    if not uploads:
+        return []
+    pl = _get_with_rotation("playlistItems", {
+        "part": "snippet,contentDetails", "playlistId": uploads, "maxResults": 50,
+    }, api_keys, http_get=http_get)
+    vids, titles = [], {}
+    for it in (pl.get("items") or []):
+        vid = ((it.get("contentDetails") or {}).get("videoId") or "").strip()
+        if not vid:
+            continue
+        vids.append(vid)
+        titles[vid] = ((it.get("snippet") or {}).get("title") or "")
+    if not vids:
+        return []
+    vs = _get_with_rotation("videos", {
+        "part": "statistics,contentDetails", "id": ",".join(vids[:50]),
+    }, api_keys, http_get=http_get)
+    shorts = []
+    for it in (vs.get("items") or []):
+        dur = _iso_duration_s(((it.get("contentDetails") or {}).get("duration")) or "")
+        if not (0 < dur <= SHORTS_MAX_S):
+            continue   # uzun video — shorts değil
+        try:
+            views = int((it.get("statistics") or {}).get("viewCount", 0))
+        except (ValueError, TypeError):
+            continue
+        shorts.append((it.get("id"), views))
+    if len(shorts) < 5:
+        log.info(f"yt_outliers: {channel_ref!r} kanalında yeterli shorts yok "
+                 f"({len(shorts)})")
+        return []
+    views_sorted = sorted(v for _, v in shorts)
+    median = views_sorted[len(views_sorted) // 2] or 1
+    out = []
+    for vid, views in shorts:
+        ratio = views / median
+        if ratio < CHANNEL_OUTLIER_X or views < min_views:
+            continue
+        out.append({"source_title": titles.get(vid, ""), "views": views,
+                    "subs": subs, "ratio": round(ratio, 2), "video_id": vid,
+                    "channel_id": "", "ref_channel": channel_ref})
+    out.sort(key=lambda r: r["ratio"], reverse=True)
+    return out[:limit]
+
+
 def search_outlier_shorts(query: str, *, api_keys: list[str],
                           language: str = "tr", limit: int = 12,
                           max_pool: int = 50, http_get=None,

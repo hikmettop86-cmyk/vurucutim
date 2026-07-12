@@ -11,6 +11,20 @@
       🔄 Yenile (YouTube)</button>
   </form>
 
+  <details class="mb-4 border border-claude-border rounded-lg p-3" {% if channel.reference_channels %}open{% endif %}>
+    <summary class="text-sm font-semibold cursor-pointer">📺 Referans kanallar
+      ({{ channel.reference_channels|length }}) — opsiyonel</summary>
+    <form method="post" action="/channels/{{ slug }}/topic-bank/refs" class="mt-2">
+      <textarea name="reference_channels" rows="3"
+                placeholder="https://www.youtube.com/@KanalAdi (her satıra bir kanal)"
+                class="w-full border border-claude-border rounded-lg px-3 py-2 text-sm font-mono">{{ channel.reference_channels|join('\n') }}</textarea>
+      <div class="text-xs opacity-60 mt-1">Senin formatını yapan rakip/örnek kanallar.
+        Yenile'de ÖNCE bu kanalların kendi ortalamasına göre patlayan shorts'ları
+        madenlenir (format+kitle garantili, kota ~3 birim/kanal); yeterse arama atlanır.</div>
+      <button class="mt-2 px-3 py-1.5 rounded-lg bg-claude-surface-alt border border-claude-border text-xs font-semibold">Kaydet</button>
+    </form>
+  </details>
+
   {% with messages = get_flashed_messages() %}
     {% for m in messages %}
       <div class="mb-3 p-3 rounded-lg bg-cyan-900/40 text-sm">{{ m }}</div>

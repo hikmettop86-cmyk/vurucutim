@@ -208,6 +208,10 @@ class ChannelConfig:
     bg_image_blur: int = 0
     voice: VoiceConfig | None = None
     reel: "ReelConfig | None" = None
+    # Referans/rakip kanallar (URL/@handle/UC-id) — konu-bankası madencisi bu
+    # kanalların KENDİ medyanına göre patlayan shorts'larını kanıtlanmış konu
+    # olarak çeker (format+kitle garantili). Boşsa yalnız arama madenciliği.
+    reference_channels: list[str] = field(default_factory=list)
 
 
 def load_settings(path: Path) -> Settings:
@@ -341,6 +345,7 @@ def load_channel(path: Path) -> ChannelConfig:
         max_age_hours=int(data.get("max_age_hours", 24)),
         dynamic_dna=bool(data.get("dynamic_dna", False)),
         negative_keywords=list(data.get("negative_keywords") or []),
+        reference_channels=list(data.get("reference_channels") or []),
         template=template,
         colors=dict(data["colors"]),
         handle=data["handle"],
@@ -395,6 +400,8 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
         data["dynamic_dna"] = True
     if cfg.negative_keywords:
         data["negative_keywords"] = list(cfg.negative_keywords)
+    if cfg.reference_channels:
+        data["reference_channels"] = list(cfg.reference_channels)
     if cfg.script_model:
         data["script_model"] = cfg.script_model
     if cfg.content_source != "rss":
