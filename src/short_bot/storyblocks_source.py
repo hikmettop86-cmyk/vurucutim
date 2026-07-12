@@ -80,12 +80,27 @@ _EXTRACT_JS = r"""(maxN) => {
     }
     if (seen.has(id)) continue;
     seen.add(id);
+    // THUMBNAIL: Storyblocks kartı <img> DEĞİL <video poster="..."> kullanıyor
+    // (2026-07-12 ölçümü). Poster olmadan thumbnail boş kalıyordu → alaka kapısı
+    // indirmeden önce çalışamıyor, her aday TARAYICIYLA indiriliyordu (yavaşlığın
+    // ana kaynağı). Sıra: video[poster] → img.src → img data-src/srcset.
     const img = el.querySelector('img');
+    const vid = el.querySelector('video');
     let title = '';
     let thumb = '';
+    if (vid) {
+      thumb = vid.getAttribute('poster') || '';
+    }
+    if (!thumb && img) {
+      thumb = img.src || img.getAttribute('src')
+              || img.getAttribute('data-src') || '';
+      if (!thumb) {
+        const ss = img.getAttribute('srcset') || '';
+        if (ss) thumb = ss.split(',')[0].trim().split(' ')[0] || '';
+      }
+    }
     if (img) {
       title = (img.getAttribute('alt') || '').trim();
-      thumb = img.src || img.getAttribute('src') || '';
     }
     if (!title) {
       title = (el.getAttribute('aria-label') || el.getAttribute('title') || '').trim();
