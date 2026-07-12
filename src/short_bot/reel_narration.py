@@ -79,6 +79,13 @@ HARD RULES:
   machine, natural phenomenon). NEVER an abstract concept ("auto-cannibalism",
   "self destruction", "symbolic power") — stock libraries have no footage for those;
   translate the idea into what a CAMERA would actually see.
+- METAFOR YASAĞI (ÇOK ÖNEMLİ): The narration may use metaphors, but the visual
+  query must describe the LITERAL subject of THIS video — never the metaphor.
+  Stock search takes words literally and will return the WRONG thing.
+    KÖTÜ: narration "görünmez savaşçılar" (= bakteriyofaj) → query "invisible
+          warrior"  → stok kütüphane bir ESKRİMCİ döndürür. FELAKET.
+    İYİ:  query "bacteriophage virus microscope" (videonun gerçek öznesi).
+  Her sorgu, videonun ANA KONUSUYLA doğrudan ilişkili somut bir nesne olmalı.
 - Plain spoken language, no markdown/emoji/brackets. Add a genuinely interesting
   angle, not a dry list.
 {hook_block}Return ONLY the JSON object."""

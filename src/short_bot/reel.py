@@ -55,7 +55,7 @@ class ReelDeps:
 def _match_with_fallback(d, query, *, topic_q, api_key, cache_dir, verify,
                          vision_call, footage_deps=None, topic_pool=None, anchor="",
                          ffmpeg_path="ffmpeg", budget=None, reuse_clips=None,
-                         exclude=None):
+                         exclude=None, context=""):
     """Footage eşleştirmeyi kademeli, KONUDA-KALAN yedeklerle dener.
 
     Sıra: (1) tam sorgu, (2) ilk 2 kelime, (3) konu tohumu, (4) kanal çıpası —
@@ -79,7 +79,7 @@ def _match_with_fallback(d, query, *, topic_q, api_key, cache_dir, verify,
                                  verify=verify, vision_call=vision_call,
                                  deps=footage_deps, topic_pool=topic_pool,
                                  ffmpeg_path=ffmpeg_path, budget=b,
-                                 exclude=exclude)
+                                 exclude=exclude, context=context)
         if clip is not None:
             return clip
     # Vision kapısından geçen aday YOK. Çıpayı vision'sız aramak ÇÖP getiriyor
@@ -204,6 +204,11 @@ def produce_reel_video(
     _first_q = next((q for q in timeline.seg_queries if q), "abstract background")
     _last_q = next((q for q in reversed(timeline.seg_queries) if q), _first_q)
     _topic_q = (topic.split(",")[0].strip()[:40] or "nature")
+    # BAĞLAM: gate'e videonun GERÇEK konusu verilir. Anlatım metafor kullanınca
+    # ("görünmez savaşçılar" = bakteriyofaj) sorgu metafora kayabiliyor ve stok
+    # kütüphane kelimeyi düz anlıyor → bakteriyofaj videosuna ESKRİMCİ geldi.
+    # Bağlamla vision "bu klip bu videoya ait mi?" diye de bakar.
+    _video_context = f"{topic.strip()[:160]} | {narration.hook.strip()[:100]}"
     # Belirteç-uygun segmentleri ÖNCE hesapla → yalnız onlarda vision konum çağır
     # (hook/close ve 'off'/kapalı durumda gereksiz vision maliyeti yok).
     n_segs = len(timeline.seg_queries)
@@ -237,7 +242,8 @@ def produce_reel_video(
                 budget={"gate": 0, "dl": 0},
                 reuse_clips=[c for k in sorted(clips_by_seg)
                              for c in clips_by_seg[k]],
-                exclude=set(taken_urls))
+                exclude=set(taken_urls),
+                context=_video_context)
             if clip is None or clip in got:
                 break        # yeni klip gelmedi → mevcutlarla yetin (fail-open)
             got.append(clip)

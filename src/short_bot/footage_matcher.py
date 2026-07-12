@@ -33,7 +33,16 @@ class _FootageVerdict(BaseModel):
     reason: str = ""
 
 
-def _judge_prompt(query: str) -> str:
+def _judge_prompt(query: str, context: str = "") -> str:
+    # BAĞLAM (videonun gerçek konusu) KRİTİK: anlatım metafor kullanınca ("görünmez
+    # savaşçılar" = bakteriyofaj) sorgu metafora kayabiliyor ve stok kütüphane
+    # kelimeyi DÜZ anlıyor → bakteriyofaj videosuna ESKRİMCİ geldi. Bağlam verilince
+    # vision "bu klip bu videoya ait mi?" diye de bakar ve konu-dışını eler.
+    ctx = (f'\nVİDEONUN KONUSU: "{context}"\n'
+           f'3) BAĞLAM: Bu görüntü YUKARIDAKİ KONUYA ait bir videoda anlamlı mı? '
+           f'Arama kelimesi tesadüfen uysa bile konuyla ilgisizse matches=false ver '
+           f'— ör. konu "bakteriyofaj virüsü" iken arama "invisible warrior" diye '
+           f'ESKRİMCİ getirdiyse bu KONUYA AİT DEĞİL, reddet.\n') if context else ""
     return (
         f'Bu görüntüyü bir YouTube Shorts videosunda B-ROLL olarak kullanacağız.\n'
         f'1) ARAMAYI KARŞILIYOR MU: "{query}"?\n'
@@ -46,6 +55,7 @@ def _judge_prompt(query: str) -> str:
         f'karanlık/siyah, ne olduğu seçilemeyen bulanık kütle, aşırı pozlanmış, '
         f'boş/anlamsız kare, ağır filigran/yazı kaplı. (Karanlık AMA net bir sahne '
         f'— ör. siyah zeminde parlayan mikroplar — clear=true.)\n'
+        f'{ctx}'
         f'Ayrıca gördüğünü 1 kısa İngilizce cümleyle tarif et.\n'
         f'SADECE JSON: {{"content": "<English description>", '
         f'"matches": true|false, "clear": true|false, '
@@ -53,8 +63,9 @@ def _judge_prompt(query: str) -> str:
     )
 
 
-def _judge_image_file(path: Path, query: str, *, vision_call) -> "_FootageVerdict | None":
-    """Yerel görüntüyü vision ile TARİF ET + sorguya KATI eşleşme yargısı ver.
+def _judge_image_file(path: Path, query: str, *, vision_call,
+                      context: str = "") -> "_FootageVerdict | None":
+    """Yerel görüntüyü vision ile TARİF ET + sorgu/kalite/BAĞLAM yargısı ver.
 
     Hata/vision yok → None (çağıran fail-open ile kabul eder — üretim durmaz)."""
     from short_bot.claude_cli import run_json
@@ -66,7 +77,7 @@ def _judge_image_file(path: Path, query: str, *, vision_call) -> "_FootageVerdic
             im.convert("RGB").save(path, "JPEG")
         except Exception:
             pass
-        return run_json(_judge_prompt(query), _FootageVerdict,
+        return run_json(_judge_prompt(query, context), _FootageVerdict,
                         claude_path=vision_call.claude_path,
                         model=vision_call.model, backend=vision_call.backend,
                         api_key=vision_call.api_key, image_path=path,
@@ -137,7 +148,7 @@ def describe_footage(image_url: str, *, vision_call=None) -> str:
 
 
 def verify_clip_frame_matches(clip_path, query: str, *, vision_call=None, pool=None,
-                              ffmpeg_path: str = "ffmpeg") -> bool:
+                              ffmpeg_path: str = "ffmpeg", context: str = "") -> bool:
     """Thumbnail'ı OLMAYAN kaynaklar (Storyblocks) için: indirilen klipten 9:16
     kare çıkar → vision KATI yargısı ("bu kare '{query}' gösteriyor mu?").
 
@@ -151,7 +162,7 @@ def verify_clip_frame_matches(clip_path, query: str, *, vision_call=None, pool=N
             frame = Path(tf.name)
         if _extract_cropped_frame(Path(clip_path), ffmpeg_path, frame) is None:
             return True
-        v = _judge_image_file(frame, query, vision_call=vision_call)
+        v = _judge_image_file(frame, query, vision_call=vision_call, context=context)
         if v is None:
             log.info(f"  footage frame-gate: vision yanıt vermedi → fail-open | q='{query}'")
             return True
@@ -168,7 +179,8 @@ def verify_clip_frame_matches(clip_path, query: str, *, vision_call=None, pool=N
             frame.unlink(missing_ok=True)
 
 
-def verify_clip_matches(image_url: str, query: str, *, vision_call=None, pool=None) -> bool:
+def verify_clip_matches(image_url: str, query: str, *, vision_call=None, pool=None,
+                        context: str = "") -> bool:
     """Thumbnail bu sorguyu KARŞILIYOR MU — vision'ın katı per-sorgu yargısı.
 
     Eski kelime-havuzu kapısı KALDIRILDI: soyut alanlarda (anchor='science history')
@@ -191,7 +203,7 @@ def verify_clip_matches(image_url: str, query: str, *, vision_call=None, pool=No
         with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tf:
             tf.write(r.content)
             thumb = Path(tf.name)
-        v = _judge_image_file(thumb, query, vision_call=vision_call)
+        v = _judge_image_file(thumb, query, vision_call=vision_call, context=context)
         if v is None:
             log.info(f"  footage gate: vision yanıt vermedi → fail-open | q='{query}'")
             return True
@@ -289,7 +301,7 @@ def match_beat_clip(query: str, *, api_key: str = "", cache_dir: Path,
                     verify: bool = True, vision_call=None,
                     deps: FootageDeps | None = None, topic_pool=None,
                     ffmpeg_path: str = "ffmpeg", budget: dict | None = None,
-                    exclude: set | None = None) -> Path | None:
+                    exclude: set | None = None, context: str = "") -> Path | None:
     """Sorguya uyan tek klibi kaynak zincirinden indirip yolunu döndürür.
 
     Kaynakları ``deps.sources`` öncelik sırasında dener; her kaynak için
@@ -348,7 +360,8 @@ def match_beat_clip(query: str, *, api_key: str = "", cache_dir: Path,
                     b["gate"] = b.get("gate", 0) + 1
                     try:
                         ok = d.verify_footage(thumb_url, query,
-                                              vision_call=vision_call, pool=topic_pool)
+                                              vision_call=vision_call, pool=topic_pool,
+                                              context=context)
                     except Exception as e:
                         log.warning(f"footage vision doğrulama hatası: {e}")
                         ok = True   # doğrulama patlarsa arama sırasına güven
@@ -369,7 +382,8 @@ def match_beat_clip(query: str, *, api_key: str = "", cache_dir: Path,
                     b["gate"] = b.get("gate", 0) + 1
                     try:
                         ok2 = d.verify_clip_frame(clip, query, vision_call=vision_call,
-                                                  pool=topic_pool, ffmpeg_path=ffmpeg_path)
+                                                  pool=topic_pool, ffmpeg_path=ffmpeg_path,
+                                                  context=context)
                     except Exception as e:
                         log.warning(f"clip frame gate hatası: {e}")
                         ok2 = True
