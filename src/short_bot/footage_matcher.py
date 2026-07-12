@@ -15,7 +15,57 @@ from short_bot.footage_sources import PexelsSource
 log = logging.getLogger(__name__)
 
 MIN_CLIP_S = 2
-MAX_CHECK = 5   # her sorguda en fazla kaç aday denenir
+MAX_CHECK = 5   # her sorguda kaynak başına en fazla kaç aday çekilir
+
+# TARAMA BÜTÇESİ (segment başına) — kullanıcı isteği + gerçek 25dk yavaşlık:
+# gate her adayı reddedince tüm kaynaklar/yönelimler taranıp Storyblocks'tan
+# onlarca klip TARAYICIYLA indiriliyordu. Bütçe dolunca eşleştirme durur.
+MAX_GATE_CHECKS = 10   # en fazla kaç aday vision kapısından geçirilir
+MAX_DOWNLOADS = 5      # en fazla kaç klip indirilir (thumbnail'siz kaynak pahalı)
+MAX_PER_SOURCE = 3     # tek kaynaktan en fazla kaç aday denenir (Storyblocks tekel olmasın)
+
+
+class _FootageVerdict(BaseModel):
+    """Vision'ın TEK çağrıda döndürdüğü tarif + KATI eşleşme yargısı."""
+    content: str = ""
+    matches: bool = False
+    reason: str = ""
+
+
+def _judge_prompt(query: str) -> str:
+    return (
+        f'Bu görüntü şu aramayı KARŞILIYOR MU: "{query}"?\n'
+        f'KATI OL: sorgunun ANA ÖZNESİ görüntüde gerçekten görünmeli. Yalnızca '
+        f'genel kategori uyuyorsa HAYIR de — ör. "balina yavrusu" istenip insan '
+        f'bebeği, "beyin anatomisi" istenip rastgele bir el görülüyorsa false.\n'
+        f'İllüstrasyon/3D render/animasyon da SAYILIR (konuyu gösteriyorsa true).\n'
+        f'Ayrıca gördüğünü 1 kısa İngilizce cümleyle tarif et.\n'
+        f'SADECE JSON: {{"content": "<English description>", '
+        f'"matches": true|false, "reason": "<kısa Türkçe gerekçe>"}}'
+    )
+
+
+def _judge_image_file(path: Path, query: str, *, vision_call) -> "_FootageVerdict | None":
+    """Yerel görüntüyü vision ile TARİF ET + sorguya KATI eşleşme yargısı ver.
+
+    Hata/vision yok → None (çağıran fail-open ile kabul eder — üretim durmaz)."""
+    from short_bot.claude_cli import run_json
+    try:
+        try:  # maliyeti dipte tutmak için ≤384px'e küçült
+            from PIL import Image
+            im = Image.open(path)
+            im.thumbnail((384, 384))
+            im.convert("RGB").save(path, "JPEG")
+        except Exception:
+            pass
+        return run_json(_judge_prompt(query), _FootageVerdict,
+                        claude_path=vision_call.claude_path,
+                        model=vision_call.model, backend=vision_call.backend,
+                        api_key=vision_call.api_key, image_path=path,
+                        retries=1, timeout_s=45)
+    except Exception as e:
+        log.warning(f"footage vision yargı hatası: {e}")
+        return None
 
 
 class _FootageDescription(BaseModel):
@@ -80,12 +130,12 @@ def describe_footage(image_url: str, *, vision_call=None) -> str:
 
 def verify_clip_frame_matches(clip_path, query: str, *, vision_call=None, pool=None,
                               ffmpeg_path: str = "ffmpeg") -> bool:
-    """Thumbnail'ı OLMAYAN kaynaklar (ör. Storyblocks kazıma) için: indirilen
-    klibin ~ortasından 9:16 kare çıkar → describe → analyze_scene(pool) off-topic mi.
+    """Thumbnail'ı OLMAYAN kaynaklar (Storyblocks) için: indirilen klipten 9:16
+    kare çıkar → vision KATI yargısı ("bu kare '{query}' gösteriyor mu?").
 
-    vision yok / pool yok / kare çıkmadı / tarif boş / hata → True (fail-open;
-    üretim ASLA gate yüzünden bloklanmaz). Off-topic ise False (çağıran klibi siler)."""
-    if vision_call is None or not pool:
+    ``pool`` yok sayılır (geriye-uyum imzası). vision yok / kare çıkmadı / vision
+    hatası → True (fail-open; üretim ASLA gate yüzünden bloklanmaz)."""
+    if vision_call is None:
         return True
     frame: Path | None = None
     try:
@@ -93,15 +143,14 @@ def verify_clip_frame_matches(clip_path, query: str, *, vision_call=None, pool=N
             frame = Path(tf.name)
         if _extract_cropped_frame(Path(clip_path), ffmpeg_path, frame) is None:
             return True
-        desc = _describe_image_file(frame, vision_call=vision_call)
-        if not desc:
-            log.info(f"  footage frame-gate: tarif BOŞ → fail-open | q='{query}'")
+        v = _judge_image_file(frame, query, vision_call=vision_call)
+        if v is None:
+            log.info(f"  footage frame-gate: vision yanıt vermedi → fail-open | q='{query}'")
             return True
-        from short_bot.reel_relevance import analyze_scene
-        res = analyze_scene(desc, pool)
-        tag = "OFF-TOPIC" if res["off_topic"] else "ok"
-        log.info(f"  footage frame-gate [{tag}] hits={res['hits']} q='{query}': '{desc[:70]}'")
-        return not res["off_topic"]
+        tag = "ok" if v.matches else "UYMUYOR"
+        log.info(f"  footage frame-gate [{tag}] q='{query}': '{(v.content or '')[:60]}'"
+                 + (f" ({v.reason[:40]})" if not v.matches and v.reason else ""))
+        return bool(v.matches)
     except Exception as e:
         log.warning(f"clip frame gate hatası: {e}")
         return True
@@ -111,25 +160,42 @@ def verify_clip_frame_matches(clip_path, query: str, *, vision_call=None, pool=N
 
 
 def verify_clip_matches(image_url: str, query: str, *, vision_call=None, pool=None) -> bool:
-    """Thumbnail off-topic mi: describe_footage → analyze_scene(desc, pool).
+    """Thumbnail bu sorguyu KARŞILIYOR MU — vision'ın katı per-sorgu yargısı.
 
-    ``pool`` verilmemişse (ya da vision/thumbnail yoksa) True — arama sırasına güven
-    (fail-open; footage üretimi ASLA gate yüzünden bloklanmaz). ``query`` imza
-    uyumu için durur; asıl karar tarif↔havuz örtüşmesine dayanır.
-    """
+    Eski kelime-havuzu kapısı KALDIRILDI: soyut alanlarda (anchor='science history')
+    havuz {science,history} oluyordu ve hiçbir vision-tarifi bu kelimeleri
+    içermediği için MÜKEMMEL klipler bile reddediliyordu (gerçek hata: "human brain
+    anatomy" sorgusuna gelen 'glowing holographic brain' klibi off-topic sayıldı →
+    tüm kaynaklar tarandı → 25dk üretim). Artık kararı vision veriyor: sorgunun
+    ANA ÖZNESİ görünüyor mu.
+
+    ``pool`` geriye-uyum için durur (yok sayılır). vision/thumbnail yok ya da vision
+    hatası → True (fail-open)."""
     if not image_url or vision_call is None:
         return True
-    desc = describe_footage(image_url, vision_call=vision_call)
-    if not desc:
-        log.info(f"  footage gate: tarif BOŞ (vision hata/timeout) → fail-open kabul | q='{query}'")
+    import requests
+    thumb: Path | None = None
+    try:
+        r = requests.get(image_url, timeout=15)
+        if r.status_code != 200 or not r.content:
+            return True
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tf:
+            tf.write(r.content)
+            thumb = Path(tf.name)
+        v = _judge_image_file(thumb, query, vision_call=vision_call)
+        if v is None:
+            log.info(f"  footage gate: vision yanıt vermedi → fail-open | q='{query}'")
+            return True
+        tag = "ok" if v.matches else "UYMUYOR"
+        log.info(f"  footage gate [{tag}] q='{query}': '{(v.content or '')[:60]}'"
+                 + (f" ({v.reason[:40]})" if not v.matches and v.reason else ""))
+        return bool(v.matches)
+    except Exception as e:
+        log.warning(f"footage gate hatası: {e}")
         return True
-    if not pool:
-        return True
-    from short_bot.reel_relevance import analyze_scene
-    res = analyze_scene(desc, pool)
-    tag = "OFF-TOPIC" if res["off_topic"] else "ok"
-    log.info(f"  footage gate [{tag}] hits={res['hits']} q='{query}': '{desc[:70]}'")
-    return not res["off_topic"]
+    finally:
+        if thumb is not None:
+            thumb.unlink(missing_ok=True)
 
 
 class SubjectPos(BaseModel):
@@ -210,40 +276,62 @@ class FootageDeps:
 def match_beat_clip(query: str, *, api_key: str = "", cache_dir: Path,
                     verify: bool = True, vision_call=None,
                     deps: FootageDeps | None = None, topic_pool=None,
-                    ffmpeg_path: str = "ffmpeg") -> Path | None:
+                    ffmpeg_path: str = "ffmpeg", budget: dict | None = None
+                    ) -> Path | None:
     """Sorguya uyan tek klibi kaynak zincirinden indirip yolunu döndürür.
 
-    Kaynakları ``deps.sources`` öncelik sırasında dener: kullanılamayanı atlar,
-    her kaynak için portrait+landscape yönelimini dener, süresi ``MIN_CLIP_S``
-    altındakileri eler, ilk başarılı indirmeyi döndürür. Hepsi tükenirse None.
+    Kaynakları ``deps.sources`` öncelik sırasında dener; her kaynak için
+    portrait+landscape yönelimi, süresi ``MIN_CLIP_S`` altındakiler elenir; ilk
+    KAPIDAN GEÇEN klip döner. Hepsi tükenir ya da BÜTÇE dolarsa None.
 
-    ALAKA GATE iki yollu: THUMBNAIL varsa indirmeden ÖNCE thumbnail üstünde
-    doğrular (ucuz); thumbnail YOKSA (ör. Storyblocks kazıma) indirdikten SONRA
-    klip KARESİ üstünde doğrular (off-topic → sil, sıradaki aday). Böylece
-    thumbnail'sız kaynaklar gate'i ATLAYAMAZ.
+    ALAKA GATE iki yollu: THUMBNAIL varsa indirmeden ÖNCE (ucuz); YOKSA
+    (Storyblocks) indirdikten SONRA klip karesinde. İkisi de vision'ın katı
+    per-sorgu yargısıdır.
 
-    ``api_key`` parametresi geriye-uyum için durur; anahtarları kaynaklar taşır.
+    TARAMA BÜTÇESİ (``budget`` dict — segment boyunca paylaşılır, çağıran verir):
+    ``gate`` (vision kapısı sayısı), ``dl`` (indirme sayısı). Kaynak başına
+    ``MAX_PER_SOURCE`` aday. Bütçe olmadan tek kaynak (Storyblocks) tüm süreyi
+    yiyordu — gerçek 25dk üretim hatası.
+
+    ``api_key``/``topic_pool`` geriye-uyum için durur (topic_pool artık yok sayılır).
     """
     d = deps or FootageDeps()
     cache_dir = Path(cache_dir)
+    b = budget if budget is not None else {"gate": 0, "dl": 0}
+
+    def _budget_left() -> bool:
+        return (b.get("gate", 0) < MAX_GATE_CHECKS
+                and b.get("dl", 0) < MAX_DOWNLOADS)
+
     for source in d.sources:
+        if not _budget_left():
+            log.info("  footage: tarama bütçesi doldu → sıradaki sorguya/kaynağa geç")
+            return None
         try:
             if not source.available():
                 continue
         except Exception:
             continue
+        src_name = getattr(source, "name", "?")
+        tried_from_source = 0
         for orientation in ("portrait", "landscape"):
+            if tried_from_source >= MAX_PER_SOURCE or not _budget_left():
+                break
             try:
                 cands = source.search(query, max_results=MAX_CHECK,
                                       orientation=orientation)
             except Exception as e:
-                log.warning(f"{getattr(source, 'name', '?')} arama hatası: {e}")
+                log.warning(f"{src_name} arama hatası: {e}")
                 cands = []
             cands = [c for c in cands if getattr(c, "duration_s", 0) >= MIN_CLIP_S]
             for c in cands:
+                if tried_from_source >= MAX_PER_SOURCE or not _budget_left():
+                    break
+                tried_from_source += 1
                 thumb_url = getattr(c, "image", "") or ""
                 # 1) Pre-download gate — THUMBNAIL varsa (ucuz, indirmeden ele)
                 if verify and d.verify_footage is not None and thumb_url:
+                    b["gate"] = b.get("gate", 0) + 1
                     try:
                         ok = d.verify_footage(thumb_url, query,
                                               vision_call=vision_call, pool=topic_pool)
@@ -252,17 +340,19 @@ def match_beat_clip(query: str, *, api_key: str = "", cache_dir: Path,
                         ok = True   # doğrulama patlarsa arama sırasına güven
                     if not ok:
                         continue
+                b["dl"] = b.get("dl", 0) + 1
                 try:
                     clip = source.download(c, cache_dir)
                 except Exception as e:
-                    log.warning(f"{getattr(source, 'name', '?')} indirme hatası: {e}")
+                    log.warning(f"{src_name} indirme hatası: {e}")
                     clip = None
                 if clip is None:
                     continue
                 # 2) Post-download gate — THUMBNAIL YOKSA klip karesinde doğrula
                 # (Storyblocks kazıma thumb üretmez → aksi hâlde gate'i atlardı).
-                if (verify and not thumb_url and topic_pool
+                if (verify and not thumb_url
                         and getattr(d, "verify_clip_frame", None) is not None):
+                    b["gate"] = b.get("gate", 0) + 1
                     try:
                         ok2 = d.verify_clip_frame(clip, query, vision_call=vision_call,
                                                   pool=topic_pool, ffmpeg_path=ffmpeg_path)

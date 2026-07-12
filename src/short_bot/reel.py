@@ -52,7 +52,7 @@ class ReelDeps:
 
 def _match_with_fallback(d, query, *, topic_q, api_key, cache_dir, verify,
                          vision_call, footage_deps=None, topic_pool=None, anchor="",
-                         ffmpeg_path="ffmpeg"):
+                         ffmpeg_path="ffmpeg", budget=None):
     """Footage eşleştirmeyi kademeli, KONUDA-KALAN yedeklerle dener.
 
     Sıra: (1) tam sorgu, (2) ilk 2 kelime, (3) konu tohumu, (4) kanal çıpası —
@@ -68,18 +68,23 @@ def _match_with_fallback(d, query, *, topic_q, api_key, cache_dir, verify,
         stages.append(topic_q)
     if anchor and anchor.lower() not in (s.lower() for s in stages):
         stages.append(anchor)
+    # Tarama bütçesi SEGMENT boyunca paylaşılır: tüm fallback aşamaları aynı
+    # kovadan yer → tek segment onlarca Storyblocks indirmesiyle dakikalar yakamaz.
+    b = budget if budget is not None else {"gate": 0, "dl": 0}
     for q in stages:
         clip = d.match_beat_clip(q, api_key=api_key, cache_dir=cache_dir,
                                  verify=verify, vision_call=vision_call,
                                  deps=footage_deps, topic_pool=topic_pool,
-                                 ffmpeg_path=ffmpeg_path)
+                                 ffmpeg_path=ffmpeg_path, budget=b)
         if clip is not None:
             return clip
-    # son çare — çıpa sorgusu vision'sız (konuda kalır); çıpa yoksa ilk-2-kelime
+    # Son çare — çıpa sorgusu vision'sız (konuda kalır); çıpa yoksa ilk-2-kelime.
+    # TAZE bütçe: bu aşama gate yapmaz, yalnız indirir; segment boş dönmesin.
     last_q = anchor or (" ".join(words[:2]) if len(words) >= 2 else (words[0] if words else topic_q))
     return d.match_beat_clip(last_q, api_key=api_key, cache_dir=cache_dir,
                              verify=False, vision_call=None, deps=footage_deps,
-                             topic_pool=None, ffmpeg_path=ffmpeg_path)
+                             topic_pool=None, ffmpeg_path=ffmpeg_path,
+                             budget={"gate": 0, "dl": 0})
 
 
 def produce_reel_video(
@@ -192,7 +197,7 @@ def produce_reel_video(
             d, query, topic_q=_topic_q, api_key=pexels_api_key,
             cache_dir=clips_cache, verify=reel.verify_footage, vision_call=vision_call,
             footage_deps=footage_deps, topic_pool=topic_pool, anchor=anchor,
-            ffmpeg_path=ffmpeg_path)
+            ffmpeg_path=ffmpeg_path, budget={"gate": 0, "dl": 0})
         if clip is None:
             raise RuntimeError(f"reel: '{query}' için footage bulunamadı (segment {si}).")
         log.info(f"  reel[süre] footage seg{si} ('{query[:30]}'): "
