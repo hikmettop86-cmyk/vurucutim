@@ -1146,6 +1146,15 @@ def _run_generator(*, channel, run_id, log, eng, settings,
     )
     topic_dist = topic_distribution(eng, channel.slug, days=_GENERATOR_TOPIC_DIST_DAYS)
     log.info(f"  → forbidden={len(forbidden)} topic_dist={topic_dist}")
+    # Kanıtlanmış-konu bankası (ilham + rotasyon; boşsa prompt değişmez)
+    proven = []
+    try:
+        from short_bot.db import active_bank_topics
+        proven = active_bank_topics(eng, channel.slug, limit=10)
+        if proven:
+            log.info(f"  → konu bankası: {len(proven)} aktif kayıt")
+    except Exception as e:
+        log.warning(f"  konu bankası okunamadı: {e}")
 
     fuzzy_threshold = (channel.generator.fuzzy_threshold
                        if channel.generator.fuzzy_threshold is not None
@@ -1176,6 +1185,7 @@ def _run_generator(*, channel, run_id, log, eng, settings,
             model=gen_model,
             backend=gen_call.backend,
             api_key=gen_call.api_key,
+            proven_topics=proven,
         )
 
         log.info(f"[3/6] dedup-check (text={result.text[:60]!r})")
@@ -1211,11 +1221,27 @@ def _run_generator(*, channel, run_id, log, eng, settings,
         status="used", short_id=None,
     )
 
+    # Banka rotasyonu: LLM kanıtlanmış konu seçtiyse kaydı 'used' işaretle
+    # (uydurma id → mark no-op; hata üretimi asla durdurmaz).
+    if getattr(chosen_result, "bank_id", None):
+        try:
+            from short_bot.db import mark_bank_topic_used
+            mark_bank_topic_used(eng, chosen_result.bank_id)
+            log.info(f"  → banka kaydı used: id={chosen_result.bank_id}")
+        except Exception as e:
+            log.warning(f"  banka used işaretlenemedi: {e}")
+
     # Reel formatı: footage-sürüklü üretim (etkinse render/compose'u atla)
     reel_call = resolve_ai_call(settings, secrets, "vision")
     if getattr(channel, "reel", None) is not None and channel.reel.enabled:
         out_dir = Path(channel.output_dir); out_dir.mkdir(parents=True, exist_ok=True)
         reel_out = out_dir / f"{datetime.now(timezone.utc):%Y-%m-%d}_{_slugify(chosen_result.text)}.mp4"
+        hook_pats = []
+        try:
+            from short_bot.db import bank_hook_patterns
+            hook_pats = bank_hook_patterns(eng, channel.slug, limit=5)
+        except Exception:
+            pass
         with tempfile.TemporaryDirectory() as reel_tmp:
             t0 = time.perf_counter()
             _reel_produce_or_none(
@@ -1224,6 +1250,7 @@ def _run_generator(*, channel, run_id, log, eng, settings,
                 templates_dir=templates_dir, cache_dir=cache_dir,
                 work_dir=Path(reel_tmp), log=log, llm_call=gen_call,
                 vision_call=reel_call, seed=generated_id,
+                hook_patterns=hook_pats,
             )
             render_ms = int((time.perf_counter() - t0) * 1000)
         log.info(f"  → {reel_out.name} ({render_ms}ms)")
@@ -1503,6 +1530,7 @@ def _render_and_compose(
 def _reel_produce_or_none(
     *, channel, topic, out_path, settings, secrets, music_root, templates_dir,
     cache_dir, work_dir, log, llm_call, vision_call, seed: int = 0,
+    hook_patterns=None,
 ) -> "Path | None":
     """Kanal reel ise reel videoyu üretip out_path döndürür; değilse None."""
     reel = getattr(channel, "reel", None)
@@ -1533,6 +1561,7 @@ def _reel_produce_or_none(
         whisper_quality=getattr(settings, "whisper_quality", "auto"),
         whisper_device=getattr(settings, "whisper_device", "auto"),
         vision_call=vision_call, seed=seed,
+        hook_patterns=hook_patterns,
     )
 
 

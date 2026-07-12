@@ -240,6 +240,12 @@ def upload(short_id):
     secrets = _load_secrets(Path(secrets_path)) if secrets_path else {}
     call = resolve_ai_call(settings, secrets, "default")
 
+    hook_pats = None
+    try:
+        from short_bot.db import bank_hook_patterns
+        hook_pats = bank_hook_patterns(eng, cfg.slug, limit=5) or None
+    except Exception:
+        pass
     generated = None
     try:
         meta = generate_youtube_metadata(
@@ -249,6 +255,7 @@ def upload(short_id):
             model=call.model,
             backend=call.backend,
             api_key=call.api_key,
+            hook_patterns=hook_pats,
         )
         generated = {"title": meta.title, "description": meta.description, "tags": meta.tags}
         current_app.logger.info("youtube: Sonnet metadata generated for short %s", short_id)

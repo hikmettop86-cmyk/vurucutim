@@ -123,6 +123,12 @@ def run_auto_upload(*, eng, short_id: int, channel, credentials,
             raise UploadAbortError(err) from e
 
     # Best-effort metadata generation
+    hook_pats = None
+    try:
+        from short_bot.db import bank_hook_patterns
+        hook_pats = bank_hook_patterns(eng, channel.slug, limit=5) or None
+    except Exception:
+        pass
     generated = None
     try:
         meta = generate_youtube_metadata(
@@ -130,6 +136,7 @@ def run_auto_upload(*, eng, short_id: int, channel, credentials,
             rss_source=rss_source, rss_link=rss_link,
             claude_path=claude_path, model=model,
             backend=backend, api_key=api_key,
+            hook_patterns=hook_pats,
         )
         generated = {"title": meta.title, "description": meta.description, "tags": meta.tags}
     except Exception:

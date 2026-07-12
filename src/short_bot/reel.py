@@ -94,6 +94,7 @@ def produce_reel_video(
     llm_backend: str = "claude_cli", llm_api_key: str | None = None,
     whisper_quality: str = "auto", whisper_device: str = "auto",
     vision_call=None, seed: int = 0, deps: ReelDeps | None = None,
+    hook_patterns=None,
 ) -> Path:
     reel = getattr(channel, "reel", None)
     if reel is None or not reel.enabled:
@@ -122,7 +123,8 @@ def produce_reel_video(
                                        backend=llm_backend, api_key=llm_api_key,
                                        hook_angle=profile.hook_angle,
                                        series_directive=bits.series_directive,
-                                       comment_line=bits.comment_line)
+                                       comment_line=bits.comment_line,
+                                       hook_patterns=hook_patterns)
     log.info(f"  reel: {narration.word_count()} kelime, {len(narration.beats)} beat")
 
     # 3) TTS
