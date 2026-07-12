@@ -35,3 +35,30 @@ def test_settings_post_saves_pixabay_and_priority(tmp_path):
     assert secrets["pixabay_api_key"] == "PIXKEY123"
     data = yaml.safe_load((cfg/"settings.yaml").read_text(encoding="utf-8"))
     assert data["footage"]["priority"] == ["pixabay", "pexels"]
+
+
+def test_settings_shows_storyblocks_status(tmp_path):
+    app, _ = _client(tmp_path)
+    body = app.test_client().get("/settings").data.decode("utf-8")
+    assert "Storyblocks" in body
+    assert "/settings/storyblocks/connect" in body
+
+
+def test_storyblocks_connect_triggers_login(tmp_path, monkeypatch):
+    app, _ = _client(tmp_path)
+    calls = []
+    import short_bot.web.routes.settings as st
+    # login'i sahtele (gerçek tarayıcı açılmasın)
+    monkeypatch.setattr(st, "_launch_storyblocks_login", lambda path: calls.append(path))
+    r = app.test_client().post("/settings/storyblocks/connect")
+    assert r.status_code in (200, 302)
+    assert len(calls) == 1
+
+
+def test_storyblocks_disconnect_deletes(tmp_path, monkeypatch):
+    app, _ = _client(tmp_path)
+    import short_bot.web.routes.settings as st
+    deleted = []
+    monkeypatch.setattr(st, "_delete_storyblocks_session", lambda path: deleted.append(path))
+    r = app.test_client().post("/settings/storyblocks/disconnect")
+    assert r.status_code in (200, 302) and len(deleted) == 1

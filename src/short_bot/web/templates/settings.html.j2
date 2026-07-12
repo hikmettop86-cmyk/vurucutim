@@ -192,11 +192,41 @@
             <input type="checkbox" name="footage_src_storyblocks" value="storyblocks"
                    {% if 'storyblocks' in _fp %}checked{% endif %}>
             Storyblocks
+            {% if storyblocks_connected %}
+              <span class="text-green-600 text-xs">✔ bağlı</span>
+            {% else %}
+              <span class="text-claude-muted text-xs">bağlı değil</span>
+            {% endif %}
           </label>
         </div>
         <input type="hidden" name="footage_order" value="{{ _fp | join(',') }}">
         <div class="text-xs text-claude-muted mt-2">
           Öncelik sırası: seçili kaynaklar storyblocks → pixabay → pexels sırasıyla denenir.
+        </div>
+      </div>
+
+      <div class="border-t border-claude-border pt-3">
+        <span class="text-xs text-claude-muted uppercase block mb-2">Storyblocks bağlantısı
+          {% if storyblocks_connected %}
+            <span class="normal-case text-green-600">(✔ bağlı)</span>
+          {% else %}
+            <span class="normal-case text-claude-muted">(bağlı değil)</span>
+          {% endif %}
+        </span>
+        {% if storyblocks_connected %}
+          <button type="submit" formaction="/settings/storyblocks/disconnect" formmethod="post"
+                  class="bg-claude-surface-alt hover:bg-claude-surface border border-claude-border px-3 py-1.5 rounded text-sm text-claude-text">
+            Bağlantıyı kes
+          </button>
+        {% else %}
+          <button type="submit" formaction="/settings/storyblocks/connect" formmethod="post"
+                  class="bg-claude-accent hover:bg-claude-accent-hover text-white px-3 py-1.5 rounded text-sm font-semibold">
+            Storyblocks'a Bağlan
+          </button>
+        {% endif %}
+        <div class="text-xs text-claude-muted mt-2">
+          Bağlan'a basınca masaüstünde bir tarayıcı açılır. Giriş yaptığında oturum
+          kaydedilir; footage indirmek için Storyblocks'u üstteki listeden seçili tut.
         </div>
       </div>
 

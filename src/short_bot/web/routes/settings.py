@@ -41,6 +41,42 @@ def _mask_key(key: str) -> str:
     return "•" * 8 + (key[-4:] if len(key) >= 4 else "")
 
 
+def _storyblocks_session_path() -> Path:
+    settings = current_app.config.get("SHORTBOT_SETTINGS")
+    sp = getattr(settings, "storyblocks_session", None) or "data/storyblocks_session.json"
+    return Path(sp)
+
+
+def _storyblocks_connected() -> bool:
+    """True if a saved Storyblocks session exists. Never raises (is_ready is defensive)."""
+    try:
+        from short_bot.storyblocks_browser import is_ready
+        return is_ready(_storyblocks_session_path())
+    except Exception:  # noqa: BLE001 — playwright/session missing → treat as disconnected
+        return False
+
+
+def _launch_storyblocks_login(session_path) -> None:
+    """Open a headed browser on the user's desktop in a daemon thread.
+
+    Runs in the background so the POST returns immediately (does NOT block).
+    Tests monkeypatch this function so no real browser is ever opened."""
+    import threading
+
+    def _run():
+        try:
+            from short_bot.storyblocks_login import run_login
+            run_login(str(session_path))
+        except Exception as e:  # noqa: BLE001 — background thread must not crash the app
+            _LOG.warning(f"[settings] storyblocks login failed: {e}")
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
+def _delete_storyblocks_session(session_path) -> None:
+    from short_bot.storyblocks_login import delete_session
+    delete_session(str(session_path))
+
 
 @bp.route("/settings", methods=["GET"])
 def view():
@@ -70,6 +106,7 @@ def view():
                             pixabay_key_masked=pixabay_key_masked,
                             pixabay_key_set=bool(secrets.get("pixabay_api_key")),
                             footage=data.get("footage", {}) or {},
+                            storyblocks_connected=_storyblocks_connected(),
                             openai_key_masked=openai_key_masked,
                             openai_key_set=bool(secrets.get("openai_api_key")),
                             youtube_key_masked=youtube_key_masked,
@@ -261,4 +298,21 @@ def save():
 
     flash("Ayarlar kaydedildi. (host/port değişikliği için restart gerekir; "
           "diğer ayarlar anında aktif olur.)", "success")
+    return redirect(url_for("settings.view"))
+
+
+@bp.route("/settings/storyblocks/connect", methods=["POST"])
+def storyblocks_connect():
+    """Masaüstünde headed tarayıcı aç (arka planda) — kullanıcı Storyblocks'a girsin."""
+    _launch_storyblocks_login(_storyblocks_session_path())
+    flash("Storyblocks giriş penceresi açıldı — tarayıcıda giriş yap, oturum kaydedilecek.",
+          "success")
+    return redirect(url_for("settings.view"))
+
+
+@bp.route("/settings/storyblocks/disconnect", methods=["POST"])
+def storyblocks_disconnect():
+    """Kayıtlı Storyblocks oturum dosyasını sil."""
+    _delete_storyblocks_session(_storyblocks_session_path())
+    flash("Storyblocks oturumu silindi.", "success")
     return redirect(url_for("settings.view"))
