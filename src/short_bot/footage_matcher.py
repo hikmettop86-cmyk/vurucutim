@@ -18,20 +18,18 @@ MIN_CLIP_S = 2
 MAX_CHECK = 5   # her sorguda en fazla kaç aday denenir
 
 
-class _FootageVerdict(BaseModel):
-    match: bool
-    reason: str = ""
+class _FootageDescription(BaseModel):
+    content: str = ""
 
 
-def verify_clip_matches(image_url: str, query: str, *, vision_call=None) -> bool:
-    """Thumbnail'in sorguyu (konuyu) gösterip göstermediğini vision ile doğrular.
+def describe_footage(image_url: str, *, vision_call=None) -> str:
+    """Thumbnail'ın NE gösterdiğini vision ile İngilizce tarif eder (yes/no DEĞİL).
 
-    ai33 için değil — OpenRouter/Claude vision (ör. Gemini Flash-Lite, ~$0.0001).
-    ``vision_call`` yoksa ya da thumbnail yoksa True döner (arama sırasına güven).
-    Ağ/model hatasında da True (footage üretimini bloklamamak için).
+    Katı: genel kategori değil, gördüğü SPESİFİK nesne/sahne. vision yok / thumbnail
+    yok / hata → "" (çağıran gate'i 'no-vision' ile pasif bırakır — üretim durmaz).
     """
     if not image_url or vision_call is None:
-        return True
+        return ""
     import requests
 
     from short_bot.claude_cli import run_json
@@ -39,7 +37,7 @@ def verify_clip_matches(image_url: str, query: str, *, vision_call=None) -> bool
     try:
         r = requests.get(image_url, timeout=15)
         if r.status_code != 200 or not r.content:
-            return True
+            return ""
         with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tf:
             tf.write(r.content)
             thumb = Path(tf.name)
@@ -51,32 +49,53 @@ def verify_clip_matches(image_url: str, query: str, *, vision_call=None) -> bool
         except Exception:
             pass
         prompt = (
-            f'Bu görüntü şu konuyu/nesneyi net biçimde gösteriyor mu: "{query}"?\n'
-            f'GEVŞEK ol — konuyla açıkça ilişkiliyse yeterli. Tamamen alakasızsa '
-            f'(ör. "asma köprü" istenip mutfak görüntüsü) false.\n'
-            f'SADECE JSON: {{"match": true|false, "reason": "<kısa Türkçe>"}}'
+            "Bu görüntü NE gösteriyor? SADECE gördüğün somut nesneleri/sahneyi "
+            "1-2 kısa İngilizce cümleyle tarif et. Genel kategori değil SPESİFİK ol "
+            "(ör. 'a kitchen counter' değil 'a person chopping onions on a wooden "
+            "board'). İngilizce yaz.\n"
+            'SADECE JSON: {"content": "<English description>"}'
         )
-        v = run_json(prompt, _FootageVerdict, claude_path=vision_call.claude_path,
+        v = run_json(prompt, _FootageDescription, claude_path=vision_call.claude_path,
                      model=vision_call.model, backend=vision_call.backend,
                      api_key=vision_call.api_key, image_path=thumb,
                      retries=1, timeout_s=45)
-        return bool(v.match)
+        return (v.content or "").strip()
     except Exception as e:
-        log.warning(f"footage vision doğrulama hatası: {e}")
-        return True
+        log.warning(f"footage describe hatası: {e}")
+        return ""
     finally:
         if thumb is not None:
             thumb.unlink(missing_ok=True)
 
 
+def verify_clip_matches(image_url: str, query: str, *, vision_call=None, pool=None) -> bool:
+    """Thumbnail off-topic mi: describe_footage → analyze_scene(desc, pool).
+
+    ``pool`` verilmemişse (ya da vision/thumbnail yoksa) True — arama sırasına güven
+    (fail-open; footage üretimi ASLA gate yüzünden bloklanmaz). ``query`` imza
+    uyumu için durur; asıl karar tarif↔havuz örtüşmesine dayanır.
+    """
+    if not image_url or vision_call is None:
+        return True
+    desc = describe_footage(image_url, vision_call=vision_call)
+    if not desc or not pool:
+        return True
+    from short_bot.reel_relevance import analyze_scene
+    return not analyze_scene(desc, pool)["off_topic"]
+
+
 class SubjectPos(BaseModel):
     found: bool = False
+    discrete: bool = False
+    confidence: float = 0.0
     x: float = 0.5
     y: float = 0.5
 
 
 class _LocateVerdict(BaseModel):
     found: bool = False
+    discrete: bool = False
+    confidence: float = 0.0
     x: float = 0.5
     y: float = 0.5
 
@@ -108,16 +127,21 @@ def locate_subject(clip_path, query, *, vision_call=None, ffmpeg_path="ffmpeg") 
         if _extract_cropped_frame(Path(clip_path), ffmpeg_path, frame) is None:
             return SubjectPos(found=False)
         prompt = (
-            f'Bu 9:16 kare şu nesneyi içeriyor mu: "{query}"? İçeriyorsa nesnenin '
-            f'MERKEZİNİ normalize koordinatla ver (sol-üst 0,0; sağ-alt 1,1).\n'
-            f'SADECE JSON: {{"found": true|false, "x": 0.0..1.0, "y": 0.0..1.0}}'
+            f'Bu 9:16 karede TEK, net, işaret-edilebilir bir ANA nesne var mı: '
+            f'"{query}"? Manzara / geniş sahne / dağınık / çok-uzak / belirsiz ise '
+            f'discrete=false ver. Varsa nesnenin MERKEZİNİ normalize koordinatla '
+            f'(sol-üst 0,0; sağ-alt 1,1) ve 0..1 güven ver.\n'
+            f'SADECE JSON: {{"found": true|false, "discrete": true|false, '
+            f'"confidence": 0.0..1.0, "x": 0.0..1.0, "y": 0.0..1.0}}'
         )
         v = run_json(prompt, _LocateVerdict, claude_path=vision_call.claude_path,
                      model=vision_call.model, backend=vision_call.backend,
                      api_key=vision_call.api_key, image_path=frame,
                      retries=1, timeout_s=45)
         x = min(1.0, max(0.0, float(v.x))); y = min(1.0, max(0.0, float(v.y)))
-        return SubjectPos(found=bool(v.found), x=x, y=y)
+        conf = min(1.0, max(0.0, float(v.confidence)))
+        return SubjectPos(found=bool(v.found), discrete=bool(v.discrete),
+                          confidence=conf, x=x, y=y)
     except Exception as e:
         log.warning(f"locate_subject hatası: {e}")
         return SubjectPos(found=False)
@@ -136,7 +160,7 @@ class FootageDeps:
 
 def match_beat_clip(query: str, *, api_key: str = "", cache_dir: Path,
                     verify: bool = True, vision_call=None,
-                    deps: FootageDeps | None = None) -> Path | None:
+                    deps: FootageDeps | None = None, topic_pool=None) -> Path | None:
     """Sorguya uyan tek klibi kaynak zincirinden indirip yolunu döndürür.
 
     Kaynakları ``deps.sources`` öncelik sırasında dener: kullanılamayanı atlar,
@@ -166,7 +190,8 @@ def match_beat_clip(query: str, *, api_key: str = "", cache_dir: Path,
                 if verify and d.verify_footage is not None:
                     thumb_url = getattr(c, "image", "") or ""
                     try:
-                        ok = d.verify_footage(thumb_url, query, vision_call=vision_call)
+                        ok = d.verify_footage(thumb_url, query,
+                                              vision_call=vision_call, pool=topic_pool)
                     except Exception as e:
                         log.warning(f"footage vision doğrulama hatası: {e}")
                         ok = True   # doğrulama patlarsa arama sırasına güven

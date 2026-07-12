@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 
 MARKER_TYPES = ("arrow", "ring", "pulse", "box", "spotlight", "underline")
+MARKER_CONF_MIN = 0.55   # marker yalnız güvenle bulunmuş TEKİL nesnede çıkar
 
 
 def _marker_worthy_segs(n_segs: int, frequency: str) -> list[int]:
@@ -20,7 +21,11 @@ def build_markers(seg_positions, *, marker_kit, frequency="beats", seed=0) -> li
     worthy = set(_marker_worthy_segs(len(seg_positions), frequency))
     out = []
     for i, pos in enumerate(seg_positions):
-        if i not in worthy or not getattr(pos, "found", False):
+        if i not in worthy:
+            continue
+        if not (getattr(pos, "found", False)
+                and getattr(pos, "discrete", False)
+                and getattr(pos, "confidence", 0.0) >= MARKER_CONF_MIN):
             continue
         h = int(hashlib.sha1(f"{seed}:mk:{i}".encode()).hexdigest(), 16)
         out.append({"seg": i, "type": kit[h % len(kit)],
