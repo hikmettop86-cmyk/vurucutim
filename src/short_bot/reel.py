@@ -90,12 +90,22 @@ def _match_with_fallback(d, query, *, topic_q, api_key, cache_dir, verify,
         log.info(f"  footage: '{query[:30]}' için kapıdan geçen aday yok → "
                  f"bu videonun kabul edilmiş klibi tekrar kullanılıyor")
         return reuse_clips[-1]
-    # Hiç klip yoksa (ilk segment) — mecburen çıpa sorgusu, vision'sız.
-    last_q = anchor or (" ".join(words[:2]) if len(words) >= 2 else (words[0] if words else topic_q))
-    return d.match_beat_clip(last_q, api_key=api_key, cache_dir=cache_dir,
-                             verify=False, vision_call=None, deps=footage_deps,
-                             topic_pool=None, ffmpeg_path=ffmpeg_path,
-                             budget={"gate": 0, "dl": 0})
+    # Hiç klip yoksa (ilk işlenen segment) — vision'sız ara ama SEGMENTİN KENDİ
+    # sorgusuyla. Kanal çıpası ('science history') ÇÖP getiriyordu (gerçek hata:
+    # 'autopsy table doctor' beat'i → çıpa → tablo/poster pazarı). Kendi sorgusu
+    # hiç değilse konuya yakın bir şey getirir.
+    for last_q in ([query]
+                   + ([" ".join(words[:2])] if len(words) > 2 else [])
+                   + ([anchor] if anchor else [])):
+        clip = d.match_beat_clip(last_q, api_key=api_key, cache_dir=cache_dir,
+                                 verify=False, vision_call=None, deps=footage_deps,
+                                 topic_pool=None, ffmpeg_path=ffmpeg_path,
+                                 budget={"gate": 0, "dl": 0})
+        if clip is not None:
+            log.info(f"  footage: '{query[:30]}' kapıdan geçmedi → vision'sız "
+                     f"'{last_q[:30]}' klibi kullanıldı")
+            return clip
+    return None
 
 
 def produce_reel_video(

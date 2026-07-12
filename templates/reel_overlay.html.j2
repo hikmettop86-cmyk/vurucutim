@@ -23,7 +23,9 @@ html,body{width:1080px;height:1920px;overflow:hidden;background:transparent;
 .card.on{display:block}
 /* sayı vurgusu — "240 parça", "%90", "24 milyon" söylenirken BÜYÜK pop.
    Ölçek seek-güdümlü (duvar-saati DEĞİL) → deterministik, animations=disabled uyumlu. */
-#numpop{position:absolute;left:50%;top:1150px;transform:translateX(-50%);
+/* Konum: ÜST-ORTA (chip'in altı, karaoke bloğunun ÇOK üstü) — altyazıyla
+   çakışmamalı (gerçek hata: sayı karaoke metninin üstüne binip okunmuyordu). */
+#numpop{position:absolute;left:50%;top:700px;transform:translateX(-50%);
   font-weight:900;font-size:150px;line-height:1;color:{{ hot_color }};
   -webkit-text-stroke:4px #000;paint-order:stroke fill;
   text-shadow:0 8px 30px rgba(0,0,0,.75);opacity:0;pointer-events:none;white-space:nowrap}
