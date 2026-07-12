@@ -21,6 +21,13 @@ html,body{width:1080px;height:1920px;overflow:hidden;background:transparent;
   font-weight:900;font-size:54px;padding:16px 40px;border-radius:14px;text-transform:uppercase;white-space:nowrap;display:none;
   box-shadow:0 14px 40px rgba(0,0,0,.55);border:4px solid rgba(0,0,0,.35)}
 .card.on{display:block}
+/* sayı vurgusu — "240 parça", "%90", "24 milyon" söylenirken BÜYÜK pop.
+   Ölçek seek-güdümlü (duvar-saati DEĞİL) → deterministik, animations=disabled uyumlu. */
+#numpop{position:absolute;left:50%;top:1150px;transform:translateX(-50%);
+  font-weight:900;font-size:150px;line-height:1;color:{{ hot_color }};
+  -webkit-text-stroke:4px #000;paint-order:stroke fill;
+  text-shadow:0 8px 30px rgba(0,0,0,.75);opacity:0;pointer-events:none;white-space:nowrap}
+#numpop.on{opacity:1}
 /* belirteç katmanı — nesnenin (x,y) konumuna 6 tür; renk {{ arrow_color }}, siyah kontur/gölge */
 #markers{position:absolute;inset:0;pointer-events:none}
 #markers .mk{position:absolute}
@@ -72,6 +79,7 @@ html,body{width:1080px;height:1920px;overflow:hidden;background:transparent;
 <div class="stage {{ layout | default('classic') }}">
 <div id="scrim"></div><div id="bar"></div>
 <div id="markers"></div>
+<div id="numpop"></div>
 <div class="big" id="hook">{{ hook }}</div>
 <div class="big" id="close">{{ close }}</div>
 {% for c in cards %}<div class="card" data-s="{{ c.start }}" data-e="{{ c.end }}">{{ c.text }}</div>
@@ -89,6 +97,8 @@ const CUTS={{ cuts }};
 const ARROWSEGS={{ arrow_segs }};   // legacy: belirteçler artık MARKERS'tan gelir
 const MARKERS={{ markers }};
 const MK={};for(const m of MARKERS){MK[m.seg]=m;}
+const NUMS={{ nums }};
+const NP=document.getElementById('numpop');
 const MCLS={arrow:'mk-arrow',ring:'mk-ring',pulse:'mk-pulse',box:'mk-box',spotlight:'mk-spot',underline:'mk-under'};
 const CUT_EFFECT='{{ cut_effect }}';   // kesme efekti türü (flash|glitch|rgbsplit|lightleak|none)
 const W=[...document.querySelectorAll('.cap .w')],CARDS=[...document.querySelectorAll('.card')];
@@ -119,6 +129,21 @@ window.__seek=function(tms){
   LEAK.style.opacity=(CUT_EFFECT==='lightleak')?op*0.9:0;
   GLITCH.style.opacity=(CUT_EFFECT==='glitch')?op:0;
   GLITCH.style.transform=(CUT_EFFECT==='glitch'&&op>0)?('translateX('+(((Math.floor(t*90)%2)?1:-1)*op*9)+'px)'):'';
+  /* Sayı vurgusu: kelime söylenirken büyük pop (0.25sn scale .6→1.1, sonra 1.0). */
+  if(NP){
+    let cur=null;
+    for(const n of NUMS){if(t>=+n.s && t<+n.e+0.35){cur=n;break;}}
+    if(cur){
+      const dt=t-(+cur.s);
+      const k=dt<0.25?(0.6+2.0*dt):(dt<0.35?(1.1-1.0*(dt-0.25)):1.0);
+      NP.textContent=cur.text;
+      NP.className='on';
+      NP.style.transform='translateX(-50%) scale('+k.toFixed(3)+')';
+    } else {NP.className='';NP.textContent='';NP.style.transform='translateX(-50%)';}
+  }
+  /* Hook pop: ilk 0.15sn'de metin patlayarak girer (açılış kalıp kırıcı). */
+  if(seg===0&&t<0.15){HOOK.style.transform='scale('+(1.15-t).toFixed(3)+')';}
+  else{HOOK.style.transform='scale(1)';}
   if(CTA){CTA.classList.toggle('on', t >= DUR - CTA_S);}
 };
 /* Görünür DURUM imzası: renderer aynı imzalı ardışık kareyi yeniden çekmez,
@@ -137,6 +162,9 @@ window.__sig=function(){
   s+='|'+BAR.style.width+'|';
   s+=[FLASH,RGB,LEAK,GLITCH].map(e=>(e.style.opacity||'0')+':'+(e.style.transform||'')).join(',');
   s+='|'+((CTA&&CTA.classList.contains('on'))?1:0);
+  /* sayı pop + hook pop imzaya DAHİL — aksi hâlde dedup bu kareleri kaçırır */
+  s+='|'+(NP?(NP.textContent+':'+(NP.style.transform||'')):'');
+  s+='|'+(HOOK.style.transform||'');
   return s;
 };
 window.__seek(0);

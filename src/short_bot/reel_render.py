@@ -35,6 +35,7 @@ def build_reel_overlay_html(
     handle: str = "", cta_text: str = "",
     font: str = "Montserrat",
     markers: list | None = None,
+    numbers: list | None = None,
     templates_dir: Path | None = None,
 ) -> str:
     if layout not in ("classic", "lower_left", "top_heavy"):
@@ -78,6 +79,10 @@ def build_reel_overlay_html(
         last_seg=last_seg, cuts=json.dumps(cuts),
         arrow_segs=json.dumps(arrow_segs), flash=flash, cut_effect=cut_effect,
         markers=json.dumps(markers or []),
+        nums=json.dumps(
+            [{"text": n["text"], "s": f"{float(n['start_s']):.3f}",
+              "e": f"{float(n['end_s']):.3f}"} for n in (numbers or [])],
+            ensure_ascii=False),
     )
 
 
