@@ -54,7 +54,11 @@ class PixabaySource:
     def available(self) -> bool:
         return bool(self.api_key)
     def search(self, query, *, max_results, orientation):
-        # Pixabay yatay/dikey: 'all' güvenli (reel cover-crop yapıyor zaten)
+        # Reel 9:16 → dikey/kare footage tercih. Pixabay'in orientation param'ı
+        # güvenilmez, o yüzden GERÇEK en/boy oranıyla filtreleriz: portrait pass'te
+        # yatay (w>h) klipleri ATLA (cover-crop yatayı ağır keser → "kesik" görüntü).
+        # Landscape pass (yedek) hepsini alır.
+        want_portrait = (orientation == "portrait")
         try:
             r = requests.get(self._ENDPOINT, timeout=15, params={
                 "key": self.api_key, "q": query, "per_page": max(3, min(50, max_results)),
@@ -75,6 +79,9 @@ class PixabaySource:
                 url = vd.get("url", "")
                 if not url:
                     continue
+                w, ht = int(vd.get("width", 0) or 0), int(vd.get("height", 0) or 0)
+                if want_portrait and w and ht and w > ht:
+                    continue   # yatay klibi portrait pass'te atla
                 out.append(FootageCandidate(
                     url=url, duration_s=int(h.get("duration", 0) or 0),
                     image=str(vd.get("thumbnail", "") or ""),

@@ -44,7 +44,7 @@ MAX_QUERY_WORDS = 5
 # faceless-2 _SEARCH_URL / _HYDRATE_SELECTOR / _MAX_PAGES / _COLLECT_LIMIT aynası.
 # ---------------------------------------------------------------------------
 _SEARCH_URL = ("https://www.storyblocks.com/video/search/{query}"
-               "?orientation=horizontal&content-type=footage&page={page}")
+               "?orientation={orientation}&content-type=footage&page={page}")
 _HYDRATE_SELECTOR = "[data-stock-id]"
 _MAX_PAGES = 4
 _COLLECT_LIMIT = 15
@@ -134,7 +134,8 @@ class StoryblocksSource:
     def search(self, query, *, max_results, orientation):
         """Sayfa 1.._MAX_PAGES kazı, kartları FootageCandidate'e eşle (≤ limit).
 
-        orientation yok sayılır (URL her zaman horizontal footage). Boş sayfa ya da
+        Reel 9:16 → orientation='portrait' istenince Storyblocks'a 'vertical'
+        sorulur (dikey footage); aksi hâlde 'horizontal'. Boş sayfa ya da
         yeni-ID-yok → erken dur. Her hata []'e çevrilir (üretim durmaz)."""
         try:
             q = _simplify_query(query)
@@ -142,13 +143,15 @@ class StoryblocksSource:
                 return []
             if not self.available():
                 return []
+            sb_orient = "vertical" if orientation == "portrait" else "horizontal"
             limit = min(int(max_results or 0) or _COLLECT_LIMIT, _COLLECT_LIMIT)
             seen: set[str] = set()
             out: list[FootageCandidate] = []
             for page_num in range(1, _MAX_PAGES + 1):
                 if len(out) >= limit:
                     break
-                url = _SEARCH_URL.format(query=quote(q[:200]), page=page_num)
+                url = _SEARCH_URL.format(query=quote(q[:200]),
+                                         orientation=sb_orient, page=page_num)
                 try:
                     cards = self._scrape_page(url)
                 except Exception as e:

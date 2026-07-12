@@ -15,12 +15,32 @@ def test_pixabay_parses(monkeypatch):
     import short_bot.footage_sources as fs
     monkeypatch.setattr(fs.requests, "get", fake_get)
     src = PixabaySource(api_key="k")
-    cands = src.search("kedi", max_results=15, orientation="portrait")
+    # fixture yatay (1920x1080) → landscape pass'te geçer
+    cands = src.search("kedi", max_results=15, orientation="landscape")
     assert len(cands) == 1
     assert cands[0].url == "http://v/large.mp4"
     assert cands[0].duration_s == 12
     assert cands[0].image == "http://t.jpg"
     assert cands[0].source == "pixabay" and cands[0].ident == "7"
+
+
+def test_pixabay_portrait_filters_landscape(monkeypatch):
+    def fake_get(url, timeout=None, **k):
+        class R:
+            status_code = 200
+            def json(self):
+                return {"hits": [
+                    {"id": 1, "duration": 9, "videos": {"large": {"url": "l.mp4", "width": 1920, "height": 1080, "thumbnail": "t"}}},
+                    {"id": 2, "duration": 9, "videos": {"large": {"url": "p.mp4", "width": 1080, "height": 1920, "thumbnail": "t"}}},
+                    {"id": 3, "duration": 9, "videos": {"large": {"url": "s.mp4", "width": 1080, "height": 1080, "thumbnail": "t"}}},
+                ]}
+        return R()
+    import short_bot.footage_sources as fs
+    monkeypatch.setattr(fs.requests, "get", fake_get)
+    src = PixabaySource(api_key="k")
+    port = src.search("x", max_results=15, orientation="portrait")
+    assert [c.ident for c in port] == ["2", "3"]      # yatay (1) atlandı, dikey+kare kaldı
+    assert len(src.search("x", max_results=15, orientation="landscape")) == 3  # yedek: hepsi
 
 
 def test_pixabay_empty_and_unavailable(monkeypatch):
