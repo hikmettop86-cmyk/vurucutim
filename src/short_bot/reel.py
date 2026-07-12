@@ -20,6 +20,8 @@ from short_bot.reel_assembler import assemble_reel as _assemble
 from short_bot.reel_markers import _marker_worthy_segs, build_markers
 from short_bot.reel_models import build_reel_timeline
 from short_bot.reel_narration import write_reel_narration as _write_narr
+from short_bot.reel_numbers import find_numbers
+from short_bot.reel_pacing import plan_subcuts, subcut_clip_index
 from short_bot.reel_render import render_reel_overlay_frames as _render
 from short_bot.reel_sfx import discover_sfx, pick_sfx_per_cut
 from short_bot.tts.ai33_client import health_check as _health
@@ -52,7 +54,8 @@ class ReelDeps:
 
 def _match_with_fallback(d, query, *, topic_q, api_key, cache_dir, verify,
                          vision_call, footage_deps=None, topic_pool=None, anchor="",
-                         ffmpeg_path="ffmpeg", budget=None, reuse_clips=None):
+                         ffmpeg_path="ffmpeg", budget=None, reuse_clips=None,
+                         exclude=None):
     """Footage eşleştirmeyi kademeli, KONUDA-KALAN yedeklerle dener.
 
     Sıra: (1) tam sorgu, (2) ilk 2 kelime, (3) konu tohumu, (4) kanal çıpası —
@@ -75,7 +78,8 @@ def _match_with_fallback(d, query, *, topic_q, api_key, cache_dir, verify,
         clip = d.match_beat_clip(q, api_key=api_key, cache_dir=cache_dir,
                                  verify=verify, vision_call=vision_call,
                                  deps=footage_deps, topic_pool=topic_pool,
-                                 ffmpeg_path=ffmpeg_path, budget=b)
+                                 ffmpeg_path=ffmpeg_path, budget=b,
+                                 exclude=exclude)
         if clip is not None:
             return clip
     # Vision kapısından geçen aday YOK. Çıpayı vision'sız aramak ÇÖP getiriyor
@@ -200,7 +204,10 @@ def produce_reel_video(
     # (gerçek şikâyet: "ilk girişteki görüntü alakasız" → tablo pazarı).
     order = list(range(1, max(1, n_segs - 1))) + [0] + (
         [n_segs - 1] if n_segs > 1 else [])
-    clips_by_seg: dict[int, Path] = {}
+    # Hızlı kesim açıksa beat başına 2-3 klip çekilir (gerçek b-roll çeşitliliği);
+    # kapalıysa tek klip (eski davranış).
+    clips_per_beat = 3 if getattr(reel, "fast_cuts", True) else 1
+    clips_by_seg: dict[int, list[Path]] = {}
     pos_by_seg: dict[int, SubjectPos] = {}
     for si in order:
         query = timeline.seg_queries[si]
@@ -208,25 +215,65 @@ def produce_reel_video(
             # hook/close kendi sorgusunu vermediyse ilk/son beat'inkini ödünç al
             query = _first_q if si == 0 else _last_q
         _seg_t0 = _time.perf_counter()
-        clip = _match_with_fallback(
-            d, query, topic_q=_topic_q, api_key=pexels_api_key,
-            cache_dir=clips_cache, verify=reel.verify_footage, vision_call=vision_call,
-            footage_deps=footage_deps, topic_pool=topic_pool, anchor=anchor,
-            ffmpeg_path=ffmpeg_path, budget={"gate": 0, "dl": 0},
-            reuse_clips=[clips_by_seg[k] for k in sorted(clips_by_seg)])
-        if clip is None:
+        want = clips_per_beat if 0 < si < n_segs - 1 else 1
+        got: list[Path] = []
+        taken_urls: set = set()
+        for _k in range(want):
+            clip = _match_with_fallback(
+                d, query, topic_q=_topic_q, api_key=pexels_api_key,
+                cache_dir=clips_cache, verify=reel.verify_footage,
+                vision_call=vision_call, footage_deps=footage_deps,
+                topic_pool=topic_pool, anchor=anchor, ffmpeg_path=ffmpeg_path,
+                budget={"gate": 0, "dl": 0},
+                reuse_clips=[c for k in sorted(clips_by_seg)
+                             for c in clips_by_seg[k]],
+                exclude=set(taken_urls))
+            if clip is None or clip in got:
+                break        # yeni klip gelmedi → mevcutlarla yetin (fail-open)
+            got.append(clip)
+            taken_urls.add(str(clip))
+        if not got:
             raise RuntimeError(f"reel: '{query}' için footage bulunamadı (segment {si}).")
-        log.info(f"  reel[süre] footage seg{si} ('{query[:30]}'): "
+        log.info(f"  reel[süre] footage seg{si} ('{query[:30]}'): {len(got)} klip, "
                  f"{_time.perf_counter() - _seg_t0:.1f}s")
-        clips_by_seg[si] = clip
+        clips_by_seg[si] = got
         if si in worthy:
-            pos_by_seg[si] = d.locate_subject(clip, query, vision_call=vision_call,
+            pos_by_seg[si] = d.locate_subject(got[0], query, vision_call=vision_call,
                                               ffmpeg_path=ffmpeg_path)
         else:
             pos_by_seg[si] = SubjectPos(found=False)
-    clip_paths: list[Path] = [clips_by_seg[i] for i in range(n_segs)]
+    # GÖRSEL LOOP: kapanış klibi = hook klibi → video başa sarınca sahne zıplamaz.
+    if getattr(reel, "visual_loop", True) and n_segs > 1 and 0 in clips_by_seg:
+        clips_by_seg[n_segs - 1] = [clips_by_seg[0][0]]
     seg_positions = [pos_by_seg[i] for i in range(n_segs)]
     _phase("footage+vision")
+
+    # ALT-KESİM PLANI: segment-içi hızlı kesim (1.5-3sn) — ölü cut_pacing canlanır.
+    if getattr(reel, "fast_cuts", True):
+        subcuts = plan_subcuts(timeline.seg_spans, timeline.words, profile.cut_pacing)
+    else:
+        subcuts = [(i, a, b) for i, (a, b) in enumerate(timeline.seg_spans)]
+    clip_idx = subcut_clip_index(
+        subcuts, {si: len(cs) for si, cs in clips_by_seg.items()})
+    clip_paths: list[Path] = [clips_by_seg[si][k]
+                              for (si, _a, _b), k in zip(subcuts, clip_idx)]
+    seg_spans = [(a, b) for (_si, a, b) in subcuts]
+    # Aynı klibin farklı alt-kesimi FARKLI saniyeden başlasın (klip-içi çeşitlilik)
+    clip_starts: list[float] = []
+    _seen_clip: dict[str, int] = {}
+    for c in clip_paths:
+        k = _seen_clip.get(str(c), 0)
+        clip_starts.append(min(6.0, 1.5 * k))
+        _seen_clip[str(c)] = k + 1
+    cut_times = [a for (_si, a, _b) in subcuts[1:]]
+    log.info(f"  reel: {len(subcuts)} alt-kesim ({profile.cut_pacing} tempo), "
+             f"{len(set(map(str, clip_paths)))} farklı klip")
+
+    # SAYI VURGUSU: anlatımdaki sayılar ekranda büyük pop.
+    numbers = (find_numbers(timeline.words)
+               if getattr(reel, "number_pop", True) else [])
+    if numbers:
+        log.info(f"  reel: {len(numbers)} sayı vurgusu → {[n['text'] for n in numbers]}")
 
     # Belirteçler: nesne konumuna göre per-segment (kapalıysa boş → arrow_frequency='off')
     markers = (build_markers(seg_positions, marker_kit=profile.marker_kit,
@@ -254,23 +301,25 @@ def produce_reel_video(
         cta_text=bits.cta_text,
         font=reel.font,
         markers=markers,
+        numbers=numbers,
     )
     _phase("overlay-render")
 
-    # 7) Montaj
-    cut_times = [timeline.seg_spans[i][0] for i in range(1, len(timeline.seg_spans))]
+    # 7) Montaj (cut_times alt-kesim planından geldi — segment sınırı DEĞİL)
     sfx_dir = Path("assets/sfx")
     # SFX kanal bayrağıyla açık/kapalı (per-video varyasyon setine bağlı DEĞİL) —
     # açıksa HER video havuzdan çeşitli SFX alır (kullanıcı: "aynı sfx" şikâyeti).
     pool = discover_sfx(sfx_dir) if reel.transitions_whoosh else []
     sfx_at_cut = pick_sfx_per_cut(pool, seed, len(cut_times))
     d.assemble_reel(
-        clip_paths=clip_paths, seg_spans=timeline.seg_spans, frames_dir=frames_dir,
+        clip_paths=clip_paths, seg_spans=seg_spans, frames_dir=frames_dir,
         narration_path=mp3, music_path=music_path, out_path=out_path,
         cut_times=cut_times, duration_s=duration_s, fps=fps, ffmpeg_path=ffmpeg_path,
         music_volume=reel.music_volume,
         sfx_at_cut=sfx_at_cut,
         zoom=("zoom" in profile.transitions),
+        clip_starts=clip_starts,
+        hook_punch=True,
     )
     _phase("montaj(ffmpeg)")
     _total = sum(_phase_t.values())

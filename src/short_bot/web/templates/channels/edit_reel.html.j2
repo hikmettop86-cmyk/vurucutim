@@ -195,6 +195,12 @@
             </label>
           </div>
           <div class="flex flex-wrap gap-4 mt-4 text-sm">
+            <label class="flex items-center gap-2" title="Segment içinde de kesim: 1.5-3sn'de bir b-roll değişir"><input type="checkbox" name="reel_fast_cuts"
+              {% if not c.reel or c.reel.fast_cuts %}checked{% endif %}> ⚡ Hızlı kesim</label>
+            <label class="flex items-center gap-2" title="Anlatımdaki sayılar ekranda büyük patlar (240, %90, 24 milyon)"><input type="checkbox" name="reel_number_pop"
+              {% if not c.reel or c.reel.number_pop %}checked{% endif %}> 🔢 Sayı vurgusu</label>
+            <label class="flex items-center gap-2" title="Kapanış karesi hook'un görseline döner — video başa sarınca kesintisiz"><input type="checkbox" name="reel_visual_loop"
+              {% if not c.reel or c.reel.visual_loop %}checked{% endif %}> 🔁 Görsel loop</label>
             <label class="flex items-center gap-2"><input type="checkbox" name="reel_arrows_enabled"
               {% if not c.reel or c.reel.arrows_enabled %}checked{% endif %}> Oklar</label>
             <label class="flex items-center gap-2"><input type="checkbox" name="reel_flash"

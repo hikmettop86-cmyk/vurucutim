@@ -110,6 +110,10 @@ def save_reel(slug):
             music_mood=request.form.get("reel_music_mood", old.music_mood if old else "upbeat"),
             font=request.form.get("reel_font", old.font if old else "Montserrat"),
             verify_footage=request.form.get("reel_verify_footage") == "on",
+            # Retention kurgu katmanı
+            fast_cuts=request.form.get("reel_fast_cuts") == "on",
+            number_pop=request.form.get("reel_number_pop") == "on",
+            visual_loop=request.form.get("reel_visual_loop") == "on",
             layout=request.form.get("reel_layout", old.layout if old else "auto"),
             hook_angle_vary=request.form.get("reel_hook_angle_vary") == "on",
             accent_vary=request.form.get("reel_accent_vary") == "on",
