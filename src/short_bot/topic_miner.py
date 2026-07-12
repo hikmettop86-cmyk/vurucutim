@@ -51,17 +51,53 @@ class _MinedTopics(BaseModel):
     topics: list[_MinedTopic]
 
 
+# Damıtma çıktısında video-TARİFİ kalıpları (konu değil meta-açıklama) — yasak.
+# Gerçek üretim hatası (2026-07-12): "…tanıtan bir seri", "…ele alan bir skeç".
+_META_WORDS = ("video", "belgesel", "seri", "skeç", "inceleme", "anlatım",
+               "sunum", "içerik", "tanıtan", "anlatan", "özetleyen",
+               "ele alan", "konu alan", "keşfeden bir", "yolculuğu")
+
+
+def _drop_meta_topics(rows: list[dict]) -> list[dict]:
+    """Video-tarifi üretilmiş kayıtları ele (topic bir İDDİA olmalı)."""
+    out = []
+    for r in rows:
+        low = (r.get("topic") or "").lower()
+        if any(w in low for w in _META_WORDS):
+            continue
+        out.append(r)
+    return out
+
+
 def _distill_prompt(rows: list[dict], lang: str) -> str:
     lines = "\n".join(
         f"- \"{r['source_title']}\"  ({r['views']:,} izlenme / {r['subs']:,} abone)"
         for r in rows)
     return f"""Aşağıda bir YouTube nişinde KÜÇÜK kanallarda patlamış (outlier)
-shorts başlıkları var. Her birini {lang} tek cümlelik VİDEO KONUSU fikrine damıt
-ve başlığın örüntüsünü çıkar. views/subs değerlerini AYNEN kopyala.
+shorts başlıkları var. Her başlıktan {lang} dilinde TEK ÇARPICI İDDİA/GERÇEK
+cümlesi çıkar — bir shorts videosunun KONUSU olacak.
+
+KURALLAR (ÇOK ÖNEMLİ):
+- topic bir İDDİA ya da ŞAŞIRTICI GERÇEK cümlesidir; videoyu TARİF ETMEZ.
+  Şu kalıplar KESİNLİKLE YASAK: "…anlatan/tanıtan/özetleyen/ele alan/konu alan
+  bir video/seri/belgesel/skeç/inceleme/anlatım/sunum".
+  KÖTÜ: "Einstein'ın beynini konu alan bir inceleme"
+  İYİ:  "Einstein'ın beyni ölümünden sonra izinsiz çalındı ve 40 yıl kavanozda gezdirildi"
+  KÖTÜ: "İnsan evrimini 40 saniyede özetleyen görsel bir anlatım"
+  İYİ:  "6 milyon yıllık insan evriminde vücudumuzda hâlâ duran 3 işe yaramaz organ"
+- Başlık bir liste/derleme ise ("Top 10…", "Famous Scientists…") içinden EN
+  çarpıcı TEK gerçeği seç ve iddiaya çevir.
+- HEDEF KİTLE: {lang} konuşan GENEL izleyici. Konu onun merakını çekmeli —
+  evrensel merak (uzay, insan vücudu, tarihin şok anları, gizemler) İYİ;
+  fazla akademik/teknik konular (ör. "Mock Theta Fonksiyonu"), başka ülkeye
+  özgü yerel içerik/mizah, tanınmayan kişiler → o kaydı ATLA.
+- Başlık nişe alakasız, anlamsız ya da hedef dile çevrilemeyecek kadar belirsizse
+  o kaydı ATLA (çıktıya koyma).
+- views/subs değerlerini kaynaktan AYNEN kopyala.
 
 {lines}
 
-SADECE JSON: {{"topics": [{{"topic": "<{lang} konu fikri>",
+SADECE JSON: {{"topics": [{{"topic": "<{lang} tek çarpıcı iddia cümlesi>",
   "source_title": "<orijinal başlık>", "views": <int>, "subs": <int>,
   "hook_pattern": "<{lang} 2-4 kelime örüntü, ör. 'sayı + beklenmedik iddia'>"}}]}}"""
 
@@ -160,13 +196,25 @@ def mine_topics_via_api(niche_query: str, *, api_keys: list, language: str = "tr
                  "views": r["views"], "subs": r["subs"], "hook_pattern": ""}
                 for r in rows]
     lang = _LANG_NAMES.get(language, "Türkçe")
-    v = run_json(_distill_prompt(rows, lang), _MinedTopics,
+    prompt = _distill_prompt(rows, lang)
+    v = run_json(prompt, _MinedTopics,
                  claude_path=llm_call.claude_path, model=llm_call.model,
                  backend=llm_call.backend, api_key=llm_call.api_key,
                  retries=2, timeout_s=120)
-    out = [t.model_dump() for t in v.topics if (t.topic or "").strip()]
+    out = _drop_meta_topics(
+        [t.model_dump() for t in v.topics if (t.topic or "").strip()])
     if not out:
-        raise ValueError("damıtma boş döndü")
+        # LLM yine video-TARİFİ üretti — bir kez düzeltici uyarıyla tekrar dene.
+        log.info("topic_miner: damıtma meta-tarif üretti → düzeltici retry")
+        v = run_json(prompt + "\n\nUYARI: Önceki denemede video TARİFİ ürettin "
+                     "('…anlatan bir video' gibi). SADECE İDDİA cümleleri yaz.",
+                     _MinedTopics, claude_path=llm_call.claude_path,
+                     model=llm_call.model, backend=llm_call.backend,
+                     api_key=llm_call.api_key, retries=1, timeout_s=120)
+        out = _drop_meta_topics(
+            [t.model_dump() for t in v.topics if (t.topic or "").strip()])
+    if not out:
+        raise ValueError("damıtma kullanılabilir konu üretemedi (meta-tarif)")
     return out[:count]
 
 
