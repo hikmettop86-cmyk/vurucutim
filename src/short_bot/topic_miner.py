@@ -15,7 +15,10 @@ import json
 import logging
 import subprocess
 
+from pydantic import BaseModel
 from rapidfuzz import fuzz
+
+from short_bot.claude_cli import run_json
 
 log = logging.getLogger(__name__)
 
@@ -150,6 +153,73 @@ def mine_topics(niche_query: str, *, language: str = "tr",
         raise
 
 
+class _MinedTopic(BaseModel):
+    topic: str
+    source_title: str = ""
+    views: int = 0
+    subs: int = 0
+    hook_pattern: str = ""
+
+
+class _MinedTopics(BaseModel):
+    topics: list[_MinedTopic]
+
+
+def _distill_prompt(rows: list[dict], lang: str) -> str:
+    lines = "\n".join(
+        f"- \"{r['source_title']}\"  ({r['views']:,} izlenme / {r['subs']:,} abone)"
+        for r in rows)
+    return f"""Aşağıda bir YouTube nişinde KÜÇÜK kanallarda patlamış (outlier)
+shorts başlıkları var. Her birini {lang} tek cümlelik VİDEO KONUSU fikrine damıt
+ve başlığın örüntüsünü çıkar. views/subs değerlerini AYNEN kopyala.
+
+{lines}
+
+SADECE JSON: {{"topics": [{{"topic": "<{lang} konu fikri>",
+  "source_title": "<orijinal başlık>", "views": <int>, "subs": <int>,
+  "hook_pattern": "<{lang} 2-4 kelime örüntü, ör. 'sayı + beklenmedik iddia'>"}}]}}"""
+
+
+def mine_topics_via_api(niche_query: str, *, api_keys: list, language: str = "tr",
+                        anchor: str = "", llm_call=None, count: int = 12,
+                        http_get=None) -> list[dict]:
+    """YouTube Data API ile outlier madenciliği (NexLev'siz, ~102 birim/arama).
+
+    Akış: kısa niş sorgusuyla outlier ara (+ opsiyonel EN çıpa araması) →
+    LLM tek çağrıyla başlıkları {lang} konu fikrine damıtır. ``llm_call`` yoksa
+    mekanik fallback: başlık aynen topic olur (çeviri yok ama üretim durmaz).
+    """
+    from short_bot.yt_outliers import search_outlier_shorts
+    q = _short_query(niche_query) or "ilginç bilgiler"
+    rows = search_outlier_shorts(q, api_keys=api_keys, language=language,
+                                 limit=count * 2, http_get=http_get)
+    if anchor and anchor.lower() != q.lower():
+        try:  # EN çıpa araması opsiyonel zenginleştirme — hatası ana akışı bozmaz
+            extra = search_outlier_shorts(anchor, api_keys=api_keys, language="en",
+                                          limit=count, http_get=http_get)
+            seen_ids = {r["video_id"] for r in rows}
+            rows += [r for r in extra if r["video_id"] not in seen_ids]
+        except Exception as e:
+            log.info(f"topic_miner: çıpa araması atlandı: {e}")
+    rows.sort(key=lambda r: r.get("ratio", 0), reverse=True)
+    rows = rows[:count]
+    if not rows:
+        raise ValueError("YouTube API'de bu niş için outlier bulunamadı")
+    if llm_call is None:
+        return [{"topic": r["source_title"], "source_title": r["source_title"],
+                 "views": r["views"], "subs": r["subs"], "hook_pattern": ""}
+                for r in rows]
+    lang = _LANG_NAMES.get(language, "Türkçe")
+    v = run_json(_distill_prompt(rows, lang), _MinedTopics,
+                 claude_path=llm_call.claude_path, model=llm_call.model,
+                 backend=llm_call.backend, api_key=llm_call.api_key,
+                 retries=2, timeout_s=120)
+    out = [t.model_dump() for t in v.topics if (t.topic or "").strip()]
+    if not out:
+        raise ValueError("damıtma boş döndü")
+    return out[:count]
+
+
 def mine_topics_with_retry(niche_query: str, *, retries: int = 1, **kw) -> list[dict]:
     """mine_topics + parse-hatasında retry. Model bazen JSON yerine düzyazı
     döndürüyor (tek seferlik dalgalanma) — bir tekrar genellikle kurtarır."""
@@ -164,11 +234,32 @@ def mine_topics_with_retry(niche_query: str, *, retries: int = 1, **kw) -> list[
 
 def refresh_topic_bank(eng, channel_slug: str, niche_query: str, *,
                        language: str = "tr", claude_path: str = "claude",
-                       model: str | None = None, run=subprocess.run) -> dict:
-    """mine → mevcut bankaya fuzzy-dedup → insert. {"added": N, "skipped_dup": M}."""
+                       model: str | None = None, run=subprocess.run,
+                       api_keys: list | None = None, anchor: str = "",
+                       llm_call=None, http_get=None,
+                       backend: str = "auto") -> dict:
+    """mine → mevcut bankaya fuzzy-dedup → insert. {"added": N, "skipped_dup": M}.
+
+    Backend seçimi: ``api_keys`` varsa önce YouTube Data API (bedava 10K
+    birim/gün × anahtar sayısı, saniyeler); o patlar ya da anahtar yoksa NexLev
+    claude-CLI köprüsü (zengin ama kotalı/yavaş). ``backend="youtube_api"`` API'yi
+    zorlar (fallback yok); ``"nexlev"`` doğrudan CLI.
+    """
     from short_bot.db import all_bank_topics, insert_bank_topics
-    mined = mine_topics_with_retry(niche_query, language=language,
-                                   claude_path=claude_path, model=model, run=run)
+    mined = None
+    if backend in ("auto", "youtube_api") and api_keys:
+        try:
+            mined = mine_topics_via_api(niche_query, api_keys=api_keys,
+                                        language=language, anchor=anchor,
+                                        llm_call=llm_call, http_get=http_get)
+            log.info(f"topic_miner: youtube_api backend → {len(mined)} konu")
+        except Exception as e:
+            if backend == "youtube_api":
+                raise
+            log.warning(f"topic_miner: youtube_api başarısız ({e}) → NexLev'e düşülüyor")
+    if mined is None:
+        mined = mine_topics_with_retry(niche_query, language=language,
+                                       claude_path=claude_path, model=model, run=run)
     existing = [r["topic"] for r in all_bank_topics(eng, channel_slug)]
     fresh, dup = [], 0
     for r in mined:
