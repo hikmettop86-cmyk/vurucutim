@@ -51,6 +51,14 @@ TOPIC SEED: {topic}
 OUTPUT a JSON object:
 - "hook": FIRST spoken sentence in {lang}. A curiosity question or surprising claim,
   under 2 seconds. Never start with a date.
+- "hook_visual": a SHORT English stock-footage query (2-4 COMMON words) for the
+  OPENING shot. This is the MOST IMPORTANT frame of the video — the viewer decides
+  in 1 second whether to keep watching. Pick the most STRIKING, CONCRETE, visually
+  arresting subject of the whole topic (e.g. topic "ultra marathon destroys your
+  body" → "exhausted runner collapsing", NOT "self destruction"). It MUST be
+  something a generic stock library actually has.
+- "close_visual": a SHORT English stock-footage query (2-4 COMMON words) for the
+  CLOSING shot. Concrete and findable; it should echo the hook's subject.
 - "beats": 3-6 beats. Each beat:
     - "text": the spoken sentence(s) in {lang} for this beat
     - "visual_query": a SHORT English stock-footage search query (2-4 COMMON words)
@@ -66,8 +74,11 @@ OUTPUT a JSON object:
 
 HARD RULES:
 - TOTAL spoken words across hook + beats + close: between {lo_w} and {hi_w}.
-- Every visual_query must be a real, findable stock-footage subject (generic,
-  evergreen — machines, nature, science, industry — NOT a specific named event).
+- Every visual_query / hook_visual / close_visual must be a real, findable
+  stock-footage subject: a PHYSICAL, VISIBLE thing (person, animal, object, place,
+  machine, natural phenomenon). NEVER an abstract concept ("auto-cannibalism",
+  "self destruction", "symbolic power") — stock libraries have no footage for those;
+  translate the idea into what a CAMERA would actually see.
 - Plain spoken language, no markdown/emoji/brackets. Add a genuinely interesting
   angle, not a dry list.
 {hook_block}Return ONLY the JSON object."""

@@ -35,6 +35,12 @@ class ReelNarration(BaseModel):
     beats: list[ReelBeat] = Field(min_length=3, max_length=6)
     close: str = Field(min_length=5, max_length=160)
     mood: Literal["upbeat", "neutral", "calm"]
+    # Hook/close KENDİ görsel sorgusu (İngilizce stok araması). Boşsa ilk/son
+    # beat'in sorgusu ödünç alınır (eski davranış). Hook videonun en kritik
+    # karesi — kendi vurucu görselini hak eder (gerçek şikâyet: "ilk girişteki
+    # görüntü alakasız" — hook, soyut bir beat sorgusunun çöp fallback'ini almıştı).
+    hook_visual: str = Field(default="", max_length=120)
+    close_visual: str = Field(default="", max_length=120)
 
     @field_validator("hook", "close", mode="before")
     @classmethod
@@ -45,7 +51,11 @@ class ReelNarration(BaseModel):
         return [self.hook, *[b.text for b in self.beats], self.close]
 
     def segment_queries(self) -> list[str | None]:
-        return [None, *[b.visual_query for b in self.beats], None]
+        """Segment başına footage sorgusu. hook/close kendi sorgusunu kullanır;
+        boşsa None → çağıran ilk/son beat'in sorgusuna düşer."""
+        hook_q = (self.hook_visual or "").strip() or None
+        close_q = (self.close_visual or "").strip() or None
+        return [hook_q, *[b.visual_query for b in self.beats], close_q]
 
     def segment_keywords(self) -> list[str]:
         return ["", *[b.keyword for b in self.beats], ""]

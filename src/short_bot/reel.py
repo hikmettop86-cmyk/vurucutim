@@ -52,7 +52,7 @@ class ReelDeps:
 
 def _match_with_fallback(d, query, *, topic_q, api_key, cache_dir, verify,
                          vision_call, footage_deps=None, topic_pool=None, anchor="",
-                         ffmpeg_path="ffmpeg", budget=None):
+                         ffmpeg_path="ffmpeg", budget=None, reuse_clips=None):
     """Footage eşleştirmeyi kademeli, KONUDA-KALAN yedeklerle dener.
 
     Sıra: (1) tam sorgu, (2) ilk 2 kelime, (3) konu tohumu, (4) kanal çıpası —
@@ -78,8 +78,15 @@ def _match_with_fallback(d, query, *, topic_q, api_key, cache_dir, verify,
                                  ffmpeg_path=ffmpeg_path, budget=b)
         if clip is not None:
             return clip
-    # Son çare — çıpa sorgusu vision'sız (konuda kalır); çıpa yoksa ilk-2-kelime.
-    # TAZE bütçe: bu aşama gate yapmaz, yalnız indirir; segment boş dönmesin.
+    # Vision kapısından geçen aday YOK. Çıpayı vision'sız aramak ÇÖP getiriyor
+    # (gerçek hata: soyut 'oto-kanibalizm' beat'i → çıpa 'science history' →
+    # tablo pazarı açılış karesi). Bunun yerine: bu videoda ZATEN kabul edilmiş
+    # (konuda) bir klibi tekrar kullan — tekrar, alakasızdan iyidir.
+    if reuse_clips:
+        log.info(f"  footage: '{query[:30]}' için kapıdan geçen aday yok → "
+                 f"bu videonun kabul edilmiş klibi tekrar kullanılıyor")
+        return reuse_clips[-1]
+    # Hiç klip yoksa (ilk segment) — mecburen çıpa sorgusu, vision'sız.
     last_q = anchor or (" ".join(words[:2]) if len(words) >= 2 else (words[0] if words else topic_q))
     return d.match_beat_clip(last_q, api_key=api_key, cache_dir=cache_dir,
                              verify=False, vision_call=None, deps=footage_deps,
@@ -179,36 +186,46 @@ def produce_reel_video(
     log.info(f"  reel: footage anchor='{anchor}' | queries={[b.visual_query for b in narration.beats]}")
     log.info(f"  reel: topic_pool={sorted(topic_pool) if topic_pool else None}")
     clips_cache = work_dir / "clips"
-    clip_paths: list[Path] = []
     seg_positions: list[SubjectPos] = []
     _first_q = next((q for q in timeline.seg_queries if q), "abstract background")
     _last_q = next((q for q in reversed(timeline.seg_queries) if q), _first_q)
     _topic_q = (topic.split(",")[0].strip()[:40] or "nature")
     # Belirteç-uygun segmentleri ÖNCE hesapla → yalnız onlarda vision konum çağır
     # (hook/close ve 'off'/kapalı durumda gereksiz vision maliyeti yok).
-    worthy = (set(_marker_worthy_segs(len(timeline.seg_queries), reel.arrow_frequency))
+    n_segs = len(timeline.seg_queries)
+    worthy = (set(_marker_worthy_segs(n_segs, reel.arrow_frequency))
               if reel.arrows_enabled else set())
-    for si, query in enumerate(timeline.seg_queries):
+    # SIRA: önce BEAT'ler, sonra hook + close. Böylece hook'un kendi sorgusu
+    # kapıdan geçemezse konudaki bir beat klibine düşer — çıpa-çöpüne değil
+    # (gerçek şikâyet: "ilk girişteki görüntü alakasız" → tablo pazarı).
+    order = list(range(1, max(1, n_segs - 1))) + [0] + (
+        [n_segs - 1] if n_segs > 1 else [])
+    clips_by_seg: dict[int, Path] = {}
+    pos_by_seg: dict[int, SubjectPos] = {}
+    for si in order:
+        query = timeline.seg_queries[si]
         if query is None:
-            # hook → ilk beat'in görüntüsü, close → son beat'in görüntüsü
+            # hook/close kendi sorgusunu vermediyse ilk/son beat'inkini ödünç al
             query = _first_q if si == 0 else _last_q
         _seg_t0 = _time.perf_counter()
         clip = _match_with_fallback(
             d, query, topic_q=_topic_q, api_key=pexels_api_key,
             cache_dir=clips_cache, verify=reel.verify_footage, vision_call=vision_call,
             footage_deps=footage_deps, topic_pool=topic_pool, anchor=anchor,
-            ffmpeg_path=ffmpeg_path, budget={"gate": 0, "dl": 0})
+            ffmpeg_path=ffmpeg_path, budget={"gate": 0, "dl": 0},
+            reuse_clips=[clips_by_seg[k] for k in sorted(clips_by_seg)])
         if clip is None:
             raise RuntimeError(f"reel: '{query}' için footage bulunamadı (segment {si}).")
         log.info(f"  reel[süre] footage seg{si} ('{query[:30]}'): "
                  f"{_time.perf_counter() - _seg_t0:.1f}s")
-        clip_paths.append(clip)
+        clips_by_seg[si] = clip
         if si in worthy:
-            pos = d.locate_subject(clip, query, vision_call=vision_call,
-                                   ffmpeg_path=ffmpeg_path)
+            pos_by_seg[si] = d.locate_subject(clip, query, vision_call=vision_call,
+                                              ffmpeg_path=ffmpeg_path)
         else:
-            pos = SubjectPos(found=False)
-        seg_positions.append(pos)
+            pos_by_seg[si] = SubjectPos(found=False)
+    clip_paths: list[Path] = [clips_by_seg[i] for i in range(n_segs)]
+    seg_positions = [pos_by_seg[i] for i in range(n_segs)]
     _phase("footage+vision")
 
     # Belirteçler: nesne konumuna göre per-segment (kapalıysa boş → arrow_frequency='off')
