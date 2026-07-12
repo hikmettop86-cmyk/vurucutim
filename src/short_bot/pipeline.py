@@ -374,6 +374,20 @@ _RUN_SUB_LOGGERS = (
     "short_bot.wikimedia_search",
     "short_bot.youtube.auth",
     "short_bot.youtube.uploader",
+    # Reel (footage-sürüklü) boru hattı — bunlar eksikken reel koşusunun logu
+    # "reel modu: footage-sürüklü üretim" satırında donuyor, asıl teşhis bilgisi
+    # (kurgucunun kararı, footage red gerekçeleri, faz süreleri) yalnız stdout'a
+    # gidiyordu; panelden bakan kullanıcı hiçbirini göremiyordu.
+    "short_bot.assets_library",
+    "short_bot.footage_matcher",
+    "short_bot.footage_sources",
+    "short_bot.reel",
+    "short_bot.reel_director",
+    "short_bot.reel_render",
+    "short_bot.storyblocks_browser",
+    "short_bot.storyblocks_source",
+    "short_bot.tts.align",
+    "short_bot.voiced",
 )
 
 

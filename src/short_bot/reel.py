@@ -55,13 +55,18 @@ class ReelDeps:
 def _match_with_fallback(d, query, *, topic_q, api_key, cache_dir, verify,
                          vision_call, footage_deps=None, topic_pool=None, anchor="",
                          ffmpeg_path="ffmpeg", budget=None, reuse_clips=None,
-                         exclude=None, context=""):
+                         reuse_idx=0, exclude=None, context=""):
     """Footage eşleştirmeyi kademeli, KONUDA-KALAN yedeklerle dener.
 
     Sıra: (1) tam sorgu, (2) ilk 2 kelime, (3) konu tohumu, (4) kanal çıpası —
     hepsi vision + topic_pool gate'li. Son çare (5): çıpa sorgusu vision'sız
     (arama TERİMİ çıpa olduğundan sonuç konuda; ham ilk-2-kelime garbage grab YOK).
     ``footage_deps`` kaynak zincirini (öncelik-sıralı) taşır.
+
+    Dönüş: ``(clip, gated)`` — ``gated`` False ise klip vision kapısından GEÇMEDİ
+    (son çare). Çağıran onu tekrar havuzuna KOYMAZ: gerçek hata short_id=171'de
+    doğrulanmamış bir insan-anatomi illüstrasyonu tekrar çıpası olup videonun
+    22 saniyesini ele geçirmişti.
     """
     words = query.split()
     stages = [query]
@@ -81,15 +86,20 @@ def _match_with_fallback(d, query, *, topic_q, api_key, cache_dir, verify,
                                  ffmpeg_path=ffmpeg_path, budget=b,
                                  exclude=exclude, context=context)
         if clip is not None:
-            return clip
+            return clip, True
     # Vision kapısından geçen aday YOK. Çıpayı vision'sız aramak ÇÖP getiriyor
     # (gerçek hata: soyut 'oto-kanibalizm' beat'i → çıpa 'science history' →
     # tablo pazarı açılış karesi). Bunun yerine: bu videoda ZATEN kabul edilmiş
     # (konuda) bir klibi tekrar kullan — tekrar, alakasızdan iyidir.
     if reuse_clips:
+        # DÖNÜŞÜMLÜ seç, hep sonuncuyu DEĞİL: eski kod reuse_clips[-1] diyordu, bu
+        # yüzden arka arkaya birkaç segment kapıdan geçemeyince hepsi AYNI klibi
+        # alıyor ve video donuyordu (short_id=171: 8 kesim üst üste tek görüntü).
+        pick = reuse_clips[reuse_idx % len(reuse_clips)]
         log.info(f"  footage: '{query[:30]}' için kapıdan geçen aday yok → "
-                 f"bu videonun kabul edilmiş klibi tekrar kullanılıyor")
-        return reuse_clips[-1]
+                 f"kabul edilmiş '{pick.name}' tekrar kullanılıyor "
+                 f"({reuse_idx % len(reuse_clips) + 1}/{len(reuse_clips)})")
+        return pick, True
     # Hiç klip yoksa (ilk işlenen segment) — vision'sız ara ama SEGMENTİN KENDİ
     # sorgusuyla. Kanal çıpası ('science history') ÇÖP getiriyordu (gerçek hata:
     # 'autopsy table doctor' beat'i → çıpa → tablo/poster pazarı). Kendi sorgusu
@@ -103,9 +113,9 @@ def _match_with_fallback(d, query, *, topic_q, api_key, cache_dir, verify,
                                  budget={"gate": 0, "dl": 0})
         if clip is not None:
             log.info(f"  footage: '{query[:30]}' kapıdan geçmedi → vision'sız "
-                     f"'{last_q[:30]}' klibi kullanıldı")
-            return clip
-    return None
+                     f"'{last_q[:30]}' klibi kullanıldı (DOĞRULANMADI)")
+            return clip, False
+    return None, False
 
 
 def produce_reel_video(
@@ -245,35 +255,58 @@ def produce_reel_video(
     # (gerçek şikâyet: "ilk girişteki görüntü alakasız" → tablo pazarı).
     order = list(range(1, max(1, n_segs - 1))) + [0] + (
         [n_segs - 1] if n_segs > 1 else [])
-    # Hızlı kesim açıksa beat başına 2-3 klip çekilir (gerçek b-roll çeşitliliği);
-    # kapalıysa tek klip (eski davranış).
-    clips_per_beat = 3 if getattr(reel, "fast_cuts", True) else 1
+    # ALT-KESİM PLANI footage'dan ÖNCE hesaplanır: bir segment kaç kesim alacaksa
+    # o kadar klip çekilir. Eskiden hook/close'a KOŞULSUZ 1 klip veriliyordu; hook
+    # 4 alt-kesime yayıldığında aynı görüntü 4 kesim üst üste ekranda kalıyordu.
+    if getattr(reel, "fast_cuts", True):
+        subcuts = plan_subcuts(timeline.seg_spans, timeline.words, profile.cut_pacing)
+    else:
+        subcuts = [(i, a, b) for i, (a, b) in enumerate(timeline.seg_spans)]
+    cuts_in_seg: dict[int, int] = {}
+    for si, _a, _b in subcuts:
+        cuts_in_seg[si] = cuts_in_seg.get(si, 0) + 1
+    # Segment başına en fazla 3 klip (tarama bütçesi): daha fazlası üretimi yavaşlatır.
+    MAX_CLIPS_PER_SEG = 3 if getattr(reel, "fast_cuts", True) else 1
     clips_by_seg: dict[int, list[Path]] = {}
     pos_by_seg: dict[int, SubjectPos] = {}
+    # VİDEO GENELİNDE kullanılmış klipler. Eskiden bu küme her segmentin başında
+    # sıfırlanıyordu; sorgular birbirine benzediği için arama HER segmentte aynı
+    # "en iyi" klibi döndürüyordu → 6 klipli havuzdan 3 klip çıkıyor, video
+    # tek görüntüye kilitleniyordu (short_id=171).
+    used_clips: set[str] = set()
+    # Tekrar havuzu: yalnız vision kapısından GEÇEN klipler. Doğrulanmamış son-çare
+    # klibi buraya girmez — yoksa tek çöp görüntü tüm videonun çıpası olur.
+    reuse_pool: list[Path] = []
+    reuse_idx = 0
     for si in order:
         query = timeline.seg_queries[si]
         if query is None:
             # hook/close kendi sorgusunu vermediyse ilk/son beat'inkini ödünç al
             query = _first_q if si == 0 else _last_q
         _seg_t0 = _time.perf_counter()
-        want = clips_per_beat if 0 < si < n_segs - 1 else 1
+        # Kapanış görsel-loop'ta hook'un klibini alacak → ona klip aramaya gerek yok.
+        is_close = si == n_segs - 1 and n_segs > 1
+        want = (1 if is_close and getattr(reel, "visual_loop", True)
+                else min(MAX_CLIPS_PER_SEG, max(1, cuts_in_seg.get(si, 1))))
         got: list[Path] = []
-        taken_urls: set = set()
         for _k in range(want):
-            clip = _match_with_fallback(
+            clip, gated = _match_with_fallback(
                 d, query, topic_q=_topic_q, api_key=pexels_api_key,
                 cache_dir=clips_cache, verify=reel.verify_footage,
                 vision_call=vision_call, footage_deps=footage_deps,
                 topic_pool=topic_pool, anchor=anchor, ffmpeg_path=ffmpeg_path,
                 budget={"gate": 0, "dl": 0},
-                reuse_clips=[c for k in sorted(clips_by_seg)
-                             for c in clips_by_seg[k]],
-                exclude=set(taken_urls),
+                reuse_clips=reuse_pool, reuse_idx=reuse_idx,
+                exclude=set(used_clips),
                 context=_video_context)
             if clip is None or clip in got:
                 break        # yeni klip gelmedi → mevcutlarla yetin (fail-open)
+            if clip in reuse_pool:
+                reuse_idx += 1          # tekrar kullanıldı → sıradakine geç
+            elif gated:
+                reuse_pool.append(clip)  # yalnız doğrulanmış klip çıpa olabilir
             got.append(clip)
-            taken_urls.add(str(clip))
+            used_clips.add(str(clip))
         if not got:
             raise RuntimeError(f"reel: '{query}' için footage bulunamadı (segment {si}).")
         log.info(f"  reel[süre] footage seg{si} ('{query[:30]}'): {len(got)} klip, "
@@ -290,11 +323,7 @@ def produce_reel_video(
     seg_positions = [pos_by_seg[i] for i in range(n_segs)]
     _phase("footage+vision")
 
-    # ALT-KESİM PLANI: segment-içi hızlı kesim (1.5-3sn) — ölü cut_pacing canlanır.
-    if getattr(reel, "fast_cuts", True):
-        subcuts = plan_subcuts(timeline.seg_spans, timeline.words, profile.cut_pacing)
-    else:
-        subcuts = [(i, a, b) for i, (a, b) in enumerate(timeline.seg_spans)]
+    # ALT-KESİM PLANI yukarıda (footage'dan önce) hesaplandı — klip sayısı ondan türedi.
     clip_idx = subcut_clip_index(
         subcuts, {si: len(cs) for si, cs in clips_by_seg.items()})
     clip_paths: list[Path] = [clips_by_seg[si][k]
