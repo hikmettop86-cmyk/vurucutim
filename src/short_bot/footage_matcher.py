@@ -270,10 +270,9 @@ def match_beat_clip(query: str, *, api_key: str = "", cache_dir: Path,
                         log.warning(f"clip frame gate hatası: {e}")
                         ok2 = True
                     if not ok2:
-                        try:
-                            Path(clip).unlink()
-                        except Exception:
-                            pass
+                        # Klibi SİLME: Storyblocks/Pexels içerik-adresli cache'i
+                        # beat'ler arası paylaşılır; silmek başka beat'in tuttuğu
+                        # dosyanın referansını koparır (FileNotFoundError). Sadece atla.
                         continue
                 return clip
     return None
