@@ -172,6 +172,16 @@ def produce_reel_video(
                              frequency=reel.arrow_frequency, seed=seed)
                if reel.arrows_enabled else [])
 
+    # Storyblocks footage için açılmış olabilecek kalıcı sync_playwright'ı KAPAT:
+    # aksi hâlde aynı thread'de reel_render'ın sync_playwright'ı "Playwright Sync
+    # API inside the asyncio loop" hatası verir. close() idempotent; kullanılmadıysa
+    # no-op, sonraki reel'de gerekirse yeniden başlar.
+    try:
+        from short_bot.storyblocks_browser import close as _sb_close
+        _sb_close()
+    except Exception:
+        pass
+
     # 6) Overlay render
     frames_dir = work_dir / "frames"
     d.render_reel_overlay_frames(

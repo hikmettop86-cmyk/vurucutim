@@ -54,3 +54,16 @@ def test_download_rejects_watermark(tmp_path, monkeypatch):
     cand = FootageCandidate(
         url="https://www.storyblocks.com/video/stock/x-1", source="storyblocks")
     assert src.download(cand, tmp_path) is None   # filigran reddi
+
+
+def test_storyblocks_close_idempotent_when_not_started():
+    """close() hiç başlamamışken güvenli (no-op) — reel.py her render öncesi çağırır."""
+    from short_bot.storyblocks_browser import close
+    close()
+    close()  # çift çağrı da patlamaz
+
+
+def test_reel_imports_storyblocks_close():
+    """reel.py, render öncesi storyblocks close'u çağırabilmeli (import edilebilir)."""
+    from short_bot.storyblocks_browser import close  # noqa: F401
+    import short_bot.reel  # noqa: F401 — import hatasi olmamali
