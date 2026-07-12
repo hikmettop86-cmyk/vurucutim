@@ -1,5 +1,9 @@
 """NexLev kanıtlanmış-konu madencisi: nişte patlamış shorts → konu bankası.
 
+TIMEOUT NOTU: NexLev MCP köprüsü niş karmaşıklığına göre 4-9 dk sürebilir
+(gerçek ölçüm: balinalar ~4dk OK, bilim-tarihi 300s'te timeout). Varsayılan
+600s; daha kısası gerçek nişlerde zaman aşımı üretir.
+
 ``web/niche_finder.py`` deseninin aynası: headless ``claude`` CLI, allowed-tools
 NexLev outlier araçlarıyla kısıtlı, ``run=subprocess.run`` testlerde enjekte
 edilir. Üretim anında ÇAĞRILMAZ — panel düğmesi + haftalık cron doldurur,
@@ -84,7 +88,7 @@ def _parse_topics(text: str) -> list[dict]:
 
 def mine_topics(niche_query: str, *, language: str = "tr",
                 claude_path: str = "claude", model: str | None = None,
-                count: int = 12, timeout: int = 300,
+                count: int = 12, timeout: int = 600,
                 run=subprocess.run) -> list[dict]:
     """NexLev'den outlier shorts madenciliği. Hata → RuntimeError/ValueError."""
     niche_query = (niche_query or "").strip() or "ilginç bilgiler"
