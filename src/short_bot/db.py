@@ -160,6 +160,23 @@ channel_insights = Table(
     Column("data_json", Text, nullable=False),
 )
 
+# Kanıtlanmış-konu bankası: NexLev outlier madenciliğinden damıtılmış konu
+# fikirleri. Üretim anında NexLev'e GİDİLMEZ — bu tablo okunur (spec:
+# docs/superpowers/specs/2026-07-12-topic-bank-design.md).
+topic_bank = Table(
+    "topic_bank", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("channel", String, nullable=False, index=True),
+    Column("topic", Text, nullable=False),
+    Column("source_title", Text, default="", nullable=False),
+    Column("views", Integer, default=0, nullable=False),
+    Column("subs", Integer, default=0, nullable=False),
+    Column("hook_pattern", String, default="", nullable=False),
+    Column("status", String, default="active", nullable=False),  # active|used|rejected
+    Column("created_at", DateTime, default=_utcnow, nullable=False),
+    Column("used_at", DateTime),
+)
+
 
 feeds = Table(
     "feeds", metadata,
@@ -805,3 +822,78 @@ def set_feed_meta(
         return
     with eng.begin() as conn:
         conn.execute(feeds.update().where(feeds.c.id == feed_id).values(**values))
+
+
+# ── Kanıtlanmış-konu bankası yardımcıları ────────────────────────────────
+
+def insert_bank_topics(eng: Engine, channel: str, rows: list[dict]) -> int:
+    """Damıtılmış konu kayıtlarını ekler (dedup ÇAĞIRANDA). Eklenen sayısı döner."""
+    if not rows:
+        return 0
+    with eng.begin() as conn:
+        for r in rows:
+            conn.execute(topic_bank.insert().values(
+                channel=channel, topic=str(r.get("topic", ""))[:500],
+                source_title=str(r.get("source_title", ""))[:500],
+                views=int(r.get("views", 0) or 0), subs=int(r.get("subs", 0) or 0),
+                hook_pattern=str(r.get("hook_pattern", ""))[:200],
+            ))
+    return len(rows)
+
+
+def _bank_row_dict(row) -> dict:
+    return {"id": row.id, "topic": row.topic, "source_title": row.source_title,
+            "views": row.views, "subs": row.subs,
+            "hook_pattern": row.hook_pattern, "status": row.status,
+            "created_at": row.created_at, "used_at": row.used_at}
+
+
+def active_bank_topics(eng: Engine, channel: str, limit: int = 10) -> list[dict]:
+    """status=active kayıtlar, en yeni önce (üretim prompt'u için)."""
+    with eng.connect() as conn:
+        rows = conn.execute(
+            select(topic_bank).where(topic_bank.c.channel == channel)
+            .where(topic_bank.c.status == "active")
+            .order_by(topic_bank.c.created_at.desc()).limit(limit)).all()
+    return [_bank_row_dict(r) for r in rows]
+
+
+def all_bank_topics(eng: Engine, channel: str) -> list[dict]:
+    """Panel listesi: her status, en yeni önce."""
+    with eng.connect() as conn:
+        rows = conn.execute(
+            select(topic_bank).where(topic_bank.c.channel == channel)
+            .order_by(topic_bank.c.created_at.desc())).all()
+    return [_bank_row_dict(r) for r in rows]
+
+
+def mark_bank_topic_used(eng: Engine, topic_id: int) -> None:
+    """Kaydı used işaretle. Bilinmeyen/uydurma id → sessiz no-op."""
+    with eng.begin() as conn:
+        conn.execute(topic_bank.update().where(topic_bank.c.id == int(topic_id))
+                     .values(status="used", used_at=_utcnow()))
+
+
+def reject_bank_topic(eng: Engine, topic_id: int) -> None:
+    with eng.begin() as conn:
+        conn.execute(topic_bank.update().where(topic_bank.c.id == int(topic_id))
+                     .values(status="rejected"))
+
+
+def bank_last_refresh(eng: Engine, channel: str):
+    """En yeni created_at (haftalık tazeleme kararı) ya da None."""
+    with eng.connect() as conn:
+        row = conn.execute(
+            select(topic_bank.c.created_at).where(topic_bank.c.channel == channel)
+            .order_by(topic_bank.c.created_at.desc()).limit(1)).first()
+    return row[0] if row else None
+
+
+def bank_hook_patterns(eng: Engine, channel: str, limit: int = 5) -> list[str]:
+    """Distinct, boş-olmayan hook_pattern'ler (başlık/hook few-shot için)."""
+    with eng.connect() as conn:
+        rows = conn.execute(
+            select(topic_bank.c.hook_pattern).distinct()
+            .where(topic_bank.c.channel == channel)
+            .where(topic_bank.c.hook_pattern != "").limit(limit)).all()
+    return [r[0] for r in rows]
