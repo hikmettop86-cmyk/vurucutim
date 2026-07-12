@@ -313,6 +313,17 @@
           Kanal OAuth credentials'larınız bundan ayrıdır; bu key sadece public "most popular" sorguları için kullanılır (~1 quota/saat).
         </div>
       {% endif %}
+
+      <div class="mt-4 border-t border-claude-border pt-3">
+        <div class="text-sm font-semibold mb-1">Ek anahtarlar (kota rotasyonu)</div>
+        <textarea name="youtube_api_keys" rows="3" placeholder="AIza... (her satıra bir anahtar)"
+                  class="bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm w-full font-mono text-claude-text">{{ youtube_extra_keys }}</textarea>
+        <div class="text-xs text-claude-muted mt-1">
+          Konu Bankası madencisi için çoklu anahtar: her anahtar günde 10.000 birim
+          (~98 arama) verir; kota dolunca otomatik sıradakine geçilir. Farklı Google Cloud
+          projelerinden anahtar ekleyin. Boş bırakıp kaydet → liste silinir.
+        </div>
+      </div>
     </div>
 
     <h2 class="font-serif text-lg font-bold mt-6 border-t border-claude-border pt-4">ai33 (Seslendirme / TTS)</h2>

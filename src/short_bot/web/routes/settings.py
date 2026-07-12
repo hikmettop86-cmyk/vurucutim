@@ -111,6 +111,8 @@ def view():
                             openai_key_set=bool(secrets.get("openai_api_key")),
                             youtube_key_masked=youtube_key_masked,
                             youtube_key_set=bool(secrets.get("youtube_api_key")),
+                            youtube_extra_keys="\n".join(
+                                secrets.get("youtube_api_keys") or []),
                             ai33_key_masked=ai33_key_masked,
                             ai33_key_set=bool(secrets.get("ai33_api_key")),
                             ai_backend=data.get("ai_backend", "claude_cli"),
@@ -249,6 +251,21 @@ def save():
         _save_secrets(secrets)
     elif clear_yt:
         secrets.pop("youtube_api_key", None)
+        _save_secrets(secrets)
+
+    # Ek YouTube API anahtarları (çoklu — konu-bankası madencisi kota rotasyonu).
+    # Textarea içeriği liste OLUR: her satır bir anahtar; boş bırakılırsa silinir.
+    if "youtube_api_keys" in request.form:
+        raw = request.form.get("youtube_api_keys", "")
+        keys, seen = [], set()
+        for line in raw.splitlines():
+            k = line.strip()
+            if k and k not in seen:
+                seen.add(k); keys.append(k)
+        if keys:
+            secrets["youtube_api_keys"] = keys
+        else:
+            secrets.pop("youtube_api_keys", None)
         _save_secrets(secrets)
 
     # OpenRouter API key — separate file
