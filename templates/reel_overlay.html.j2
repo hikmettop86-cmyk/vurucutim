@@ -131,10 +131,12 @@ window.__seek=function(tms){
   LEAK.style.opacity=(CUT_EFFECT==='lightleak')?op*0.9:0;
   GLITCH.style.opacity=(CUT_EFFECT==='glitch')?op:0;
   GLITCH.style.transform=(CUT_EFFECT==='glitch'&&op>0)?('translateX('+(((Math.floor(t*90)%2)?1:-1)*op*9)+'px)'):'';
-  /* Sayı vurgusu: kelime söylenirken büyük pop (0.25sn scale .6→1.1, sonra 1.0). */
+  /* Sayı vurgusu: kelime söylenirken büyük pop (0.25sn scale .6→1.1, sonra 1.0).
+     HOOK/CLOSE segmentinde GÖSTERİLMEZ — oralarda zaten büyük başlık bloğu var,
+     sayı onun üstüne biner (gerçek hata: hook metniyle çakıştı). */
   if(NP){
     let cur=null;
-    for(const n of NUMS){if(t>=+n.s && t<+n.e+0.35){cur=n;break;}}
+    if(capOn){for(const n of NUMS){if(t>=+n.s && t<+n.e+0.35){cur=n;break;}}}
     if(cur){
       const dt=t-(+cur.s);
       const k=dt<0.25?(0.6+2.0*dt):(dt<0.35?(1.1-1.0*(dt-0.25)):1.0);
