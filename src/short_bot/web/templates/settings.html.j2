@@ -171,6 +171,60 @@
       {% endif %}
     </div>
 
+    <h2 class="font-serif text-lg font-bold mt-6 border-t border-claude-border pt-4">Footage Kaynakları</h2>
+    {% set _fp = footage.get('priority', []) %}
+    <div class="bg-claude-surface border border-claude-border rounded-lg p-4 space-y-4">
+      <div>
+        <span class="text-xs text-claude-muted uppercase block mb-2">Kaynak önceliği (aç/kapa)</span>
+        <div class="flex flex-col gap-2">
+          <label class="text-sm flex items-center gap-2">
+            <input type="checkbox" name="footage_src_pexels" value="pexels"
+                   {% if 'pexels' in _fp %}checked{% endif %}>
+            Pexels
+          </label>
+          <label class="text-sm flex items-center gap-2">
+            <input type="checkbox" name="footage_src_pixabay" value="pixabay"
+                   {% if 'pixabay' in _fp %}checked{% endif %}>
+            Pixabay
+            {% if not pixabay_key_set %}<span class="text-amber-600 text-xs">(anahtar yok)</span>{% endif %}
+          </label>
+          <label class="text-sm flex items-center gap-2">
+            <input type="checkbox" name="footage_src_storyblocks" value="storyblocks"
+                   {% if 'storyblocks' in _fp %}checked{% endif %}>
+            Storyblocks
+          </label>
+        </div>
+        <input type="hidden" name="footage_order" value="{{ _fp | join(',') }}">
+        <div class="text-xs text-claude-muted mt-2">
+          Öncelik sırası: seçili kaynaklar storyblocks → pixabay → pexels sırasıyla denenir.
+        </div>
+      </div>
+
+      <div class="border-t border-claude-border pt-3">
+        <span class="text-xs text-claude-muted uppercase block mb-1">Pixabay API Key
+          {% if pixabay_key_set %}<span class="normal-case text-claude-muted">(mevcut: {{ pixabay_key_masked }})</span>{% endif %}
+        </span>
+        {% if pixabay_key_set %}
+          <div class="flex items-center gap-3">
+            <span class="font-mono text-sm">{{ pixabay_key_masked }}</span>
+            <label class="text-xs flex items-center gap-1 text-claude-muted">
+              <input type="checkbox" name="pixabay_api_key_clear" value="1"> Sil
+            </label>
+          </div>
+          <input type="password" name="pixabay_api_key" placeholder="Yeni key gir (değiştir)"
+                 autocomplete="new-password"
+                 class="bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm w-full mt-2 text-claude-text">
+        {% else %}
+          <input type="password" name="pixabay_api_key" value="" placeholder="Pixabay API key"
+                 autocomplete="new-password"
+                 class="bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm w-full text-claude-text">
+          <div class="text-xs text-claude-muted mt-1">
+            pixabay.com/api/docs kayıt → key al → buraya yapıştır. Key git'e yazılmaz.
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
     <h2 class="font-serif text-lg font-bold mt-6 border-t border-claude-border pt-4">OpenAI API Key</h2>
     {% if openai_key_set %}
     <div class="mb-3 text-xs">

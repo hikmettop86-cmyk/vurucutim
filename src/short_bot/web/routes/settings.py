@@ -58,6 +58,7 @@ def view():
         "Secrets":    str(_secrets_path()),
     }
     pexels_key_masked = _mask_key(secrets.get("pexels_api_key", ""))
+    pixabay_key_masked = _mask_key(secrets.get("pixabay_api_key", ""))
     openai_key_masked = _mask_key(secrets.get("openai_api_key", ""))
     youtube_key_masked = _mask_key(secrets.get("youtube_api_key", ""))
     openrouter_key_masked = _mask_key(secrets.get("openrouter_api_key", ""))
@@ -66,6 +67,9 @@ def view():
     return render_template("settings.html.j2", data=data, paths=paths,
                             pexels_key_masked=pexels_key_masked,
                             pexels_key_set=bool(secrets.get("pexels_api_key")),
+                            pixabay_key_masked=pixabay_key_masked,
+                            pixabay_key_set=bool(secrets.get("pixabay_api_key")),
+                            footage=data.get("footage", {}) or {},
                             openai_key_masked=openai_key_masked,
                             openai_key_set=bool(secrets.get("openai_api_key")),
                             youtube_key_masked=youtube_key_masked,
@@ -153,6 +157,20 @@ def save():
         trends_data["default_sources"] = src_list
     data["trends"] = trends_data
 
+    # Footage kaynak önceliği (aç/kapa + sıra)
+    order_raw = request.form.get("footage_order", "").strip()
+    enabled = {s for s in ("storyblocks", "pixabay", "pexels")
+               if request.form.get(f"footage_src_{s}") == "1"}
+    if order_raw:
+        ordered = [s for s in order_raw.split(",") if s.strip() in enabled]
+    else:
+        ordered = [s for s in ("storyblocks", "pixabay", "pexels") if s in enabled]
+    if not ordered:
+        ordered = ["pexels"]
+    fdata = data.get("footage", {}) or {}
+    fdata["priority"] = ordered
+    data["footage"] = fdata
+
     path.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
                     encoding="utf-8")
 
@@ -165,6 +183,16 @@ def save():
         _save_secrets(secrets)
     elif clear:
         secrets.pop("pexels_api_key", None)
+        _save_secrets(secrets)
+
+    # Pixabay key — separate file (footage kaynağı)
+    new_pixabay_key = request.form.get("pixabay_api_key", "").strip()
+    clear_pixabay = request.form.get("pixabay_api_key_clear") == "1"
+    if new_pixabay_key:
+        secrets["pixabay_api_key"] = new_pixabay_key
+        _save_secrets(secrets)
+    elif clear_pixabay:
+        secrets.pop("pixabay_api_key", None)
         _save_secrets(secrets)
 
     # OpenAI key — separate file (used by Dynamic DNA feature for embeddings)
