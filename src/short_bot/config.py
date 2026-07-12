@@ -137,6 +137,7 @@ class ReelConfig(BaseModel):
     font: Literal["Montserrat", "Anton", "Bebas Neue", "Oswald",
                   "Poppins", "Inter", "Archivo Black"] = "Montserrat"
     verify_footage: bool = True
+    footage_anchor: str = ""   # EN konu çıpası (boşsa dna.search_query_template'ten türetilir)
     # Faz 2 varyasyon knob'ları (per-video deterministik profil)
     layout: Literal["auto", "classic", "lower_left", "top_heavy"] = "auto"
     hook_angle_vary: bool = True
