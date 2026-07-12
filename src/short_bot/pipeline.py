@@ -1562,6 +1562,9 @@ def _reel_produce_or_none(
         whisper_device=getattr(settings, "whisper_device", "auto"),
         vision_call=vision_call, seed=seed,
         hook_patterns=hook_patterns,
+        # SFX + AI-kurgucu kütüphanesinin kökü: music_root'un üst klasörü
+        # (music_root paketlenmiş uygulamada taşınır; assets/ ona bitişiktir).
+        assets_root=Path(music_root).parent,
     )
 
 

@@ -142,6 +142,9 @@ class ReelConfig(BaseModel):
     fast_cuts: bool = True      # segment-içi hızlı kesim (1.5-3sn'de b-roll değişir)
     number_pop: bool = True     # anlatımdaki sayıları ekranda büyük vurgula
     visual_loop: bool = True    # kapanış klibi = hook klibi (loop hissi)
+    # AI kurgucu (2026-07-13): anlatımı okuyup tempo/efekt/SFX/müzik seçer.
+    # Kapalıysa kararlar eski seed-hash havuzlarından gelir (içerikten habersiz).
+    ai_director: bool = True
     # Faz 2 varyasyon knob'ları (per-video deterministik profil)
     layout: Literal["auto", "classic", "lower_left", "top_heavy"] = "auto"
     hook_angle_vary: bool = True

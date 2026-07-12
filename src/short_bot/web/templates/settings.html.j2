@@ -231,6 +231,53 @@
       </div>
 
       <div class="border-t border-claude-border pt-3">
+        <span class="text-xs text-claude-muted uppercase block mb-2">🎬 Varlık kütüphanesi (SFX + müzik)
+          <span class="normal-case text-claude-muted">
+            — {{ asset_library.total_sfx }} SFX, {{ asset_library.total_music }} müzik
+          </span>
+        </span>
+
+        {% if asset_library.total_sfx or asset_library.total_music %}
+          <div class="flex flex-wrap gap-1.5 mb-2 text-xs">
+            {% for cat, n in asset_library.sfx.items() %}
+              <span class="bg-claude-surface-alt border border-claude-border rounded px-2 py-0.5 font-mono">🔊 {{ cat }} · {{ n }}</span>
+            {% endfor %}
+            {% for mood, n in asset_library.music.items() %}
+              <span class="bg-claude-surface-alt border border-claude-border rounded px-2 py-0.5 font-mono">🎵 {{ mood }} · {{ n }}</span>
+            {% endfor %}
+          </div>
+        {% endif %}
+
+        <div class="flex flex-wrap items-end gap-3">
+          <label class="text-xs text-claude-muted">
+            Kategori başına SFX
+            <input type="number" name="per_sfx" value="15" min="1" max="40"
+                   class="block w-20 bg-claude-surface border border-claude-border rounded px-2 py-1 text-sm text-claude-text">
+          </label>
+          <label class="text-xs text-claude-muted">
+            Ruh hali başına müzik
+            <input type="number" name="per_music" value="10" min="1" max="40"
+                   class="block w-20 bg-claude-surface border border-claude-border rounded px-2 py-1 text-sm text-claude-text">
+          </label>
+          <button type="submit" formaction="/settings/assets/build" formmethod="post"
+                  {% if library_building %}disabled{% endif %}
+                  class="bg-claude-accent hover:bg-claude-accent-hover text-white px-3 py-1.5 rounded text-sm font-semibold disabled:opacity-50">
+            {% if library_building %}Kuruluyor…{% else %}Kütüphaneyi Kur/Genişlet{% endif %}
+          </button>
+          {% if library_status %}
+            <span class="text-xs text-claude-muted font-mono">{{ library_status }}</span>
+          {% endif %}
+        </div>
+
+        <div class="text-xs text-claude-muted mt-2">
+          Mixkit'ten telifsiz ses indirir (anahtar gerekmez, ticari kullanıma açık).
+          Var olan dosyalar yeniden indirilmez — düğmeye tekrar basmak kütüphaneyi
+          <strong>büyütür</strong>. Kütüphane genişledikçe AI kurgucu her videoda farklı
+          ses seçebilir; aynı SFX bir videoda iki kez çalmaz.
+        </div>
+      </div>
+
+      <div class="border-t border-claude-border pt-3">
         <span class="text-xs text-claude-muted uppercase block mb-1">Pixabay API Key
           {% if pixabay_key_set %}<span class="normal-case text-claude-muted">(mevcut: {{ pixabay_key_masked }})</span>{% endif %}
         </span>

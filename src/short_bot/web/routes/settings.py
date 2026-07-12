@@ -78,6 +78,52 @@ def _delete_storyblocks_session(session_path) -> None:
     delete_session(str(session_path))
 
 
+# --- Varlık kütüphanesi (SFX + müzik) ------------------------------------
+# Kurulum ağdan indirir (dakikalar sürebilir) → arka plan thread'i, POST anında döner.
+# Storyblocks-login deseninin aynısı: modül-düzeyi durum + daemon thread.
+_LIB_BUILD: dict = {"running": False, "status": ""}
+
+
+def _assets_root() -> Path:
+    """SFX/müzik kökü: music_root'un üst klasörü (paketlenmiş uygulamada taşınır)."""
+    return Path(current_app.config["SHORTBOT_MUSIC_ROOT"]).parent
+
+
+def _library_inventory() -> dict:
+    """Kütüphane envanteri: {"sfx": {kat: n}, "music": {mood: n}, "total_*": N}."""
+    try:
+        from short_bot.assets_library import load_library_index
+        idx = load_library_index(_assets_root())
+    except Exception as e:  # noqa: BLE001 — envanter ayarlar sayfasını düşürmesin
+        _LOG.warning(f"[settings] varlık envanteri okunamadı: {e}")
+        return {"sfx": {}, "music": {}, "total_sfx": 0, "total_music": 0}
+    sfx = {k: len(v) for k, v in idx.get("sfx", {}).items()}
+    music = {k: len(v) for k, v in idx.get("music", {}).items()}
+    return {"sfx": sfx, "music": music,
+            "total_sfx": sum(sfx.values()), "total_music": sum(music.values())}
+
+
+def _launch_library_build(root, per_sfx: int, per_music: int) -> None:
+    """Kütüphaneyi arka planda kur/genişlet. Testler bu fonksiyonu monkeypatch'ler."""
+    import threading
+
+    def _run():
+        try:
+            from short_bot.assets_library import build_library
+            res = build_library(root, per_sfx=per_sfx, per_music=per_music,
+                                progress=lambda m: _LIB_BUILD.update(status=m))
+            _LIB_BUILD["status"] = (f"Tamamlandı: +{res['sfx']} SFX, "
+                                    f"+{res['music']} müzik")
+        except Exception as e:  # noqa: BLE001 — arka plan thread'i uygulamayı düşürmesin
+            _LIB_BUILD["status"] = f"Hata: {e}"
+            _LOG.warning(f"[settings] kütüphane kurulumu başarısız: {e}")
+        finally:
+            _LIB_BUILD["running"] = False
+
+    _LIB_BUILD.update(running=True, status="Başlıyor…")
+    threading.Thread(target=_run, daemon=True).start()
+
+
 @bp.route("/settings", methods=["GET"])
 def view():
     data = yaml.safe_load(_settings_path().read_text(encoding="utf-8")) or {}
@@ -119,7 +165,10 @@ def view():
                             openrouter_models=data.get("openrouter_models", {}) or {},
                             openrouter_key_masked=openrouter_key_masked,
                             openrouter_key_set=bool(secrets.get("openrouter_api_key")),
-                            openrouter_catalog=get_catalog(Path(cache_dir)))
+                            openrouter_catalog=get_catalog(Path(cache_dir)),
+                            asset_library=_library_inventory(),
+                            library_building=_LIB_BUILD.get("running", False),
+                            library_status=_LIB_BUILD.get("status", ""))
 
 
 @bp.route("/settings", methods=["POST"])
@@ -330,4 +379,22 @@ def storyblocks_disconnect():
     """Kayıtlı Storyblocks oturum dosyasını sil."""
     _delete_storyblocks_session(_storyblocks_session_path())
     flash("Storyblocks oturumu silindi.", "success")
+    return redirect(url_for("settings.view"))
+
+
+@bp.route("/settings/assets/build", methods=["POST"])
+def assets_build():
+    """Ses kütüphanesini Mixkit'ten kur/genişlet (arka planda; anahtar gerekmez).
+
+    Var olan dosya yeniden indirilmez → düğmeye tekrar basmak kütüphaneyi BÜYÜTÜR.
+    Kütüphane ne kadar genişse AI kurgucunun eli o kadar rahat (aynı ses tekrarlanmaz).
+    """
+    if _LIB_BUILD.get("running"):
+        flash("Kütüphane kurulumu zaten sürüyor.", "error")
+        return redirect(url_for("settings.view"))
+    per_sfx = max(1, min(40, int(request.form.get("per_sfx") or 15)))
+    per_music = max(1, min(40, int(request.form.get("per_music") or 10)))
+    _launch_library_build(_assets_root(), per_sfx, per_music)
+    flash(f"Kütüphane kurulumu başladı (kategori başına {per_sfx} SFX, "
+          f"{per_music} müzik). Sayfayı birkaç dakika sonra yenile.", "success")
     return redirect(url_for("settings.view"))

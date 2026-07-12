@@ -201,6 +201,8 @@
               {% if not c.reel or c.reel.number_pop %}checked{% endif %}> 🔢 Sayı vurgusu</label>
             <label class="flex items-center gap-2" title="Kapanış karesi hook'un görseline döner — video başa sarınca kesintisiz"><input type="checkbox" name="reel_visual_loop"
               {% if not c.reel or c.reel.visual_loop %}checked{% endif %}> 🔁 Görsel loop</label>
+            <label class="flex items-center gap-2" title="AI kurgucu anlatımı okur; tempo, kesme efekti, kesim başına SFX ve müzik ruh halini İÇERİĞE göre seçer. Kapalıysa kararlar rastgele havuzdan gelir."><input type="checkbox" name="reel_ai_director"
+              {% if not c.reel or c.reel.ai_director %}checked{% endif %}> 🎬 AI kurgucu</label>
             <label class="flex items-center gap-2"><input type="checkbox" name="reel_arrows_enabled"
               {% if not c.reel or c.reel.arrows_enabled %}checked{% endif %}> Oklar</label>
             <label class="flex items-center gap-2"><input type="checkbox" name="reel_flash"

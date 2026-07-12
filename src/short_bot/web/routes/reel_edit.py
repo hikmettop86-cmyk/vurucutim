@@ -114,6 +114,7 @@ def save_reel(slug):
             fast_cuts=request.form.get("reel_fast_cuts") == "on",
             number_pop=request.form.get("reel_number_pop") == "on",
             visual_loop=request.form.get("reel_visual_loop") == "on",
+            ai_director=request.form.get("reel_ai_director") == "on",
             layout=request.form.get("reel_layout", old.layout if old else "auto"),
             hook_angle_vary=request.form.get("reel_hook_angle_vary") == "on",
             accent_vary=request.form.get("reel_accent_vary") == "on",

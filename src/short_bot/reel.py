@@ -120,13 +120,16 @@ def produce_reel_video(
     llm_backend: str = "claude_cli", llm_api_key: str | None = None,
     whisper_quality: str = "auto", whisper_device: str = "auto",
     vision_call=None, seed: int = 0, deps: ReelDeps | None = None,
-    hook_patterns=None,
+    hook_patterns=None, assets_root: Path | None = None,
 ) -> Path:
     reel = getattr(channel, "reel", None)
     if reel is None or not reel.enabled:
         raise ValueError("produce_reel_video: channel.reel etkin değil")
     d = deps or ReelDeps()
     work_dir = Path(work_dir); work_dir.mkdir(parents=True, exist_ok=True)
+    # SFX/müzik/kurgu kütüphanesinin kökü. Paketlenmiş uygulamada music_root
+    # taşınabilir olduğu için çağıran (pipeline) music_root.parent'ı geçirir.
+    assets_root = Path(assets_root) if assets_root else Path("assets")
 
     # Varyasyon profili (deterministik: aynı seed → aynı profil). Reel etkin
     # kontrolünden SONRA hesaplanır; saf fonksiyon (çağrı zincirine girmez).
@@ -166,6 +169,29 @@ def produce_reel_video(
                                        hook_patterns=hook_patterns)
     log.info(f"  reel: {narration.word_count()} kelime, {len(narration.beats)} beat")
     _phase("senaryo(LLM)")
+
+    # 2b) AI KURGUCU: anlatımı okuyup kurgu kararlarını verir (tempo, kesme efekti,
+    # kesim başına SFX kategorisi, müzik ruh hali, marker, layout). Profil yeniden
+    # kurulur — planın DOLU alanları seed-hash'i ezer, boş alanlar eskiye düşer.
+    # Kurgucu kapalı / kütüphane boş / LLM hatası → plan None → tamamen eski davranış.
+    edit_plan = None
+    if getattr(reel, "ai_director", True):
+        from short_bot.assets_library import load_library_index
+        from short_bot.reel_director import plan_edit
+
+        class _LC:   # plan_edit'in beklediği llm_call taşıyıcısı
+            claude_path = llm_claude_path; model = llm_model
+            backend = llm_backend; api_key = llm_api_key
+
+        # Kesim sayısı ancak tempo seçildikten sonra netleşir; prompt için kaba
+        # tahmin yeter (sfx_plan döngüsel kullanılır, uzunluk kritik değil).
+        est_cuts = max(4, len(narration.beats) * 3)
+        edit_plan = plan_edit(narration, topic=topic, n_cuts=est_cuts,
+                              library_index=load_library_index(assets_root),
+                              llm_call=_LC())
+        if edit_plan is not None:
+            profile = build_variation_profile(channel, seed, edit_plan=edit_plan)
+        _phase("kurgucu(LLM)")
 
     # 3) TTS
     mp3 = work_dir / "narration.mp3"
@@ -322,11 +348,29 @@ def produce_reel_video(
     _phase("overlay-render")
 
     # 7) Montaj (cut_times alt-kesim planından geldi — segment sınırı DEĞİL)
-    sfx_dir = Path("assets/sfx")
-    # SFX kanal bayrağıyla açık/kapalı (per-video varyasyon setine bağlı DEĞİL) —
-    # açıksa HER video havuzdan çeşitli SFX alır (kullanıcı: "aynı sfx" şikâyeti).
-    pool = discover_sfx(sfx_dir) if reel.transitions_whoosh else []
-    sfx_at_cut = pick_sfx_per_cut(pool, seed, len(cut_times))
+    sfx_dir = assets_root / "sfx"
+    # SFX kanal bayrağıyla açık/kapalı (per-video varyasyon setine bağlı DEĞİL).
+    # Havuz kategori klasörlü; kurgucunun sfx_plan'ı kesim başına kategoriyi seçer,
+    # ve AYNI SES bir videoda TEKRAR ÇALMAZ (kullanıcı: "aynı sfx" şikâyeti).
+    pool = discover_sfx(sfx_dir) if reel.transitions_whoosh else {}
+    sfx_at_cut = pick_sfx_per_cut(pool, seed, len(cut_times),
+                                  sfx_plan=profile.sfx_plan)
+    n_uniq = len({str(p) for p in sfx_at_cut})
+    log.info(f"  reel: {len(cut_times)} kesim, {n_uniq} farklı SFX"
+             + (f" (kurgucu: {'/'.join(dict.fromkeys(profile.sfx_plan))})"
+                if profile.sfx_plan else ""))
+
+    # Müzik: kurgucu ruh hali önerdiyse yeniden seç (pipeline kanal ayarıyla seçmişti,
+    # ama kurgucu anlatımı OKUDUKTAN sonra karar verir). Klasör yoksa eskisi kalır.
+    if profile.music_mood:
+        from short_bot.assets import pick_music
+        try:
+            music_path = pick_music(assets_root / "music", mood=profile.music_mood,
+                                    channel_slug=channel.slug)
+            log.info(f"  reel: müzik '{profile.music_mood}' → {music_path.name}")
+        except (FileNotFoundError, OSError) as e:
+            log.info(f"  reel: '{profile.music_mood}' müziği yok ({e}), mevcut müzik")
+
     d.assemble_reel(
         clip_paths=clip_paths, seg_spans=seg_spans, frames_dir=frames_dir,
         narration_path=mp3, music_path=music_path, out_path=out_path,

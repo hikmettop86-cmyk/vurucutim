@@ -41,6 +41,8 @@ class VariationProfile:
     cut_pacing: str
     marker_kit: tuple[str, ...] = ()
     cut_effect: str = "flash"
+    music_mood: str = ""              # kurgucudan; boş → kanal ayarı kullanılır
+    sfx_plan: tuple[str, ...] = ()    # kurgucudan; kesim başına SFX kategorisi
 
 
 def _idx(seed: int, salt: str, n: int) -> int:
@@ -63,11 +65,21 @@ def _accent_variants(channel) -> tuple[str, ...]:
     return tuple(out)
 
 
-def build_variation_profile(channel, seed: int) -> VariationProfile:
+def build_variation_profile(channel, seed: int, edit_plan=None) -> VariationProfile:
+    """Video profilini kur. ``edit_plan`` (AI kurgucu) verilirse ONUN alanları KAZANIR.
+
+    Kurgucu bir alanı boş bırakırsa (ya da uydurma değeri doğrulamada elendiyse)
+    o alan eski seed-hash davranışına düşer — fail-open. Kanalın AÇIK ayarı
+    ("auto" değil, ör. layout="classic") kurgucuyu da ezer: kullanıcı sözü son sözdür.
+    """
     reel = channel.reel
+    p = edit_plan   # kısa ad; None olabilir
+
+    def _plan(field: str) -> str:
+        return (getattr(p, field, "") or "") if p is not None else ""
 
     if reel.layout == "auto":
-        layout = LAYOUTS[_idx(seed, "layout", len(LAYOUTS))]
+        layout = _plan("layout") or LAYOUTS[_idx(seed, "layout", len(LAYOUTS))]
     else:
         layout = reel.layout if reel.layout in LAYOUTS else "classic"
 
@@ -83,7 +95,8 @@ def build_variation_profile(channel, seed: int) -> VariationProfile:
 
     if getattr(reel, "transition_vary", True):
         transitions = _TRANSITION_SETS[_idx(seed, "trans", len(_TRANSITION_SETS))]
-        cut_effect = CUT_EFFECTS[_idx(seed, "cuteffect", len(CUT_EFFECTS))]
+        cut_effect = (_plan("cut_effect")
+                      or CUT_EFFECTS[_idx(seed, "cuteffect", len(CUT_EFFECTS))])
     else:
         transitions = tuple(
             t for t, on in (("flash", reel.transitions_flash),
@@ -92,12 +105,17 @@ def build_variation_profile(channel, seed: int) -> VariationProfile:
         cut_effect = "flash"
 
     if reel.cut_pacing == "auto":
-        cut_pacing = _CUT_PACINGS[_idx(seed, "pace", len(_CUT_PACINGS))]
+        cut_pacing = (_plan("cut_pacing")
+                      or _CUT_PACINGS[_idx(seed, "pace", len(_CUT_PACINGS))])
     else:
         cut_pacing = reel.cut_pacing
 
-    marker_kit = _MARKER_KITS[_idx(seed, "marker", len(_MARKER_KITS))]
+    kit = tuple(getattr(p, "marker_kit", ()) or ()) if p is not None else ()
+    marker_kit = kit or _MARKER_KITS[_idx(seed, "marker", len(_MARKER_KITS))]
 
-    return VariationProfile(layout=layout, hook_angle=hook_angle, accent=accent,
-                            transitions=transitions, cut_pacing=cut_pacing,
-                            marker_kit=marker_kit, cut_effect=cut_effect)
+    return VariationProfile(
+        layout=layout, hook_angle=hook_angle, accent=accent,
+        transitions=transitions, cut_pacing=cut_pacing,
+        marker_kit=marker_kit, cut_effect=cut_effect,
+        music_mood=_plan("music_mood"),
+        sfx_plan=tuple(getattr(p, "sfx_plan", ()) or ()) if p is not None else ())
