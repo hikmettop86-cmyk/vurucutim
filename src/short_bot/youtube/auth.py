@@ -88,8 +88,14 @@ def build_flow(root: Path, slug: str, *, redirect_uri: str) -> Flow:
             f"client_secrets.json not found at {secrets_path}. "
             "Download from Google Cloud Console and place it there."
         )
+    # PKCE'yi AÇIKÇA etkinleştir: yeni google-auth-oauthlib sürümlerinde
+    # autogenerate_code_verifier varsayılan False → flow.code_verifier None kalır,
+    # authorization_url code_challenge üretmez ve callback'teki verifier kontrolü
+    # HER connect'te patlar ("code_verifier bulunamadı"). True yapınca S256 PKCE
+    # üretilir; connect'te kaydedilen verifier callback'te token değişimine gider.
     return Flow.from_client_secrets_file(
         str(secrets_path), scopes=SCOPES, redirect_uri=redirect_uri,
+        autogenerate_code_verifier=True,
     )
 
 
