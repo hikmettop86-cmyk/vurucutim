@@ -105,7 +105,9 @@ window.__seek=function(tms){
   for(const w of W){const vis=capOn&&+w.dataset.chunk===chk;w.classList.toggle('vis',vis);w.classList.toggle('hot',vis&&lead>=+w.dataset.s&&t<+w.dataset.e);}
   HOOK.classList.toggle('on',seg===0);CLOSE.classList.toggle('on',seg===LAST);
   for(const c of CARDS){const s=+c.dataset.s,e=+c.dataset.e;c.classList.toggle('on',t>=s&&t<e);}
-  BAR.style.width=Math.min(100,(t/DUR)*100)+'%';
+  /* Çubuğu 0.25% adıma yuvarla (2.7px): ardışık kareler AYNILAŞIR → renderer
+     screenshot yerine kopyalayabilir (kare-dedup, 3-4x hızlı). Görsel fark yok. */
+  BAR.style.width=(Math.round(Math.min(100,(t/DUR)*100)*4)/4)+'%';
   const m=MK[seg];
   if(m){if(seg!==mkSeg){MLAYER.innerHTML='<div class="mk '+(MCLS[m.type]||'mk-arrow')+'" style="left:'+(m.x*1080)+'px;top:'+(m.y*1920)+'px"></div>';mkSeg=seg;}}
   else if(mkSeg!==-999){MLAYER.innerHTML='';mkSeg=-999;}
@@ -118,6 +120,24 @@ window.__seek=function(tms){
   GLITCH.style.opacity=(CUT_EFFECT==='glitch')?op:0;
   GLITCH.style.transform=(CUT_EFFECT==='glitch'&&op>0)?('translateX('+(((Math.floor(t*90)%2)?1:-1)*op*9)+'px)'):'';
   if(CTA){CTA.classList.toggle('on', t >= DUR - CTA_S);}
+};
+/* Görünür DURUM imzası: renderer aynı imzalı ardışık kareyi yeniden çekmez,
+   öncekini kopyalar (screenshot ~137ms, kopya ~1ms). İmza görünen HER şeyi
+   kapsamalı — aksi hâlde kare kaybı olur. */
+window.__sig=function(){
+  let vis=-1,hot=-1,i=0;
+  for(const w of W){
+    if(w.classList.contains('vis')&&vis<0)vis=+w.dataset.chunk;
+    if(w.classList.contains('hot'))hot=i;
+    i++;
+  }
+  let s=vis+'|'+hot+'|'+mkSeg+'|'+MLAYER.innerHTML.length+'|';
+  s+=(HOOK.classList.contains('on')?1:0)+''+(CLOSE.classList.contains('on')?1:0)+'|';
+  for(const c of CARDS)s+=(c.classList.contains('on')?1:0);
+  s+='|'+BAR.style.width+'|';
+  s+=[FLASH,RGB,LEAK,GLITCH].map(e=>(e.style.opacity||'0')+':'+(e.style.transform||'')).join(',');
+  s+='|'+((CTA&&CTA.classList.contains('on'))?1:0);
+  return s;
 };
 window.__seek(0);
 </script></body></html>

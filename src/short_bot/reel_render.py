@@ -2,12 +2,15 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from short_bot.reel_colors import contrast_text, ensure_bright
 from short_bot.reel_models import ReelTimeline
+
+log = logging.getLogger(__name__)
 
 WIDTH, HEIGHT = 1080, 1920
 
@@ -98,12 +101,32 @@ def render_reel_overlay_frames(
         except Exception:
             pass  # DOM zaten set edildi; font yüklenemedIyse fallback font kullanılır
 
+        # KARE-DEDUP: overlay ardışık karelerde çoğu zaman DEĞİŞMEZ (karaoke kelimesi
+        # ~0.4sn'de bir değişir). Şablonun __sig() imzası aynıysa screenshot (~137ms)
+        # yerine önceki PNG kopyalanır (~1ms) → render 3-4x hızlanır. __sig yoksa
+        # (eski şablon) imza None kalır ve her kare çekilir (eski davranış).
+        import shutil
+        prev_sig = None
+        prev_path: Path | None = None
+        shot = 0
         for i in range(total):
             pg.evaluate("(t)=>window.__seek(t)", int(i / fps * 1000))
+            try:
+                sig = pg.evaluate("()=>window.__sig?window.__sig():null")
+            except Exception:
+                sig = None
+            path = out_dir / f"f_{i:05d}.png"
+            if sig is not None and sig == prev_sig and prev_path is not None:
+                shutil.copyfile(prev_path, path)
+                continue
             # animations="disabled": marker CSS animasyonları duvar-saatiyle koşup
             # deterministikliği bozmasın (aynı seed → aynı kareler). Belirteçler
             # yerinde/görünür kalır; geçiş efektleri JS/seek güdümlü, etkilenmez.
-            pg.screenshot(path=str(out_dir / f"f_{i:05d}.png"),
-                          omit_background=True, animations="disabled")
+            pg.screenshot(path=str(path), omit_background=True,
+                          animations="disabled")
+            shot += 1
+            prev_sig, prev_path = sig, path
         b.close()
+    log.info(f"  reel: overlay {total} kare ({shot} çekildi, "
+             f"{total - shot} kopyalandı)")
     return total
