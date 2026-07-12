@@ -3,8 +3,9 @@ import json as _json_m
 from datetime import datetime, timezone
 from pathlib import Path
 import requests
-from flask import (Blueprint, abort, current_app, flash, jsonify, redirect,
-                   render_template, request, send_from_directory, url_for)
+from flask import (Blueprint, abort, current_app, flash, has_request_context,
+                   jsonify, redirect, render_template, request,
+                   send_from_directory, url_for)
 
 from short_bot.config import load_channel, resolve_ai_call
 from short_bot.db import init_db, record_youtube_upload, get_rss_item_for_short
@@ -26,6 +27,12 @@ def _yt_root() -> Path:
 
 
 def _redirect_uri() -> str:
+    # Gerçek isteğin host:port'unu kullan (sabit settings.web_port DEĞİL). Böylece
+    # /connect ve /callback DAİMA aynı panele döner — iki panel açıkken ya da port
+    # tarama (Electron 5005→5006) durumunda callback yanlış panele düşmez. loopback
+    # istemcilerinde Google herhangi bir 127.0.0.1 portuna izin verir.
+    if has_request_context() and request.host:
+        return f"{request.scheme}://{request.host}/oauth/callback"
     s = current_app.config["SHORTBOT_SETTINGS"]
     host = getattr(s, "web_host", "127.0.0.1")
     port = getattr(s, "web_port", 5005)
@@ -49,18 +56,24 @@ def _save_oauth_verifier(slug: str, code_verifier: str) -> None:
     p.write_text(_json_m.dumps({"code_verifier": code_verifier}), encoding="utf-8")
 
 
-def _pop_oauth_verifier(slug: str) -> str | None:
+def _read_oauth_verifier(slug: str) -> str | None:
+    """Verifier'ı OKUR ama SİLMEZ — token değişimi başarılınca _delete ile silinir.
+    Böylece token değişimi başka bir sebeple patlarsa verifier'ı erken silip
+    yanıltıcı 'code_verifier bulunamadı' hatası vermeyiz."""
     p = _oauth_pending_dir() / f"{slug}.json"
     if not p.exists():
         return None
     try:
-        data = _json_m.loads(p.read_text(encoding="utf-8"))
-        return data.get("code_verifier")
-    finally:
-        try:
-            p.unlink()
-        except OSError:
-            pass
+        return _json_m.loads(p.read_text(encoding="utf-8")).get("code_verifier")
+    except Exception:
+        return None
+
+
+def _delete_oauth_verifier(slug: str) -> None:
+    try:
+        (_oauth_pending_dir() / f"{slug}.json").unlink()
+    except OSError:
+        pass
 
 
 @bp.route("/youtube-avatars/<slug>")
@@ -105,8 +118,9 @@ def callback():
         abort(404)
     try:
         flow = yt_auth.build_flow(_yt_root(), state, redirect_uri=_redirect_uri())
-        # Retrieve PKCE code_verifier from server-side file (NOT Flask session)
-        flow.code_verifier = _pop_oauth_verifier(state)
+        # Retrieve PKCE code_verifier from server-side file (NOT Flask session).
+        # OKU ama silme — token değişimi başarılınca aşağıda sileriz.
+        flow.code_verifier = _read_oauth_verifier(state)
         if flow.code_verifier is None:
             raise RuntimeError(
                 "OAuth code_verifier bulunamadı — /connect tekrar başlat"
@@ -114,6 +128,7 @@ def callback():
         flow.fetch_token(code=code)
         creds = flow.credentials
         yt_auth.save_credentials(_yt_root(), state, creds)
+        _delete_oauth_verifier(state)   # başarı: verifier'ı temizle
         info = yt_auth.fetch_and_save_channel_info(_yt_root(), state, creds)
         title = info.get("snippet", {}).get("title", state)
         return f"""

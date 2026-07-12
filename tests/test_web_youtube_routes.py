@@ -473,3 +473,28 @@ def test_upload_route_uses_openrouter_backend_when_configured(tmp_path):
     assert kw["backend"] == "openrouter"
     assert kw["api_key"] == "sk-or-test123"
     assert kw["model"] == "or-default"
+
+
+def test_redirect_uri_uses_actual_request_host(tmp_path):
+    """Redirect gerçek isteğin host:port'unu kullanmalı (sabit settings.web_port değil)
+    — iki panel/port-scan durumunda callback yanlış panele düşmesin."""
+    from short_bot.web.routes.youtube import _redirect_uri
+    app = _make_app(tmp_path)
+    with app.test_request_context("/", base_url="http://127.0.0.1:5006"):
+        assert _redirect_uri() == "http://127.0.0.1:5006/oauth/callback"
+    # istek bağlamı yokken settings fallback
+    with app.app_context():
+        assert _redirect_uri() == "http://127.0.0.1:5005/oauth/callback"
+
+
+def test_oauth_verifier_read_is_non_destructive(tmp_path):
+    """Verifier okuma SİLMEZ (token başarılınca ayrı delete); tekrar okunabilir."""
+    from short_bot.web.routes.youtube import (
+        _save_oauth_verifier, _read_oauth_verifier, _delete_oauth_verifier)
+    app = _make_app(tmp_path)
+    with app.app_context():
+        _save_oauth_verifier("ch", "VER123")
+        assert _read_oauth_verifier("ch") == "VER123"
+        assert _read_oauth_verifier("ch") == "VER123"   # hâlâ var
+        _delete_oauth_verifier("ch")
+        assert _read_oauth_verifier("ch") is None
