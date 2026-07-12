@@ -12,9 +12,12 @@ edilir. Üretim anında ÇAĞRILMAZ — panel düğmesi + haftalık cron dolduru
 from __future__ import annotations
 
 import json
+import logging
 import subprocess
 
 from rapidfuzz import fuzz
+
+log = logging.getLogger(__name__)
 
 _ALLOWED_TOOLS = ",".join([
     "mcp__claude_ai_NexLev__search_viral_videos_small_channels",
@@ -131,7 +134,20 @@ def mine_topics(niche_query: str, *, language: str = "tr",
         result_text = envelope.get("result", "") if isinstance(envelope, dict) else proc.stdout
     except (ValueError, TypeError):
         result_text = proc.stdout or ""
-    return _parse_topics(result_text)
+    try:
+        return _parse_topics(result_text)
+    except ValueError:
+        # Teşhis: model JSON yerine ne döndürdü (kota/izin/düzyazı)?
+        log.warning(f"topic_miner parse edilemedi; model çıktısı[:400]: "
+                    f"{(result_text or '')[:400]!r}")
+        low = (result_text or "").lower()
+        if "kota" in low or "quota" in low or "limit" in low:
+            # NexLev free plan günlük araması dolmuş — model bunu düzyazıyla
+            # açıklıyor. Net Türkçe hata: kullanıcı panelde nedenini görsün.
+            raise RuntimeError(
+                "NexLev günlük arama kotası dolmuş görünüyor — yarın tekrar "
+                "deneyin (free plan gün başına sınırlı arama verir).")
+        raise
 
 
 def mine_topics_with_retry(niche_query: str, *, retries: int = 1, **kw) -> list[dict]:
