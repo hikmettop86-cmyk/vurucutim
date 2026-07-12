@@ -147,6 +147,45 @@ def init_scheduler(app):
         id="_insights_refresh",
         replace_existing=True,
     )
+
+    def _weekly_topic_bank_refresh():
+        """Pazartesi 05:00: generator'lı kanalların konu bankasını tazele.
+
+        Yalnız `bank_last_refresh` 7 günden eski (ya da hiç yok) kanallar için
+        NexLev madenciliği koşar. Tek kanalın hatası kalanları durdurmaz."""
+        try:
+            from datetime import datetime, timedelta, timezone
+            from short_bot.db import bank_last_refresh
+            from short_bot.topic_miner import refresh_topic_bank
+            eng = init_db(app.config["SHORTBOT_DB_PATH"])
+            cfg_dir = app.config["SHORTBOT_CONFIG_DIR"]
+            claude_path = app.config["SHORTBOT_SETTINGS"].claude_cli_path
+            cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+            for cfg in list_channels(cfg_dir / "channels"):
+                try:
+                    if cfg.content_source != "generator" or cfg.generator is None:
+                        continue
+                    last = bank_last_refresh(eng, cfg.slug)
+                    if last is not None:
+                        if last.tzinfo is None:
+                            last = last.replace(tzinfo=timezone.utc)
+                        if last > cutoff:
+                            continue
+                    res = refresh_topic_bank(eng, cfg.slug, cfg.generator.topic,
+                                             language=cfg.language,
+                                             claude_path=claude_path)
+                    _LOG.info(f"[topic-bank] haftalık {cfg.slug}: +{res['added']}")
+                except Exception as e:  # noqa: BLE001
+                    _LOG.warning(f"[topic-bank] haftalık {cfg.slug}: {e}")
+        except Exception as e:  # noqa: BLE001 — cron must not crash
+            _LOG.warning(f"[topic-bank] haftalık tazeleme hatası: {e}")
+
+    scheduler.add_job(
+        _weekly_topic_bank_refresh,
+        trigger=CronTrigger(day_of_week="mon", hour=5, minute=0),
+        id="_topic_bank_refresh",
+        replace_existing=True,
+    )
     # Trend cache refresh on the interval from settings.trends.refresh_minutes.
     # Default 60min keeps the cache well under the 90min freshness window
     # used by the pipeline (so inline refresh on stale cache is rare).
