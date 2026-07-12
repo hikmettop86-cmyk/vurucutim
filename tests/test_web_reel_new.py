@@ -277,7 +277,7 @@ def test_reel_wizard_chip_click_uses_key_only(tmp_path):
 def test_niche_wizard_has_both_finders_and_langs(tmp_path):
     c = _client(tmp_path)
     body = c.get("/channels/new-reel").data.decode("utf-8")
-    assert "NexLev Niş Bulucu" in body
+    assert "Veri-Destekli Niş Bulucu" in body
     assert "AI Niş Bulucu" in body
     assert 'hx-post="/channels/new-reel/find-niches"' in body
     assert 'id="niche-results"' in body
@@ -292,13 +292,13 @@ def test_niche_find_ai_mode_uses_find_niches_ai(tmp_path):
     with patch("short_bot.web.routes.reel_new.threading.Thread", _SyncThread), \
          patch("short_bot.web.routes.reel_new.find_niches_ai",
                return_value=_NICHE_SAMPLE) as ai_mock, \
-         patch("short_bot.web.routes.reel_new.find_niches") as nex_mock:
+         patch("short_bot.web.routes.reel_new.find_niches_data") as data_mock:
         r1 = c.post("/channels/new-reel/find-niches",
                     data={"topic": "bilim", "mode": "ai", "language": "de"})
         job_id = re.search(r"niche-status/([0-9a-f]+)", r1.data.decode("utf-8")).group(1)
         r2 = c.get(f"/channels/new-reel/niche-status/{job_id}")
     assert ai_mock.called
-    assert not nex_mock.called
+    assert not data_mock.called
     assert ai_mock.call_args.kwargs.get("language") == "de"
     assert "İnsan Vücudu" in r2.data.decode("utf-8")
 
@@ -306,7 +306,7 @@ def test_niche_find_ai_mode_uses_find_niches_ai(tmp_path):
 def test_niche_find_start_returns_running(tmp_path):
     c = _client(tmp_path)
     with patch("short_bot.web.routes.reel_new.threading.Thread", _SyncThread), \
-         patch("short_bot.web.routes.reel_new.find_niches", return_value=_NICHE_SAMPLE):
+         patch("short_bot.web.routes.reel_new.find_niches_data", return_value=_NICHE_SAMPLE):
         r = c.post("/channels/new-reel/find-niches", data={"topic": "bilim gerçekleri"})
     assert r.status_code == 200
     body = r.data.decode("utf-8")
@@ -317,7 +317,7 @@ def test_niche_find_start_returns_running(tmp_path):
 def test_niche_status_done_renders_cards(tmp_path):
     c = _client(tmp_path)
     with patch("short_bot.web.routes.reel_new.threading.Thread", _SyncThread), \
-         patch("short_bot.web.routes.reel_new.find_niches", return_value=_NICHE_SAMPLE):
+         patch("short_bot.web.routes.reel_new.find_niches_data", return_value=_NICHE_SAMPLE):
         r1 = c.post("/channels/new-reel/find-niches", data={"topic": "bilim"})
         job_id = re.search(r"niche-status/([0-9a-f]+)", r1.data.decode("utf-8")).group(1)
         r2 = c.get(f"/channels/new-reel/niche-status/{job_id}")
@@ -337,7 +337,7 @@ def test_niche_status_unknown_job_shows_error(tmp_path):
 def test_niche_find_error_surfaces_to_user(tmp_path):
     c = _client(tmp_path)
     with patch("short_bot.web.routes.reel_new.threading.Thread", _SyncThread), \
-         patch("short_bot.web.routes.reel_new.find_niches",
+         patch("short_bot.web.routes.reel_new.find_niches_data",
                side_effect=RuntimeError("claude CLI bulunamadı: claude")):
         r1 = c.post("/channels/new-reel/find-niches", data={"topic": "x"})
         job_id = re.search(r"niche-status/([0-9a-f]+)", r1.data.decode("utf-8")).group(1)

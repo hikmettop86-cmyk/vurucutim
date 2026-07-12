@@ -72,3 +72,30 @@ def test_timeline_holds_words_and_beats():
     )
     assert tl.duration_s == 12.0
     assert tl.seg_queries[1] == "bee on flower macro"
+
+
+def test_hook_and_close_get_own_visual_queries():
+    """Hook videonun en kritik karesi — kendi görsel sorgusunu kullanmalı.
+
+    Gerçek şikâyet: "ilk girişteki görüntü alakasız" — hook, soyut bir beat
+    sorgusunun çöp fallback'ini ödünç alıyordu."""
+    from short_bot.reel_models import ReelBeat, ReelNarration
+    beats = [ReelBeat(text="Beat bir cumlesi burada", visual_query="body scan",
+                      keyword="A"),
+             ReelBeat(text="Beat iki cumlesi burada", visual_query="muscle fiber",
+                      keyword="B"),
+             ReelBeat(text="Beat uc cumlesi burada", visual_query="runner legs",
+                      keyword="C")]
+    n = ReelNarration(hook="Merak uyandiran soru", beats=beats,
+                      close="Kapanis cumlesi burada", mood="neutral",
+                      hook_visual="exhausted runner collapsing",
+                      close_visual="marathon finish line")
+    q = n.segment_queries()
+    assert q[0] == "exhausted runner collapsing"     # hook kendi sorgusu
+    assert q[-1] == "marathon finish line"           # close kendi sorgusu
+    assert q[1:-1] == ["body scan", "muscle fiber", "runner legs"]
+
+    # geriye-uyum: alanlar boşsa None → çağıran ilk/son beat'e düşer
+    n2 = ReelNarration(hook="Merak uyandiran soru", beats=beats,
+                       close="Kapanis cumlesi burada", mood="neutral")
+    assert n2.segment_queries()[0] is None and n2.segment_queries()[-1] is None

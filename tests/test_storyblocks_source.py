@@ -5,7 +5,19 @@ TÜM Playwright etkileşimleri MONKEYPATCH'lenir — gerçek tarayıcı AÇILMAZ
 mantığı (query sadeleştirme, oturum kontrolü, kart eşleme, filigran-boyut reddi)
 sınar.
 """
-from short_bot.storyblocks_source import StoryblocksSource, _simplify_query
+from short_bot.storyblocks_source import (StoryblocksSource, _EXTRACT_JS,
+                                          _simplify_query)
+
+
+def test_extract_js_reads_video_poster_thumbnail():
+    """Storyblocks kartı <img> değil <video poster>: kazıma poster'ı okumalı.
+
+    Gerçek hata (2026-07-12): thumbnail boş kalınca alaka kapısı indirmeden ÖNCE
+    çalışamıyordu → her aday TARAYICIYLA indiriliyordu (üretim yavaşlığının ana
+    kaynağı). Bu test poster fallback zincirini kilitler."""
+    assert "poster" in _EXTRACT_JS
+    assert "querySelector('video')" in _EXTRACT_JS
+    assert "data-src" in _EXTRACT_JS and "srcset" in _EXTRACT_JS
 
 
 def test_simplify_query_strips_stopwords():

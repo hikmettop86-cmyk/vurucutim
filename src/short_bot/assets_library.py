@@ -35,6 +35,12 @@ MUSIC_MOODS = {
     "upbeat": "happy",            # 36
 }
 
+# Kurgucuya SUNULABİLECEK müzik ruh halleri. assets/music/ altındaki HER klasör
+# ruh hali DEĞİLDİR — pick_music orayı aynı zamanda kanal klasörü olarak kullanır
+# (assets/music/<kanal-slug>/). Bu allowlist olmadan kurgucu bir bilim videosuna
+# "galatasaray" müziği seçebilirdi. "breaking"/"neutral" eski jenerik moodlar.
+MUSIC_MOOD_VOCAB = frozenset(MUSIC_MOODS) | {"breaking", "neutral"}
+
 _SFX_URL = "https://mixkit.co/free-sound-effects/{cat}/"
 _MUSIC_URL = "https://mixkit.co/free-stock-music/{cat}/"
 _ASSET_RE = re.compile(r'https://assets\.mixkit\.co/[^"\s\\<>]+\.mp3')

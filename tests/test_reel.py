@@ -64,10 +64,11 @@ def test_happy_path_chain_order(tmp_path):
     out = _call(_deps(calls), tmp_path)
     assert out == tmp_path / "out.mp4"
     names = [c if isinstance(c, str) else c[0] for c in calls]
-    # preflight ÖNCE, sonra narration, tts, probe, asr, 5x match, render, assemble
-    # (5 segment = hook + 3 beat + close; her segment footage ile kaplanır)
+    # preflight ÖNCE, sonra narration, tts, probe, asr, match'ler, render, assemble
+    # (5 segment = hook + 3 beat + close; fast_cuts açıkken beat başına 2-3 klip
+    # çekilir → match sayısı segment sayısından FAZLA)
     assert names[0] == "health" and names[1] == "narr"
-    assert names.count("match") == 5
+    assert names.count("match") >= 5
     assert names[-2:] == ["render", "assemble"]
 
 
@@ -78,11 +79,14 @@ def test_tts_gets_full_text(tmp_path):
     assert tts == _narr().full_text()
 
 
-def test_assemble_gets_three_clips(tmp_path):
+def test_assemble_gets_subcut_clips(tmp_path):
+    """fast_cuts (varsayılan açık): 5 segment → segment-içi alt-kesimlerle DAHA
+    ÇOK parça. clip_paths ve seg_spans daima aynı boyda."""
     calls = []
     _call(_deps(calls), tmp_path)
     _, kw = next(c for c in calls if isinstance(c, tuple) and c[0] == "assemble")
-    assert len(kw["clip_paths"]) == 5      # hook+3beat+close segment sayisi
+    assert len(kw["clip_paths"]) == len(kw["seg_spans"])
+    assert len(kw["clip_paths"]) > 5       # alt-kesim → 5 segment'ten fazla
     assert kw["duration_s"] == 30.0
 
 

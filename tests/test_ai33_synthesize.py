@@ -146,6 +146,70 @@ def test_synthesize_poll_timeout_raises_timeout_error(tmp_path):
                    poll_timeout_s=5.0)
 
 
+class FlakySession(FakeSession):
+    """Ses indirme GET'i ilk ``fail_n`` çağrıda ağ hatası fırlatır (10054 benzeri)."""
+
+    def __init__(self, *a, fail_audio_n=0, fail_poll_n=0, **kw):
+        super().__init__(*a, **kw)
+        self.fail_audio_n = fail_audio_n
+        self.fail_poll_n = fail_poll_n
+
+    def get(self, url, **kw):
+        if "/v1/task/" in url:
+            if self.fail_poll_n > 0:
+                self.fail_poll_n -= 1
+                raise ConnectionResetError(10054, "connection forcibly closed")
+            self.gets.append((url, kw))
+            return self.task_resps.pop(0)
+        if self.fail_audio_n > 0:
+            self.fail_audio_n -= 1
+            raise ConnectionResetError(10054, "connection forcibly closed")
+        self.gets.append((url, kw))
+        return self.audio_resp
+
+
+def test_synthesize_download_retries_on_connection_reset(tmp_path):
+    """Ses üretildi ama indirme koptu (WinError 10054) → retry kurtarır."""
+    out = tmp_path / "n.mp3"
+    sess = FlakySession(
+        post_resp=FakeResponse(200, {"task_id": "t1"}),
+        task_resps=[FakeResponse(200, {"status": "done",
+                                       "metadata": {"audio_url": "https://cdn/x.mp3"}})],
+        audio_resp=FakeResponse(200, content=b"mp3-ok"),
+        fail_audio_n=2,          # ilk 2 deneme kopar, 3.sü başarır
+    )
+    synthesize("x", voice_id="v", api_key="k", out_path=out,
+               session=sess, sleep=lambda s: None, now=_clock())
+    assert out.read_bytes() == b"mp3-ok"
+
+
+def test_synthesize_download_fails_after_all_retries(tmp_path):
+    sess = FlakySession(
+        post_resp=FakeResponse(200, {"task_id": "t1"}),
+        task_resps=[FakeResponse(200, {"status": "done",
+                                       "metadata": {"audio_url": "https://cdn/x.mp3"}})],
+        fail_audio_n=99,         # hiç düzelmiyor
+    )
+    with pytest.raises(Ai33Error, match="indirme"):
+        synthesize("x", voice_id="v", api_key="k", out_path=tmp_path / "n.mp3",
+                   session=sess, sleep=lambda s: None, now=_clock())
+
+
+def test_synthesize_poll_survives_transient_network_error(tmp_path):
+    """Poll GET'te geçici ağ kopması üretimi DÜŞÜRMEZ — poll'a devam edilir."""
+    out = tmp_path / "n.mp3"
+    sess = FlakySession(
+        post_resp=FakeResponse(200, {"task_id": "t1"}),
+        task_resps=[FakeResponse(200, {"status": "done",
+                                       "metadata": {"audio_url": "https://cdn/x.mp3"}})],
+        audio_resp=FakeResponse(200, content=b"mp3"),
+        fail_poll_n=2,           # ilk 2 poll kopar, sonra done
+    )
+    synthesize("x", voice_id="v", api_key="k", out_path=out,
+               session=sess, sleep=lambda s: None, now=_clock())
+    assert out.read_bytes() == b"mp3"
+
+
 def test_synthesize_empty_text_raises(tmp_path):
     with pytest.raises(ValueError, match="text"):
         synthesize("  ", voice_id="v", api_key="k", out_path=tmp_path / "n.mp3")
