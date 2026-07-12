@@ -138,6 +138,10 @@ class ReelConfig(BaseModel):
                   "Poppins", "Inter", "Archivo Black"] = "Montserrat"
     verify_footage: bool = True
     footage_anchor: str = ""   # EN konu çıpası (boşsa dna.search_query_template'ten türetilir)
+    # Retention kurgu katmanı (2026-07-12): insan-editör hamleleri
+    fast_cuts: bool = True      # segment-içi hızlı kesim (1.5-3sn'de b-roll değişir)
+    number_pop: bool = True     # anlatımdaki sayıları ekranda büyük vurgula
+    visual_loop: bool = True    # kapanış klibi = hook klibi (loop hissi)
     # Faz 2 varyasyon knob'ları (per-video deterministik profil)
     layout: Literal["auto", "classic", "lower_left", "top_heavy"] = "auto"
     hook_angle_vary: bool = True
