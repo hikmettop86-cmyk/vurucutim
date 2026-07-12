@@ -111,11 +111,24 @@ def produce_reel_video(
     from short_bot.reel_subscribe import build_subscribe_bits
     bits = build_subscribe_bits(channel, seed)
 
+    # Faz zamanlayıcı: hangi aşama ne kadar sürdü (üretim yavaşlığı teşhisi).
+    import time as _time
+    _t0 = _time.perf_counter()
+    _phase_t = {}
+
+    def _phase(name: str) -> None:
+        nonlocal _t0
+        dt = _time.perf_counter() - _t0
+        _phase_t[name] = dt
+        _t0 = _time.perf_counter()
+        log.info(f"  reel[süre] {name}: {dt:.1f}s")
+
     # 1) Preflight (LLM/TTS kredisi harcamadan)
     verdict = d.health_check(voice_id=reel.voice_id, api_key=ai33_api_key, tmp_dir=work_dir)
     if verdict != "healthy":
         raise RuntimeError(_PREFLIGHT.get(verdict, f"ai33 preflight: {verdict}"))
     log.info("  reel: ai33 preflight healthy")
+    _phase("preflight")
 
     # 2) Senaryo
     narration = d.write_reel_narration(topic, channel=channel,
@@ -126,11 +139,13 @@ def produce_reel_video(
                                        comment_line=bits.comment_line,
                                        hook_patterns=hook_patterns)
     log.info(f"  reel: {narration.word_count()} kelime, {len(narration.beats)} beat")
+    _phase("senaryo(LLM)")
 
     # 3) TTS
     mp3 = work_dir / "narration.mp3"
     d.synthesize(narration.full_text(), voice_id=reel.voice_id, api_key=ai33_api_key,
                  out_path=mp3, speed=reel.speed)
+    _phase("tts(ai33)")
 
     # 4) Süre + hizalama + zaman çizelgesi
     duration_s = d.probe_duration_s(mp3, ffprobe_path="ffprobe")
@@ -138,6 +153,7 @@ def produce_reel_video(
                                quality=whisper_quality, device=whisper_device)
     timeline = build_reel_timeline(narration, words, duration_s=duration_s)
     log.info(f"  reel: ses {duration_s:.1f}s, {len(timeline.words)} kelime")
+    _phase("whisper-hizalama")
 
     # 5) Beat başına footage (+ belirteç-uygun segmentlerde nesne konumu)
     # Öncelik-sıralı kaynak zinciri (Pexels + opsiyonel Pixabay): biri bulamazsa
@@ -171,6 +187,7 @@ def produce_reel_video(
         if query is None:
             # hook → ilk beat'in görüntüsü, close → son beat'in görüntüsü
             query = _first_q if si == 0 else _last_q
+        _seg_t0 = _time.perf_counter()
         clip = _match_with_fallback(
             d, query, topic_q=_topic_q, api_key=pexels_api_key,
             cache_dir=clips_cache, verify=reel.verify_footage, vision_call=vision_call,
@@ -178,6 +195,8 @@ def produce_reel_video(
             ffmpeg_path=ffmpeg_path)
         if clip is None:
             raise RuntimeError(f"reel: '{query}' için footage bulunamadı (segment {si}).")
+        log.info(f"  reel[süre] footage seg{si} ('{query[:30]}'): "
+                 f"{_time.perf_counter() - _seg_t0:.1f}s")
         clip_paths.append(clip)
         if si in worthy:
             pos = d.locate_subject(clip, query, vision_call=vision_call,
@@ -185,6 +204,7 @@ def produce_reel_video(
         else:
             pos = SubjectPos(found=False)
         seg_positions.append(pos)
+    _phase("footage+vision")
 
     # Belirteçler: nesne konumuna göre per-segment (kapalıysa boş → arrow_frequency='off')
     markers = (build_markers(seg_positions, marker_kit=profile.marker_kit,
@@ -213,6 +233,7 @@ def produce_reel_video(
         font=reel.font,
         markers=markers,
     )
+    _phase("overlay-render")
 
     # 7) Montaj
     cut_times = [timeline.seg_spans[i][0] for i in range(1, len(timeline.seg_spans))]
@@ -229,4 +250,9 @@ def produce_reel_video(
         sfx_at_cut=sfx_at_cut,
         zoom=("zoom" in profile.transitions),
     )
+    _phase("montaj(ffmpeg)")
+    _total = sum(_phase_t.values())
+    _brk = " | ".join(f"{k} {v:.0f}s(%{100 * v / max(_total, 1):.0f})"
+                      for k, v in sorted(_phase_t.items(), key=lambda kv: -kv[1]))
+    log.info(f"  reel[SÜRE ÖZET] toplam {_total / 60:.1f}dk → {_brk}")
     return out_path

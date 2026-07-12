@@ -99,12 +99,20 @@ def build_generator_prompt(
             f"(kanıt: {_fmt_n(int(t.get('views', 0)))} izlenme / "
             f"{_fmt_n(int(t.get('subs', 0)))} abonelik kanal)"
             for t in proven_topics)
+        # ZORUNLU seçim: kaçış kapısı ("uymuyorsa serbest üret") bırakıldığında LLM
+        # bankayı görmezden gelip halüsinasyon üretti (gerçek hata 2026-07-12:
+        # "doktorlar sembolik güçlerini artırmak için tıbbi semboller yutuyordu").
         proven_block = (
-            "\nKANITLANMIŞ KONULAR (nişinde küçük kanallarda patlamış "
-            "videolardan damıtıldı):\n" + lines + "\n"
-            'Bu konulardan BİRİNİ seç ya da çok yakın bir varyasyonunu üret ve '
-            'çıktına "bank_id": <seçtiğin id> ekle. Hiçbiri kanala uymuyorsa '
-            'serbest üret, "bank_id": null bırak.\n')
+            "\nKANITLANMIŞ KONULAR (nişinde küçük kanallarda patlamış gerçek "
+            "videolardan damıtıldı — hepsi DOĞRULANMIŞ olgular):\n" + lines + "\n"
+            'ZORUNLU: Bu listeden TAM OLARAK BİR konu seç ve çıktına '
+            '"bank_id": <seçtiğin id> ekle. Serbest konu üretmek YASAK — '
+            '"bank_id" null OLAMAZ.\n'
+            "İçeriği SEÇTİĞİN konunun etrafında yaz: o olguyu açıkla, bağlamını ve "
+            "şaşırtıcı yanını anlat.\n"
+            "UYDURMA YASAĞI: Seçtiğin olgunun DIŞINDA yeni 'gerçek' UYDURMA. Emin "
+            "olmadığın tarih, sayı, isim, mekanizma EKLEME. Bilmediğin detayı "
+            "yazmak yerine olgunun bilinen kısmını derinleştir.\n")
 
     forbidden_tone = ", ".join(dna.tone.forbidden) if dna.tone.forbidden else "—"
 
@@ -226,9 +234,30 @@ def generate_quote(
         topic_distribution=topic_distribution,
         proven_topics=proven_topics,
     )
-    return run_json(
+    result = run_json(
         prompt, GeneratorResult,
         claude_path=claude_path, model=model,
         backend=backend, api_key=api_key,
         retries=2, timeout_s=180,
     )
+    if not proven_topics:
+        return result
+    # Banka doluysa seçim ZORUNLU: LLM atlarsa ya da uydurma id verirse bir kez
+    # düzeltici tekrar (gerçek hata: bankayı yok sayıp halüsinasyon üretti).
+    valid_ids = {int(t["id"]) for t in proven_topics}
+    if result.bank_id in valid_ids:
+        return result
+    ids_txt = ", ".join(str(i) for i in sorted(valid_ids))
+    retry = (prompt + f"\n\nHATA: Önceki denemende geçerli bir kanıtlanmış konu "
+             f"SEÇMEDİN (bank_id={result.bank_id!r}). ZORUNLU: yukarıdaki "
+             f"listeden bir konu seç; \"bank_id\" şu id'lerden biri OLMALI: "
+             f"{ids_txt}. Serbest/uydurma konu YASAK.\n")
+    result = run_json(
+        retry, GeneratorResult,
+        claude_path=claude_path, model=model,
+        backend=backend, api_key=api_key,
+        retries=2, timeout_s=180,
+    )
+    if result.bank_id not in valid_ids:
+        result.bank_id = None   # yine seçmedi → mark_used no-op (üretim durmaz)
+    return result
