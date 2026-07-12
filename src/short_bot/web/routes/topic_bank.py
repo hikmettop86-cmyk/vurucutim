@@ -61,7 +61,8 @@ def _miner_kwargs(cfg) -> dict:
     tmpl = getattr(getattr(cfg, "dna", None), "search_query_template", "") or ""
     return {"api_keys": resolve_youtube_api_keys(secrets),
             "anchor": derive_footage_anchor(tmpl),
-            "llm_call": llm_call}
+            "llm_call": llm_call,
+            "keywords": list(getattr(cfg, "keywords", None) or [])}
 
 
 @bp.post("/channels/<slug>/topic-bank/refresh")

@@ -180,27 +180,91 @@ SADECE JSON: {{"topics": [{{"topic": "<{lang} konu fikri>",
   "hook_pattern": "<{lang} 2-4 kelime örüntü, ör. 'sayı + beklenmedik iddia'>"}}]}}"""
 
 
+class _SearchQueries(BaseModel):
+    queries: list[str]
+
+
+def _search_queries(niche_query: str, language: str, llm_call,
+                    keywords=None) -> list[str]:
+    """Nişten 2-3 KISA YouTube arama sorgusu üret.
+
+    Uzun/talimatlı niş cümlesi YouTube aramasında 0 sonuç veriyor (gerçek ölçüm:
+    'Bilim ve keşif tarihindeki şok edici olayları' → boş; 'bilim tarihi ilginç'
+    → dolu). Öncelik: kanal keywords → LLM türetimi → ilk-3-kelime fallback."""
+    kw = [str(k).strip() for k in (keywords or []) if str(k).strip()]
+    if kw:
+        return [" ".join(kw[:3])]
+    short = _short_query(niche_query)
+    fallback = [" ".join(short.split()[:3])] if short else ["ilginç bilgiler"]
+    if llm_call is None:
+        return fallback
+    lang = _LANG_NAMES.get(language, "Türkçe")
+    try:
+        v = run_json(
+            f'Şu YouTube Shorts nişi için 2-3 KISA arama sorgusu üret '
+            f'(her biri 2-3 yaygın {lang} kelime; talimat değil, arama terimi): '
+            f'"{short}"\nSADECE JSON: {{"queries": ["...", "..."]}}',
+            _SearchQueries, claude_path=llm_call.claude_path, model=llm_call.model,
+            backend=llm_call.backend, api_key=llm_call.api_key,
+            retries=1, timeout_s=60)
+        out = [q.strip() for q in v.queries if (q or "").strip()][:3]
+        return out or fallback
+    except Exception as e:
+        log.info(f"topic_miner: sorgu türetme atlandı ({e}) → fallback")
+        return fallback
+
+
+# Kademeli outlier eşikleri: sıkı geçmezse gevşet (hiç sonuç > mükemmel sonuç).
+# Havuz API'den BİR kez ham çekilir; kademeler YERELDE uygulanır (ekstra birim yok).
+_FILTER_TIERS = (
+    {"min_views": 20_000, "max_subs": 500_000, "min_ratio": 3.0},   # sıkı (gerçek outlier)
+    {"min_views": 10_000, "max_subs": 2_000_000, "min_ratio": 1.0},
+    {"min_views": 5_000, "max_subs": 10**9, "min_ratio": 0.0},
+)
+
+
+def _apply_tier(rows: list[dict], tier: dict) -> list[dict]:
+    return [r for r in rows
+            if r["views"] >= tier["min_views"] and r["subs"] <= tier["max_subs"]
+            and r["ratio"] >= tier["min_ratio"]]
+
+
 def mine_topics_via_api(niche_query: str, *, api_keys: list, language: str = "tr",
                         anchor: str = "", llm_call=None, count: int = 12,
-                        http_get=None) -> list[dict]:
+                        keywords=None, http_get=None) -> list[dict]:
     """YouTube Data API ile outlier madenciliği (NexLev'siz, ~102 birim/arama).
 
-    Akış: kısa niş sorgusuyla outlier ara (+ opsiyonel EN çıpa araması) →
-    LLM tek çağrıyla başlıkları {lang} konu fikrine damıtır. ``llm_call`` yoksa
-    mekanik fallback: başlık aynen topic olur (çeviri yok ama üretim durmaz).
+    Akış: kısa arama sorguları (keywords/LLM) → outlier havuzu (+ EN çıpa) →
+    kademeli filtre → LLM tek çağrıyla {lang} konu fikrine damıtma. ``llm_call``
+    yoksa mekanik fallback: başlık aynen topic olur (üretim durmaz).
     """
     from short_bot.yt_outliers import search_outlier_shorts
-    q = _short_query(niche_query) or "ilginç bilgiler"
-    rows = search_outlier_shorts(q, api_keys=api_keys, language=language,
-                                 limit=count * 2, http_get=http_get)
-    if anchor and anchor.lower() != q.lower():
-        try:  # EN çıpa araması opsiyonel zenginleştirme — hatası ana akışı bozmaz
-            extra = search_outlier_shorts(anchor, api_keys=api_keys, language="en",
-                                          limit=count, http_get=http_get)
-            seen_ids = {r["video_id"] for r in rows}
-            rows += [r for r in extra if r["video_id"] not in seen_ids]
+    queries = _search_queries(niche_query, language, llm_call, keywords=keywords)
+    if anchor and all(anchor.lower() != q.lower() for q in queries):
+        queries.append(anchor)
+    # Havuzu HAM çek (filtre yok) — kademeler yerelde uygulanır, ekstra birim yakılmaz.
+    pool, seen_ids = [], set()
+    for qi, q in enumerate(queries[:4]):
+        lang_q = "en" if (anchor and q == anchor) else language
+        try:
+            found = search_outlier_shorts(q, api_keys=api_keys, language=lang_q,
+                                          limit=count * 4, http_get=http_get,
+                                          min_views=1_000, max_subs=10**12,
+                                          min_ratio=0.0)
         except Exception as e:
-            log.info(f"topic_miner: çıpa araması atlandı: {e}")
+            if qi == 0 and not pool:
+                raise   # ilk arama bile yoksa (kota/ağ) net hata
+            log.info(f"topic_miner: '{q}' araması atlandı: {e}")
+            continue
+        for r in found:
+            if r["video_id"] not in seen_ids:
+                seen_ids.add(r["video_id"]); pool.append(r)
+    rows = []
+    for tier in _FILTER_TIERS:
+        rows = _apply_tier(pool, tier)
+        if rows:
+            break
+        log.info("topic_miner: filtre kademesi gevşetiliyor (0 outlier)")
     rows.sort(key=lambda r: r.get("ratio", 0), reverse=True)
     rows = rows[:count]
     if not rows:
@@ -236,7 +300,7 @@ def refresh_topic_bank(eng, channel_slug: str, niche_query: str, *,
                        language: str = "tr", claude_path: str = "claude",
                        model: str | None = None, run=subprocess.run,
                        api_keys: list | None = None, anchor: str = "",
-                       llm_call=None, http_get=None,
+                       llm_call=None, http_get=None, keywords=None,
                        backend: str = "auto") -> dict:
     """mine → mevcut bankaya fuzzy-dedup → insert. {"added": N, "skipped_dup": M}.
 
@@ -251,7 +315,8 @@ def refresh_topic_bank(eng, channel_slug: str, niche_query: str, *,
         try:
             mined = mine_topics_via_api(niche_query, api_keys=api_keys,
                                         language=language, anchor=anchor,
-                                        llm_call=llm_call, http_get=http_get)
+                                        llm_call=llm_call, http_get=http_get,
+                                        keywords=keywords)
             log.info(f"topic_miner: youtube_api backend → {len(mined)} konu")
         except Exception as e:
             if backend == "youtube_api":

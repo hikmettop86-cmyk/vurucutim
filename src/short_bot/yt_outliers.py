@@ -42,28 +42,48 @@ def resolve_youtube_api_keys(secrets: dict) -> list[str]:
     return out
 
 
+def _err_reason(resp) -> str:
+    try:
+        errs = ((resp.json() or {}).get("error") or {}).get("errors") or []
+        return str((errs[0] or {}).get("reason", "")) if errs else ""
+    except Exception:
+        return ""
+
+
 def _get_with_rotation(path: str, params: dict, api_keys: list[str], *,
-                       http_get, timeout: int = 20) -> dict:
-    """GET'i anahtar rotasyonuyla dener: 403 (kota) → sıradaki anahtar.
+                       http_get, timeout: int = 20, sleep=None) -> dict:
+    """GET'i anahtar rotasyonuyla dener: 403 kota → sıradaki anahtar; 403
+    GEÇİCİ (rate/diğer) → kısa bekleyip aynı anahtarla 1 kez daha.
 
     Başlangıç indeksi güne göre kayar (anahtarlar eşit aşınır). Tüm anahtarlar
-    403 verirse QuotaExhausted; başka HTTP hatası RuntimeError."""
+    kota-403 verirse QuotaExhausted; başka HTTP hatası RuntimeError."""
     if not api_keys:
         raise ValueError("YouTube API anahtarı yok (Ayarlar → YouTube Data API)")
+    if sleep is None:
+        import time
+        sleep = time.sleep
     start = date.today().toordinal() % len(api_keys)
     ordered = api_keys[start:] + api_keys[:start]
     last_status = None
     for key in ordered:
-        r = http_get(f"{_YT}/{path}", params={**params, "key": key},
-                     timeout=timeout)
-        if r.status_code == 200:
-            return r.json() or {}
-        last_status = r.status_code
-        if r.status_code == 403:
-            # kota/erişim — sıradaki anahtarı dene
-            log.info(f"yt_outliers: anahtar 403 (kota?) → sıradaki denenecek")
-            continue
-        raise RuntimeError(f"YouTube API hata (HTTP {r.status_code}, {path})")
+        for attempt in (1, 2):
+            r = http_get(f"{_YT}/{path}", params={**params, "key": key},
+                         timeout=timeout)
+            if r.status_code == 200:
+                return r.json() or {}
+            last_status = r.status_code
+            if r.status_code != 403:
+                raise RuntimeError(f"YouTube API hata (HTTP {r.status_code}, {path})")
+            reason = _err_reason(r)
+            if reason == "quotaExceeded":
+                log.info("yt_outliers: anahtar kotası dolu → sıradaki denenecek")
+                break   # bu anahtar bugünlük öldü → rotasyon
+            # rate-limit/geçici 403 → kısa bekleyip aynı anahtarla tekrar
+            if attempt == 1:
+                log.info(f"yt_outliers: geçici 403 ({reason or '?'}) → 2s bekle, tekrar")
+                sleep(2.0)
+            else:
+                log.info("yt_outliers: 403 sürüyor → sıradaki anahtar")
     if last_status == 403:
         raise QuotaExhausted(
             "Tüm YouTube API anahtarlarının günlük kotası dolu görünüyor — "
@@ -87,13 +107,19 @@ def search_outlier_shorts(query: str, *, api_keys: list[str],
     q = (query or "").strip()
     if not q:
         return []
-    # 1) Arama: izlenmeye göre sıralı havuz (büyük-kanal önyargısını oran filtresi düzeltir)
-    search = _get_with_rotation("search", {
-        "part": "snippet", "q": q, "type": "video", "videoDuration": "short",
-        "order": "viewCount", "maxResults": min(50, max(5, max_pool)),
-        "relevanceLanguage": language, "safeSearch": "none",
-    }, api_keys, http_get=http_get)
+    # 1) Arama: izlenmeye göre sıralı havuz (büyük-kanal önyargısını oran filtresi
+    # düzeltir). viewCount+short bazı sorgularda 0 döner → relevance'a düş.
+    base = {"part": "snippet", "q": q, "type": "video", "videoDuration": "short",
+            "maxResults": min(50, max(5, max_pool)),
+            "relevanceLanguage": language, "safeSearch": "none"}
+    search = _get_with_rotation("search", {**base, "order": "viewCount"},
+                                api_keys, http_get=http_get)
     items = search.get("items") or []
+    if not items:
+        log.info("yt_outliers: viewCount havuzu boş → relevance denemesi")
+        search = _get_with_rotation("search", {**base, "order": "relevance"},
+                                    api_keys, http_get=http_get)
+        items = search.get("items") or []
     vids, chans, meta = [], [], {}
     for it in items:
         vid = ((it.get("id") or {}).get("videoId") or "").strip()

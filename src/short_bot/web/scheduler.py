@@ -194,7 +194,8 @@ def init_scheduler(app):
                                              claude_path=claude_path,
                                              api_keys=api_keys,
                                              anchor=derive_footage_anchor(tmpl),
-                                             llm_call=llm_call)
+                                             llm_call=llm_call,
+                                             keywords=list(cfg.keywords or []))
                     _LOG.info(f"[topic-bank] haftalık {cfg.slug}: +{res['added']}")
                 except Exception as e:  # noqa: BLE001
                     _LOG.warning(f"[topic-bank] haftalık {cfg.slug}: {e}")
