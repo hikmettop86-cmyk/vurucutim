@@ -37,7 +37,10 @@ def test_settings_post_saves_pixabay_and_priority(tmp_path):
     assert data["footage"]["priority"] == ["pixabay", "pexels"]
 
 
-def test_settings_shows_storyblocks_status(tmp_path):
+def test_settings_shows_storyblocks_status(tmp_path, monkeypatch):
+    # Bağlantı durumunu deterministik sabitle (gerçek oturum dosyasına bağlı olmasın).
+    import short_bot.web.routes.settings as st
+    monkeypatch.setattr(st, "_storyblocks_connected", lambda: False)
     app, _ = _client(tmp_path)
     body = app.test_client().get("/settings").data.decode("utf-8")
     assert "Storyblocks" in body
@@ -62,3 +65,31 @@ def test_storyblocks_disconnect_deletes(tmp_path, monkeypatch):
     monkeypatch.setattr(st, "_delete_storyblocks_session", lambda path: deleted.append(path))
     r = app.test_client().post("/settings/storyblocks/disconnect")
     assert r.status_code in (200, 302) and len(deleted) == 1
+
+
+def test_settings_footage_canonical_order_with_real_values(tmp_path):
+    """Gerçek template value=source-adı gönderir; hepsi seçili → kanonik sıra."""
+    app, cfg = _client(tmp_path)
+    app.test_client().post("/settings", data={
+        "footage_src_storyblocks": "storyblocks",
+        "footage_src_pixabay": "pixabay",
+        "footage_src_pexels": "pexels",
+    })
+    data = yaml.safe_load((cfg / "settings.yaml").read_text(encoding="utf-8"))
+    assert data["footage"]["priority"] == ["storyblocks", "pixabay", "pexels"]
+
+
+def test_settings_footage_subset_and_order(tmp_path):
+    # sadece storyblocks + pexels (value=adı) → [storyblocks, pexels] kanonik
+    app, cfg = _client(tmp_path)
+    app.test_client().post("/settings", data={
+        "footage_src_storyblocks": "storyblocks", "footage_src_pexels": "pexels"})
+    data = yaml.safe_load((cfg / "settings.yaml").read_text(encoding="utf-8"))
+    assert data["footage"]["priority"] == ["storyblocks", "pexels"]
+
+
+def test_settings_footage_none_defaults_pexels(tmp_path):
+    app, cfg = _client(tmp_path)
+    app.test_client().post("/settings", data={})   # hiç footage kutusu işaretli değil
+    data = yaml.safe_load((cfg / "settings.yaml").read_text(encoding="utf-8"))
+    assert data["footage"]["priority"] == ["pexels"]

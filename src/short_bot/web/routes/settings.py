@@ -194,14 +194,12 @@ def save():
         trends_data["default_sources"] = src_list
     data["trends"] = trends_data
 
-    # Footage kaynak önceliği (aç/kapa + sıra)
-    order_raw = request.form.get("footage_order", "").strip()
-    enabled = {s for s in ("storyblocks", "pixabay", "pexels")
-               if request.form.get(f"footage_src_{s}") == "1"}
-    if order_raw:
-        ordered = [s for s in order_raw.split(",") if s.strip() in enabled]
-    else:
-        ordered = [s for s in ("storyblocks", "pixabay", "pexels") if s in enabled]
+    # Footage kaynak önceliği: seçili (checked) kaynaklar sabit kanonik sırada
+    # (storyblocks → pixabay → pexels). Checkbox VARLIĞINA bakılır (value ne olursa
+    # olsun) — böylece template value="pexels" ile de doğru çalışır. Hiçbiri seçili
+    # değilse [pexels] varsayılan.
+    _CANON = ("storyblocks", "pixabay", "pexels")
+    ordered = [s for s in _CANON if request.form.get(f"footage_src_{s}")]
     if not ordered:
         ordered = ["pexels"]
     fdata = data.get("footage", {}) or {}
