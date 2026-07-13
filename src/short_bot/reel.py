@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Callable
 
 from short_bot.audio_probe import probe_duration_s as _probe
-from short_bot.footage_matcher import FootageDeps, SubjectPos
+from short_bot.footage_matcher import FootageDeps, SubjectPos, download_banked
 from short_bot.footage_matcher import locate_subject as _locate
 from short_bot.footage_matcher import match_beat_clip as _match
 from short_bot.footage_sources import build_footage_sources
@@ -87,31 +87,28 @@ def _match_with_fallback(d, query, *, topic_q, api_key, cache_dir, verify,
     # Tarama bütçesi SEGMENT boyunca paylaşılır: tüm fallback aşamaları aynı
     # kovadan yer → tek segment onlarca Storyblocks indirmesiyle dakikalar yakamaz.
     b = budget if budget is not None else {"gate": 0, "dl": 0}
-    # 1) KATI kapı: sorgunun ana öznesi görünmeli.
+    # 1) KATI kapı: sorgunun ana öznesi görünmeli. Bu tarama sırasında, katı kapıdan
+    # geçemeyen ama BAĞLAMDA + NET olan adaylar ``bank``'a not edilir.
+    bank: list = []
     for q in stages:
         clip = d.match_beat_clip(q, api_key=api_key, cache_dir=cache_dir,
                                  verify=verify, vision_call=vision_call,
                                  deps=footage_deps, topic_pool=topic_pool,
                                  ffmpeg_path=ffmpeg_path, budget=b,
-                                 exclude=exclude, context=context, seen=seen)
+                                 exclude=exclude, context=context, seen=seen,
+                                 bank=bank)
         if clip is not None:
             return clip, True
-    # 2) GEVŞEK kapı: ana özne yok ama BAĞLAMA uyan destekleyici b-roll kabul.
-    # Önbellekteki adaylar yeniden yargılanmaz → bu geçiş neredeyse bedava.
-    # Bütçe TAZE: katı geçişte tükendiyse gevşek geçiş hiç aday göremezdi.
-    if verify and vision_call is not None:
-        for q in stages:
-            clip = d.match_beat_clip(q, api_key=api_key, cache_dir=cache_dir,
-                                     verify=True, vision_call=vision_call,
-                                     deps=footage_deps, topic_pool=topic_pool,
-                                     ffmpeg_path=ffmpeg_path,
-                                     budget={"gate": 0, "dl": 0},
-                                     exclude=exclude, context=context,
-                                     relaxed=True, seen=seen)
-            if clip is not None:
-                log.info(f"  footage: '{query[:30]}' katı kapıdan geçmedi → "
-                         f"BAĞLAMA UYAN b-roll kabul edildi")
-                return clip, True
+    # 2) BAĞLAM B-ROLL'Ü: ana özne yok ama konunun dünyasından, net bir klip.
+    # YENİDEN ARAMA YOK, YENİDEN VISION YOK — adaylar katı taramada zaten yargılandı.
+    # (Bunu ayrı bir ikinci tarama olarak kurmak canlı koşuda 121 vision çağrısına
+    # çıkıp üretimi dakikalarca uzatmıştı.)
+    if bank:
+        clip = download_banked(bank, cache_dir=cache_dir, exclude=exclude)
+        if clip is not None:
+            log.info(f"  footage: '{query[:30]}' katı kapıdan geçmedi → "
+                     f"BAĞLAMA UYAN b-roll kabul edildi ({len(bank)} aday notlanmıştı)")
+            return clip, True
     # 3) TEKRAR: bu videoda ZATEN kabul edilmiş (konuda) bir klibi yeniden kullan —
     # tekrar, alakasızdan iyidir.
     if reuse_clips:

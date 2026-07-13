@@ -17,21 +17,21 @@ log = logging.getLogger(__name__)
 MIN_CLIP_S = 2
 MAX_CHECK = 5   # her sorguda kaynak başına en fazla kaç aday çekilir
 
-# TARAMA BÜTÇESİ (segment başına) — kullanıcı isteği + gerçek 25dk yavaşlık:
-# gate her adayı reddedince tüm kaynaklar/yönelimler taranıp Storyblocks'tan
-# onlarca klip TARAYICIYLA indiriliyordu. Bütçe dolunca eşleştirme durur.
-# TARAMA BÜTÇESİ — vision DOĞRULUĞU maliyetten önemli (kullanıcı kararı).
-# Eski değerler (10/5/3) çok dardı: kondor koşusunda bütçe daha ilk sorguda dolup
-# YENİ adaylara hiç sıra gelmiyor, vision'sız çöpe düşülüyordu. Yargı önbelleği
-# (``seen``) aynı adayın iki kez yargılanmasını zaten engellediği için yüksek
-# tavan boşa çağrıya dönüşmez — sadece DAHA ÇOK FARKLI adaya bakılır.
-MAX_GATE_CHECKS = 30   # en fazla kaç aday vision kapısından geçirilir
+# TARAMA BÜTÇESİ — vision DOĞRULUĞU maliyetten önemli (kullanıcı kararı), ama her
+# vision çağrısı ~3sn. Eski değerler (10/5/3) çok dardı: bütçe ilk sorguda dolup
+# YENİ adaylara sıra gelmiyor, vision'sız çöpe düşülüyordu. 30'a çıkarmak ise
+# üretimi dakikalarca uzattı (bir koşuda 121 çağrı). 14 dengeyi tutuyor —
+# çünkü artık iki şey bütçeyi verimli kullanıyor:
+#   1. ``seen`` önbelleği: aynı aday iki kez yargılanmaz
+#   2. ``bank``: katı kapıdan geçemeyen ama BAĞLAMDA olan adaylar not edilir →
+#      yedek için İKİNCİ BİR TARAMA gerekmez (asıl yavaşlık oradan geliyordu)
+MAX_GATE_CHECKS = 14   # en fazla kaç aday vision kapısından geçirilir
 # MAX_DOWNLOADS, MAX_PER_SOURCE'tan BELİRGİN ŞEKİLDE BÜYÜK olmalı: thumbnail'ı
 # olmayan kaynak (Storyblocks) her adayı yargılamak için İNDİRMEK zorunda; tavan
 # dar olursa tek kaynak indirme bütçesini bitirip zincirdeki diğer kaynakları
 # aç bırakır ve klip hiç bulunamaz.
-MAX_DOWNLOADS = 20     # en fazla kaç klip indirilir
-MAX_PER_SOURCE = 8     # tek kaynaktan en fazla kaç aday denenir (tekel olmasın)
+MAX_DOWNLOADS = 16     # en fazla kaç klip indirilir
+MAX_PER_SOURCE = 6     # tek kaynaktan en fazla kaç aday denenir (tekel olmasın)
 
 
 class _FootageVerdict(BaseModel):
@@ -179,12 +179,12 @@ def describe_footage(image_url: str, *, vision_call=None) -> str:
 
 def verify_clip_frame_matches(clip_path, query: str, *, vision_call=None, pool=None,
                               ffmpeg_path: str = "ffmpeg", context: str = "",
-                              relaxed: bool = False, seen: dict | None = None) -> bool:
+                              seen: dict | None = None) -> bool:
     """Thumbnail'ı OLMAYAN kaynaklar (Storyblocks) için: indirilen klipten 9:16
     kare çıkar → vision yargısı ("bu kare '{query}' gösteriyor mu?").
 
-    Eşik ``verify_clip_matches`` ile aynı merdiven: ``relaxed`` bağlam-b-roll'ü de
-    kabul eder. ``seen`` klip yolu ile yargıyı önbelleğe alır.
+    KATI eşik (sorgunun ana öznesi görünmeli). ``seen`` klip yolu ile yargıyı
+    önbelleğe alır; çağıran bağlam-b-roll yedeğini oradan okur (bkz. match_beat_clip).
 
     ``pool`` yok sayılır (geriye-uyum imzası). vision yok / kare çıkmadı / vision
     hatası → True (fail-open; üretim ASLA gate yüzünden bloklanmaz)."""
@@ -192,7 +192,7 @@ def verify_clip_frame_matches(clip_path, query: str, *, vision_call=None, pool=N
         return True
 
     def _decide(v: "_FootageVerdict") -> bool:
-        return bool(v.clear) and bool(v.in_context if relaxed else v.matches)
+        return bool(v.clear) and bool(v.matches)
 
     key = str(clip_path)
     if seen is not None and key in seen:
@@ -210,11 +210,8 @@ def verify_clip_frame_matches(clip_path, query: str, *, vision_call=None, pool=N
         if seen is not None:
             seen[key] = v
         ok = _decide(v)
-        tag = ("ok" if ok else
-               "BULANIK/KARANLIK" if (v.matches or v.in_context) else "BAĞLAM DIŞI")
-        if ok and relaxed and not v.matches:
-            tag = "bağlam-broll"
-        log.info(f"  footage frame-gate [{tag}] q='{query}': '{(v.content or '')[:60]}'"
+        log.info(f"  footage frame-gate [{_tag(v, ok)}] q='{query}': "
+                 f"'{(v.content or '')[:60]}'"
                  + (f" ({v.reason[:40]})" if not ok and v.reason else ""))
         return ok
     except Exception as e:
@@ -225,9 +222,24 @@ def verify_clip_frame_matches(clip_path, query: str, *, vision_call=None, pool=N
             frame.unlink(missing_ok=True)
 
 
+def _tag(v: "_FootageVerdict", ok: bool) -> str:
+    """Kapı kararının okunur etiketi (teşhis logu).
+
+    Reddin GERÇEK nedenini söylemeli: "matches=false ama bağlamda ve net" bir klip
+    BULANIK değildir — gevşek geçişin kabul edeceği adaydır. Yanlış etiket, sorunu
+    teşhis ederken yanlış yere baktırır.
+    """
+    if ok:
+        return "ok"
+    if not v.clear:
+        return "BULANIK/KARANLIK"
+    if not v.in_context:
+        return "BAĞLAM DIŞI"
+    return "özne yok (bağlamda)"   # gevşek geçiş kabul edebilir
+
+
 def verify_clip_matches(image_url: str, query: str, *, vision_call=None, pool=None,
-                        context: str = "", relaxed: bool = False,
-                        seen: dict | None = None) -> bool:
+                        context: str = "", seen: dict | None = None) -> bool:
     """Thumbnail bu sorguyu KARŞILIYOR MU — vision'ın katı per-sorgu yargısı.
 
     Eski kelime-havuzu kapısı KALDIRILDI: soyut alanlarda (anchor='science history')
@@ -237,10 +249,11 @@ def verify_clip_matches(image_url: str, query: str, *, vision_call=None, pool=No
     tüm kaynaklar tarandı → 25dk üretim). Artık kararı vision veriyor: sorgunun
     ANA ÖZNESİ görünüyor mu.
 
-    ``relaxed=False`` → KATI eşik (sorgunun ana öznesi görünmeli).
-    ``relaxed=True``  → BAĞLAM eşiği (ana özne olmasa da videoya ait destekleyici
-    b-roll kabul). Katı kapı hiçbir şey geçirmediğinde bu merdivene inilir; aksi
-    hâlde vision'sız çöp alınıyordu (kondor videosuna dağda yürüyen turist).
+    KATI eşik: sorgunun ANA ÖZNESİ görünmeli VE görüntü net olmalı.
+
+    Kapıdan geçemeyen ama BAĞLAMDA + net olan adaylar çağıran tarafından ``seen``
+    önbelleğinden okunup yedeğe notlanır (bkz. ``match_beat_clip`` ``bank``) —
+    aksi hâlde vision'sız çöp alınıyordu (kondor videosuna dağda yürüyen turist).
 
     ``seen`` verilirse yargı image_url ile ÖNBELLEĞE alınır: aynı aday bir videoda
     İKİ KEZ vision'a sokulmaz. Bu israfı keser (doğruluğu değil) — gerçek koşuda
@@ -255,7 +268,7 @@ def verify_clip_matches(image_url: str, query: str, *, vision_call=None, pool=No
     def _decide(v: "_FootageVerdict") -> bool:
         # clear HER İKİ eşikte de şart: konuya uysa bile KARANLIK/BULANIK klip
         # retention öldürür (gerçek hata: 6sn ne olduğu anlaşılmayan siyah kütle).
-        return bool(v.clear) and bool(v.in_context if relaxed else v.matches)
+        return bool(v.clear) and bool(v.matches)
 
     if seen is not None and image_url in seen:
         return _decide(seen[image_url])
@@ -276,12 +289,8 @@ def verify_clip_matches(image_url: str, query: str, *, vision_call=None, pool=No
         if seen is not None:
             seen[image_url] = v
         ok = _decide(v)
-        tag = ("ok" if ok else
-               "BULANIK/KARANLIK" if (v.matches or v.in_context) else
-               "BAĞLAM DIŞI" if not v.in_context else "UYMUYOR")
-        if ok and relaxed and not v.matches:
-            tag = "bağlam-broll"
-        log.info(f"  footage gate [{tag}] q='{query}': '{(v.content or '')[:60]}'"
+        log.info(f"  footage gate [{_tag(v, ok)}] q='{query}': "
+                 f"'{(v.content or '')[:60]}'"
                  + (f" ({v.reason[:40]})" if not ok and v.reason else ""))
         return ok
     except Exception as e:
@@ -376,12 +385,39 @@ class FootageDeps:
     locate_subject: Callable = locate_subject
 
 
+def download_banked(bank: list, *, cache_dir: Path, exclude: set | None = None):
+    """Katı taramada KENARA NOTLANMIŞ (bağlamda + net) adaydan bir klip indir.
+
+    Bu adaylar zaten vision'dan geçti — yeniden arama ve yeniden yargı YOK.
+    Gevşek kapıyı ayrı bir ikinci TARAMA olarak kurmak canlı koşuda 121 vision
+    çağrısına çıkıp üretimi dakikalarca uzatmıştı; oysa in_context yargısı katı
+    taramada zaten alınmıştı.
+    """
+    for entry in bank:
+        kind = entry[0]
+        if kind == "clip":                     # thumbnail'sız kaynak: zaten indirildi
+            clip = entry[1]
+            if exclude and str(clip) in exclude:
+                continue
+            return clip
+        _k, source, cand = entry
+        try:
+            clip = source.download(cand, cache_dir)
+        except Exception as e:  # noqa: BLE001 — bir aday tüm yedeği düşürmesin
+            log.warning(f"banked indirme hatası: {e}")
+            continue
+        if clip is None or (exclude and str(clip) in exclude):
+            continue
+        return clip
+    return None
+
+
 def match_beat_clip(query: str, *, api_key: str = "", cache_dir: Path,
                     verify: bool = True, vision_call=None,
                     deps: FootageDeps | None = None, topic_pool=None,
                     ffmpeg_path: str = "ffmpeg", budget: dict | None = None,
                     exclude: set | None = None, context: str = "",
-                    relaxed: bool = False, seen: dict | None = None) -> Path | None:
+                    seen: dict | None = None, bank: list | None = None) -> Path | None:
     """Sorguya uyan tek klibi kaynak zincirinden indirip yolunu döndürür.
 
     Kaynakları ``deps.sources`` öncelik sırasında dener; her kaynak için
@@ -402,13 +438,32 @@ def match_beat_clip(query: str, *, api_key: str = "", cache_dir: Path,
     HİÇ çalışmıyordu; her segment aynı klibi yeniden buluyordu.)
 
     ``seen``: video-geneli vision yargı önbelleği (image_url → verdict). Aynı aday
-    iki kez yargılanmaz.  ``relaxed``: bkz. ``verify_clip_matches``.
+    iki kez yargılanmaz.
+
+    ``bank``: KATI kapıdan geçemeyen ama BAĞLAMDA + NET olan adaylar buraya notlanır
+    (yeniden aramaya gerek kalmadan yedek olarak kullanılır — bkz. ``download_banked``).
 
     ``api_key``/``topic_pool`` geriye-uyum için durur (topic_pool artık yok sayılır).
     """
     d = deps or FootageDeps()
     cache_dir = Path(cache_dir)
     b = budget if budget is not None else {"gate": 0, "dl": 0}
+
+    def _bank(entry) -> None:
+        """Yedeğe not et. TEKİL: aynı aday portrait+landscape aramalarında iki kez
+        döner; iki kez notlanırsa yedek havuzu sahte çeşitlilik gösterir."""
+        if bank is None:
+            return
+        key = str(entry[-1].url if entry[0] == "dl" else entry[1])
+        if any(str(e[-1].url if e[0] == "dl" else e[1]) == key for e in bank):
+            return
+        bank.append(entry)
+
+    def _in_context(key: str) -> bool:
+        """Yargı önbellekten: ana özne yok AMA konunun dünyasından ve net mi?"""
+        v = (seen or {}).get(key)
+        return bool(v is not None and getattr(v, "in_context", False)
+                    and getattr(v, "clear", False))
 
     def _budget_left() -> bool:
         return (b.get("gate", 0) < MAX_GATE_CHECKS
@@ -452,12 +507,15 @@ def match_beat_clip(query: str, *, api_key: str = "", cache_dir: Path,
                     try:
                         ok = d.verify_footage(thumb_url, query,
                                               vision_call=vision_call, pool=topic_pool,
-                                              context=context, relaxed=relaxed,
-                                              seen=seen)
+                                              context=context, seen=seen)
                     except Exception as e:
                         log.warning(f"footage vision doğrulama hatası: {e}")
                         ok = True   # doğrulama patlarsa arama sırasına güven
                     if not ok:
+                        # Katı kapıdan geçmedi ama BAĞLAMDA + NET ise yedeğe not et
+                        # (yeniden arama/yeniden yargı gerekmesin).
+                        if _in_context(thumb_url):
+                            _bank(("dl", source, c))
                         continue
                 b["dl"] = b.get("dl", 0) + 1
                 try:
@@ -480,12 +538,14 @@ def match_beat_clip(query: str, *, api_key: str = "", cache_dir: Path,
                     try:
                         ok2 = d.verify_clip_frame(clip, query, vision_call=vision_call,
                                                   pool=topic_pool, ffmpeg_path=ffmpeg_path,
-                                                  context=context, relaxed=relaxed,
-                                                  seen=seen)
+                                                  context=context, seen=seen)
                     except Exception as e:
                         log.warning(f"clip frame gate hatası: {e}")
                         ok2 = True
                     if not ok2:
+                        # Bağlamdaysa yedeğe not et (klip zaten indi, yeniden inmesin).
+                        if _in_context(str(clip)):
+                            _bank(("clip", clip))
                         # Klibi SİLME: Storyblocks/Pexels içerik-adresli cache'i
                         # beat'ler arası paylaşılır; silmek başka beat'in tuttuğu
                         # dosyanın referansını koparır (FileNotFoundError). Sadece atla.

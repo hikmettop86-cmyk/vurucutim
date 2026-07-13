@@ -324,10 +324,10 @@ def test_gate_rejects_out_of_context_clip_metaphor_trap(monkeypatch):
     from short_bot.footage_matcher import _FootageVerdict, _judge_prompt, \
         verify_clip_matches
 
-    # bağlam prompt'a giriyor mu
+    # bağlam prompt'a giriyor mu + metafor tuzağı örneği veriliyor mu
     p = _judge_prompt("invisible warrior", context="bakteriyofaj virüsü bakteri avlar")
     assert "VİDEONUN KONUSU" in p and "bakteriyofaj virüsü" in p
-    assert "BAĞLAM" in p
+    assert "in_context" in p and "ESKRİMCİ" in p
     # bağlam yoksa o blok hiç yok (geriye uyum)
     assert "VİDEONUN KONUSU" not in _judge_prompt("invisible warrior")
 
