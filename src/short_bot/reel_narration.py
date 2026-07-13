@@ -143,6 +143,17 @@ OUTPUT a JSON object:
   (bir koşuda videonun %27'siydi) ve ekranı 13 saniye STATİK bir metin bloğu kaplar —
   outro LOOP'U ÖLDÜRÜR: izleyici bittiğini görür ve başa dönmez.
   YORUM SORUSUNU BURAYA KOYMA — onun kendi alanı var ("comment").
+- "open_loop": YALNIZCA aşağıda bir SERİ yönergesi verildiyse doldur; yoksa boş bırak.
+  Tepe ödendikten SONRA açılan yeni, SPESİFİK soru/vaat.
+  BU ALAN BİR KONU BAŞLIĞIDIR, konuşulacak cümle DEĞİL. Bir sonraki bölümün ÜRETİM
+  KONUSU olarak aynen kullanılacak — o yüzden:
+    ✗ "Bunun bilimsel sırrını 2. bölümde açıklıyoruz."   ← bölüm numarası, meta dil
+    ✗ "Daha fazlası var."                                 ← içi boş
+    ✓ "Paslı benekli kedinin avlanma başarısının ardındaki refleks hızı"
+    ✓ "Fener balığının ışığını üreten simbiyotik bakteri"
+  Bölüm numarası, "sonraki bölümde", "anlatacağım" GİBİ İFADELER BU ALANA GİRMEZ —
+  onlar BEAT'İN METNİNE girer (aşağıdaki seri yönergesine bak). Bu alan yalnız
+  KONUNUN KENDİSİDİR: bir sonraki videonun neyi anlatacağı.
 - "comment": videonun İÇERİĞİNE bağlı, DÜŞÜK EFORLU yorum sorusu (en fazla 90
   karakter). Ayrı alan çünkü "close" ile birleşince hem sınırı aşıyor hem dev
   kapanış kartını şişiriyordu. Boş bırakılabilir.
@@ -207,6 +218,10 @@ def fit_word_budget(n: ReelNarration, *, lo_w: int, hi_w: int) -> ReelNarration:
 
     Kısaltma sırası: SONDAN başlayarak beat at — ama TEPE beat'i, hook'u ve close'u
     ASLA atma (tepe duygusal boşalma anı; hook en kritik saniye; close LOOP callback'i).
+
+    SERİDE TEPE-SONRASI BEAT DE DOKUNULMAZ: açık kapı cümlesi (bir sonraki bölümün
+    vaadi) tam orada konuşuluyor. Atılırsa abone çipi, izleyicinin HİÇ DUYMADIĞI bir
+    sözün üstüne ateşlenir ve takas çöker — yani serinin bütün mekanizması ölür.
     """
     if n.word_count() <= hi_w:
         return n
@@ -218,14 +233,17 @@ def fit_word_budget(n: ReelNarration, *, lo_w: int, hi_w: int) -> ReelNarration:
         return ReelNarration(hook=n.hook, beats=beats, close=n.close, mood=n.mood,
                              hook_visual=n.hook_visual, close_visual=n.close_visual,
                              cover_title=n.cover_title, comment=n.comment,
-                             peak_beat=peak)
+                             open_loop=n.open_loop, peak_beat=peak)
 
     beats = list(n.beats)
     peak = n.peak_beat
     cur = n
-    # SONDAN başlayarak beat at — TEPE'ye dokunma, MIN_BEATS'in altına inme.
+    # SONDAN başlayarak beat at — TEPE'ye (ve seride tepe-sonrasına) dokunma,
+    # MIN_BEATS'in altına inme.
     while cur.word_count() > hi_w and len(beats) > MIN_BEATS:
-        drop = next((i for i in range(len(beats) - 1, -1, -1) if i != peak), None)
+        korunan = {peak} | ({peak + 1} if n.open_loop else set())
+        drop = next((i for i in range(len(beats) - 1, -1, -1)
+                     if i not in korunan), None)
         if drop is None:
             break
         log.info(f"  senaryo bütçeyi aşıyor → beat atıldı: "
@@ -293,12 +311,52 @@ def write_reel_narration(topic: str, *, channel, claude_path: str = "claude",
     # yasak dediğimiz cümleleri yine kuruyor. Yakalayıp yeniden yazdırıyoruz —
     # LLM çağrısı ucuz, tekrar eden kalıp ise videoyu "otomasyon" diye ele veriyor.
     bad = find_overused(n.full_text())
-    if not bad:
+    if bad:
+        log.warning(f"  senaryo aşınmış kalıp kullandı ({', '.join(bad)}) → yeniden yazılıyor")
+        n = _budgeted(prompt + _phrase_feedback(bad))
+        still = find_overused(n.full_text())
+        if still:
+            log.warning(f"  kalıp ikinci denemede de geçti ({', '.join(still)}) → "
+                        f"mevcut metin kullanılıyor")
+
+    # AÇIK KAPI DENETİMİ (yalnız seride). Abone çipi tepeden ~1.3sn sonra ekrana
+    # geliyor; vaat o ana kadar SÖYLENMEMİŞSE istek, izleyicinin hiç duymadığı bir
+    # sözün üstüne düşer ve takas çöker. Prompt bunu istiyor — ama ölçüyoruz.
+    if series_directive:
+        n = _ensure_open_loop(n, prompt, claude_path=claude_path, model=model,
+                              backend=backend, api_key=api_key,
+                              budgeted=_budgeted)
+    return n
+
+
+def _open_loop_feedback(n: ReelNarration) -> str:
+    if not n.open_loop:
+        return ("\n\nHATA — AÇIK KAPI YOK: 'open_loop' alanını boş bıraktın. Seri "
+                "yönergesi verildi; bu bölüm kendi tepesini ödedikten sonra bir "
+                "sonraki bölüme SPESİFİK bir kapı AÇMALI. Abone isteği o vaadin "
+                "karşılığıdır; vaat yoksa istek de yok.\n")
+    return (f"\n\nHATA — VAAT SÖYLENMİYOR: 'open_loop' alanına şunu yazdın:\n"
+            f'  "{n.open_loop}"\n'
+            f"Ama bu vaat TEPEDEN SONRAKİ beat'lerin METNİNDE geçmiyor — yani "
+            f"izleyici onu HİÇ DUYMUYOR. Abone çipi tam o anda ekrana geliyor ve "
+            f"boşluğa düşüyor.\n"
+            f"Tepeden sonraki beat'in metnini, bu vaadi AÇIKÇA söyleyecek şekilde "
+            f"yeniden yaz (aynı sözcükleri kullan).\n")
+
+
+def _ensure_open_loop(n: ReelNarration, prompt: str, *, claude_path, model, backend,
+                      api_key, budgeted) -> ReelNarration:
+    """Açık kapı konuşulmuyorsa LLM'e NE YAPTIĞINI birebir gösterip yeniden yazdır."""
+    if n.open_loop and n.open_loop_spoken():
         return n
-    log.warning(f"  senaryo aşınmış kalıp kullandı ({', '.join(bad)}) → yeniden yazılıyor")
-    n2 = _budgeted(prompt + _phrase_feedback(bad))
-    still = find_overused(n2.full_text())
-    if still:
-        log.warning(f"  kalıp ikinci denemede de geçti ({', '.join(still)}) → "
-                    f"mevcut metin kullanılıyor")
-    return n2
+    neden = ("open_loop boş" if not n.open_loop
+             else f"vaat tepe-sonrası beat'te geçmiyor ('{n.open_loop[:50]}')")
+    log.warning(f"  seri: açık kapı denetimi başarısız ({neden}) → yeniden yazılıyor")
+    n2 = budgeted(prompt + _open_loop_feedback(n))
+    if n2.open_loop and n2.open_loop_spoken():
+        return n2
+    # İkinci deneme de tutmadı: video yine üretilir ama TAKAS ÇALIŞMAZ — bunu
+    # görünür kıl, sessizce geçiştirme (abone gelmiyorsa sebebi burada aranmalı).
+    log.warning("  seri: açık kapı İKİNCİ denemede de kurulamadı → bu bölümün abone "
+                "takası çalışmayacak (çip, söylenmemiş bir vaadin üstüne düşecek)")
+    return n2 if n2.open_loop else n

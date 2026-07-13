@@ -158,6 +158,8 @@ def assemble_reel(
     impact_volume: float = 0.40,
     sfx_at_cut: list | None = None,
     sfx_gains: list[float] | None = None,   # kesim başına seviye çarpanı (bkz. reel_interrupt)
+    sting: Path | None = None,        # açılış ses imzası (t=0, bkz. reel_identity)
+    sting_volume: float = 0.35,
     zoom: bool = True, clip_starts: list | None = None,
     hook_punch: bool = False,
     subject_xs: list | None = None,   # alt-kesim başına öznenin yatay konumu (0-1)
@@ -277,6 +279,15 @@ def assemble_reel(
                              f"volume={impact_volume:g}[impact]")
                 labels.append("[impact]")
                 idx += 1
+
+        # STING — kanalın AÇILIŞ SES İMZASI, t=0'da. Bir "ses logosu": izleyici onu
+        # bilinçli fark etmez ama üçüncü videoda TANIR, ve tanıdık şeye abone olunur.
+        # Faceless kanalda tanınmayı taşıyan kanallardan biri budur (bkz. reel_identity).
+        if sting is not None and Path(sting).exists():
+            cmd += ["-i", str(sting)]
+            parts.append(f"[{idx}:a]volume={sting_volume:g}[sting]")
+            labels.append("[sting]")
+            idx += 1
 
         if sfx_at_cut and cut_times:
             for k, ct in enumerate(cut_times):

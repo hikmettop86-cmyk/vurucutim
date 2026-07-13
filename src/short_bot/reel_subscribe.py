@@ -55,6 +55,7 @@ class SubscribeBits:
     series_directive: str
     comment_line: str
     cta_text: str
+    badge: str = ""          # feed kimliği rozeti ("BİLİNMEYEN TARİH #47")
 
 
 def _idx(seed: int, salt: str, n: int) -> int:
@@ -62,11 +63,33 @@ def _idx(seed: int, salt: str, n: int) -> int:
     return int(h, 16) % n
 
 
-def build_subscribe_bits(channel, seed: int) -> SubscribeBits:
+def build_subscribe_bits(channel, seed: int, episode=None) -> SubscribeBits:
+    """Abone mekanikleri. ``episode`` (EpisodePlan) verilirse SERİ modu devreye girer.
+
+    Seri modunda üç şey değişir:
+      • yönerge: LLM'e bölüm numarası + ödenecek söz + açılacak kapı bildirilir
+      • CTA: jenerik rotasyon yerine TAKAS ("#48 yarın — ABONE OL")
+      • rozet: kare sıfırda feed kimliği
+
+    Ayrıca YORUM SORUSU KAPATILIR. Çalışma belgesi (§3.1) "son 5 saniyede CTA
+    yığılması: üç istek = sıfır istek" diyor. Seride izleyiciden istediğimiz TEK şey
+    net: bir sonraki bölüm için abone olmak. Yorum sorusu onunla dikkat için yarışır
+    ve ikisi de kaybeder.
+    """
     reel = channel.reel
+    seri = episode is not None and getattr(episode, "enabled", True)
 
     series_directive = ""
-    if getattr(reel, "series_enabled", False):
+    badge = ""
+    if seri:
+        from short_bot.reel_series import episode_badge
+        from short_bot.reel_series import series_directive as _sd
+        title = (getattr(reel, "series_title", "") or "İlginç Bilgiler").strip()
+        series_directive = _sd(episode, title)
+        badge = episode_badge(title, episode.episode_no)
+    elif getattr(reel, "series_enabled", False):
+        # Seri açık ama bölüm planı gelmedi (eski çağıranlar / plan kurulamadı) →
+        # eski davranış: yalnız bir teaser yönergesi, numara ve takas yok.
         title = (getattr(reel, "series_title", "") or "İlginç Bilgiler").strip()
         series_directive = (
             f"Bu bir '{title}' serisinin bir bölümü. Kapanışı, izleyiciyi bir "
@@ -75,13 +98,19 @@ def build_subscribe_bits(channel, seed: int) -> SubscribeBits:
         )
 
     comment_line = ""
-    if getattr(reel, "comment_question", False):
+    if getattr(reel, "comment_question", False) and not seri:
         comment_line = COMMENT_STYLES[_idx(seed, "comment", len(COMMENT_STYLES))]
 
     cta_text = ""
     if getattr(reel, "cta_enabled", False):
         custom = (getattr(reel, "cta_text_custom", "") or "").strip()
-        cta_text = custom or CTA_TEXTS[_idx(seed, "cta", len(CTA_TEXTS))]
+        if seri and not custom:
+            # TAKAS: numarası olan istek somut bir şey vaat eder ve ne zaman
+            # geleceğini söyler. "Daha fazlası için abone ol" beyaz gürültüdür.
+            from short_bot.reel_series import trade_cta
+            cta_text = trade_cta(episode.next_no)
+        else:
+            cta_text = custom or CTA_TEXTS[_idx(seed, "cta", len(CTA_TEXTS))]
         if len(cta_text) > CTA_MAX_CHARS:
             # Kesilmiş çip ("...ABONE O") her şeyden kötü — kırp ve uyar.
             log.warning(f"  abone çipi çok uzun ({len(cta_text)} > {CTA_MAX_CHARS} "
@@ -89,4 +118,4 @@ def build_subscribe_bits(channel, seed: int) -> SubscribeBits:
             cta_text = cta_text[:CTA_MAX_CHARS].rstrip()
 
     return SubscribeBits(series_directive=series_directive,
-                         comment_line=comment_line, cta_text=cta_text)
+                         comment_line=comment_line, cta_text=cta_text, badge=badge)

@@ -227,6 +227,8 @@ def produce_reel_video(
     vision_call=None, seed: int = 0, deps: ReelDeps | None = None,
     cancel_check=None,   # panelden iptal edildiyse faz sınırında dur
     hook_patterns=None, assets_root: Path | None = None,
+    episode=None,        # EpisodePlan — seri/cliffhanger mimarisi (bkz. reel_series)
+    on_narration=None,   # callback(narration): açık kapıyı çağırana bildir (ark zinciri)
 ) -> Path:
     reel = getattr(channel, "reel", None)
     if reel is None or not reel.enabled:
@@ -242,9 +244,23 @@ def produce_reel_video(
     from short_bot.reel_variation import build_variation_profile
     profile = build_variation_profile(channel, seed)
 
-    # Abone bitleri (deterministik: aynı seed → aynı seri/yorum/cta).
+    # FEED KİMLİĞİ KİLİDİ: aksan rengi ve yerleşim per-video DÖNMESİN. Varyasyon
+    # motoru bunları döndürüyordu (otomasyon parmak izini kırmak için) ama aynı
+    # hamle TANINMAYI da siliyordu: yüzü olmayan bir kanalın kimliği FONT, RENK ve
+    # YERLEŞİMDİR. Çeşitlilik ölmüyor — izleyicinin tanımak için kullanmadığı
+    # alanlara (efekt/SFX/marker/müzik/tempo) taşınıyor.
+    from short_bot.reel_identity import lock_profile
+    if getattr(reel, "identity_lock", True):
+        profile = lock_profile(profile, channel)
+
+    # Abone bitleri. ``episode`` verilirse SERİ modu: bölüm numarası, ödenecek söz,
+    # açılacak kapı ve TAKAS CTA'sı (bkz. reel_series).
     from short_bot.reel_subscribe import build_subscribe_bits
-    bits = build_subscribe_bits(channel, seed)
+    bits = build_subscribe_bits(channel, seed, episode=episode)
+    if episode is not None:
+        log.info(f"  reel: BÖLÜM #{episode.episode_no} (ark {episode.arc_pos})"
+                 + (f" — önceki sözü ödüyor: '{episode.continue_from[:60]}'"
+                    if episode.continue_from else " — yeni ark"))
 
     # Faz zamanlayıcı: hangi aşama ne kadar sürdü (üretim yavaşlığı teşhisi).
     import time as _time
@@ -300,6 +316,20 @@ def produce_reel_video(
     else:
         log.warning("  reel: manşet YOK → küçük resimde hook CÜMLESİ görünecek "
                     "(feed boyutunda okunmaz)")
+    # AÇIK KAPI çağırana BURADA bildirilir — montaj başarısız olsa bile bir sonraki
+    # bölümün konu tohumu kaybolmasın diye değil; tam tersine, çağıran onu ancak
+    # üretim BAŞARILI olunca kaydeder (bkz. pipeline). Burada yalnız taşıyoruz.
+    if episode is not None:
+        if narration.open_loop:
+            log.info(f"  reel: açık kapı → #{episode.next_no}: "
+                     f"'{narration.open_loop}'"
+                     + ("" if narration.open_loop_spoken()
+                        else "  ⚠ VAAT KONUŞULMUYOR (abone takası çalışmayacak)"))
+        else:
+            log.warning("  reel: açık kapı KURULAMADI → bu bölüm seriyi ilerletmiyor, "
+                        "abone isteği takas değil rica olarak düşecek")
+        if on_narration is not None:
+            on_narration(narration)
     _phase("senaryo(LLM)")
 
     # 2b) AI KURGUCU: anlatımı okuyup kurgu kararlarını verir (tempo, kesme efekti,
@@ -671,6 +701,8 @@ def produce_reel_video(
         arrow_frequency=reel.arrow_frequency if reel.arrows_enabled else "off",
         cut_effect=profile.cut_effect, handle=channel.handle,
         cta_text=bits.cta_text,
+        badge=bits.badge,
+        lang=channel.language,
         font=reel.font,
         markers=markers,
         numbers=numbers,
@@ -755,6 +787,15 @@ def produce_reel_video(
 
     # Görüntü punch'ı kesinti anlarında DA ateşlenir — dördüncü kanal. Ses vuruşuyla
     # aynı karede olduğu için izleyici ikisini tek bir "olay" olarak algılar.
+    # AÇILIŞ SES İMZASI: kanala göre BİR KEZ seçilir, her bölümde aynı çalar. Seed'e
+    # göre seçilseydi her videoda farklı olurdu — yani imza olmazdı.
+    sting = None
+    if getattr(reel, "sting_enabled", True):
+        from short_bot.reel_identity import pick_sting
+        sting = pick_sting(assets_root / "sting", channel.slug)
+        if sting:
+            log.info(f"  reel: açılış imzası → {sting.name}")
+
     punches = punch_times(numbers, peak_end_s, extra=interrupts)
     if punches:
         log.info(f"  reel: vurgu punch-in @ "
@@ -770,6 +811,7 @@ def produce_reel_video(
         riser=riser, impact=impact, reveal_s=peak_end_s,
         sfx_at_cut=sfx_at_cut,
         sfx_gains=cut_gains,
+        sting=sting, sting_volume=getattr(reel, "sting_volume", 0.35),
         # VURGU PUNCH-IN: sayı söylenirken ve TEPE anında görüntü bir tık yaklaşır.
         # Kesme efektleri ritmi zamanlayıcıyla veriyordu; bu, ritmi İÇERİĞE bağlayan
         # tek hamle — insan kurgucunun yaptığı, otomasyonun yapmadığı şey.

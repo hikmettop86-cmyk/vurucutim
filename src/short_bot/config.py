@@ -177,6 +177,18 @@ class ReelConfig(BaseModel):
     cta_enabled: bool = True
     comment_question: bool = True
     cta_text_custom: str = ""
+    # SERİ / CLIFFHANGER MİMARİSİ (bkz. reel_series). Bölüm numarası + açık kapı +
+    # takas CTA. Ark bu kadar bölümden sonra kesilir ve konu bankasından taze konu
+    # gelir — zincir uzadıkça konu kanalın nişinden sürüklenir (sapma birikimli).
+    series_arc_length: int = 3
+    # FEED KİMLİĞİ KİLİDİ (bkz. reel_identity). Aksan rengi ve yerleşim per-video
+    # DÖNMEZ; kanalın sabit değerine oturur. Kesme efekti/SFX/marker/müzik dönmeye
+    # devam eder — izleyici kanalı onlardan tanımaz, FONT ve RENKTEN tanır.
+    identity_lock: bool = True
+    # Açılış ses imzası (assets/sting/*.mp3). Kanala göre BİR KEZ seçilir, her
+    # bölümde aynı çalar — imza ancak tekrarlanınca imza olur.
+    sting_enabled: bool = True
+    sting_volume: float = 0.35
 
     @field_validator("target_duration_s", mode="before")
     @classmethod
@@ -514,6 +526,9 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
             "transition_vary": cfg.reel.transition_vary,
             "series_enabled": cfg.reel.series_enabled,
             "series_title": cfg.reel.series_title,
+            "series_arc_length": cfg.reel.series_arc_length,
+            "identity_lock": cfg.reel.identity_lock,
+            "sting_enabled": cfg.reel.sting_enabled,
             "cta_enabled": cfg.reel.cta_enabled,
             "comment_question": cfg.reel.comment_question,
             "cta_text_custom": cfg.reel.cta_text_custom,

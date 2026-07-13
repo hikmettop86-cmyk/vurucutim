@@ -1217,6 +1217,33 @@ def _run_generator(*, channel, run_id, log, eng, settings,
     else:
         gen_model = gen_call.model
 
+    # SERİ / ARK PLANI (bkz. reel_series). Konu planlaması burada video düzeyinden
+    # ARK düzeyine çıkıyor: önceki bölüm bir kapı açtıysa (open_loop), O KAPI bu
+    # bölümün konusudur. Kullanıcı elle konu seçtiyse (forced_topic) zincir ezilir —
+    # kullanıcı sözü son sözdür.
+    episode = None
+    reel_cfg = getattr(channel, "reel", None)
+    if reel_cfg is not None and reel_cfg.enabled and reel_cfg.series_enabled:
+        from short_bot.db import last_episode
+        from short_bot.reel_series import clean_open_loop, plan_episode
+        try:
+            episode = plan_episode(last_episode(eng, channel.slug),
+                                   arc_max=reel_cfg.series_arc_length)
+            if episode.continue_from and not forced_topic:
+                # META DİLİ AYIKLA. LLM kapıya "…2. bölümde açıklıyoruz" gibi bir kuyruk
+                # ekliyor (ölçüldü, ilk gerçek koşuda tam olarak bunu yaptı). O metin
+                # burada ÜRETİM KONUSU oluyor — içinde bölüm numarası geçen bir konu
+                # tohumu senaryo yazıcısını yanıltır. Kayıtta HAM hâli duruyor (teşhis).
+                forced_topic = clean_open_loop(episode.continue_from)
+                log.info(f"  seri: ark sürüyor → konu ÖNCEKİ BÖLÜMÜN KAPISINDAN "
+                         f"geliyor: {forced_topic[:80]!r}")
+            elif episode.continue_from:
+                log.info("  seri: kullanıcı konu seçti → ark zinciri bu bölümde "
+                         "ezildi (sözü ödeme yönergesi yine de veriliyor)")
+        except Exception as e:   # seri KOZMETİK değil ama üretimi düşürmemeli
+            log.warning(f"  seri: bölüm planlanamadı ({e}) → serisiz üretim")
+            episode = None
+
     if forced_topic:
         log.info(f"  konu KULLANICI tarafından seçildi: {forced_topic[:80]!r}")
 
@@ -1309,6 +1336,11 @@ def _run_generator(*, channel, run_id, log, eng, settings,
             hook_pats = bank_hook_patterns(eng, channel.slug, limit=5)
         except Exception:
             pass
+        # Açık kapıyı senaryo yazılır yazılmaz yakala; ama DB'ye ancak üretim
+        # BAŞARILI olunca yaz. Yarım kalan bir üretim bölüm numarasını tüketirse
+        # feed'de #47'den #49'a atlarız — seri sayacının delik olması, serinin
+        # gerçekliğine dair tek somut kanıtı çürütür.
+        acik_kapi: dict = {}
         with tempfile.TemporaryDirectory() as reel_tmp:
             t0 = time.perf_counter()
             _reel_produce_or_none(
@@ -1319,6 +1351,8 @@ def _run_generator(*, channel, run_id, log, eng, settings,
                 vision_call=reel_call, seed=generated_id,
                 hook_patterns=hook_pats,
                 cancel_check=lambda: is_run_cancelled(eng, run_id),
+                episode=episode,
+                on_narration=lambda n: acik_kapi.update(open_loop=n.open_loop),
             )
             render_ms = int((time.perf_counter() - t0) * 1000)
         log.info(f"  → {reel_out.name} ({render_ms}ms)")
@@ -1329,6 +1363,18 @@ def _run_generator(*, channel, run_id, log, eng, settings,
             script_json=chosen_result.script.model_dump_json(), render_ms=render_ms,
         )
         update_generated_short_id(eng, generated_id, short_id)
+        if episode is not None:
+            try:
+                from short_bot.db import record_episode
+                record_episode(
+                    eng, channel.slug, episode_no=episode.episode_no,
+                    arc_pos=episode.arc_pos, topic=chosen_result.text,
+                    open_loop=acik_kapi.get("open_loop", ""), short_id=short_id)
+                log.info(f"  seri: bölüm #{episode.episode_no} kaydedildi"
+                         + (" (kapı açık → sonraki bölümün konusu hazır)"
+                            if acik_kapi.get("open_loop") else " (kapı yok → ark biter)"))
+            except Exception as e:
+                log.warning(f"  seri: bölüm kaydedilemedi ({e}) → zincir kopabilir")
         finish_run(eng, run_id, status="success", short_id=short_id, error=None)
         yt_creds_root = (Path(eng.url.database).parent / "youtube_credentials").resolve() \
             if eng.url.database else Path("data/youtube_credentials").resolve()
@@ -1599,6 +1645,7 @@ def _reel_produce_or_none(
     *, channel, topic, out_path, settings, secrets, music_root, templates_dir,
     cache_dir, work_dir, log, llm_call, vision_call, seed: int = 0,
     hook_patterns=None, cancel_check=None,
+    episode=None, on_narration=None,
 ) -> "Path | None":
     """Kanal reel ise reel videoyu üretip out_path döndürür; değilse None."""
     reel = getattr(channel, "reel", None)
@@ -1634,6 +1681,7 @@ def _reel_produce_or_none(
         # SFX + AI-kurgucu kütüphanesinin kökü: music_root'un üst klasörü
         # (music_root paketlenmiş uygulamada taşınır; assets/ ona bitişiktir).
         assets_root=Path(music_root).parent,
+        episode=episode, on_narration=on_narration,
     )
 
 

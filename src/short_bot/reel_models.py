@@ -13,6 +13,15 @@ from short_bot.caption_align import align_to_asr
 from short_bot.text_normalize import strip_non_turkish_diacritics
 
 
+def _content_words(s: str) -> set[str]:
+    """Anlam taşıyan sözcükler (ek/edat gürültüsü elenir).
+
+    İki denetim de buna dayanır: close_echoes_hook (loop) ve open_loop_spoken (takas).
+    """
+    import re
+    return {w for w in re.findall(r"\w+", (s or "").lower()) if len(w) >= 4}
+
+
 class ReelBeat(BaseModel):
     text: str = Field(min_length=8, max_length=300)
     visual_query: str = Field(min_length=2, max_length=120)
@@ -49,6 +58,11 @@ COMMENT_MAX_CHARS = 90
 COVER_TITLE_MAX_CHARS = 40
 COVER_TITLE_MAX_WORDS = 6
 
+# AÇIK KAPI: tek cümlelik, SPESİFİK bir vaat. Bir sonraki bölümün konu tohumu olacağı
+# için "daha fazlası var" gibi içi boş bir cümle işe yaramaz — tohum olacak kadar
+# somut olmalı. Uzun olması da gerekmiyor: tek nefeste söylenen bir söz.
+OPEN_LOOP_MAX_CHARS = 140
+
 
 class ReelNarration(BaseModel):
     hook: str = Field(min_length=5, max_length=140)
@@ -66,6 +80,11 @@ class ReelNarration(BaseModel):
     close_visual: str = Field(default="", max_length=120)
     # Kare-sıfır manşeti (3-6 kelime). Konuşulmaz, yalnız ekranda durur.
     cover_title: str = Field(default="", max_length=COVER_TITLE_MAX_CHARS)
+    # AÇIK KAPI: bu bölümün tepesi ödendikten SONRA açılan yeni, spesifik soru.
+    # Bir sonraki bölümün KONU TOHUMUDUR (bkz. reel_series) — abone isteğini bir
+    # ricadan TAKASA çeviren şey budur. Cümlenin kendisi tepe-sonrası beat'in
+    # METNİNE dokunur (orada konuşulur); bu alan onun YAPISAL kaydıdır.
+    open_loop: str = Field(default="", max_length=OPEN_LOOP_MAX_CHARS)
     # TEPE: videonun EN BÜYÜK reveal'inin hangi beat olduğu. Beğeni tetiği ve abone
     # isteği buna göre yerleşir — ikisi de tepeden SONRA gelmeli. Beğeni bir karar
     # değil DUYGUSAL BOŞALMADIR; boşalacak bir tepe yoksa beğeni de gelmez.
@@ -126,9 +145,38 @@ class ReelNarration(BaseModel):
             object.__setattr__(self, "peak_beat", p)
         return self
 
+    @field_validator("open_loop", mode="before")
+    @classmethod
+    def _trim_open_loop(cls, v):
+        if isinstance(v, str):
+            v = strip_non_turkish_diacritics(v).strip()
+            return v[:OPEN_LOOP_MAX_CHARS].rstrip()
+        return v
+
     def peak_segment(self) -> int:
         """Tepenin SEGMENT indeksi (hook segment 0 olduğu için +1)."""
         return self.peak_beat + 1
+
+    def open_loop_spoken(self) -> bool:
+        """Açık kapı, TEPEDEN SONRAKİ beat'lerde GERÇEKTEN konuşuluyor mu?
+
+        Abone çipi tepeden ~1.3sn sonra ekrana geliyor. Vaat o ana kadar SÖYLENMEMİŞSE
+        istek boşa düşer: izleyici neyin karşılığında abone olacağını bilmez ve çip
+        "daha fazlası için abone ol" beyaz gürültüsüne dönüşür.
+
+        Prompt bunu istiyor ama LLM'e güvenmiyoruz — ölçüyoruz (bkz. close_echoes_hook:
+        aynı gerekçe, aynı desen).
+        """
+        if not self.open_loop:
+            return False
+        vaat = _content_words(self.open_loop)
+        if not vaat:
+            return False
+        sonrasi = " ".join(b.text for b in self.beats[self.peak_beat + 1:])
+        ortak = vaat & _content_words(sonrasi)
+        # Tek ortak kelime tesadüf olabilir ("bir", "şey" zaten elenmiş durumda);
+        # ikisi, vaadin gerçekten dokunduğuna işaret eder.
+        return len(ortak) >= 2
 
     def close_echoes_hook(self) -> bool:
         """LOOP kontrolü: kapanış hook'un sözcüklerini geri çağırıyor mu?
@@ -136,11 +184,6 @@ class ReelNarration(BaseModel):
         Kapanış hook'la hiç ortak İÇERİK sözcüğü paylaşmıyorsa video 'biter' ve
         izleyici döngüye girmez — oysa her tekrar oynatma ayrı bir izlenme sayılır.
         """
-        def _content_words(s: str) -> set[str]:
-            import re
-            words = re.findall(r"\w+", s.lower())
-            return {w for w in words if len(w) >= 4}   # ek/edat gürültüsünü at
-
         hook_w = _content_words(self.hook)
         return bool(hook_w and (hook_w & _content_words(self.close)))
 

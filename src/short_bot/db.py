@@ -178,6 +178,23 @@ topic_bank = Table(
 )
 
 
+# SERİ BÖLÜMLERİ (bkz. reel_series). Konu planlamasını video düzeyinden ARK düzeyine
+# çıkaran kayıt: her bölüm bir KAPI açar (open_loop) ve o kapı, BİR SONRAKİ bölümün
+# konu tohumu olur. Bu tablo olmadan zincir kurulamaz — bölüm numarası da, ödenecek
+# söz de kalıcı olmalı (üretim süreçleri arasında yaşamalı).
+series_episodes = Table(
+    "series_episodes", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("channel", String, nullable=False, index=True),
+    Column("episode_no", Integer, nullable=False),   # kanal ömrü boyunca artan
+    Column("arc_pos", Integer, default=1, nullable=False),   # arkın kaçıncı bölümü
+    Column("topic", Text, default="", nullable=False),
+    Column("open_loop", Text, default="", nullable=False),   # sonrakine bırakılan söz
+    Column("short_id", Integer, ForeignKey("shorts.id")),
+    Column("created_at", DateTime, default=_utcnow, nullable=False),
+)
+
+
 feeds = Table(
     "feeds", metadata,
     Column("id", Integer, primary_key=True, autoincrement=True),
@@ -892,6 +909,44 @@ def reject_bank_topic(eng: Engine, topic_id: int) -> None:
     with eng.begin() as conn:
         conn.execute(topic_bank.update().where(topic_bank.c.id == int(topic_id))
                      .values(status="rejected"))
+
+
+def last_episode(eng: Engine, channel: str) -> dict | None:
+    """Kanalın EN SON bölümü (ark zincirini kuran kayıt) ya da None.
+
+    Sıralama episode_no'ya göre — created_at'e DEĞİL: iki üretim aynı saniyede
+    biterse (paralel koşu) created_at eşitlenip zincir yanlış halkadan devam edebilir.
+    """
+    with eng.connect() as conn:
+        row = conn.execute(
+            select(series_episodes).where(series_episodes.c.channel == channel)
+            .order_by(series_episodes.c.episode_no.desc()).limit(1)).first()
+    if row is None:
+        return None
+    return {"episode_no": row.episode_no, "arc_pos": row.arc_pos,
+            "topic": row.topic, "open_loop": row.open_loop,
+            "short_id": row.short_id}
+
+
+def record_episode(eng: Engine, channel: str, *, episode_no: int, arc_pos: int,
+                   topic: str, open_loop: str, short_id: int | None = None) -> None:
+    """Üretilen bölümü kaydet. ``open_loop`` bir sonraki bölümün KONU TOHUMUDUR."""
+    with eng.begin() as conn:
+        conn.execute(series_episodes.insert().values(
+            channel=channel, episode_no=int(episode_no), arc_pos=int(arc_pos),
+            topic=str(topic or "")[:500], open_loop=str(open_loop or "")[:500],
+            short_id=short_id))
+
+
+def episode_history(eng: Engine, channel: str, limit: int = 20) -> list[dict]:
+    """Panel için: son bölümler, en yeni önce."""
+    with eng.connect() as conn:
+        rows = conn.execute(
+            select(series_episodes).where(series_episodes.c.channel == channel)
+            .order_by(series_episodes.c.episode_no.desc()).limit(limit)).all()
+    return [{"episode_no": r.episode_no, "arc_pos": r.arc_pos, "topic": r.topic,
+             "open_loop": r.open_loop, "short_id": r.short_id,
+             "created_at": r.created_at} for r in rows]
 
 
 def bank_last_refresh(eng: Engine, channel: str):

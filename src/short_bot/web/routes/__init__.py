@@ -13,7 +13,7 @@ def register_blueprints(app: Flask) -> None:
         channel_new, channel_edit, preview, logs, settings,
         generator_test, system, youtube, youtube_stats, youtube_overview,
         activity, community, feeds, reel_new, reel_edit,
-        topic_bank,
+        topic_bank, series,
     )
     app.register_blueprint(dashboard.bp)
     app.register_blueprint(shorts.bp)
@@ -33,4 +33,5 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(youtube_overview.bp)
     app.register_blueprint(activity.bp)
     app.register_blueprint(topic_bank.bp)
+    app.register_blueprint(series.bp)
     app.register_blueprint(community.bp)

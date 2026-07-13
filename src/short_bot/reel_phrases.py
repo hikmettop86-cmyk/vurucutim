@@ -45,12 +45,28 @@ OVERUSED = (
     "bir de bunu duymadın",
     "bir de şunu duyun",
     "peki tüm bu",
-    "bunu biliyor muydunuz",
-    "bunu biliyor muydun",
-    "merhaba arkadaşlar",
-    "bugün sizlere",
-    "hazır mısın",
     "inanılmaz ama gerçek",
+)
+
+# KALIP denetimi — DİZGE denetimi yetmiyor.
+#
+# GERÇEK KAÇAK (bölüm #2): yasak listesinde "bunu biliyor muydunuz" vardı, LLM
+# "...sahip olduğunu biliyor muydunuz?" yazdı ve DENETİMDEN GEÇTİ. Yasak olan şey
+# bir dizge değil, bir KALIP: cevaplanabilir bir evet/hayır sorusu hook DEĞİLDİR —
+# izleyici onu 200 milisaniyede içinden cevaplar, gerilim çöker, kaydırır.
+#
+# (etiket, örüntü) — etiket LLM'e geri bildirimde gösterilir, örüntü metinde aranır.
+OVERUSED_PATTERNS = (
+    ("… biliyor muydunuz? (cevaplanabilir evet/hayır sorusu — hook değil)",
+     r"\bbiliyor mu(ydunuz|ydun|sun|sunuz)\b"),
+    ("… duymuş muydunuz? (aynı kalıp)",
+     r"\bduymu[sş] mu(ydunuz|ydun)\b"),
+    ("Merhaba arkadaşlar / dostlar (kanal açılışı — ilk saniyeyi harcar)",
+     r"\bmerhaba\s+(arkada[sş]lar|dostlar|herkese)\b"),
+    ("Bugün sizlere … anlatacağım (vaat değil, gündem duyurusu)",
+     r"\bbug[uü]n\s+siz(lere|e)\b"),
+    ("Hazır mısınız? (içi boş kalıp)",
+     r"\bhaz[ıi]r m[ıi](s[ıi]n|s[ıi]n[ıi]z)\b"),
 )
 
 
@@ -76,6 +92,14 @@ def pick_styles(seed: int, n: int = 4) -> list[str]:
 
 
 def find_overused(text: str) -> list[str]:
-    """Metindeki aşınmış kalıplar (normalize edilmiş eşleşme)."""
+    """Metindeki aşınmış kalıplar: hem BİREBİR ifadeler hem ÖRÜNTÜLER.
+
+    Örüntü katmanı şart: dizge denetimi "bunu biliyor muydunuz"u yakalıyor ama
+    "...sahip olduğunu biliyor muydunuz?"u KAÇIRIYOR (gerçek kaçak, bölüm #2) —
+    oysa yasak olan şey dizge değil, kalıbın kendisi.
+    """
     t = _norm(text)
-    return [p for p in OVERUSED if _norm(p) in t]
+    bulunan = [p for p in OVERUSED if _norm(p) in t]
+    bulunan += [etiket for etiket, oru in OVERUSED_PATTERNS
+                if re.search(oru, t, re.IGNORECASE)]
+    return bulunan

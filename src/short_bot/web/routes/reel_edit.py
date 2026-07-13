@@ -121,6 +121,10 @@ def save_reel(slug):
             transition_vary=request.form.get("reel_transition_vary") == "on",
             series_enabled=request.form.get("reel_series_enabled") == "on",
             series_title=request.form.get("reel_series_title", old.series_title if old else ""),
+            series_arc_length=_form_int("reel_series_arc_length",
+                                        old.series_arc_length if old else 3),
+            identity_lock=request.form.get("reel_identity_lock") == "on",
+            sting_enabled=request.form.get("reel_sting_enabled") == "on",
             cta_enabled=request.form.get("reel_cta_enabled") == "on",
             cta_text_custom=request.form.get("reel_cta_text_custom", old.cta_text_custom if old else ""),
             comment_question=request.form.get("reel_comment_question") == "on",
@@ -131,6 +135,11 @@ def save_reel(slug):
             music_duck=request.form.get("reel_music_duck") == "on",
             subject_framing=request.form.get("reel_subject_framing") == "on",
             color_grade=request.form.get("reel_color_grade") == "on",
+            # Faz 2 kurgu katmanı. FORMDA OLMAYAN ALAN pydantic VARSAYILANINA döner —
+            # yani kaydet'e basmak bunları sessizce sıfırlardı. Onay kutusu olarak
+            # forma bağlıyoruz ki kullanıcı ayarı kaydetmekle ayarı KAYBETMESİN.
+            tempo_zones=request.form.get("reel_tempo_zones") == "on",
+            interrupts=request.form.get("reel_interrupts") == "on",
         )
     except Exception as e:  # pydantic ValidationError vb.
         flash(f"Reel ayarları geçersiz: {e}", "error")

@@ -1,0 +1,137 @@
+{% extends "base.html.j2" %}
+{% block title %}Seri — {{ channel.name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto p-6">
+
+  <div class="flex items-start justify-between gap-4 mb-6">
+    <div>
+      <h1 class="text-2xl font-bold text-claude-text">Seri</h1>
+      <p class="text-sm text-claude-muted mt-1">
+        {{ channel.name }}
+        {% if series_title %}· <span class="text-claude-text font-medium">{{ series_title }}</span>{% endif %}
+        · {{ episodes|length }} bölüm üretildi
+      </p>
+    </div>
+    <a href="/channels/{{ slug }}/edit-reel"
+       class="flex-shrink-0 px-4 py-2 rounded-lg bg-white border border-claude-border
+              text-sm font-semibold text-claude-text hover:bg-claude-surface">Ayarlar</a>
+  </div>
+
+  {% with messages = get_flashed_messages() %}
+    {% for m in messages %}
+      <div class="mb-4 px-4 py-3 rounded-lg bg-claude-surface border border-claude-border
+                  text-sm text-claude-text">{{ m }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  {% if not enabled %}
+    <div class="rounded-xl border border-dashed border-claude-border bg-claude-surface
+                px-6 py-10 text-center">
+      <p class="text-claude-text font-medium">Seri modu kapalı</p>
+      <p class="text-sm text-claude-muted mt-2 max-w-lg mx-auto">
+        Seri modu, aboneliği bir <b>ricadan takasa</b> çevirir: her bölüm kendi tepesini
+        öder, sonra yeni bir kapı açar — ve o kapının cevabı bir sonraki bölümdedir.
+        Kapı aynı zamanda sonraki bölümün <b>konusu</b> olur; konu planlaması video
+        düzeyinden ark düzeyine çıkar.
+      </p>
+      <a href="/channels/{{ slug }}/edit-reel"
+         class="inline-block mt-4 px-4 py-2 rounded-lg bg-claude-accent text-white
+                text-sm font-semibold hover:opacity-90">Ayarlardan aç</a>
+    </div>
+  {% else %}
+
+    {# ── SIRADAKİ BÖLÜM — bu sayfanın asıl cevabı ─────────────────────────
+       "Bir sonraki koşu NE üretecek?" Üretim başladıktan sonra öğrenmek geç
+       kalmaktır; önceden görmek müdahale şansı verir. #}
+    <article class="rounded-xl border-2 border-claude-accent/40 bg-white p-5 mb-6">
+      <div class="flex items-start justify-between gap-4">
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="px-2 py-0.5 rounded-md bg-claude-accent/10 text-claude-accent
+                         text-xs font-bold">SIRADAKİ</span>
+            <span class="text-xs text-claude-muted">
+              ark {{ next.arc_pos }}/{{ next.arc_max }}
+              {% if next.arc_pos == 1 %}· yeni ark{% endif %}
+            </span>
+          </div>
+          <p class="text-lg font-bold text-claude-text">{{ next.badge }}</p>
+
+          {% if next.from_chain %}
+            <p class="text-sm text-claude-muted mt-2">Konu, bir önceki bölümün bıraktığı
+              kapıdan geliyor:</p>
+            <p class="text-claude-text mt-1 leading-snug">"{{ next.topic }}"</p>
+          {% else %}
+            <p class="text-sm text-claude-muted mt-2">
+              Zincir kapalı — konu <a href="/channels/{{ slug }}/topic-bank"
+                class="text-claude-accent hover:underline">konu bankasından</a> gelecek.
+            </p>
+          {% endif %}
+
+          <p class="text-xs text-claude-muted mt-3">
+            Abone çipi: <span class="px-2 py-0.5 rounded bg-claude-surface-alt
+              text-claude-text font-medium">🔔 {{ next.cta }}</span>
+          </p>
+        </div>
+
+        {% if next.from_chain %}
+        <form method="post" action="/channels/{{ slug }}/series/break-arc"
+              class="flex-shrink-0"
+              onsubmit="return confirm('Zincir kesilsin mi? Sıradaki bölüm konu bankasından taze bir konu alacak (bölüm numarası korunur).')">
+          <button class="px-3 py-1.5 rounded-lg text-xs text-claude-muted border
+                         border-claude-border hover:text-claude-accent
+                         hover:border-claude-accent whitespace-nowrap">
+            Zinciri kes</button>
+        </form>
+        {% endif %}
+      </div>
+    </article>
+
+    {# ── GEÇMİŞ BÖLÜMLER ────────────────────────────────────────────────── #}
+    {% if not episodes %}
+      <div class="rounded-xl border border-dashed border-claude-border bg-claude-surface
+                  px-6 py-10 text-center">
+        <p class="text-claude-text font-medium">Henüz bölüm üretilmedi</p>
+        <p class="text-sm text-claude-muted mt-1">
+          Kanalı çalıştır — 1. bölüm konu bankasından bir konuyla başlar.
+        </p>
+      </div>
+    {% else %}
+      <h2 class="text-sm font-semibold text-claude-muted uppercase tracking-wide mb-3">
+        Üretilmiş bölümler</h2>
+      <div class="space-y-3">
+      {% for e in episodes %}
+        <article class="rounded-xl border border-claude-border bg-white p-4">
+          <div class="flex items-start gap-4">
+            <div class="flex-shrink-0 w-14 text-center">
+              <div class="text-xl font-bold text-claude-text">#{{ e.episode_no }}</div>
+              <div class="text-[10px] text-claude-muted">ark {{ e.arc_pos }}</div>
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="text-claude-text leading-snug">{{ e.topic }}</p>
+              {% if e.open_loop %}
+                {# Kapı = bir SONRAKİ bölüme bırakılan söz. Bu kayıt olmadan zincir kurulamaz. #}
+                <p class="text-xs text-claude-muted mt-2">
+                  <span class="text-claude-accent font-semibold">↳ kapı:</span>
+                  {{ e.open_loop }}
+                </p>
+              {% else %}
+                <p class="text-xs text-claude-muted mt-2">
+                  <span class="text-claude-muted font-semibold">↳ kapı yok</span>
+                  — bu bölüm seriyi ilerletmiyor (ark burada bitti)
+                </p>
+              {% endif %}
+            </div>
+            {% if e.short_id %}
+            <a href="/shorts/{{ e.short_id }}"
+               class="flex-shrink-0 text-xs text-claude-muted hover:text-claude-accent">
+              videoyu aç →</a>
+            {% endif %}
+          </div>
+        </article>
+      {% endfor %}
+      </div>
+    {% endif %}
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,4 +1,7 @@
-<!doctype html><html><head><meta charset="utf-8"><style>
+{# lang ŞART: .card'ın `text-transform:uppercase`'i DİLE DUYARLIDIR. lang yokken
+   tarayıcı 'i' → 'I' yapar (Unicode varsayılanı); lang="tr" ile 'i' → 'İ' yapar.
+   Türkçede bunlar AYRI harflerdir — "BILINMEYEN" yazan bir kart yanlış yazılmıştır. #}
+<!doctype html><html lang="{{ lang | default('tr') }}"><head><meta charset="utf-8"><style>
 @import url('{{ font_import }}');
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{width:1080px;height:1920px;overflow:hidden;background:transparent;
@@ -23,6 +26,21 @@ html,body{width:1080px;height:1920px;overflow:hidden;background:transparent;
    o boyutta OKUNMAZ. Manşet 3-6 kelimedir ve 140 puntoyla okunur — küçük resimde
    ~39px'e denk gelir. Hook cümlesi kaybolmaz: altyazı olarak akmaya devam eder. */
 .big.cover{font-size:140px;letter-spacing:-3px}
+/* BÖLÜM ROZETİ (feed kimliği). Faceless kanalda FORMAT YÜZDÜR: izleyici seni
+   yüzünden değil, feed'de tanıdığı biçimden hatırlar — ve tanımadığına abone olmaz.
+   Numara ayrıca serinin GERÇEK olduğunu kanıtlar: 47. bölüm varsa 48. de gelecektir,
+   yani abonelik somut bir şey satın alır.
+   Manşetin ÜSTÜNDE (top 300 → rozet 210-270): küçük resimde de görünür.
+   Manşet varken rozet manşeti aşağı itmez — ikisi de mutlak konumlu. */
+#badge{position:absolute;top:206px;left:60px;right:60px;text-align:center;
+  font-size:46px;font-weight:900;letter-spacing:4px;color:{{ hot_color }};
+  -webkit-text-stroke:2px #000;paint-order:stroke fill;
+  text-shadow:0 4px 16px rgba(0,0,0,.9);display:none;white-space:nowrap;
+  overflow:hidden}
+#badge.on{display:block}
+.stage.lower_left #badge{text-align:left}
+/* top_heavy'de başlık 180'e çıkıyor → rozet 118'e (ilerleme çubuğu 96-108'in altı) */
+.stage.top_heavy #badge{top:118px}
 .card{position:absolute;top:200px;left:50%;transform:translateX(-50%) rotate(-3deg);background:{{ highlight_color }};color:{{ chip_text }};
   font-weight:900;font-size:54px;padding:16px 40px;border-radius:14px;text-transform:uppercase;white-space:nowrap;display:none;
   box-shadow:0 14px 40px rgba(0,0,0,.55);border:4px solid rgba(0,0,0,.35)}
@@ -123,6 +141,7 @@ html,body{width:1080px;height:1920px;overflow:hidden;background:transparent;
 <div id="scrim"></div><div id="bar"></div>
 <div id="markers"></div>
 <div id="numpop"></div>
+{% if badge %}<div id="badge">{{ badge }}</div>{% endif %}
 <div class="big{% if cover_title %} cover{% endif %}" id="hook">{{ cover_title or hook }}</div>
 <div class="big" id="close">{{ close }}</div>
 {% for c in cards %}<div class="card" data-s="{{ c.start }}" data-e="{{ c.end }}">{{ c.text }}</div>
@@ -179,6 +198,7 @@ const MCLS={arrow:'mk-arrow',ring:'mk-ring',pulse:'mk-pulse',box:'mk-box',spotli
 const CUT_EFFECT='{{ cut_effect }}';   // kesme efekti türü (flash|glitch|rgbsplit|lightleak|none)
 const W=[...document.querySelectorAll('.cap .w')],CARDS=[...document.querySelectorAll('.card')];
 const CAPB=document.querySelector('.cap');
+const BADGE=document.getElementById('badge');
 const HOOK=document.getElementById('hook'),CLOSE=document.getElementById('close'),BAR=document.getElementById('bar');
 
 // ——— OTOMATİK SIĞDIRMA ———
@@ -218,21 +238,58 @@ function fitBox(el,{minScale=0.55,maxH=0}={}){
   }
   el.style.display=prev;
 }
-// Altyazıda her an yalnız birkaç kelime görünür. Hepsini geçici olarak görünür yapıp
-// ölçmek EN KÖTÜ durumu verir: gerçek gösterimde satır daha kısa olacağı için sığar.
-// Vurgulu kelimenin scale(1.09)'u DÜZENİ etkilemez (transform'dur) ve SAFE_X payı
-// görsel taşmayı emer.
+// ——— ALTYAZI SIĞDIRMASI ———
+// TAŞMA TEK BAŞINA YETMİYOR. Altyazı her an EN FAZLA 3 kelime (bir "öbek") gösterir.
+// Dar bir kutuda (lower_left: 800px — sağdaki YouTube eylem rayından kaçmak için)
+// metin TAŞMAZ, SARAR. Sarma taşma olmadığı için lineOverflow onu GÖREMEZ ve sığdırma
+// hiç devreye girmez.
+// GERÇEK SONUÇ (bölüm #1, lower_left): "Bir kilogramlık bir" — üç kelime, ÜÇ SATIR.
+//
+// SINIR 2 SATIR, ve bu keyfî değil GEOMETRİK: altyazı bottom:540'tan yukarı büyür.
+// 3 satır (82px×1.15×3 ≈ 283px) → üst kenar y≈1097. Abone çipi y 1080-1160'ta.
+// Yani üç satırlık altyazı ÇİPİN ÜSTÜNE BİNER. İki satır → üst kenar y≈1191, temiz.
+const MAX_CAP_LINES = 2;
+// Bir öbeğin kaç SATIRA yayıldığı: görünür kelimelerin farklı 'top' değerlerini say.
+// (Range.getClientRects burada işe yaramaz — aynı satırdaki her span ayrı rect verir.)
+function _chunkLines(cap){
+  const ws=[...cap.querySelectorAll('.w')];
+  const obekler=[...new Set(ws.map(w=>w.dataset.chunk))];
+  let enKotu=1;
+  for(const c of obekler){
+    for(const w of ws) w.classList.toggle('vis', w.dataset.chunk===c);
+    const satirlar=new Set();
+    for(const w of ws){
+      if(w.classList.contains('vis')) satirlar.add(Math.round(w.getBoundingClientRect().top));
+    }
+    enKotu=Math.max(enKotu, satirlar.size);
+  }
+  for(const w of ws) w.classList.remove('vis');   // ölçüm izini temizle
+  return enKotu;
+}
 function fitCap(){
   const cap=document.querySelector('.cap'); if(!cap) return;
-  cap.classList.add('measure');
-  fitBox(cap,{minScale:0.6});
-  cap.classList.remove('measure');
+  cap.style.fontSize='';                       // idempotent: stil sayfasındaki puntoya dön
+  const base=parseFloat(getComputedStyle(cap).fontSize), floor=base*0.6;
+  let size=base;
+  for(;;){
+    // TAŞMA: tüm kelimeler görünürken en kötü durum (uzun tek kelime kadraja sığmalı)
+    cap.classList.add('measure');
+    const tasma=lineOverflow(cap)>0;
+    cap.classList.remove('measure');
+    // SARMA: öbek başına satır sayısı (gerçek gösterim hâli)
+    const satir=_chunkLines(cap);
+    if(size<=floor || (!tasma && satir<=MAX_CAP_LINES)) break;
+    size-=2; cap.style.fontSize=size+'px';
+  }
 }
 window.__fit=function(){
   // Hook/close ekranın üst yarısında; altyazı bloğuna sarkmasın diye yükseklik sınırı.
   // maxH 720: hook/kapanış kartı top:300'den başlar → en fazla y=1020'ye iner,
   // yani abone çipinin (1080) üstünde kalır. 820 olsaydı çipe binerdi.
   fitBox(HOOK,{maxH:720}); fitBox(CLOSE,{maxH:720}); fitCap();
+  // Rozet tek satır (nowrap) — taşarsa overflow:hidden onu SESSİZCE keserdi ve
+  // numarası uçan bir rozet işlevini kaybeder. Sığdırma puntoyu küçültür.
+  if(BADGE) fitBox(BADGE,{minScale:0.7});
 };
 const FLASH=document.getElementById('flash'),MLAYER=document.getElementById('markers');
 const RGB=document.getElementById('rgbsplit'),LEAK=document.getElementById('lightleak'),GLITCH=document.getElementById('glitch');
@@ -247,6 +304,9 @@ window.__seek=function(tms){
   const numOn=seg>0&&seg<LAST;
   for(const w of W){const vis=capOn&&+w.dataset.chunk===chk;w.classList.toggle('vis',vis);w.classList.toggle('hot',vis&&lead>=+w.dataset.s&&t<+w.dataset.e);}
   HOOK.classList.toggle('on',seg===0);CLOSE.classList.toggle('on',seg===LAST);
+  /* Rozet HOOK segmentinde durur — yani KARE SIFIRDA. Feed'in küçük resmi orasıdır
+     ve tanınma orada olur. Gövdede kalsaydı altyazıyla dikkat için yarışırdı. */
+  if(BADGE)BADGE.classList.toggle('on',seg===0);
   for(const c of CARDS){const s=+c.dataset.s,e=+c.dataset.e;c.classList.toggle('on',t>=s&&t<e);}
   /* Çubuğu 0.25% adıma yuvarla (2.7px): ardışık kareler AYNILAŞIR → renderer
      screenshot yerine kopyalayabilir (kare-dedup, 3-4x hızlı). Görsel fark yok. */
@@ -317,6 +377,7 @@ window.__sig=function(){
   }
   let s=vis+'|'+hot+'|'+mkSeg+'|'+MLAYER.innerHTML.length+'|';
   s+=(HOOK.classList.contains('on')?1:0)+''+(CLOSE.classList.contains('on')?1:0)+'|';
+  s+=(BADGE&&BADGE.classList.contains('on')?1:0)+'|';
   for(const c of CARDS)s+=(c.classList.contains('on')?1:0);
   s+='|'+BAR.style.width+'|';
   s+=[FLASH,RGB,LEAK,GLITCH].map(e=>(e.style.opacity||'0')+':'+(e.style.transform||'')).join(',');

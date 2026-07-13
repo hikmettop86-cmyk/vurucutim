@@ -67,6 +67,14 @@ SFX_TARGET_LUFS = -23    # anlatımın BELİRGİN altında (vurgu, yarış deği
 MAX_RISER_S = 2.5
 RISER_TARGET_LUFS = -20  # SFX'ten biraz önde: gerilimi taşıması gerek
 
+# STING: kanalın AÇILIŞ SES İMZASI ("ses logosu"). Her bölümün ilk karesinde, HEP AYNI
+# ses. Ayrı klasör: SFX havuzuna karışırsa kesim başına çalar ve imza olmaktan çıkar
+# (bkz. reel_identity — imza ancak TEKRARLANINCA imza olur).
+# Mixkit'in "cinematic" kategorisinden gelir: kısa, vurucu, marka hissi taşıyan sesler.
+STING_CATEGORY = "cinematic"
+MAX_STING_S = 1.8        # riser'dan kısa, SFX'ten uzun: tanınacak kadar var olmalı
+STING_TARGET_LUFS = -20
+
 
 def normalize_sfx(path, *, ffmpeg_path: str = "ffmpeg",
                   max_s: float = MAX_SFX_S,
@@ -178,6 +186,11 @@ def _fill(kind: str, cat: str, page_url: str, dest_dir: Path, want: int,
                 # Riser'ın DORUĞU sondadır → fade YOK, ve SFX'ten uzun kalır.
                 normalize_sfx(out, max_s=MAX_RISER_S,
                               target_lufs=RISER_TARGET_LUFS, fade_out=False)
+            elif kind == "sting":
+                # Sting bir MARKA sesidir: kısa ama tanınacak kadar var, ve fade ile
+                # temiz biter (kare sıfırda konuşmanın üstüne binmemeli).
+                normalize_sfx(out, max_s=MAX_STING_S,
+                              target_lufs=STING_TARGET_LUFS)
             added += 1
             if progress:
                 progress(f"{kind}/{cat}: {have + added}/{want}")
@@ -185,12 +198,13 @@ def _fill(kind: str, cat: str, page_url: str, dest_dir: Path, want: int,
 
 
 def build_library(dest_root, *, per_sfx: int = 12, per_music: int = 8,
-                  per_riser: int = 7, http_get=None, progress=None) -> dict:
+                  per_riser: int = 7, per_sting: int = 6,
+                  http_get=None, progress=None) -> dict:
     """Kütüphaneyi kur/genişlet → assets/sfx/<kat>/ + assets/music/<mood>/ + manifest.
 
     Tek kategorinin hatası diğerlerini DURDURMAZ (fail-open). Var olan dosya
     yeniden indirilmez → düğmeye tekrar basmak kütüphaneyi büyütür.
-    Dönüş: {"sfx": N, "music": M, "riser": R, "skipped": K}
+    Dönüş: {"sfx": N, "music": M, "riser": R, "sting": S, "skipped": K}
     """
     root = Path(dest_root)
     http_get = http_get or _default_get
@@ -215,6 +229,17 @@ def build_library(dest_root, *, per_sfx: int = 12, per_music: int = 8,
         skipped += 1
         log.warning(f"assets_library: riser atlandı: {e}")
 
+    # STING: kanalın açılış ses imzası. Ayrı klasör — SFX havuzuna karışırsa kesim
+    # başına çalar ve imza olmaktan çıkar (bkz. reel_identity).
+    n_sting = 0
+    try:
+        n_sting = _fill("sting", STING_CATEGORY,
+                        _SFX_URL.format(cat=STING_CATEGORY),
+                        root / "sting", per_sting, http_get, progress)
+    except Exception as e:   # noqa: BLE001
+        skipped += 1
+        log.warning(f"assets_library: sting atlandı: {e}")
+
     for mood, cat in MUSIC_MOODS.items():
         try:
             n_music += _fill("music", mood, _MUSIC_URL.format(cat=cat),
@@ -224,10 +249,10 @@ def build_library(dest_root, *, per_sfx: int = 12, per_music: int = 8,
             log.warning(f"assets_library: music/{mood} atlandı: {e}")
 
     idx = load_library_index(root, write_manifest=True)
-    log.info(f"assets_library: +{n_sfx} sfx, +{n_music} müzik "
+    log.info(f"assets_library: +{n_sfx} sfx, +{n_music} müzik, +{n_sting} sting "
              f"(toplam sfx={sum(len(v) for v in idx['sfx'].values())}, "
              f"müzik={sum(len(v) for v in idx['music'].values())})")
-    return {"sfx": n_sfx, "music": n_music, "riser": n_riser,
+    return {"sfx": n_sfx, "music": n_music, "riser": n_riser, "sting": n_sting,
             "skipped": skipped}
 
 

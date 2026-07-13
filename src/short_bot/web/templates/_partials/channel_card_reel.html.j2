@@ -58,6 +58,10 @@
       {% if c.content_source == 'generator' %}
       <a href="/channels/{{ c.slug }}/topic-bank" class="px-2 py-1 text-claude-text hover:bg-claude-surface-alt rounded text-xs" title="Kanıtlanmış konu bankası">🎯 Konu</a>
       {% endif %}
+      {# SERİ: ark görünür olmalı — sıradaki bölümün konusu ÜRETİMDEN ÖNCE bilinsin. #}
+      {% if c.reel and c.reel.series_enabled %}
+      <a href="/channels/{{ c.slug }}/series" class="px-2 py-1 text-claude-text hover:bg-claude-surface-alt rounded text-xs" title="Seri: bölümler + sıradaki konu">📚 Seri</a>
+      {% endif %}
     </div>
   </div>
 </div>

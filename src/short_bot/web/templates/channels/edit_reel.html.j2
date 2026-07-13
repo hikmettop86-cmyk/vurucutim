@@ -282,14 +282,63 @@
                    {% if not c.reel or c.reel.comment_question %}checked{% endif %} class="mt-1">
           </label>
           <label class="flex items-start justify-between gap-3 text-sm">
-            <span>Seri modu <small class="block text-claude-muted">numaralı seri + "sonraki bölüm" teaser'ı</small></span>
+            <span>Seri modu
+              <small class="block text-claude-muted">Numaralı bölüm + açık kapı + takas CTA
+                ("#48 yarın — ABONE OL"). Her bölüm kendi tepesini öder ama yeni bir
+                soru açar; o soru bir SONRAKİ bölümün konusu olur. Aboneliği ricadan
+                takasa çeviren mekanizma budur. <b>Yorum sorusunu kapatır</b> — üç
+                istek = sıfır istek.</small></span>
             <input type="checkbox" name="reel_series_enabled"
                    {% if c.reel and c.reel.series_enabled %}checked{% endif %} class="mt-1">
           </label>
           <label class="block">
             <span class="text-xs text-claude-muted uppercase tracking-wide">Seri başlığı</span>
             <input type="text" name="reel_series_title" value="{{ c.reel.series_title if c.reel else '' }}"
+                   placeholder="Bilinmeyen Tarih"
                    class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+            <small class="text-claude-muted">Kare sıfırda rozet olarak görünür:
+              "BİLİNMEYEN TARİH #47"</small>
+          </label>
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase tracking-wide">Ark uzunluğu</span>
+            <input type="number" name="reel_series_arc_length" min="1" max="10"
+                   value="{{ c.reel.series_arc_length if c.reel else 3 }}"
+                   class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+            <small class="text-claude-muted">Zincir kaç bölüm sürsün? Sonrasında kesilir
+              ve konu bankasından taze konu gelir. Uzun zincir konuyu nişinden
+              sürükler (her bölüm bir öncekinin kapısından doğuyor).</small>
+          </label>
+          <label class="flex items-start justify-between gap-3 text-sm">
+            <span>Feed kimliği kilidi
+              <small class="block text-claude-muted">Aksan rengi ve yerleşim her videoda
+                DÖNMESİN. Yüzü olmayan bir kanalda format = yüzdür; tanınmadan abonelik
+                birikmez. Kesme efekti/SFX/marker/müzik dönmeye devam eder —
+                izleyici kanalı onlardan tanımaz.</small></span>
+            <input type="checkbox" name="reel_identity_lock"
+                   {% if not c.reel or c.reel.identity_lock %}checked{% endif %} class="mt-1">
+          </label>
+          <label class="flex items-start justify-between gap-3 text-sm">
+            <span>Açılış ses imzası (sting)
+              <small class="block text-claude-muted">assets/sting/ klasöründeki bir ses,
+                her bölümün ilk karesinde. Kanala göre bir kez seçilir ve hep aynı
+                çalar — imza ancak tekrarlanınca imza olur. Klasör boşsa devre dışı.</small></span>
+            <input type="checkbox" name="reel_sting_enabled"
+                   {% if not c.reel or c.reel.sting_enabled %}checked{% endif %} class="mt-1">
+          </label>
+          <label class="flex items-start justify-between gap-3 text-sm">
+            <span>Tempo bölgeleri
+              <small class="block text-claude-muted">Hook hızlı, tepe yavaş. TTS tek
+                hızda okur; insan anlatıcı okumaz.</small></span>
+            <input type="checkbox" name="reel_tempo_zones"
+                   {% if not c.reel or c.reel.tempo_zones %}checked{% endif %} class="mt-1">
+          </label>
+          <label class="flex items-start justify-between gap-3 text-sm">
+            <span>Koordineli kesinti
+              <small class="block text-claude-muted">3-5 anda vuruş + efekt + altyazı
+                darbesi + punch AYNI KAREDE; öteki kesimlerde ses kısık. Kapalıysa her
+                kesim eşit güçte patlar — yani hiçbiri vurgu olmaz.</small></span>
+            <input type="checkbox" name="reel_interrupts"
+                   {% if not c.reel or c.reel.interrupts %}checked{% endif %} class="mt-1">
           </label>
         </div>
       </section>
