@@ -11,6 +11,7 @@
         {{ channel.name }}
         {% if series_title %}· <span class="text-claude-text font-medium">{{ series_title }}</span>{% endif %}
         · {{ episodes|length }} bölüm üretildi
+        · <span class="text-claude-muted">{{ 'planlı ark' if mode == 'planned' else 'serbest zincir' }}</span>
       </p>
     </div>
     <a href="/channels/{{ slug }}/edit-reel"
@@ -32,8 +33,7 @@
       <p class="text-sm text-claude-muted mt-2 max-w-lg mx-auto">
         Seri modu, aboneliği bir <b>ricadan takasa</b> çevirir: her bölüm kendi tepesini
         öder, sonra yeni bir kapı açar — ve o kapının cevabı bir sonraki bölümdedir.
-        Kapı aynı zamanda sonraki bölümün <b>konusu</b> olur; konu planlaması video
-        düzeyinden ark düzeyine çıkar.
+        İzleyici bir videoya değil, bir <b>seriye</b> abone olur.
       </p>
       <a href="/channels/{{ slug }}/edit-reel"
          class="inline-block mt-4 px-4 py-2 rounded-lg bg-claude-accent text-white
@@ -41,30 +41,102 @@
     </div>
   {% else %}
 
-    {# ── SIRADAKİ BÖLÜM — bu sayfanın asıl cevabı ─────────────────────────
-       "Bir sonraki koşu NE üretecek?" Üretim başladıktan sonra öğrenmek geç
-       kalmaktır; önceden görmek müdahale şansı verir. #}
+    {% if not series_title %}
+      {# Rozet seri ADI olmadan yalnız "#47" gösterir — kimlik yarım kalır. #}
+      <div class="mb-6 rounded-xl border border-claude-accent/40 bg-white p-4
+                  flex items-center justify-between gap-4">
+        <div>
+          <p class="text-sm font-semibold text-claude-text">Seri başlığı yok</p>
+          <p class="text-xs text-claude-muted mt-1">
+            Rozet kare sıfırda "<b>{{ series_title or '…' }} #1</b>" olarak görünecek.
+            Başlıksız rozet yalnız numara gösterir — kimlik yarım kalır.
+          </p>
+        </div>
+        <form method="post" action="/channels/{{ slug }}/series/suggest-title">
+          <button class="px-3 py-1.5 rounded-lg bg-claude-accent text-white text-xs
+                         font-semibold hover:opacity-90 whitespace-nowrap">
+            DNA'dan öner</button>
+        </form>
+      </div>
+    {% endif %}
+
+    {# ── ONAY BEKLEYEN TASLAK ARK ─────────────────────────────────────────
+       Hiçbir ark, kullanıcı GÖRMEDEN üretilmeye başlamaz. #}
+    {% if draft %}
+      <article class="rounded-xl border-2 border-claude-accent bg-white p-5 mb-6">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="px-2 py-0.5 rounded-md bg-claude-accent text-white text-xs
+                       font-bold">ONAY BEKLİYOR</span>
+          <span class="text-lg font-bold text-claude-text">{{ draft.title }}</span>
+          <span class="text-xs text-claude-muted">{{ draft.total }} bölüm</span>
+        </div>
+        <ol class="space-y-2 mb-4">
+          {% for e in draft.plan %}
+          <li class="flex gap-3 text-sm">
+            <span class="flex-shrink-0 w-6 text-claude-muted font-mono">{{ loop.index }}.</span>
+            <div class="min-w-0">
+              <p class="text-claude-text leading-snug">{{ e.topic }}</p>
+              {% if e.promise %}
+              <p class="text-xs text-claude-muted mt-0.5">
+                <span class="text-claude-accent">↳ önceki bölümün vaadi:</span> {{ e.promise }}
+              </p>
+              {% endif %}
+            </div>
+          </li>
+          {% endfor %}
+        </ol>
+        <div class="flex items-center gap-2">
+          <form method="post" action="/channels/{{ slug }}/series/arcs/{{ draft.id }}/approve">
+            <button class="px-4 py-2 rounded-lg bg-claude-accent text-white text-sm
+                           font-semibold hover:opacity-90">Onayla ve üretime al</button>
+          </form>
+          <form method="post" action="/channels/{{ slug }}/series/arcs/{{ draft.id }}/discard">
+            <button class="px-3 py-2 rounded-lg text-sm text-claude-muted border
+                           border-claude-border hover:text-claude-accent">Sil</button>
+          </form>
+          <p class="text-xs text-claude-muted ml-2">
+            Onaylamadan hiçbir bölüm üretilmez.
+          </p>
+        </div>
+      </article>
+    {% endif %}
+
+    {# ── SIRADAKİ BÖLÜM — sayfanın asıl cevabı ────────────────────────────
+       "Bir sonraki koşu NE üretecek?" Üretim başladıktan sonra öğrenmek geç kalmaktır. #}
     <article class="rounded-xl border-2 border-claude-accent/40 bg-white p-5 mb-6">
       <div class="flex items-start justify-between gap-4">
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-2 mb-2">
             <span class="px-2 py-0.5 rounded-md bg-claude-accent/10 text-claude-accent
                          text-xs font-bold">SIRADAKİ</span>
-            <span class="text-xs text-claude-muted">
-              ark {{ next.arc_pos }}/{{ next.arc_max }}
-              {% if next.arc_pos == 1 %}· yeni ark{% endif %}
-            </span>
+            {% if next.source == 'plan' %}
+              <span class="text-xs text-claude-muted">
+                plan {{ next.arc_pos }}/{{ next.arc_total }}
+                {% if active_arc %}· {{ active_arc.title }}{% endif %}</span>
+            {% elif next.source == 'zincir' %}
+              <span class="text-xs text-claude-muted">zincir · ark {{ next.arc_pos }}/{{ next.arc_total }}</span>
+            {% endif %}
           </div>
           <p class="text-lg font-bold text-claude-text">{{ next.badge }}</p>
 
-          {% if next.from_chain %}
+          {% if next.source == 'plan' %}
+            <p class="text-sm text-claude-muted mt-2">Konu onaylı plandan geliyor:</p>
+            <p class="text-claude-text mt-1 leading-snug">"{{ next.topic }}"</p>
+          {% elif next.source == 'zincir' %}
             <p class="text-sm text-claude-muted mt-2">Konu, bir önceki bölümün bıraktığı
               kapıdan geliyor:</p>
             <p class="text-claude-text mt-1 leading-snug">"{{ next.topic }}"</p>
           {% else %}
             <p class="text-sm text-claude-muted mt-2">
-              Zincir kapalı — konu <a href="/channels/{{ slug }}/topic-bank"
-                class="text-claude-accent hover:underline">konu bankasından</a> gelecek.
+              {% if mode == 'planned' %}
+                <b class="text-claude-text">Onaylı ark yok</b> — sıradaki koşu
+                <a href="/channels/{{ slug }}/topic-bank" class="text-claude-accent hover:underline">bankadan</a>
+                tek bir konu üretecek (seri ilerlemez). Aşağıdan ark planla.
+              {% else %}
+                Zincir kapalı — konu
+                <a href="/channels/{{ slug }}/topic-bank" class="text-claude-accent hover:underline">konu bankasından</a>
+                gelecek.
+              {% endif %}
             </p>
           {% endif %}
 
@@ -74,18 +146,53 @@
           </p>
         </div>
 
-        {% if next.from_chain %}
-        <form method="post" action="/channels/{{ slug }}/series/break-arc"
-              class="flex-shrink-0"
-              onsubmit="return confirm('Zincir kesilsin mi? Sıradaki bölüm konu bankasından taze bir konu alacak (bölüm numarası korunur).')">
-          <button class="px-3 py-1.5 rounded-lg text-xs text-claude-muted border
-                         border-claude-border hover:text-claude-accent
-                         hover:border-claude-accent whitespace-nowrap">
-            Zinciri kes</button>
-        </form>
-        {% endif %}
+        <div class="flex flex-col gap-2 flex-shrink-0">
+          {% if mode == 'planned' and not draft and not active_arc %}
+          <form method="post" action="/channels/{{ slug }}/series/plan-arc">
+            <button class="w-full px-4 py-2 rounded-lg bg-claude-accent text-white
+                           text-sm font-semibold hover:opacity-90 whitespace-nowrap">
+              Yeni ark planla</button>
+          </form>
+          {% endif %}
+          {% if next.source == 'zincir' %}
+          <form method="post" action="/channels/{{ slug }}/series/break-arc"
+                onsubmit="return confirm('Zincir kesilsin mi? Sıradaki bölüm konu bankasından taze bir konu alacak (bölüm numarası korunur).')">
+            <button class="w-full px-3 py-1.5 rounded-lg text-xs text-claude-muted border
+                           border-claude-border hover:text-claude-accent whitespace-nowrap">
+              Zinciri kes</button>
+          </form>
+          {% endif %}
+        </div>
       </div>
     </article>
+
+    {# ── AKTİF ARKIN İLERLEMESİ ──────────────────────────────────────────── #}
+    {% if active_arc %}
+      <section class="mb-6">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-semibold text-claude-muted uppercase tracking-wide">
+            Aktif ark — {{ active_arc.title }}</h2>
+          <span class="text-xs text-claude-muted">
+            {{ active_arc.produced }}/{{ active_arc.total }} üretildi</span>
+        </div>
+        <ol class="rounded-xl border border-claude-border bg-white divide-y divide-claude-border">
+          {% for e in active_arc.plan %}
+          {% set uretildi = loop.index0 < active_arc.produced %}
+          <li class="flex items-start gap-3 p-4 {% if uretildi %}opacity-50{% endif %}">
+            <span class="flex-shrink-0 w-6 text-claude-muted font-mono text-sm">
+              {% if uretildi %}✓{% else %}{{ loop.index }}.{% endif %}</span>
+            <div class="min-w-0 flex-1">
+              <p class="text-sm text-claude-text leading-snug">{{ e.topic }}</p>
+            </div>
+            {% if loop.index0 == active_arc.produced %}
+            <span class="flex-shrink-0 text-xs px-2 py-0.5 rounded bg-claude-accent/10
+                         text-claude-accent font-semibold">sıradaki</span>
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ol>
+      </section>
+    {% endif %}
 
     {# ── GEÇMİŞ BÖLÜMLER ────────────────────────────────────────────────── #}
     {% if not episodes %}
@@ -93,7 +200,8 @@
                   px-6 py-10 text-center">
         <p class="text-claude-text font-medium">Henüz bölüm üretilmedi</p>
         <p class="text-sm text-claude-muted mt-1">
-          Kanalı çalıştır — 1. bölüm konu bankasından bir konuyla başlar.
+          {% if mode == 'planned' %}Ark planla, onayla, sonra kanalı çalıştır.
+          {% else %}Kanalı çalıştır — 1. bölüm konu bankasından bir konuyla başlar.{% endif %}
         </p>
       </div>
     {% else %}
@@ -110,7 +218,6 @@
             <div class="flex-1 min-w-0">
               <p class="text-claude-text leading-snug">{{ e.topic }}</p>
               {% if e.open_loop %}
-                {# Kapı = bir SONRAKİ bölüme bırakılan söz. Bu kayıt olmadan zincir kurulamaz. #}
                 <p class="text-xs text-claude-muted mt-2">
                   <span class="text-claude-accent font-semibold">↳ kapı:</span>
                   {{ e.open_loop }}

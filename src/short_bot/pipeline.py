@@ -8,7 +8,7 @@ import tempfile
 import threading
 import time
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -1222,27 +1222,54 @@ def _run_generator(*, channel, run_id, log, eng, settings,
     # bölümün konusudur. Kullanıcı elle konu seçtiyse (forced_topic) zincir ezilir —
     # kullanıcı sözü son sözdür.
     episode = None
+    arc_id = None
     reel_cfg = getattr(channel, "reel", None)
     if reel_cfg is not None and reel_cfg.enabled and reel_cfg.series_enabled:
-        from short_bot.db import last_episode
+        from short_bot.db import active_arc, last_episode
         from short_bot.reel_series import clean_open_loop, plan_episode
         try:
             episode = plan_episode(last_episode(eng, channel.slug),
                                    arc_max=reel_cfg.series_arc_length)
-            if episode.continue_from and not forced_topic:
-                # META DİLİ AYIKLA. LLM kapıya "…2. bölümde açıklıyoruz" gibi bir kuyruk
-                # ekliyor (ölçüldü, ilk gerçek koşuda tam olarak bunu yaptı). O metin
-                # burada ÜRETİM KONUSU oluyor — içinde bölüm numarası geçen bir konu
-                # tohumu senaryo yazıcısını yanıltır. Kayıtta HAM hâli duruyor (teşhis).
+            # PLANLI ARK ÖNCE. Onaylı bir ark varsa hem KONU hem SIRADAKİ KONU plandan
+            # gelir — LLM cliffhanger'ı UYDURMAZ, SÖYLER. Sapma yapısal olarak imkânsız.
+            ark = (active_arc(eng, channel.slug)
+                   if getattr(reel_cfg, "arc_mode", "chain") == "planned" else None)
+            if ark:
+                kalemler = ark["plan"]
+                i = int(ark["produced"])
+                if 0 <= i < len(kalemler):
+                    arc_id = ark["id"]
+                    sirasi = (kalemler[i + 1]["topic"] if i + 1 < len(kalemler) else "")
+                    episode = replace(
+                        episode, arc_pos=i + 1, continue_from="",
+                        next_topic=sirasi, arc_title=ark["title"],
+                        arc_total=len(kalemler))
+                    if not forced_topic:
+                        forced_topic = kalemler[i]["topic"]
+                        log.info(f"  seri: PLANLI ARK '{ark['title']}' "
+                                 f"({i + 1}/{len(kalemler)}) → konu plandan: "
+                                 f"{forced_topic[:80]!r}")
+            elif episode.continue_from and not forced_topic:
+                # ZİNCİR MODU. META DİLİ AYIKLA: LLM kapıya "…2. bölümde açıklıyoruz"
+                # gibi bir kuyruk ekliyor (ölçüldü). O metin burada ÜRETİM KONUSU
+                # oluyor — bölüm numarası geçen bir konu tohumu senaryo yazıcısını
+                # yanıltır. Kayıtta HAM hâli duruyor (teşhis).
                 forced_topic = clean_open_loop(episode.continue_from)
                 log.info(f"  seri: ark sürüyor → konu ÖNCEKİ BÖLÜMÜN KAPISINDAN "
                          f"geliyor: {forced_topic[:80]!r}")
             elif episode.continue_from:
                 log.info("  seri: kullanıcı konu seçti → ark zinciri bu bölümde "
                          "ezildi (sözü ödeme yönergesi yine de veriliyor)")
+            elif getattr(reel_cfg, "arc_mode", "chain") == "planned":
+                # Planlı mod ama ONAYLI ARK YOK → üretim DURMAZ: bankadan tek konu
+                # üretilir ve zincir davranışına düşülür. Duran bir otomasyon,
+                # sapmış bir otomasyondan kötüdür; panel bunu görünür kılar.
+                log.warning("  seri: planlı mod ama ONAYLI ARK YOK → bankadan tek konu "
+                            "(panelden ark planlayıp onaylayın)")
         except Exception as e:   # seri KOZMETİK değil ama üretimi düşürmemeli
             log.warning(f"  seri: bölüm planlanamadı ({e}) → serisiz üretim")
             episode = None
+            arc_id = None
 
     if forced_topic:
         log.info(f"  konu KULLANICI tarafından seçildi: {forced_topic[:80]!r}")
@@ -1365,7 +1392,7 @@ def _run_generator(*, channel, run_id, log, eng, settings,
         update_generated_short_id(eng, generated_id, short_id)
         if episode is not None:
             try:
-                from short_bot.db import record_episode
+                from short_bot.db import advance_arc, record_episode
                 record_episode(
                     eng, channel.slug, episode_no=episode.episode_no,
                     arc_pos=episode.arc_pos, topic=chosen_result.text,
@@ -1373,6 +1400,12 @@ def _run_generator(*, channel, run_id, log, eng, settings,
                 log.info(f"  seri: bölüm #{episode.episode_no} kaydedildi"
                          + (" (kapı açık → sonraki bölümün konusu hazır)"
                             if acik_kapi.get("open_loop") else " (kapı yok → ark biter)"))
+                # PLANLI ARK SAYACI — yalnız üretim BAŞARILIYSA ilerler. Başarısız bir
+                # koşu planı tüketirse o bölüm hiç üretilmemiş olur ve planda delik kalır.
+                if arc_id is not None:
+                    advance_arc(eng, arc_id)
+                    log.info(f"  seri: ark {arc_id} → "
+                             f"{episode.arc_pos}/{episode.arc_total} bölüm üretildi")
             except Exception as e:
                 log.warning(f"  seri: bölüm kaydedilemedi ({e}) → zincir kopabilir")
         finish_run(eng, run_id, status="success", short_id=short_id, error=None)

@@ -123,6 +123,8 @@ def save_reel(slug):
             series_title=request.form.get("reel_series_title", old.series_title if old else ""),
             series_arc_length=_form_int("reel_series_arc_length",
                                         old.series_arc_length if old else 3),
+            arc_mode=request.form.get("reel_arc_mode",
+                                      old.arc_mode if old else "planned"),
             identity_lock=request.form.get("reel_identity_lock") == "on",
             sting_enabled=request.form.get("reel_sting_enabled") == "on",
             cta_enabled=request.form.get("reel_cta_enabled") == "on",

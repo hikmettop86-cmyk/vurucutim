@@ -181,6 +181,16 @@ class ReelConfig(BaseModel):
     # takas CTA. Ark bu kadar bölümden sonra kesilir ve konu bankasından taze konu
     # gelir — zincir uzadıkça konu kanalın nişinden sürüklenir (sapma birikimli).
     series_arc_length: int = 3
+    # ARK MODU (bkz. reel_arc):
+    #   "chain"   → her bölüm bir sonrakini KEŞFEDER (kapı → sonraki konu). Planlama
+    #               yok, ama sapma birikimli ve vaat yalnız TEK ADIM ileriyi gösterir.
+    #   "planned" → ark ÖNCEDEN planlanır ve kullanıcı ONAYLAR. Sıradaki bölümün
+    #               konusu planda yazılı olduğu için LLM cliffhanger'ı UYDURMAZ,
+    #               SÖYLER → konu sapması yapısal olarak imkânsız. Ayrıca ilk bölüm
+    #               "N bölümlük seri" diye İLAN eder: izleyici bir videoya değil bir
+    #               SERİYE abone olur.
+    # Onaylı ark yoksa üretim DURMAZ — bankadan tek konu üretilir (panel uyarır).
+    arc_mode: Literal["chain", "planned"] = "planned"
     # FEED KİMLİĞİ KİLİDİ (bkz. reel_identity). Aksan rengi ve yerleşim per-video
     # DÖNMEZ; kanalın sabit değerine oturur. Kesme efekti/SFX/marker/müzik dönmeye
     # devam eder — izleyici kanalı onlardan tanımaz, FONT ve RENKTEN tanır.
@@ -527,6 +537,7 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
             "series_enabled": cfg.reel.series_enabled,
             "series_title": cfg.reel.series_title,
             "series_arc_length": cfg.reel.series_arc_length,
+            "arc_mode": cfg.reel.arc_mode,
             "identity_lock": cfg.reel.identity_lock,
             "sting_enabled": cfg.reel.sting_enabled,
             "cta_enabled": cfg.reel.cta_enabled,

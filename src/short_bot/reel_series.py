@@ -47,6 +47,12 @@ class EpisodePlan:
     arc_pos: int             # bu arkın kaçıncı bölümü (1 = yeni ark)
     continue_from: str = ""  # bir önceki bölümün açtığı kapı (bu bölüm ONU ödemeli)
     enabled: bool = True
+    # --- PLANLI ARK (bkz. reel_arc). Zincirde bunlar boştur. ---
+    # Bir sonraki bölümün konusu PLANDA ZATEN YAZILI → LLM cliffhanger'ı UYDURMAZ,
+    # SÖYLER. Konu sapması yapısal olarak imkânsız hâle gelir.
+    next_topic: str = ""     # planın sıradaki bölümü ("" = son bölüm ya da zincir modu)
+    arc_title: str = ""      # serinin adı (ilk bölümde ilan edilir)
+    arc_total: int = 0       # arkın toplam bölüm sayısı (0 = plan yok)
 
     @property
     def next_no(self) -> int:
@@ -55,6 +61,15 @@ class EpisodePlan:
     @property
     def is_new_arc(self) -> bool:
         return self.arc_pos <= 1
+
+    @property
+    def is_planned(self) -> bool:
+        return self.arc_total > 0
+
+    @property
+    def is_arc_finale(self) -> bool:
+        """Planın SON bölümü mü? (sonrasında yeni ark / bankadan konu gelir)"""
+        return self.is_planned and not self.next_topic
 
 
 def plan_episode(last: dict | None, *, arc_max: int = DEFAULT_ARC_MAX) -> EpisodePlan:
@@ -126,6 +141,41 @@ def series_directive(plan: EpisodePlan, series_title: str) -> str:
             f"Videonun TEPESİ (peak_beat) tam olarak BU SÖZÜ ödemeli. İzleyici bu "
             f"cevap için abone oldu; başka bir şey anlatırsan takas bozulur ve bir "
             f"daha güvenmez.")
+    # PLANLI ARKIN İLK BÖLÜMÜ SERİYİ İLAN EDER. İzleyici bir VİDEOYA abone olmaz, bir
+    # SERİYE abone olur: "3 bölümlük bir seri" demek, tek adımlık bir vaatten çok daha
+    # güçlü bir abone sebebidir.
+    if plan.is_planned and plan.is_new_arc:
+        satirlar.append(
+            f"SERİYİ İLAN ET: bu, '{plan.arc_title}' adlı {plan.arc_total} BÖLÜMLÜK "
+            f"bir serinin İLK bölümü. Anlatımın bir yerinde (hook'ta değil, tepeden "
+            f"sonra) serinin {plan.arc_total} bölüm olduğunu ve nereye gittiğini bir "
+            f"cümleyle söyle. İzleyici bir videoya değil, bir SERİYE abone olur.")
+
+    if plan.is_arc_finale:
+        # Son bölüm: ödenmemiş vaat BIRAKMAZ (plan bitti) ama seri devam ediyor.
+        satirlar.append(
+            f"BU, '{plan.arc_title}' SERİSİNİN SON BÖLÜMÜ. Ark burada kapanıyor:\n"
+            f"  • 'open_loop' alanını BOŞ bırak — sıradaki bölüm YENİ bir konuyla gelecek.\n"
+            f"  • Ama seri BİTMİYOR: tepeden sonra, {plan.next_no}. bölümün yarın "
+            f"geleceğini ve YENİ bir konu açacağını bir cümleyle söyle.")
+        return "\n".join(satirlar)
+
+    if plan.next_topic:
+        # PLANLI ARK: kapı UYDURULMAZ, planda YAZILI. LLM'in işi onu SÖYLEMEK.
+        satirlar.append(
+            f"AÇIK KAPI — PLANDA YAZILI, UYDURMA. Bir sonraki bölümün ({plan.next_no}) "
+            f"konusu ŞUDUR:\n"
+            f'  "{plan.next_topic}"\n'
+            f"  • 'open_loop' alanına BU KONUYU aynen yaz.\n"
+            f"  • AYNI konuyu TEPEDEN SONRAKİ BEAT'İN METNİNDE de, kendi sözcüklerinle "
+            f"an ve {plan.next_no}. bölüme havale et. Kapanışta DEĞİL — abone isteği "
+            f"ekranda tam o anda beliriyor; söz daha söylenmemişse istek boşa düşer.\n"
+            f"    ✗ 'Ama hikâye burada bitmiyor.'   ← neyin geleceğini söylemiyor\n"
+            f"    ✓ 'Ama o ışık balığın kendi değil — onu üreten bakteriyi "
+            f"{plan.next_no}. bölümde anlatıyorum.'")
+        return "\n".join(satirlar)
+
+    # ZİNCİR MODU: plan yok → kapıyı LLM'in kendisi bulur.
     satirlar.append(
         f"AÇIK KAPI — ZORUNLU. Bu bölüm kendi tepesini TAM ÖDER, ama kapanmaz: "
         f"tepenin AÇIĞA ÇIKARDIĞI yeni ve SPESİFİK bir konu bırakır; onun cevabı "

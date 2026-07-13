@@ -195,6 +195,29 @@ series_episodes = Table(
 )
 
 
+# PLANLI ARK (bkz. reel_arc). Zincirden farkı: bölümler ÖNCEDEN planlanır ve kullanıcı
+# ONAYLAR. Plan JSON olarak durur — ayrı bir kalem tablosuna bölmenin faydası yok:
+# plan bir BÜTÜN olarak onaylanıyor, tek tek düzenlenmiyor. Hangi kalemin üretildiğini
+# 'produced' sayacı taşır (series_episodes zaten bölüm bölüm kayıt tutuyor).
+#
+# status: draft   → LLM plan yazdı, kullanıcı henüz onaylamadı (ÜRETİME GİRMEZ)
+#         active  → onaylandı, bölümleri sırayla üretiliyor
+#         done    → tüm bölümleri üretildi
+#         discarded → kullanıcı attı
+series_arcs = Table(
+    "series_arcs", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("channel", String, nullable=False, index=True),
+    Column("title", Text, default="", nullable=False),
+    Column("seed_topic", Text, default="", nullable=False),   # arkı doğuran banka konusu
+    Column("plan_json", Text, nullable=False),                # [{topic, promise}, ...]
+    Column("status", String, default="draft", nullable=False),
+    Column("produced", Integer, default=0, nullable=False),   # kaç bölümü üretildi
+    Column("created_at", DateTime, default=_utcnow, nullable=False),
+    Column("approved_at", DateTime),
+)
+
+
 feeds = Table(
     "feeds", metadata,
     Column("id", Integer, primary_key=True, autoincrement=True),
@@ -947,6 +970,113 @@ def episode_history(eng: Engine, channel: str, limit: int = 20) -> list[dict]:
     return [{"episode_no": r.episode_no, "arc_pos": r.arc_pos, "topic": r.topic,
              "open_loop": r.open_loop, "short_id": r.short_id,
              "created_at": r.created_at} for r in rows]
+
+
+# --- PLANLI ARK ------------------------------------------------------------
+
+def _arc_dict(row) -> dict:
+    import json as _json
+    try:
+        plan = _json.loads(row.plan_json)
+    except Exception:
+        plan = []
+    return {"id": row.id, "title": row.title, "seed_topic": row.seed_topic,
+            "plan": plan, "status": row.status, "produced": row.produced,
+            "created_at": row.created_at, "approved_at": row.approved_at,
+            "total": len(plan),
+            "remaining": max(0, len(plan) - int(row.produced or 0))}
+
+
+def create_arc(eng: Engine, channel: str, *, title: str, seed_topic: str,
+               plan: list[dict]) -> int:
+    """Taslak ark kaydet (status=draft → ÜRETİME GİRMEZ, önce onay)."""
+    import json as _json
+    with eng.begin() as conn:
+        r = conn.execute(series_arcs.insert().values(
+            channel=channel, title=str(title or "")[:120],
+            seed_topic=str(seed_topic or "")[:500],
+            plan_json=_json.dumps(plan, ensure_ascii=False),
+            status="draft", produced=0))
+        return int(r.inserted_primary_key[0])
+
+
+def _arc_by_status(eng: Engine, channel: str, status: str) -> dict | None:
+    with eng.connect() as conn:
+        row = conn.execute(
+            select(series_arcs).where(series_arcs.c.channel == channel)
+            .where(series_arcs.c.status == status)
+            .order_by(series_arcs.c.id.desc()).limit(1)).first()
+    return _arc_dict(row) if row is not None else None
+
+
+def draft_arc(eng: Engine, channel: str) -> dict | None:
+    """Onay bekleyen taslak (varsa)."""
+    return _arc_by_status(eng, channel, "draft")
+
+
+def active_arc(eng: Engine, channel: str) -> dict | None:
+    """Üretimde olan onaylı ark. Bölümleri BİTMİŞSE None döner (done'a çekilir)."""
+    a = _arc_by_status(eng, channel, "active")
+    if a and a["remaining"] <= 0:
+        finish_arc(eng, a["id"])
+        return None
+    return a
+
+
+def approve_arc(eng: Engine, arc_id: int) -> None:
+    """Taslağı ÜRETİME AL. Aynı kanalda başka bir aktif ark varsa o done'a çekilir —
+    iki aktif ark olursa hangisinin üretileceği belirsizleşir."""
+    with eng.begin() as conn:
+        row = conn.execute(select(series_arcs.c.channel)
+                           .where(series_arcs.c.id == int(arc_id))).first()
+        if row is None:
+            return
+        conn.execute(series_arcs.update()
+                     .where(series_arcs.c.channel == row[0])
+                     .where(series_arcs.c.status == "active")
+                     .values(status="done"))
+        conn.execute(series_arcs.update().where(series_arcs.c.id == int(arc_id))
+                     .values(status="active", approved_at=_utcnow()))
+
+
+def discard_arc(eng: Engine, arc_id: int) -> None:
+    with eng.begin() as conn:
+        conn.execute(series_arcs.update().where(series_arcs.c.id == int(arc_id))
+                     .values(status="discarded"))
+
+
+def finish_arc(eng: Engine, arc_id: int) -> None:
+    with eng.begin() as conn:
+        conn.execute(series_arcs.update().where(series_arcs.c.id == int(arc_id))
+                     .values(status="done"))
+
+
+def advance_arc(eng: Engine, arc_id: int) -> None:
+    """Bir bölüm ÜRETİLDİ → sayacı ilerlet. Üretim BAŞARILIYSA çağrılır: başarısız
+    bir koşu planı tüketirse o bölüm hiç üretilmemiş olur ve planda delik kalır."""
+    with eng.begin() as conn:
+        row = conn.execute(select(series_arcs.c.produced, series_arcs.c.plan_json)
+                           .where(series_arcs.c.id == int(arc_id))).first()
+        if row is None:
+            return
+        import json as _json
+        try:
+            toplam = len(_json.loads(row[1]))
+        except Exception:
+            toplam = 0
+        yeni = int(row[0] or 0) + 1
+        conn.execute(series_arcs.update().where(series_arcs.c.id == int(arc_id))
+                     .values(produced=yeni,
+                             status=("done" if toplam and yeni >= toplam else "active")))
+
+
+def arc_history(eng: Engine, channel: str, limit: int = 10) -> list[dict]:
+    with eng.connect() as conn:
+        rows = conn.execute(
+            select(series_arcs).where(series_arcs.c.channel == channel)
+            .where(series_arcs.c.status.in_(("active", "done")))
+            .order_by(series_arcs.c.id.desc()).limit(limit)).all()
+    return [_arc_dict(r) for r in rows]
 
 
 def bank_last_refresh(eng: Engine, channel: str):
