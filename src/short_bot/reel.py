@@ -660,7 +660,9 @@ def produce_reel_video(
     # Müzik profili: sessiz girişi atla + kütüphane seviye farkını eşitle.
     # Ölçüldü — parçaları 0:00'dan başlatınca müzik konuşmanın 37 dB altında
     # kalıyordu (olması gereken ~12 dB): çoğu stok parça yavaş kuruluyor.
+    # Profil çıkmazsa ESKİ davranış: kazanç yok, kanal çarpanı uygulanır.
     m_start, m_gain = 0.0, 0.0
+    m_vol = reel.music_volume
     if music_path is not None:
         try:
             # Önbellek müzik köküne yazılır: work_dir geçici, her koşuda silinir —
@@ -671,6 +673,10 @@ def produce_reel_video(
             konusma = speech_lufs(mp3, ffmpeg_path=ffmpeg_path)
             m_start = mprof.start_s
             m_gain = music_gain_db(mprof, konusma, reel.music_volume)
+            # Kazanç hedefi ZATEN tutturuyor (kanal ayarının dokunuşu da içinde).
+            # Üstüne bir de music_volume çarpmak ÇİFTE KISMA olur — gerçek hata:
+            # log "-11 dB altına oturtuldu" derken müzik -29 dB altında kalıyordu.
+            m_vol = 1.0
             log.info(f"  reel: müzik girişi {m_start:.1f}sn atlandı | "
                      f"konuşma {konusma if konusma is None else round(konusma,1)} LUFS, "
                      f"müzik {mprof.lufs:.1f} → {m_gain:+.1f} dB ile "
@@ -686,7 +692,7 @@ def produce_reel_video(
         clip_paths=clip_paths, seg_spans=seg_spans, frames_dir=frames_dir,
         narration_path=mp3, music_path=music_path, out_path=out_path,
         cut_times=cut_times, duration_s=duration_s, fps=fps, ffmpeg_path=ffmpeg_path,
-        music_volume=reel.music_volume,
+        music_volume=m_vol,
         music_start_s=m_start, music_gain_db=m_gain,
         sfx_volume=getattr(reel, "sfx_volume", 0.22),
         music_duck=getattr(reel, "music_duck", True),
