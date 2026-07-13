@@ -5,8 +5,12 @@ Seslendirme metni kanal dilinde, her beat için SOMUT İngilizce görsel sorgu
 """
 from __future__ import annotations
 
+import logging
+
 from short_bot.claude_cli import run_json
 from short_bot.reel_models import ReelNarration
+
+log = logging.getLogger(__name__)
 
 WORDS_PER_SECOND = 2.2   # ai33/ElevenLabs Türkçe ölçümü
 
@@ -147,8 +151,52 @@ HARD RULES:
 
 def _budget_feedback(actual: int, lo_w: int, hi_w: int) -> str:
     if actual > hi_w:
-        return f"\n\nKISALT: {actual} kelime vardı, üst sınır {hi_w}. Kısalt.\n"
+        return (f"\n\nKISALT: {actual} kelime yazdın, ÜST SINIR {hi_w}. "
+                f"En az {actual - hi_w} kelime AT. Beat sayısını azaltabilirsin.\n")
     return f"\n\nUZAT: sadece {actual} kelime vardı, alt sınır {lo_w}. Detay ekle.\n"
+
+
+MIN_BEATS = 3
+
+
+def fit_word_budget(n: ReelNarration, *, lo_w: int, hi_w: int) -> ReelNarration:
+    """Bütçeyi aşan senaryoyu KESİN olarak sığdır (LLM ikna edilemezse son çare).
+
+    GERÇEK HATA: LLM 112 kelime üretti (sınır 99) → video 53.3 SANİYE oldu. Retry
+    vardı ama sonucu KONTROL EDİLMİYORDU. 45sn'yi aşan video hem düşüşü sertleştirir
+    hem loop'u zorlaştırır hem de TEPE'yi geciktirir (%64'e kaydı, olması gereken ~%50).
+
+    Kısaltma sırası: SONDAN başlayarak beat at — ama TEPE beat'i, hook'u ve close'u
+    ASLA atma (tepe duygusal boşalma anı; hook en kritik saniye; close LOOP callback'i).
+    """
+    if n.word_count() <= hi_w:
+        return n
+
+    def _rebuild(beats, peak):
+        return ReelNarration(hook=n.hook, beats=beats, close=n.close, mood=n.mood,
+                             hook_visual=n.hook_visual, close_visual=n.close_visual,
+                             peak_beat=peak)
+
+    beats = list(n.beats)
+    peak = n.peak_beat
+    cur = n
+    # SONDAN başlayarak beat at — TEPE'ye dokunma, MIN_BEATS'in altına inme.
+    while cur.word_count() > hi_w and len(beats) > MIN_BEATS:
+        drop = next((i for i in range(len(beats) - 1, -1, -1) if i != peak), None)
+        if drop is None:
+            break
+        log.info(f"  senaryo bütçeyi aşıyor → beat atıldı: "
+                 f"'{beats[drop].text[:40]}...'")
+        beats = beats[:drop] + beats[drop + 1:]
+        if drop < peak:
+            peak -= 1
+        cur = _rebuild(beats, peak)
+        peak = cur.peak_beat
+    n = cur
+    if n.word_count() > hi_w:
+        log.warning(f"  senaryo hâlâ bütçe dışı: {n.word_count()} kelime > {hi_w} "
+                    f"(en az {MIN_BEATS} beat korunuyor) → video hedeften uzun olacak")
+    return n
 
 
 def write_reel_narration(topic: str, *, channel, claude_path: str = "claude",
@@ -174,6 +222,15 @@ def write_reel_narration(topic: str, *, channel, claude_path: str = "claude",
                  backend=backend, api_key=api_key, retries=3)
     if lo_w <= n.word_count() <= hi_w:
         return n
+    # LLM'i bir kez daha ikna etmeyi dene — SONUCU KONTROL ET (eskiden edilmiyordu:
+    # ikinci deneme de taşınca 112 kelime olduğu gibi gidiyor, video 53sn oluyordu).
     retry = prompt + _budget_feedback(n.word_count(), lo_w, hi_w)
-    return run_json(retry, ReelNarration, claude_path=claude_path, model=model,
-                    backend=backend, api_key=api_key, retries=3)
+    n2 = run_json(retry, ReelNarration, claude_path=claude_path, model=model,
+                  backend=backend, api_key=api_key, retries=3)
+    if lo_w <= n2.word_count() <= hi_w:
+        return n2
+    # İkna olmadı → KESİN olarak sığdır (kısa kalan da fazla uzun olandan iyidir).
+    best = n2 if abs(n2.word_count() - hi_w) < abs(n.word_count() - hi_w) else n
+    log.warning(f"  senaryo bütçeye uymadı ({n.word_count()} → {n2.word_count()} "
+                f"kelime, sınır {lo_w}-{hi_w}) → kısaltılıyor")
+    return fit_word_budget(best, lo_w=lo_w, hi_w=hi_w)

@@ -32,6 +32,10 @@ MAX_GATE_CHECKS = 14   # en fazla kaç aday vision kapısından geçirilir
 # aç bırakır ve klip hiç bulunamaz.
 MAX_DOWNLOADS = 16     # en fazla kaç klip indirilir
 MAX_PER_SOURCE = 6     # tek kaynaktan en fazla kaç aday denenir (tekel olmasın)
+# Vision kapısı çağrıları PARALEL: her çağrı ~3sn ve sıralıyken footage aşaması
+# üretimin %82'sini yiyordu (161 çağrı → 832sn). Çağrı SAYISI ve DOĞRULUK aynı
+# kalır; yalnız bekleme üst üste biner. 6 işçi OpenRouter'ı zorlamıyor.
+GATE_WORKERS = 6
 
 
 class _FootageVerdict(BaseModel):
@@ -496,6 +500,41 @@ def match_beat_clip(query: str, *, api_key: str = "", cache_dir: Path,
                 log.warning(f"{src_name} arama hatası: {e}")
                 cands = []
             cands = [c for c in cands if getattr(c, "duration_s", 0) >= MIN_CLIP_S]
+
+            # PARALEL ÖN-YARGI: bu partideki thumbnail'lı adayları AYNI ANDA vision'a
+            # gönder, sonucu ``seen``e yaz. Aşağıdaki SIRALI döngü önbellekten okuyacağı
+            # için hem SIRA hem tüm semantik korunur — yalnız BEKLEME üst üste biner.
+            # Ölçüm: 161 çağrı × ~3sn sıralı = 8 dakika. Çağrı SAYISI değişmiyor,
+            # doğruluk da değişmiyor (kullanıcı: "vision çok önemli").
+            prewarmed: set = set()
+            if verify and d.verify_footage is not None and seen is not None:
+                room = MAX_GATE_CHECKS - b.get("gate", 0)
+                slots = min(room, MAX_PER_SOURCE - tried_from_source)
+                todo = []
+                for c in cands:
+                    if len(todo) >= slots:
+                        break
+                    u = getattr(c, "image", "") or ""
+                    if not u or u in seen or (exclude and getattr(c, "url", "") in exclude):
+                        continue
+                    todo.append((c, u))
+                if len(todo) > 1:
+                    from concurrent.futures import ThreadPoolExecutor
+
+                    def _judge(item):
+                        _c, _u = item
+                        try:
+                            d.verify_footage(_u, query, vision_call=vision_call,
+                                             pool=topic_pool, context=context, seen=seen)
+                        except Exception as e:  # noqa: BLE001 — biri patlarsa diğerleri sürsün
+                            log.warning(f"footage vision doğrulama hatası: {e}")
+
+                    with ThreadPoolExecutor(max_workers=GATE_WORKERS) as ex:
+                        list(ex.map(_judge, todo))
+                    for _c, _u in todo:
+                        prewarmed.add(_u)
+                    b["gate"] = b.get("gate", 0) + len(todo)
+
             for c in cands:
                 if tried_from_source >= MAX_PER_SOURCE or not _budget_left():
                     break
@@ -507,7 +546,9 @@ def match_beat_clip(query: str, *, api_key: str = "", cache_dir: Path,
                 # Önbellekte olan aday vision'a YENİDEN gitmez → bütçe yalnız YENİ
                 # adaylar için harcanır.
                 if verify and d.verify_footage is not None and thumb_url:
-                    cached = seen is not None and thumb_url in seen
+                    # Ön-yargıda bütçe ZATEN düşüldü → iki kez sayma.
+                    cached = (seen is not None and thumb_url in seen) \
+                        or thumb_url in prewarmed
                     if not cached:
                         b["gate"] = b.get("gate", 0) + 1
                     try:

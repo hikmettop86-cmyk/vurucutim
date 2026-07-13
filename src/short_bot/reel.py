@@ -30,6 +30,10 @@ from short_bot.tts.align import transcribe_words as _transcribe
 
 log = logging.getLogger(__name__)
 
+# Belirteç konumları birbirinden BAĞIMSIZ vision çağrıları (~2-3sn) — paralel ölç.
+# 15 alt-kesim sıralı ölçülünce 30 saniye yiyordu.
+LOCATE_WORKERS = 5
+
 _PREFLIGHT = {
     "no-key": "ai33 için AI33_API_KEY tanımlı değil (Ayarlar → API anahtarları).",
     "auth": "ai33 reddetti: AI33_API_KEY geçersiz ya da kredi bitmiş.",
@@ -375,15 +379,24 @@ def produce_reel_video(
     markers = []
     if reel.arrows_enabled and worthy:
         _mk_t0 = _time.perf_counter()
-        positions = []
-        for i, (si, _a, _b) in enumerate(subcuts):
-            if si not in worthy:
-                positions.append(SubjectPos(found=False))
-                continue
+
+        def _locate_at(i: int, si: int) -> SubjectPos:
             q = timeline.seg_queries[si] or _first_q
-            positions.append(d.locate_subject(
-                clip_paths[i], q, vision_call=vision_call,
-                ffmpeg_path=ffmpeg_path, at_s=clip_starts[i] + 0.4))
+            return d.locate_subject(clip_paths[i], q, vision_call=vision_call,
+                                    ffmpeg_path=ffmpeg_path,
+                                    at_s=clip_starts[i] + 0.4)
+
+        # PARALEL: her konum ölçümü bir vision çağrısı (~2-3sn). 15 alt-kesim sıralı
+        # ölçülünce 30 saniye yiyordu; sonuçlar birbirinden bağımsız.
+        from concurrent.futures import ThreadPoolExecutor
+        todo = [(i, si) for i, (si, _a, _b) in enumerate(subcuts) if si in worthy]
+        found: dict[int, SubjectPos] = {}
+        if todo:
+            with ThreadPoolExecutor(max_workers=LOCATE_WORKERS) as ex:
+                for (i, _si), pos in zip(todo, ex.map(lambda t: _locate_at(*t), todo)):
+                    found[i] = pos
+        positions = [found.get(i, SubjectPos(found=False))
+                     for i in range(len(subcuts))]
         markers = build_markers(subcuts, positions,
                                 marker_kit=profile.marker_kit,
                                 frequency=reel.arrow_frequency, seed=seed)
