@@ -52,8 +52,8 @@ def _short():
 def test_word_budget():
     # 1.95 kelime/sn GERÇEK koşularda ölçüldü (2.2 varsayımı fazla iyimserdi:
     # üst sınır 99 kelime verip 48-53 SANİYELİK video ürettiriyordu).
-    assert reel_word_budget((25, 45)) == (48, 87)   # 25*1.95, 45*1.95
-    assert WORDS_PER_SECOND == 1.95
+    assert reel_word_budget((25, 45)) == (45, 81)   # 25*1.80, 45*1.80
+    assert WORDS_PER_SECOND == 1.80
 
 
 def test_prompt_asks_concrete_english_queries_and_language():
@@ -61,7 +61,7 @@ def test_prompt_asks_concrete_english_queries_and_language():
     assert "visual_query" in p
     assert "English" in p            # görsel sorgular İngilizce
     assert "Turkish" in p            # seslendirme Türkçe
-    assert "48" in p and "87" in p   # kelime bütçesi
+    assert "45" in p and "81" in p   # kelime bütçesi
 
 
 def test_write_returns_llm_output_in_budget(monkeypatch):

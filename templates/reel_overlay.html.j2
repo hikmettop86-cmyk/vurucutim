@@ -65,15 +65,24 @@ html,body{width:1080px;height:1920px;overflow:hidden;background:transparent;
 .cap .w.vis{display:inline}
 .cap .w.hot{color:{{ hot_color }};display:inline-block;transform:scale(1.09)}
 #handle{position:absolute;bottom:150px;left:0;right:0;text-align:center;font-size:44px;font-weight:800;text-shadow:0 3px 12px rgba(0,0,0,.9);opacity:.9}
+/* 56px + nowrap, kadraja SIĞMIYORDU: "Bu seri devam ediyor — ABONE OL" sağdan
+   kesiliyordu ("...ABONE O"). Çözüm sarma DEĞİL (sarma altyazıya biner):
+   font küçült + metinleri KISA tut (bkz. reel_subscribe.CTA_MAX_CHARS). */
 #cta{position:absolute;bottom:250px;left:50%;transform:translateX(-50%);
-  background:{{ highlight_color }};color:{{ chip_text }};font-weight:900;font-size:56px;
-  padding:20px 46px;border-radius:16px;white-space:nowrap;display:none;
+  background:{{ highlight_color }};color:{{ chip_text }};font-weight:900;font-size:46px;
+  padding:16px 36px;border-radius:16px;white-space:nowrap;display:none;
+  max-width:1000px;overflow:hidden;
   box-shadow:0 16px 50px rgba(0,0,0,.6);border:4px solid rgba(0,0,0,.35)}
 #cta.on{display:block}
 /* BEĞENİ TETİĞİ: tepeden hemen sonra, SESSİZ bir nabız. Anlatım saniyesi harcamaz,
    izleyiciyi rahatsız etmez — duygusal dalganın üstüne biner. */
-#like{position:absolute;bottom:640px;left:50%;transform:translateX(-50%) scale(0);
-  font-size:150px;opacity:0;filter:drop-shadow(0 10px 30px rgba(0,0,0,.65))}
+/* Konum GÜVENLİ BÖLGEDE olmalı. bottom:640 altyazıya biniyordu: "Her 👍erde
+   bulunuyorlar!" — emoji kelimeyi eziyordu. Harita (1920 yük.):
+     chip top 200 | numpop top 700-850 | ALTYAZI bottom 300-580 | cta bottom 250
+   bottom:760 + 120px → numpop'un 166px altında, altyazının 178px üstünde. */
+#like{position:absolute;bottom:760px;left:50%;transform:translateX(-50%) scale(0);
+  font-size:120px;line-height:1.2;opacity:0;
+  filter:drop-shadow(0 10px 30px rgba(0,0,0,.65))}
 /* layout varyantları — marka aynı, konum/hiza farklı */
 .stage.lower_left .cap{text-align:left;left:60px;right:220px;bottom:360px}
 .stage.lower_left .big{text-align:left;left:60px;right:120px}

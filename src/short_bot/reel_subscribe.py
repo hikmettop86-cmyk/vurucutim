@@ -5,7 +5,10 @@ Deterministik (seed → sabit), havuzdan rotasyon (şablon parmak izi vermez).
 from __future__ import annotations
 
 import hashlib
+import logging
 from dataclasses import dataclass
+
+log = logging.getLogger(__name__)
 
 # YORUM YEMİ — YÖNERGE, kalıp cümle DEĞİL.
 #
@@ -34,11 +37,16 @@ COMMENT_STYLES = (
 # izleyici bunu on bin kez duydu, beyni filtreliyor ("YouTube beyaz gürültüsü").
 # İşleyen çerçeveler: DEĞER-SPESİFİK (ne alacağını söyle) ve SERİ (dönüşü alışkanlık
 # yapar; seri izleyicisi ilk-kez izleyiciden çok daha yüksek oranda abone olur).
+#
+# ÇİP TEK SATIR: 1080px genişliğe sığmalı. "Bu seri devam ediyor — ABONE OL" (30
+# karakter) sağdan KESİLİYORDU. Sarmaya izin vermek çözüm değil — iki satırlık çip
+# altyazının üstüne biner ve payoff'u kapatır (araştırma: CTA payoff'u KAPATMAMALI).
+CTA_MAX_CHARS = 24
 CTA_TEXTS = (
-    "Her gün bir tane — ABONE OL",
-    "Yarın sıradaki — ABONE OL",
-    "Bunun gibi her gün — ABONE OL",
-    "Bu seri devam ediyor — ABONE OL",
+    "Her gün yeni — ABONE OL",
+    "Yarın devamı — ABONE OL",
+    "Seri sürüyor — ABONE OL",
+    "Devamı yarın — ABONE OL",
 )
 
 
@@ -74,6 +82,11 @@ def build_subscribe_bits(channel, seed: int) -> SubscribeBits:
     if getattr(reel, "cta_enabled", False):
         custom = (getattr(reel, "cta_text_custom", "") or "").strip()
         cta_text = custom or CTA_TEXTS[_idx(seed, "cta", len(CTA_TEXTS))]
+        if len(cta_text) > CTA_MAX_CHARS:
+            # Kesilmiş çip ("...ABONE O") her şeyden kötü — kırp ve uyar.
+            log.warning(f"  abone çipi çok uzun ({len(cta_text)} > {CTA_MAX_CHARS} "
+                        f"karakter), kırpılıyor: {cta_text!r}")
+            cta_text = cta_text[:CTA_MAX_CHARS].rstrip()
 
     return SubscribeBits(series_directive=series_directive,
                          comment_line=comment_line, cta_text=cta_text)

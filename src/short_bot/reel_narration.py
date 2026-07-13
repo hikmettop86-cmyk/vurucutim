@@ -12,10 +12,12 @@ from short_bot.reel_models import ReelNarration
 
 log = logging.getLogger(__name__)
 
-# ÖLÇÜM (gerçek koşular): 96 kelime/48.6sn = 1.98 | 92/43.4 = 2.12 | 112/53.3 = 2.10
-# 2.2 varsayımı fazla İYİMSERDİ → üst sınır 99 kelime, gerçekte 48-53 saniye video.
-# En YAVAŞ ölçülen hıza göre bütçele: 45 saniyeyi aşmamak, kısa kalmaktan önemli.
-WORDS_PER_SECOND = 1.95
+# ÖLÇÜM (gerçek koşular, kelime/sn):
+#   86/47.8 = 1.80  |  96/48.6 = 1.98  |  92/43.4 = 2.12  |  112/53.3 = 2.10
+# Hız içeriğe göre %18 oynuyor. Bütçeyi EN YAVAŞ ölçüme göre kur: 45 saniyeyi
+# AŞMAMAK, kısa kalmaktan önemli (aşınca düşüş sertleşiyor, loop zorlaşıyor ve
+# TEPE geç kalıyor). 2.2 varsayımı iyimserdi → 48-53 saniyelik videolar üretiyordu.
+WORDS_PER_SECOND = 1.80
 
 # Prompt İngilizce yazıldığından dil adları da İngilizce verilir. locale.LANGUAGE_NAMES
 # yerel adları döndürüyor ("tr" -> "Türkçe") ve İngilizce prompt'a uymadığından burada
