@@ -34,6 +34,20 @@ log = logging.getLogger(__name__)
 # 15 alt-kesim sıralı ölçülünce 30 saniye yiyordu.
 LOCATE_WORKERS = 5
 
+
+def _probe_s(path, ffmpeg_path: str = "ffmpeg") -> float:
+    """Ses dosyasının süresi. Riser'ın BİTİŞİ tepeye hizalanacağı için şart.
+    Okunamazsa kütüphane varsayılanına düş (fail-open)."""
+    import subprocess
+    from short_bot.assets_library import MAX_RISER_S
+    try:
+        p = subprocess.run(["ffprobe", "-v", "error", "-show_entries",
+                            "format=duration", "-of", "csv=p=0", str(path)],
+                           capture_output=True, text=True, timeout=15)
+        return float(p.stdout.strip())
+    except Exception:
+        return MAX_RISER_S
+
 _PREFLIGHT = {
     "no-key": "ai33 için AI33_API_KEY tanımlı değil (Ayarlar → API anahtarları).",
     "auth": "ai33 reddetti: AI33_API_KEY geçersiz ya da kredi bitmiş.",
@@ -456,6 +470,24 @@ def produce_reel_video(
              + (f" (kurgucu: {'/'.join(dict.fromkeys(profile.sfx_plan))})"
                 if profile.sfx_plan else ""))
 
+    # RISER → IMPACT: reveal'den önce yükselen ses, tam tepe karesinde vuruş.
+    # Riser bir TAHMİN MAKİNESİDİR — "bir şey geliyor" der ve kaydırma dürtüsünü
+    # bastırır (çözülmeden gidemezsin); impact tahmini ÖDÜLLENDİRİR.
+    riser = impact = None
+    if peak_end_s:
+        risers = sorted((assets_root / "riser").glob("*.mp3"))
+        if risers:
+            pick = risers[seed % len(risers)]
+            riser = (pick, _probe_s(pick, ffmpeg_path))
+        impacts = sorted((sfx_dir / "impact").glob("*.mp3"))
+        # Kesimlerde ZATEN kullanılmış bir impact'i tepede tekrar çalma
+        used = {str(p) for p in sfx_at_cut}
+        fresh = [p for p in impacts if str(p) not in used] or impacts
+        if fresh:
+            impact = fresh[seed % len(fresh)]
+        log.info(f"  reel: tepe sesi → riser={riser[0].name if riser else '-'} "
+                 f"+ impact={impact.name if impact else '-'} @ {peak_end_s:.1f}s")
+
     # Müzik: kurgucu ruh hali önerdiyse yeniden seç (pipeline kanal ayarıyla seçmişti,
     # ama kurgucu anlatımı OKUDUKTAN sonra karar verir). Klasör yoksa eskisi kalır.
     if profile.music_mood:
@@ -474,6 +506,7 @@ def produce_reel_video(
         music_volume=reel.music_volume,
         sfx_volume=getattr(reel, "sfx_volume", 0.22),
         music_duck=getattr(reel, "music_duck", True),
+        riser=riser, impact=impact, reveal_s=peak_end_s,
         sfx_at_cut=sfx_at_cut,
         zoom=("zoom" in profile.transitions),
         clip_starts=clip_starts,

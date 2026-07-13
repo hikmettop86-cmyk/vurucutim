@@ -215,9 +215,17 @@ def write_reel_narration(topic: str, *, channel, claude_path: str = "claude",
     if series_directive:
         prompt = prompt + f"\n\nSERİ: {series_directive}\n"
     if comment_line:
-        prompt = prompt + (f"\n\nYORUM SORUSU: '{comment_line}' cümlesini kapanışın "
-                           f"hemen ardına, izleyiciyi yorum yapmaya teşvik edecek "
-                           f"şekilde 'close' alanına dahil et.\n")
+        # comment_line artık KALIP CÜMLE değil, YÖNERGE: soruyu LLM videonun kendi
+        # içeriğinden yazar. Jenerik ("Ne düşünüyorsun?") sorular cevapsız kalır;
+        # iyi bir yorum sorusu videodaki SPESİFİK bir ana bağlı olmalıdır.
+        prompt = prompt + (
+            f"\n\nYORUM SORUSU — 'close' alanının SONUNA, videonun İÇERİĞİNE bağlı "
+            f"KISA bir soru ekle. Türü şu olmalı:\n{comment_line}\n"
+            f"Soru DÜŞÜK EFORLU olmalı (tek harf/tek kelimeyle cevaplanabilsin). "
+            f"'Ne düşünüyorsun?' / 'Yorumlara yaz' gibi açık uçlu, jenerik "
+            f"kapanışlar YASAK — cevapsız kalırlar.\n"
+            f"Kapanışın LOOP CALLBACK görevi bozulmasın: önce hook'un sözcüklerini "
+            f"geri çağır, soruyu EN SONA koy.\n")
     n = run_json(prompt, ReelNarration, claude_path=claude_path, model=model,
                  backend=backend, api_key=api_key, retries=3)
     if lo_w <= n.word_count() <= hi_w:

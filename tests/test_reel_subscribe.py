@@ -1,5 +1,5 @@
 from short_bot.config import ReelConfig
-from short_bot.reel_subscribe import (CTA_TEXTS, COMMENT_QUESTIONS,
+from short_bot.reel_subscribe import (CTA_TEXTS, COMMENT_STYLES,
                                       SubscribeBits, build_subscribe_bits)
 
 
@@ -21,9 +21,9 @@ def test_all_off_empty():
 
 def test_comment_from_pool_when_on():
     ch = _Ch(comment_question=True, cta_enabled=False, series_enabled=False)
-    lines = {build_subscribe_bits(ch, s).comment_line for s in range(len(COMMENT_QUESTIONS) * 2)}
+    lines = {build_subscribe_bits(ch, s).comment_line for s in range(len(COMMENT_STYLES) * 2)}
     assert len(lines) >= 2
-    assert build_subscribe_bits(ch, 0).comment_line in COMMENT_QUESTIONS
+    assert build_subscribe_bits(ch, 0).comment_line in COMMENT_STYLES
 
 
 def test_cta_from_pool_when_on():

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import tempfile
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
@@ -36,6 +37,9 @@ MAX_PER_SOURCE = 6     # tek kaynaktan en fazla kaç aday denenir (tekel olması
 # üretimin %82'sini yiyordu (161 çağrı → 832sn). Çağrı SAYISI ve DOĞRULUK aynı
 # kalır; yalnız bekleme üst üste biner. 6 işçi OpenRouter'ı zorlamıyor.
 GATE_WORKERS = 6
+# Küçük resim indirmesi: paralel tarama CDN'i zorluyor; tek bir 503 doğrulamayı
+# tamamen atlatıp DOĞRULANMAMIŞ klibi videoya sokuyordu.
+THUMB_RETRIES = 3
 
 
 class _FootageVerdict(BaseModel):
@@ -204,7 +208,7 @@ def verify_clip_frame_matches(clip_path, query: str, *, vision_call=None, pool=N
     def _decide(v: "_FootageVerdict") -> bool:
         return bool(v.clear) and bool(v.matches)
 
-    key = str(clip_path)
+    key = _seen_key(query, str(clip_path))
     if seen is not None and key in seen:
         return _decide(seen[key])
     frame: Path | None = None
@@ -230,6 +234,12 @@ def verify_clip_frame_matches(clip_path, query: str, *, vision_call=None, pool=N
     finally:
         if frame is not None:
             frame.unlink(missing_ok=True)
+
+
+def _seen_key(query: str, asset: str) -> str:
+    """Yargı önbelleği anahtarı. Yargı (GÖRSEL, SORGU) çiftine bağlıdır — aynı klip
+    bir sorguya uyup diğerine uymayabilir."""
+    return f"{query} :: {asset}"
 
 
 def _tag(v: "_FootageVerdict", ok: bool) -> str:
@@ -280,14 +290,32 @@ def verify_clip_matches(image_url: str, query: str, *, vision_call=None, pool=No
         # retention öldürür (gerçek hata: 6sn ne olduğu anlaşılmayan siyah kütle).
         return bool(v.clear) and bool(v.matches)
 
-    if seen is not None and image_url in seen:
-        return _decide(seen[image_url])
+    # ANAHTAR (SORGU, GÖRSEL): ``matches`` SORGUYA karşı verilen bir yargıdır.
+    # Yalnız görsele göre önbelleklemek, "ocean low tide path" için verilen [ok]
+    # yargısını "earth moon gravity pull" sorgusunda da kullandırıyordu — okyanus
+    # klibi ay segmentine KAPIDAN GEÇMİŞ gibi giriyordu (gerçek hata: short_id=748).
+    key = _seen_key(query, image_url)
+    if seen is not None and key in seen:
+        return _decide(seen[key])
 
     import requests
     thumb: Path | None = None
     try:
-        r = requests.get(image_url, timeout=15)
-        if r.status_code != 200 or not r.content:
+        # Küçük resmi YENİDEN DENE: paralel tarama CDN'i zorluyor ve tek bir 503,
+        # doğrulamayı tamamen atlatıp DOĞRULANMAMIŞ klibi videoya sokuyordu.
+        r = None
+        for attempt in range(THUMB_RETRIES):
+            r = requests.get(image_url, timeout=15)
+            if r.status_code == 200 and r.content:
+                break
+            if attempt + 1 < THUMB_RETRIES:
+                time.sleep(0.4 * (attempt + 1))
+        if r is None or r.status_code != 200 or not r.content:
+            # Fail-open KORUNUR (üretim asla kapı yüzünden bloklanmaz) ama SESSİZ
+            # OLMAZ: sessiz kabul, teşhis ederken "kapı çalışıyor" sandırıyordu.
+            log.warning(f"  footage gate: küçük resim inmedi "
+                        f"(HTTP {getattr(r, 'status_code', '?')}) → fail-open, "
+                        f"klip DOĞRULANMADAN kabul | q='{query}'")
             return True
         with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tf:
             tf.write(r.content)
@@ -297,14 +325,15 @@ def verify_clip_matches(image_url: str, query: str, *, vision_call=None, pool=No
             log.info(f"  footage gate: vision yanıt vermedi → fail-open | q='{query}'")
             return True
         if seen is not None:
-            seen[image_url] = v
+            seen[key] = v
         ok = _decide(v)
         log.info(f"  footage gate [{_tag(v, ok)}] q='{query}': "
                  f"'{(v.content or '')[:60]}'"
                  + (f" ({v.reason[:40]})" if not ok and v.reason else ""))
         return ok
     except Exception as e:
-        log.warning(f"footage gate hatası: {e}")
+        log.warning(f"  footage gate hatası → fail-open, klip DOĞRULANMADAN kabul: "
+                    f"{e} | q='{query}'")
         return True
     finally:
         if thumb is not None:
@@ -469,9 +498,9 @@ def match_beat_clip(query: str, *, api_key: str = "", cache_dir: Path,
             return
         bank.append(entry)
 
-    def _in_context(key: str) -> bool:
+    def _in_context(asset: str) -> bool:
         """Yargı önbellekten: ana özne yok AMA konunun dünyasından ve net mi?"""
-        v = (seen or {}).get(key)
+        v = (seen or {}).get(_seen_key(query, asset))
         return bool(v is not None and getattr(v, "in_context", False)
                     and getattr(v, "clear", False))
 
@@ -515,7 +544,8 @@ def match_beat_clip(query: str, *, api_key: str = "", cache_dir: Path,
                     if len(todo) >= slots:
                         break
                     u = getattr(c, "image", "") or ""
-                    if not u or u in seen or (exclude and getattr(c, "url", "") in exclude):
+                    if (not u or _seen_key(query, u) in seen
+                            or (exclude and getattr(c, "url", "") in exclude)):
                         continue
                     todo.append((c, u))
                 if len(todo) > 1:
@@ -580,7 +610,8 @@ def match_beat_clip(query: str, *, api_key: str = "", cache_dir: Path,
                 # (Storyblocks kazıma thumb üretmez → aksi hâlde gate'i atlardı).
                 if (verify and not thumb_url
                         and getattr(d, "verify_clip_frame", None) is not None):
-                    if not (seen is not None and str(clip) in seen):
+                    if not (seen is not None
+                            and _seen_key(query, str(clip)) in seen):
                         b["gate"] = b.get("gate", 0) + 1
                     try:
                         ok2 = d.verify_clip_frame(clip, query, vision_call=vision_call,

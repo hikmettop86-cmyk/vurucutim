@@ -25,6 +25,10 @@ log = logging.getLogger(__name__)
 # Mixkit SFX kategorileri (canlı ölçüm: whoosh 20, diğerleri ~36 dosya)
 SFX_CATEGORIES = ("whoosh", "impact", "click", "game", "technology", "cinematic")
 
+# RISER: reveal'den önce yükselen ses. SFX havuzuna KARIŞMAZ — kesim başına çalarsa
+# video uğultuya döner. Tek bir yerde, TEPEDEN hemen önce kullanılır.
+RISER_CATEGORY = "riser"
+
 # Kurgucunun kullanacağı ruh hali → Mixkit müzik kategorisi (hepsi doğrulandı)
 MUSIC_MOODS = {
     "tense": "thriller",          # 20
@@ -58,9 +62,20 @@ MAX_SFX_S = 1.5          # SFX bir VURGUDUR, yatak değil
 SFX_FADE_S = 0.12        # kırpma tıkırtısı olmasın
 SFX_TARGET_LUFS = -23    # anlatımın BELİRGİN altında (vurgu, yarış değil)
 
+# RISER SFX'ten UZUN olmalı: 1.5sn'ye kırpılırsa YÜKSELİŞ yok olur, geriye bir uğultu
+# kalır. Riser'ın işi tam da o yükseliş — beyne "bir şey geliyor" demesi.
+MAX_RISER_S = 2.5
+RISER_TARGET_LUFS = -20  # SFX'ten biraz önde: gerilimi taşıması gerek
 
-def normalize_sfx(path, *, ffmpeg_path: str = "ffmpeg") -> "Path | None":
+
+def normalize_sfx(path, *, ffmpeg_path: str = "ffmpeg",
+                  max_s: float = MAX_SFX_S,
+                  target_lufs: float = SFX_TARGET_LUFS,
+                  fade_out: bool = True) -> "Path | None":
     """SFX dosyasını yerinde VURGUYA çevir: kırp + fade + seviye eşitle.
+
+    ``fade_out=False`` (riser): sondaki doruk KORUNUR — riser'ın işi tam da o
+    yükseliş; sonunu söndürürsek geriye bir uğultu kalır.
 
     Idempotent (kütüphane tekrar taranabilir). Bozuk/çözülemeyen dosya → None,
     dosyaya DOKUNULMAZ (fail-open: tek bozuk dosya kurulumu düşürmez).
@@ -75,12 +90,14 @@ def normalize_sfx(path, *, ffmpeg_path: str = "ffmpeg") -> "Path | None":
     os.close(fd)          # Windows: açık tanıtıcı ffmpeg'in yazmasını engeller
     tmp = Path(tmp_name)
     try:
+        af = f"atrim=0:{max_s:g},asetpts=N/SR/TB,"
+        if fade_out:
+            af += (f"afade=t=out:st={max(0.0, max_s - SFX_FADE_S):g}:"
+                   f"d={SFX_FADE_S:g},")
+        af += f"loudnorm=I={target_lufs:g}:TP=-3:LRA=11"
         cmd = [
             ffmpeg_path, "-y", "-v", "error", "-i", str(p),
-            "-af", (f"atrim=0:{MAX_SFX_S},asetpts=N/SR/TB,"
-                    f"afade=t=out:st={max(0.0, MAX_SFX_S - SFX_FADE_S):g}:d={SFX_FADE_S:g},"
-                    f"loudnorm=I={SFX_TARGET_LUFS}:TP=-3:LRA=11"),
-            "-ar", "44100", "-b:a", "128k", str(tmp),
+            "-af", af, "-ar", "44100", "-b:a", "128k", str(tmp),
         ]
         r = subprocess.run(cmd, capture_output=True, timeout=60)
         if r.returncode != 0 or not tmp.exists() or tmp.stat().st_size < 1000:
@@ -157,6 +174,10 @@ def _fill(kind: str, cat: str, page_url: str, dest_dir: Path, want: int,
                 # dosyalar arası 20 dB seviye farkı var → kütüphaneye VURGU
                 # olarak girsin (kırpılmış + seviyesi eşitlenmiş).
                 normalize_sfx(out)
+            elif kind == "riser":
+                # Riser'ın DORUĞU sondadır → fade YOK, ve SFX'ten uzun kalır.
+                normalize_sfx(out, max_s=MAX_RISER_S,
+                              target_lufs=RISER_TARGET_LUFS, fade_out=False)
             added += 1
             if progress:
                 progress(f"{kind}/{cat}: {have + added}/{want}")
@@ -164,12 +185,12 @@ def _fill(kind: str, cat: str, page_url: str, dest_dir: Path, want: int,
 
 
 def build_library(dest_root, *, per_sfx: int = 12, per_music: int = 8,
-                  http_get=None, progress=None) -> dict:
+                  per_riser: int = 7, http_get=None, progress=None) -> dict:
     """Kütüphaneyi kur/genişlet → assets/sfx/<kat>/ + assets/music/<mood>/ + manifest.
 
     Tek kategorinin hatası diğerlerini DURDURMAZ (fail-open). Var olan dosya
     yeniden indirilmez → düğmeye tekrar basmak kütüphaneyi büyütür.
-    Dönüş: {"sfx": N, "music": M, "skipped": K}
+    Dönüş: {"sfx": N, "music": M, "riser": R, "skipped": K}
     """
     root = Path(dest_root)
     http_get = http_get or _default_get
@@ -183,6 +204,17 @@ def build_library(dest_root, *, per_sfx: int = 12, per_music: int = 8,
             skipped += 1
             log.warning(f"assets_library: sfx/{cat} atlandı: {e}")
 
+    # RISER: ayrı klasör — SFX havuzuna karışırsa kesim başına çalar ve video
+    # uğultuya döner. Tek bir yerde, TEPEDEN hemen önce kullanılır.
+    n_riser = 0
+    try:
+        n_riser = _fill("riser", RISER_CATEGORY,
+                        _SFX_URL.format(cat=RISER_CATEGORY),
+                        root / "riser", per_riser, http_get, progress)
+    except Exception as e:   # noqa: BLE001
+        skipped += 1
+        log.warning(f"assets_library: riser atlandı: {e}")
+
     for mood, cat in MUSIC_MOODS.items():
         try:
             n_music += _fill("music", mood, _MUSIC_URL.format(cat=cat),
@@ -195,7 +227,8 @@ def build_library(dest_root, *, per_sfx: int = 12, per_music: int = 8,
     log.info(f"assets_library: +{n_sfx} sfx, +{n_music} müzik "
              f"(toplam sfx={sum(len(v) for v in idx['sfx'].values())}, "
              f"müzik={sum(len(v) for v in idx['music'].values())})")
-    return {"sfx": n_sfx, "music": n_music, "skipped": skipped}
+    return {"sfx": n_sfx, "music": n_music, "riser": n_riser,
+            "skipped": skipped}
 
 
 def load_library_index(root, *, write_manifest: bool = False) -> dict:

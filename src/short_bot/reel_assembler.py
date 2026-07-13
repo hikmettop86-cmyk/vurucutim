@@ -63,6 +63,11 @@ def assemble_reel(
     fps: int = 30, ffmpeg_path: str = "ffmpeg", music_volume: float = 0.10,
     narration_volume: float = 1.0, sfx_volume: float = 0.22,
     music_duck: bool = True,
+    riser: tuple | None = None,       # (path, süre_sn) — TEPESİ reveal'e denk gelir
+    impact: Path | None = None,       # reveal karesinde vuruş
+    reveal_s: float | None = None,    # TEPE anı (yoksa gramer kurulmaz)
+    riser_volume: float = 0.35,
+    impact_volume: float = 0.40,
     sfx_at_cut: list | None = None,
     zoom: bool = True, clip_starts: list | None = None,
     hook_punch: bool = False,
@@ -129,6 +134,26 @@ def assemble_reel(
                 parts.append("[bgm0]anull[bgm]")
             labels.append("[bgm]")
             idx += 1
+        # RISER → IMPACT: riser bir TAHMİN MAKİNESİDİR — beyne "bir şey geliyor" der
+        # ve kaydırma dürtüsünü bastırır (çözülmeden gidemezsin); impact tahmini
+        # ÖDÜLLENDİRİR. Riser'ın TEPESİ sondadır → BİTİŞİNİ reveal karesine hizala.
+        if reveal_s is not None and reveal_s > 0:
+            if riser is not None:
+                r_path, r_dur = riser
+                r_at = max(0.0, reveal_s - float(r_dur))
+                cmd += ["-i", str(r_path)]
+                parts.append(f"[{idx}:a]adelay={int(r_at*1000)}|{int(r_at*1000)},"
+                             f"volume={riser_volume:g}[riser]")
+                labels.append("[riser]")
+                idx += 1
+            if impact is not None:
+                i_at = reveal_s
+                cmd += ["-i", str(impact)]
+                parts.append(f"[{idx}:a]adelay={int(i_at*1000)}|{int(i_at*1000)},"
+                             f"volume={impact_volume:g}[impact]")
+                labels.append("[impact]")
+                idx += 1
+
         if sfx_at_cut and cut_times:
             for k, ct in enumerate(cut_times):
                 if k >= len(sfx_at_cut) or sfx_at_cut[k] is None:

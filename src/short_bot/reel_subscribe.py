@@ -7,17 +7,38 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass
 
-COMMENT_QUESTIONS = (
-    "Sen biliyor muydun? Yorumlara yaz.",
-    "Hangisi seni en çok şaşırttı?",
-    "Bunu bilen var mıydı aranızda?",
-    "Sence en ilginci hangisiydi?",
+# YORUM YEMİ — YÖNERGE, kalıp cümle DEĞİL.
+#
+# Açık uçlu sorular ("Ne düşünüyorsun?", "Hangisi seni en çok şaşırttı?") YÜKSEK
+# EFORLUDUR ve cevapsız kalır. Yanıt ALAN türler: İKİLİ/hangisi (tek harf yeter),
+# kişisel hatırlama, doğrulama, eksiği-bul. Ama iyi bir soru VİDEODAKİ SPESİFİK BİR
+# ANA bağlı olmalı — jenerik kalıp bunu yapamaz. O yüzden LLM'e cümleyi yazdırıyoruz,
+# biz yalnız TÜRÜ dayatıyoruz.
+#
+# "Yanlışı bul" türü KASTEN YOK: bilim/tarih kanalında kısa vadeli yorum için uzun
+# vadeli OTORİTEYİ takas eder — otorite bizim ürünümüz. Yerine "eksiği bul".
+COMMENT_STYLES = (
+    "İKİLİ SORU: videodaki iki şıkkı karşılaştıran, tek harfle (A/B) "
+    "cevaplanabilecek bir soru sor. Örnek kalıp: 'Sence hangisi daha çılgın: "
+    "A mı, B mi? Tek harf yaz.'",
+    "KİŞİSEL HATIRLAMA: 'Bunu kaç yaşında öğrendin?' gibi, izleyicinin kendi "
+    "deneyimini tek kelimeyle yazabileceği bir soru sor.",
+    "DOĞRULAMA: 'Bunu duyunca tüylerin diken diken olan bir ben miyim?' gibi, "
+    "onay ya da itiraz — ikisi de yorum getiren bir cümle kur.",
+    "EKSİĞİ BUL: 'Kasten bir detay atladım, bulabilir misin?' tarzı, izleyiciyi "
+    "videoya geri döndüren bir soru sor. (Kasten YANLIŞ bilgi verme — otoriteyi "
+    "asla takas etme.)",
 )
+
+# ABONE İSTEĞİ — "Daha fazlası için abone ol" ARAŞTIRMANIN ADIYLA ANDIĞI ölü ifade:
+# izleyici bunu on bin kez duydu, beyni filtreliyor ("YouTube beyaz gürültüsü").
+# İşleyen çerçeveler: DEĞER-SPESİFİK (ne alacağını söyle) ve SERİ (dönüşü alışkanlık
+# yapar; seri izleyicisi ilk-kez izleyiciden çok daha yüksek oranda abone olur).
 CTA_TEXTS = (
-    "Her gün yeni bilgi — ABONE OL",
-    "Kaçırma, ABONE OL",
-    "Daha fazlası için ABONE OL",
-    "Bunu sevdiysen ABONE OL",
+    "Her gün bir tane — ABONE OL",
+    "Yarın sıradaki — ABONE OL",
+    "Bunun gibi her gün — ABONE OL",
+    "Bu seri devam ediyor — ABONE OL",
 )
 
 
@@ -47,7 +68,7 @@ def build_subscribe_bits(channel, seed: int) -> SubscribeBits:
 
     comment_line = ""
     if getattr(reel, "comment_question", False):
-        comment_line = COMMENT_QUESTIONS[_idx(seed, "comment", len(COMMENT_QUESTIONS))]
+        comment_line = COMMENT_STYLES[_idx(seed, "comment", len(COMMENT_STYLES))]
 
     cta_text = ""
     if getattr(reel, "cta_enabled", False):
