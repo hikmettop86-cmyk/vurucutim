@@ -54,11 +54,20 @@ OUTPUT a JSON object:
 - "hook_visual": a SHORT English stock-footage query (2-4 COMMON words) for the
   OPENING shot. This is the MOST IMPORTANT frame of the video — the viewer decides
   in 1 second whether to keep watching. Pick the most STRIKING, CONCRETE, visually
-  arresting subject of the whole topic (e.g. topic "ultra marathon destroys your
+  arresting subject OF THE TOPIC ITSELF (e.g. topic "ultra marathon destroys your
   body" → "exhausted runner collapsing", NOT "self destruction"). It MUST be
   something a generic stock library actually has.
+  HOOK METAFORU GÖRSELE GİRMEZ: your hook SENTENCE may use a metaphor, but
+  hook_visual must show the video's REAL subject — never the metaphor's object.
+    KÖTÜ: topic "parasitic wasp takes over a caterpillar", hook "Bir geminin
+          mürettebatı fırtınada mahsur kalırsa..." → hook_visual "ship in storm"
+          → the viewer watches a SHIP for the first 5 seconds of a WASP video.
+    İYİ:  hook_visual "caterpillar wasp larvae" (the video's real subject).
+  Metaphor lives in the WORDS; the picture shows the SUBJECT. That is what a human
+  editor does.
 - "close_visual": a SHORT English stock-footage query (2-4 COMMON words) for the
-  CLOSING shot. Concrete and findable; it should echo the hook's subject.
+  CLOSING shot. Concrete and findable; it should echo the hook's subject — and it
+  is bound by the SAME metaphor ban.
 - "beats": 3-6 beats. Each beat:
     - "text": the spoken sentence(s) in {lang} for this beat
     - "visual_query": a SHORT English stock-footage search query (2-4 COMMON words)

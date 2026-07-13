@@ -264,7 +264,11 @@ def produce_reel_video(
     # ("görünmez savaşçılar" = bakteriyofaj) sorgu metafora kayabiliyor ve stok
     # kütüphane kelimeyi düz anlıyor → bakteriyofaj videosuna ESKRİMCİ geldi.
     # Bağlamla vision "bu klip bu videoya ait mi?" diye de bakar.
-    _video_context = f"{topic.strip()[:160]} | {narration.hook.strip()[:100]}"
+    # BAĞLAM = KONU. Hook'u BURAYA KATMA: hook metaforik olabilir ("bir geminin
+    # mürettebatı..." = tırtıl) ve içindeki kelime bağlama sızınca kapı GERÇEK BİR
+    # GEMİYİ 'bağlamda' sayar — metaforu elemesi gereken mekanizma metaforu
+    # MEŞRULAŞTIRIR (gerçek hata: short_id=745, 39sn'nin 13'ü Boğaz'da gemi).
+    _video_context = topic.strip()[:200]
     # Belirteç-uygun segmentleri ÖNCE hesapla → yalnız onlarda vision konum çağır
     # (hook/close ve 'off'/kapalı durumda gereksiz vision maliyeti yok).
     n_segs = len(timeline.seg_queries)
