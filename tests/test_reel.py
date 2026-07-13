@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
@@ -34,6 +35,10 @@ def _deps(calls, health="healthy"):
                                        Path(kw["out_path"]))[2],
         probe_duration_s=lambda p, **kw: (calls.append("probe"), 30.0)[1],
         trailing_silence_s=lambda p, **kw: 0.0,
+        retime=lambda src, out, zones, **kw: (Path(out).write_bytes(b"mp3"),
+                                              Path(out))[1],
+        insert_pause=lambda src, out, **kw: (Path(out).write_bytes(b"mp3"),
+                                             Path(out))[1],
         transcribe_words=lambda p, **kw: (calls.append("asr"), [])[1],
         match_beat_clip=lambda q, **kw: (calls.append(("match", q)),
                                          Path(kw["cache_dir"]).joinpath(f"{q[:3]}.mp4"))[1]
@@ -149,11 +154,18 @@ def test_match_with_fallback_last_resort_drops_vision(tmp_path):
     assert gated is False            # DOĞRULANMADI → tekrar havuzuna girmemeli
 
 
+@dataclass(frozen=True)
 class _W:
-    """Whisper kelimesi."""
+    """Whisper kelimesi. DATACLASS olmalı: duraklama kaydırması dataclasses.replace
+    kullanıyor (üretimdeki TimedWord da dataclass'tır)."""
 
-    def __init__(self, word, i):
-        self.word = word; self.start_s = float(i); self.end_s = i + 0.9
+    word: str
+    start_s: float
+    end_s: float
+
+    @staticmethod
+    def at(word, i):
+        return _W(word=word, start_s=float(i), end_s=i + 0.9)
 
 
 def _heard_deps(calls, transcripts):
@@ -163,7 +175,7 @@ def _heard_deps(calls, transcripts):
     return type(d)(**{**d.__dict__,
                       "transcribe_words": lambda p, **kw: (
                           calls.append("asr"),
-                          [_W(w, i) for i, w in enumerate(next(seq).split())])[1]})
+                          [_W.at(w, i) for i, w in enumerate(next(seq).split())])[1]})
 
 
 def test_tts_okumadigi_obek_icin_yeniden_seslendirir(tmp_path):
@@ -202,7 +214,7 @@ def _tail_deps(calls, tails):
                       "trailing_silence_s": lambda p, **kw: next(seq),
                       "transcribe_words": lambda p, **kw: (
                           calls.append("asr"),
-                          [_W(w, i) for i, w in enumerate(full.split())])[1]})
+                          [_W.at(w, i) for i, w in enumerate(full.split())])[1]})
 
 
 def test_sondaki_uzun_sessizlik_yeniden_seslendirtir(tmp_path):
@@ -219,13 +231,33 @@ def test_kisa_sessizlik_yeniden_seslendirtmez(tmp_path):
     assert sum(1 for c in calls if isinstance(c, tuple) and c[0] == "tts") == 1
 
 
+def _tempo_dur(base_dur: float) -> float:
+    """Sahte ASR çizelgesine tempo bölgeleri uygulanınca çıkan süre.
+
+    Süre iddiaları artık üç etkiyi ÜST ÜSTE taşıyor (ölü hava kesimi → tempo
+    bölgeleri → tepe duraklaması); beklenen değeri elle yazmak yerine aynı saf
+    fonksiyonlardan türetiyoruz.
+    """
+    from short_bot.reel_models import TimedWord, build_reel_timeline
+    from short_bot.reel_tempo import plan_zones, retimed_duration_s
+    n = _narr()
+    asr = [TimedWord(word=w, start_s=float(i), end_s=i + 0.9, seg=-1)
+           for i, w in enumerate(n.full_text().split())]
+    tl = build_reel_timeline(n, asr, duration_s=base_dur)
+    z = plan_zones(tl.seg_spans, peak_seg=n.peak_segment(), duration_s=base_dur)
+    return retimed_duration_s(z) if z else base_dur
+
+
 def test_olu_hava_video_suresinden_kesilir(tmp_path):
     # Sondaki sessizlik kesilmezse video konuşmasız akar (döngü kırılır) ve
     # altyazılar o boşluğa yayılıp sesin gerisine düşer.
     calls = []
     _call(_tail_deps(calls, [5.0, 5.0, 5.0]), tmp_path)   # hiç düzelmiyor
+    from short_bot.reel_pause import REVEAL_PAUSE_S
     kw = next(c[1] for c in calls if isinstance(c, tuple) and c[0] == "assemble")
-    assert kw["duration_s"] == pytest.approx(30.0 - (5.0 - 0.4))
+    # ölü hava kesilir (-4.6sn) → tempo bölgeleri → tepe duraklaması (+0.45sn)
+    kirpilmis = 30.0 - (5.0 - 0.4)
+    assert kw["duration_s"] == pytest.approx(_tempo_dur(kirpilmis) + REVEAL_PAUSE_S)
 
 
 def test_montaja_vurgu_darbeleri_gecer(tmp_path):
@@ -235,3 +267,142 @@ def test_montaja_vurgu_darbeleri_gecer(tmp_path):
     kw = next(c[1] for c in calls if isinstance(c, tuple) and c[0] == "assemble")
     assert kw["punch_at"], "vurgu darbesi montaja hiç geçmedi"
     assert all(0 <= t <= kw["duration_s"] for t in kw["punch_at"])
+
+
+def test_tepe_oncesi_duraklama_eklenir_ve_altyazi_kayar(tmp_path):
+    """Tepe beat'inden hemen önce sessizlik; sonraki altyazılar TAM o kadar kayar.
+
+    İnsan anlatıcı en büyük açıklamadan önce susar. Kritik olan senkron: saf
+    sessizlik konuşmayı bozmaz, dolayısıyla kaydırma KESİNDİR.
+    """
+    from short_bot.reel_pause import REVEAL_PAUSE_S
+    full = _narr().full_text()
+    calls = []
+    d = _heard_deps(calls, [full])
+    pauses = []
+    d = type(d)(**{**d.__dict__,
+                   "insert_pause": lambda src, out, **kw: (pauses.append(kw["at_s"]),
+                                                           Path(out).write_bytes(b"m"),
+                                                           Path(out))[2]})
+    _call(d, tmp_path)
+    assert pauses, "tepe öncesi duraklama hiç eklenmedi"
+    kw = next(c[1] for c in calls if isinstance(c, tuple) and c[0] == "assemble")
+    # Video süresi duraklama kadar uzamalı (sahte probe 30.0 sn döndürüyor; araya
+    # tempo bölgeleri de giriyor — bkz. _tempo_dur)
+    assert kw["duration_s"] == pytest.approx(_tempo_dur(30.0) + REVEAL_PAUSE_S)
+
+
+def test_duraklama_basarisiz_olursa_uretim_devam_eder(tmp_path):
+    # Duraklama KOZMETİK: ffmpeg patlarsa video yine üretilmeli.
+    full = _narr().full_text()
+    calls = []
+    d = _heard_deps(calls, [full])
+
+    def _patla(*a, **kw):
+        raise RuntimeError("ffmpeg yok")
+
+    d = type(d)(**{**d.__dict__, "insert_pause": _patla})
+    out = _call(d, tmp_path)
+    assert out == tmp_path / "out.mp4"
+
+
+# --- TEMPO BÖLGELERİ (orkestratör bağlantısı) ------------------------------
+
+def test_tempo_bolgeleri_uygulanir_ve_sure_yeniden_hesaplanir(tmp_path):
+    """Hook hızlansın, tepe yavaşlasın — ve montaj YENİ süreyi görsün.
+
+    Süre yanlış geçerse ffmpeg videoyu sesten uzun/kısa keser (ölü hava ya da
+    yarıda kesilen kapanış).
+    """
+    from short_bot.reel_pause import REVEAL_PAUSE_S
+    from short_bot.reel_tempo import BODY_TEMPO, HOOK_TEMPO, PEAK_TEMPO
+    calls, zones_seen = [], []
+    d = _heard_deps(calls, [_narr().full_text()])
+    d = type(d)(**{**d.__dict__,
+                   "retime": lambda src, out, zones, **kw: (
+                       zones_seen.append(zones), Path(out).write_bytes(b"m"),
+                       Path(out))[2]})
+    _call(d, tmp_path)
+    assert zones_seen, "tempo bölgeleri hiç uygulanmadı"
+    z = zones_seen[0]
+    assert [x.tempo for x in z] == [HOOK_TEMPO, BODY_TEMPO, PEAK_TEMPO, BODY_TEMPO]
+    kw = next(c[1] for c in calls if isinstance(c, tuple) and c[0] == "assemble")
+    assert kw["duration_s"] == pytest.approx(_tempo_dur(30.0) + REVEAL_PAUSE_S)
+
+
+def test_tempo_basarisiz_olursa_uretim_devam_eder(tmp_path):
+    """Tempo KOZMETİK: ffmpeg patlarsa video tek tempoyla yine üretilmeli."""
+    calls = []
+    d = _heard_deps(calls, [_narr().full_text()])
+
+    def _patla(*a, **kw):
+        raise RuntimeError("atempo yok")
+
+    d = type(d)(**{**d.__dict__, "retime": _patla})
+    out = _call(d, tmp_path)
+    assert out == tmp_path / "out.mp4"
+
+
+def test_asr_yoksa_tempo_uygulanmaz(tmp_path):
+    """Kelime zamanı olmadan bölge sınırları tahmindir — hız bir hecenin ortasında
+    değişirse duyulur bir kayma bırakır. Tahmine göre ses kesmeyiz."""
+    calls, cagrildi = [], []
+    d = _deps(calls)   # transcribe_words → [] (kelime yok)
+    d = type(d)(**{**d.__dict__,
+                   "retime": lambda *a, **kw: cagrildi.append(1)})
+    _call(d, tmp_path)
+    assert not cagrildi, "ASR yokken tempo uygulanmamalı"
+
+
+# --- KOORDİNELİ KESİNTİ (orkestratör bağlantısı) ---------------------------
+
+def test_kesinti_anlari_dort_kanala_da_gidiyor(tmp_path):
+    """Kesinti ancak DÖRT kanal aynı karede ateşlenirse 'olay' olur."""
+    calls, overlay = [], []
+    d = _heard_deps(calls, [_narr().full_text()])
+    d = type(d)(**{**d.__dict__,
+                   "render_reel_overlay_frames": lambda tl, out, **kw: (
+                       overlay.append(kw), 900)[1]})
+    _call(d, tmp_path)
+    kw = next(c[1] for c in calls if isinstance(c, tuple) and c[0] == "assemble")
+    kesinti = overlay[0]["interrupts"]
+    assert kesinti, "kesinti anı hiç seçilmedi"
+    # 1) overlay (efekt + altyazı darbesi)  2) montaj punch  3) SFX seviyesi
+    assert all(t in kw["punch_at"] for t in kesinti), "kesintide görüntü punch'ı yok"
+    assert kw["sfx_gains"], "kesim başına SFX seviyesi montaja geçmedi"
+    from short_bot.reel_interrupt import LOUD_SFX_GAIN, QUIET_SFX_GAIN
+    assert set(kw["sfx_gains"]) <= {LOUD_SFX_GAIN, QUIET_SFX_GAIN}
+    assert LOUD_SFX_GAIN in kw["sfx_gains"], "hiçbir kesim yükseltilmemiş"
+    assert QUIET_SFX_GAIN in kw["sfx_gains"], "hiçbir kesim kısılmamış → kontrast yok"
+
+
+def test_muzik_profili_montaja_gecer(tmp_path, monkeypatch):
+    """Müziğin sessiz girişi atlanmalı ve seviyesi eşitlenmeli.
+
+    Parçaları 0:00'dan başlatınca müzik konuşmanın 37 dB altında kalıyordu
+    (gerçek video, 571.mp3) — yani hiç duyulmuyordu.
+    """
+    from short_bot.music_profile import MUSIC_UNDER_SPEECH_DB, MusicProfile
+    monkeypatch.setattr("short_bot.reel.profile_music",
+                        lambda p, **kw: MusicProfile(12.5, -24.0))
+    monkeypatch.setattr("short_bot.reel.speech_lufs", lambda p, **kw: -16.0)
+    calls = []
+    _call(_deps(calls), tmp_path)
+    kw = next(c[1] for c in calls if isinstance(c, tuple) and c[0] == "assemble")
+    assert kw["music_start_s"] == 12.5          # sessiz giriş atlandı
+    # müzik konuşmanın (-16) sabit mesafe altına oturdu — parçadan bağımsız
+    assert -24.0 + kw["music_gain_db"] == pytest.approx(-16.0 + MUSIC_UNDER_SPEECH_DB,
+                                                        abs=4.1)
+
+
+def test_muzik_profili_cikmazsa_uretim_devam_eder(tmp_path, monkeypatch):
+    # Müzik KOZMETİK: profil çıkarılamazsa ham parçayla devam edilmeli.
+    def _patla(p, **kw):
+        raise RuntimeError("ffmpeg yok")
+
+    monkeypatch.setattr("short_bot.reel.profile_music", _patla)
+    calls = []
+    out = _call(_deps(calls), tmp_path)
+    assert out == tmp_path / "out.mp4"
+    kw = next(c[1] for c in calls if isinstance(c, tuple) and c[0] == "assemble")
+    assert kw["music_start_s"] == 0.0 and kw["music_gain_db"] == 0.0

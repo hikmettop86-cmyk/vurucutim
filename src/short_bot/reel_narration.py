@@ -92,6 +92,14 @@ OUTPUT a JSON object:
   YASAK AÇILIŞLAR: "Bunu biliyor muydunuz?" (200 milisaniyede içinden cevaplanır →
   gerilim çöker → kaydırır), "Merhaba arkadaşlar", "Bugün sizlere ... anlatacağım".
   Cevaplanabilir bir evet/hayır sorusu HOOK DEĞİLDİR.
+- "cover_title": KARE SIFIR MANŞETİ — {lang}, 3-6 KELİME, BÜYÜK yazılacak.
+  Feed'de izleyicinin gördüğü İLK KARE budur ve video orada avuç içi kadar görünür.
+  Hook CÜMLESİ o boyutta okunmaz; 3-6 kelimelik bir manşet okunur. Manşet
+  KONUŞULMAZ — yalnız ekranda durur, hook cümlesi altyazı olarak akar.
+  Manşet videonun VAADİNİ taşımalı, konusunu ÖZETLEMEMELİ:
+    KÖTÜ: "Kanguru yavruları hakkında bilgiler"   ← başlık değil, etiket
+    İYİ:  "Bebek kanguru bir embriyo"             ← merak açar
+  Cevabı VERME (merak kapanır), soruyu KUR. Nokta/emoji yok.
 - "peak_beat": 0-based index of the beat that carries the BIGGEST shock/reveal.
   It must be in the MIDDLE of the beat list, not the first and not the last.
   Bu, beğeni tetiğinin ve abone isteğinin yerleşeceği andır: beğeni bir karar değil,
@@ -204,8 +212,12 @@ def fit_word_budget(n: ReelNarration, *, lo_w: int, hi_w: int) -> ReelNarration:
         return n
 
     def _rebuild(beats, peak):
+        # comment/cover_title de TAŞINMALI: eski hâli bunları düşürüyordu — bütçe
+        # taşan her senaryoda yorum sorusu sessizce kayboluyordu (ve manşet de
+        # kaybolurdu). Kısaltma BEAT atar, alan silmez.
         return ReelNarration(hook=n.hook, beats=beats, close=n.close, mood=n.mood,
                              hook_visual=n.hook_visual, close_visual=n.close_visual,
+                             cover_title=n.cover_title, comment=n.comment,
                              peak_beat=peak)
 
     beats = list(n.beats)

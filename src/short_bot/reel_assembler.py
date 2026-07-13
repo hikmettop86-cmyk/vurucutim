@@ -157,6 +157,7 @@ def assemble_reel(
     riser_volume: float = 0.35,
     impact_volume: float = 0.40,
     sfx_at_cut: list | None = None,
+    sfx_gains: list[float] | None = None,   # kesim başına seviye çarpanı (bkz. reel_interrupt)
     zoom: bool = True, clip_starts: list | None = None,
     hook_punch: bool = False,
     subject_xs: list | None = None,   # alt-kesim başına öznenin yatay konumu (0-1)
@@ -284,8 +285,11 @@ def assemble_reel(
                 cmd += ["-i", str(sfx_at_cut[k])]
                 # Seviye ayardan gelir (eskiden SABİT 0.6 → anlatımla yarışıyordu).
                 # Kütüphanedeki SFX zaten kırpılmış + seviyesi eşitlenmiş vurgular.
+                # KESİM BAŞINA ÇARPAN: kesinti anları yüksek, ötekiler kısık. Hepsi
+                # aynı seviyedeyken hiçbiri vurgu değildi — kontrast olmadan vurgu olmaz.
+                g = sfx_gains[k] if (sfx_gains and k < len(sfx_gains)) else 1.0
                 parts.append(f"[{idx}:a]adelay={int(ct*1000)}|{int(ct*1000)},"
-                             f"volume={sfx_volume:g}[wh{k}]")
+                             f"volume={sfx_volume * g:g}[wh{k}]")
                 labels.append(f"[wh{k}]")
                 idx += 1
         parts.append(f"{''.join(labels)}amix=inputs={len(labels)}:"

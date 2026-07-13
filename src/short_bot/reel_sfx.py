@@ -35,8 +35,12 @@ def _flatten(pool) -> list[Path]:
     return list(pool or [])
 
 
+IMPACT_CAT = "impact"
+
+
 def pick_sfx_per_cut(pool, seed: int, n_cuts: int,
-                     sfx_plan: "list[str] | tuple[str, ...]" = ()) -> list:
+                     sfx_plan: "list[str] | tuple[str, ...]" = (),
+                     impact_at: "set[int] | frozenset[int]" = frozenset()) -> list:
     """Kesim başına SFX seç. AYNI DOSYA bir videoda tekrar KULLANILMAZ.
 
     ``sfx_plan`` (kurgucudan) varsa kesim k için o kategoriden seçilir; yoksa tüm
@@ -44,6 +48,11 @@ def pick_sfx_per_cut(pool, seed: int, n_cuts: int,
     kurgucu tempoyu da belirlediği için kesin kesim sayısı plandan sonra netleşir.
     Kategori/havuz tükenirse tekrar serbest kalır (çökmez).
     ``pool`` dict (yeni) ya da düz liste (eski çağıranlar) olabilir.
+
+    ``impact_at``: KESİNTİ anlarına denk gelen kesimlerin indeksleri (bkz.
+    reel_interrupt). Oralarda kategori kurgucunun planını EZER ve 'impact' olur:
+    kesinti bir VURUŞTUR, "whoosh" geçiş sesi onu taşıyamaz. Havuzda impact
+    kategorisi yoksa plan/eski davranış aynen sürer (fail-open).
     """
     if n_cuts <= 0:
         return []
@@ -57,7 +66,9 @@ def pick_sfx_per_cut(pool, seed: int, n_cuts: int,
 
     for k in range(n_cuts):
         cat = None
-        if sfx_plan:
+        if k in impact_at and IMPACT_CAT in by_cat:
+            cat = IMPACT_CAT
+        elif sfx_plan:
             want = sfx_plan[k % len(sfx_plan)]
             if want in by_cat:
                 cat = want

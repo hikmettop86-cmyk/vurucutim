@@ -159,6 +159,13 @@ class ReelConfig(BaseModel):
     # AI kurgucu (2026-07-13): anlatımı okuyup tempo/efekt/SFX/müzik seçer.
     # Kapalıysa kararlar eski seed-hash havuzlarından gelir (içerikten habersiz).
     ai_director: bool = True
+    # TEMPO BÖLGELERİ: hook hızlı, tepe yavaş (bkz. reel_tempo). TTS tek hızda okur,
+    # insan anlatıcı okumaz — tek hız videoyu "makine okumuş" yapar.
+    tempo_zones: bool = True
+    # KOORDİNELİ KESİNTİ: 3-5 beat sınırında vuruş+efekt+altyazı darbesi+punch AYNI
+    # KAREDE; öteki kesimlerde SFX kısık (bkz. reel_interrupt). Kapalıysa her kesim
+    # eşit güçte patlar — yani hiçbiri vurgu olmaz.
+    interrupts: bool = True
     # Faz 2 varyasyon knob'ları (per-video deterministik profil)
     layout: Literal["auto", "classic", "lower_left", "top_heavy"] = "auto"
     hook_angle_vary: bool = True

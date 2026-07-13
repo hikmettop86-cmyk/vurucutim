@@ -18,6 +18,11 @@ html,body{width:1080px;height:1920px;overflow:hidden;background:transparent;
 .big{position:absolute;top:300px;left:60px;right:60px;text-align:center;font-size:104px;font-weight:900;
   line-height:1.05;letter-spacing:-2px;display:none;-webkit-text-stroke:3px #000;paint-order:stroke fill;text-shadow:0 8px 30px rgba(0,0,0,.9)}
 .big.on{display:block}
+/* KARE SIFIR = FEED'İN KÜÇÜK RESMİ. Video orada ~300px genişliğinde görünür: 104
+   puntoluk bir hook CÜMLESİ (140 karaktere kadar, sığdırma ile 57 puntoya inebilen)
+   o boyutta OKUNMAZ. Manşet 3-6 kelimedir ve 140 puntoyla okunur — küçük resimde
+   ~39px'e denk gelir. Hook cümlesi kaybolmaz: altyazı olarak akmaya devam eder. */
+.big.cover{font-size:140px;letter-spacing:-3px}
 .card{position:absolute;top:200px;left:50%;transform:translateX(-50%) rotate(-3deg);background:{{ highlight_color }};color:{{ chip_text }};
   font-weight:900;font-size:54px;padding:16px 40px;border-radius:14px;text-transform:uppercase;white-space:nowrap;display:none;
   box-shadow:0 14px 40px rgba(0,0,0,.55);border:4px solid rgba(0,0,0,.35)}
@@ -118,7 +123,7 @@ html,body{width:1080px;height:1920px;overflow:hidden;background:transparent;
 <div id="scrim"></div><div id="bar"></div>
 <div id="markers"></div>
 <div id="numpop"></div>
-<div class="big" id="hook">{{ hook }}</div>
+<div class="big{% if cover_title %} cover{% endif %}" id="hook">{{ cover_title or hook }}</div>
 <div class="big" id="close">{{ close }}</div>
 {% for c in cards %}<div class="card" data-s="{{ c.start }}" data-e="{{ c.end }}">{{ c.text }}</div>
 {% endfor %}
@@ -132,6 +137,10 @@ html,body{width:1080px;height:1920px;overflow:hidden;background:transparent;
 </div>
 <script>
 const LEAD=0.08,CHUNK=3,DUR={{ duration_s }},LAST={{ last_seg }};
+/* MANŞET VARSA hook segmentinde ALTYAZI DA AKAR: kartta artık cümle değil 3-6
+   kelimelik manşet var, konuşulan hook cümlesini izleyicinin okuyabilmesi lazım.
+   Manşet yoksa eski davranış: kartta tam hook cümlesi, altyazı kapalı. */
+const HAS_COVER={{ 'true' if cover_title else 'false' }};
 // CTA/BEĞENİ TEPEDEN SONRA. Eskiden abone çipi son 2.5sn'deydi: tepe geçmiş, dopamin
 // harcanmış, üstelik sondaki çip TEKRAR DÖNGÜSÜNÜ yok ediyordu.
 const CTA_AT={{ cta_at }},CTA_DUR={{ cta_dur }};
@@ -143,11 +152,33 @@ const MARKERS={{ markers }};
 // gösterilen KLİPTEN ölçüldü. Segmente bağlarsak marker, aynı segmentin diğer
 // kliplerinin üstünde de çizilir ve BOŞLUĞU işaretler (gerçek hata).
 function activeMarker(t){for(const m of MARKERS){if(t>=m.t0&&t<m.t1)return m;}return null;}
+// KESİNTİ ANLARI (bkz. reel_interrupt): videoda 3-5 kare. Orada geçiş efekti TAM
+// GÜÇTE ve UZUN patlar, altyazı bloğu bir darbe alır — ve montaj aynı karede vuruş
+// sesi + görüntü punch'ı çalar. Diğer kesimlerde efekt KISIK (CUT_FX_MAX): kontrast
+// olmadan vurgu olmaz. Eskiden her kesim aynı güçte patlıyordu → hiçbiri vurgu değildi.
+const INTR={{ interrupts }};
+const CUT_FX_S=0.12,CUT_FX_MAX=0.55;   // sıradan kesim: kısa, kısık
+const INTR_FX_S=0.26;                  // kesinti: uzun, tam güçlü
+const CAP_PUNCH_S=0.30,CAP_PUNCH=0.05; // altyazı darbesi (ölçek)
+const HOOK_POP=0.06,HOOK_POP_S=0.15;   // açılış patlaması (bkz. __seek'teki not)
+function fxOp(t){
+  if(CUT_EFFECT==='none')return 0;
+  let op=0;
+  for(const ct of CUTS){const dt=t-ct;if(dt>=0&&dt<CUT_FX_S)op=Math.max(op,(1-dt/CUT_FX_S)*CUT_FX_MAX);}
+  for(const it of INTR){const dt=t-it;if(dt>=0&&dt<INTR_FX_S)op=Math.max(op,1-dt/INTR_FX_S);}
+  return op;
+}
+function capPunch(t){
+  let k=0;
+  for(const it of INTR){const dt=t-it;if(dt>=0&&dt<CAP_PUNCH_S)k=Math.max(k,1-dt/CAP_PUNCH_S);}
+  return k;
+}
 const NUMS={{ nums }};
 const NP=document.getElementById('numpop');
 const MCLS={arrow:'mk-arrow',ring:'mk-ring',pulse:'mk-pulse',box:'mk-box',spotlight:'mk-spot',underline:'mk-under'};
 const CUT_EFFECT='{{ cut_effect }}';   // kesme efekti türü (flash|glitch|rgbsplit|lightleak|none)
 const W=[...document.querySelectorAll('.cap .w')],CARDS=[...document.querySelectorAll('.card')];
+const CAPB=document.querySelector('.cap');
 const HOOK=document.getElementById('hook'),CLOSE=document.getElementById('close'),BAR=document.getElementById('bar');
 
 // ——— OTOMATİK SIĞDIRMA ———
@@ -211,7 +242,9 @@ for(const w of W){const sg=+w.dataset.seg;if(sg!==ps||ic===CHUNK){ch++;ic=0;ps=s
 window.__seek=function(tms){
   const t=tms/1000,lead=t+LEAD;let seg=0,chk=-1;
   for(const w of W){if(lead>=+w.dataset.s){seg=+w.dataset.seg;chk=+w.dataset.chunk;}}
-  const capOn=seg>0&&seg<LAST;
+  const capOn=(HAS_COVER?seg>=0:seg>0)&&seg<LAST;
+  // Sayı vurgusu hook'ta ASLA: orada zaten büyük başlık bloğu var, sayı üstüne biner.
+  const numOn=seg>0&&seg<LAST;
   for(const w of W){const vis=capOn&&+w.dataset.chunk===chk;w.classList.toggle('vis',vis);w.classList.toggle('hot',vis&&lead>=+w.dataset.s&&t<+w.dataset.e);}
   HOOK.classList.toggle('on',seg===0);CLOSE.classList.toggle('on',seg===LAST);
   for(const c of CARDS){const s=+c.dataset.s,e=+c.dataset.e;c.classList.toggle('on',t>=s&&t<e);}
@@ -224,7 +257,11 @@ window.__seek=function(tms){
     MLAYER.innerHTML=m?('<div class="mk '+(MCLS[m.type]||'mk-arrow')+'" style="left:'+(m.x*1080)+'px;top:'+(m.y*1920)+'px"></div>'):'';
     mkSeg=mkey;
   }
-  let op=0;if(CUT_EFFECT!=='none'){for(const ct of CUTS){const dt=t-ct;if(dt>=0&&dt<0.12)op=Math.max(op,1-dt/0.12);}}
+  const op=fxOp(t);
+  // ALTYAZI DARBESİ: kesinti karesinde blok bir tık büyür. Ses vuruşuyla AYNI KAREDE
+  // olduğu için izleyici ikisini tek bir "olay" olarak algılar — kurgunun içeriğe
+  // kilitlendiği yer burası.
+  if(CAPB){const k=capPunch(t);CAPB.style.transform=k>0?('scale('+(1+CAP_PUNCH*k).toFixed(4)+')'):'';}
   // seçilen efekti kesme yakınlığı (op) ile uygula; op seek-driven → deterministik
   FLASH.style.opacity=(CUT_EFFECT==='flash')?op*0.85:0;
   RGB.style.opacity=(CUT_EFFECT==='rgbsplit')?op:0;
@@ -237,7 +274,7 @@ window.__seek=function(tms){
      sayı onun üstüne biner (gerçek hata: hook metniyle çakıştı). */
   if(NP){
     let cur=null;
-    if(capOn){for(const n of NUMS){if(t>=+n.s && t<+n.e+0.35){cur=n;break;}}}
+    if(numOn){for(const n of NUMS){if(t>=+n.s && t<+n.e+0.35){cur=n;break;}}}
     if(cur){
       const dt=t-(+cur.s);
       const k=dt<0.25?(0.6+2.0*dt):(dt<0.35?(1.1-1.0*(dt-0.25)):1.0);
@@ -246,8 +283,12 @@ window.__seek=function(tms){
       NP.style.transform='translateX(-50%) scale('+k.toFixed(3)+')';
     } else {NP.className='';NP.textContent='';NP.style.transform='translateX(-50%)';}
   }
-  /* Hook pop: ilk 0.15sn'de metin patlayarak girer (açılış kalıp kırıcı). */
-  if(seg===0&&t<0.15){HOOK.style.transform='scale('+(1.15-t).toFixed(3)+')';}
+  /* Hook pop: ilk 0.15sn'de metin patlayarak girer (açılış kalıp kırıcı).
+     ÖLÇEK 1.15 DEĞİL 1.06 — GİZLİ TAŞMA HATASIYDI: kare sıfır feed'in küçük resmidir
+     ve başlık orada TAM okunmalı. Otomatik sığdırma metni en fazla 960px'e (SAFE_X
+     payı) oturtuyor; 1.15 ölçek onu 1104px'e çıkarıp 1080px'lik kadrajdan TAŞIRIYORDU
+     — yani tam da en kritik karede yazının kenarları kesiliyordu. 1.06 → 1018px. */
+  if(seg===0&&t<HOOK_POP_S){HOOK.style.transform='scale('+(1+HOOK_POP*(1-t/HOOK_POP_S)).toFixed(4)+')';}
   else{HOOK.style.transform='scale(1)';}
   if(CTA){CTA.classList.toggle('on', t >= CTA_AT && t < CTA_AT + CTA_DUR);}
   // Beğeni nabzı: yay gibi büyüyüp sönen tek bir vuruş (sessiz, 1.2sn)
@@ -285,6 +326,8 @@ window.__sig=function(){
   /* sayı pop + hook pop imzaya DAHİL — aksi hâlde dedup bu kareleri kaçırır */
   s+='|'+(NP?(NP.textContent+':'+(NP.style.transform||'')):'');
   s+='|'+(HOOK.style.transform||'');
+  /* altyazı darbesi imzaya DAHİL — aksi hâlde kare-dedup darbeyi düz kare sanıp atlar */
+  s+='|'+(CAPB?(CAPB.style.transform||''):'');
   return s;
 };
 window.__seek(0);

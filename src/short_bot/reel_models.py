@@ -39,6 +39,16 @@ CLOSE_MAX_CHARS = 120
 # DÜŞÜRÜYORDU. İkisi de KONUŞULUR ama dev kapanış kartı yalnız callback'i gösterir.
 COMMENT_MAX_CHARS = 90
 
+# KARE SIFIR = KÜÇÜK RESİM. Feed'de gördüğü İLK KARE, izleyicinin durup durmayacağına
+# karar verdiği karedir — ve video orada ~300px genişliğinde görünür. Bugün o karede
+# HOOK CÜMLESİ duruyor: 140 karaktere kadar, otomatik sığdırma yüzünden 57 puntoya
+# kadar inebilen bir metin bloğu. Kaydıran göz onu OKUMAZ; okunmayan hook, hook değildir.
+# ``cover_title`` 3-6 kelimelik bir MANŞETTİR: küçük resim boyutunda bile okunur.
+# Konuşulmaz — yalnız ekranda durur; hook CÜMLESİ altyazı olarak akmaya devam eder.
+# Boşsa eski davranışa düşülür (hook cümlesi kartta) — fail-open.
+COVER_TITLE_MAX_CHARS = 40
+COVER_TITLE_MAX_WORDS = 6
+
 
 class ReelNarration(BaseModel):
     hook: str = Field(min_length=5, max_length=140)
@@ -54,6 +64,8 @@ class ReelNarration(BaseModel):
     # görüntü alakasız" — hook, soyut bir beat sorgusunun çöp fallback'ini almıştı).
     hook_visual: str = Field(default="", max_length=120)
     close_visual: str = Field(default="", max_length=120)
+    # Kare-sıfır manşeti (3-6 kelime). Konuşulmaz, yalnız ekranda durur.
+    cover_title: str = Field(default="", max_length=COVER_TITLE_MAX_CHARS)
     # TEPE: videonun EN BÜYÜK reveal'inin hangi beat olduğu. Beğeni tetiği ve abone
     # isteği buna göre yerleşir — ikisi de tepeden SONRA gelmeli. Beğeni bir karar
     # değil DUYGUSAL BOŞALMADIR; boşalacak bir tepe yoksa beğeni de gelmez.
@@ -73,6 +85,24 @@ class ReelNarration(BaseModel):
         if isinstance(v, str) and len(v) > COMMENT_MAX_CHARS:
             return v[:COMMENT_MAX_CHARS].rstrip()
         return v
+
+    @field_validator("cover_title", mode="before")
+    @classmethod
+    def _fit_cover_title(cls, v):
+        """Manşeti KELİME sınırına kırp — reddetme.
+
+        LLM "3-6 kelime" talimatına uymayınca koca bir üretimi (LLM + TTS + footage
+        + montaj) çöpe atmanın anlamı yok. Ama 12 kelimelik bir "manşet" manşet
+        DEĞİLDİR — küçük resimde yine okunmaz. O yüzden reddetmek yerine KIRPIYORUZ:
+        ilk 6 kelime zaten vaadin taşıyıcısıdır.
+        """
+        if not isinstance(v, str):
+            return v
+        s = strip_non_turkish_diacritics(v).strip()
+        words = s.split()
+        if len(words) > COVER_TITLE_MAX_WORDS:
+            s = " ".join(words[:COVER_TITLE_MAX_WORDS])
+        return s[:COVER_TITLE_MAX_CHARS].rstrip()
 
     @model_validator(mode="after")
     def _resolve_peak(self):
@@ -155,6 +185,7 @@ class ReelTimeline:
     duration_s: float
     hook: str
     close: str
+    cover_title: str = ""                  # kare-sıfır manşeti (boşsa hook cümlesi)
 
 
 def build_reel_timeline(narration: "ReelNarration", asr_words: list[TimedWord],
@@ -189,4 +220,5 @@ def build_reel_timeline(narration: "ReelNarration", asr_words: list[TimedWord],
         seg_queries=narration.segment_queries(),
         seg_keywords=narration.segment_keywords(),
         duration_s=duration_s, hook=narration.hook, close=narration.close,
+        cover_title=narration.cover_title,
     )

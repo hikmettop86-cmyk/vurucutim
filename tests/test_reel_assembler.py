@@ -166,3 +166,27 @@ def test_assemble_zoom_fallback_on_failure(tmp_path, monkeypatch):
         narration_path=music, music_path=None, out_path=out,
         cut_times=[], duration_s=1.0, zoom=True)
     assert out.exists()
+
+
+def test_ses_butunluk_denetimi_dusen_kareleri_yakalar():
+    """ffmpeg ses karesi düşürdüğünde ÇIKIŞ KODU 0 verir — bozulma sessizdir.
+
+    Gerçek hata: üretilen iki videoda zaman damgaları 32sn'ye gidiyordu ama seste
+    yalnız 25sn'lik örnek vardı. Ses ortadan atlıyor, sonda kesiliyordu. Hiçbir şey
+    bunu fark etmiyordu: kullanıcı fark etti.
+    """
+    import subprocess
+    from short_bot.reel_assembler import MAX_AUDIO_GAP_S, audio_gap_s
+
+    # 3sn'lik gerçek bir mp4 üret — sesi tam.
+    import tempfile
+    from pathlib import Path as _P
+    td = _P(tempfile.mkdtemp())
+    v = td / "ok.mp4"
+    subprocess.run(["ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=black:s=64x64:d=3",
+                    "-f", "lavfi", "-i", "sine=frequency=440:duration=3",
+                    "-c:v", "libx264", "-preset", "ultrafast", "-c:a", "aac",
+                    "-t", "3", str(v)], capture_output=True, check=True)
+    assert audio_gap_s(v, 3.0) <= MAX_AUDIO_GAP_S, "sağlam video kusurlu sayıldı"
+    # Beklenen süreyi şişirince (ses eksikmiş gibi) denetim yakalamalı.
+    assert audio_gap_s(v, 10.0) > MAX_AUDIO_GAP_S

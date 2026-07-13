@@ -26,6 +26,10 @@ from short_bot.reel_pause import MIN_PAUSE_AT_S, REVEAL_PAUSE_S
 from short_bot.reel_pause import insert_pause as _pause
 from short_bot.reel_pause import shift_words
 from short_bot.reel_punch import punch_times
+from short_bot.reel_interrupt import (impact_cut_indices, select_interrupts,
+                                      sfx_gains)
+from short_bot.reel_tempo import plan_zones, remap_words, retimed_duration_s
+from short_bot.reel_tempo import retime as _retime
 from short_bot.reel_narration import write_reel_narration as _write_narr
 from short_bot.reel_numbers import find_numbers
 from short_bot.reel_pacing import plan_subcuts, subcut_clip_index
@@ -97,6 +101,7 @@ class ReelDeps:
     probe_duration_s: Callable = _probe
     trailing_silence_s: Callable = _tail
     transcribe_words: Callable = _transcribe
+    retime: Callable = _retime
     insert_pause: Callable = _pause
     match_beat_clip: Callable = _match
     locate_subject: Callable = _locate
@@ -287,6 +292,14 @@ def produce_reel_video(
                                        comment_line=bits.comment_line,
                                        hook_patterns=hook_patterns, seed=seed)
     log.info(f"  reel: {narration.word_count()} kelime, {len(narration.beats)} beat")
+    # Manşet KONUŞULMAZ (senaryo logunda görünmez) ama feed'in küçük resmi ODUR —
+    # videonun izlenip izlenmeyeceğine orada karar veriliyor. Loglanmazsa sonradan
+    # "o karede ne yazıyordu" sorusunu yanıtlayacak hiçbir kayıt kalmaz.
+    if narration.cover_title:
+        log.info(f"  reel: kare-sıfır manşeti: '{narration.cover_title}'")
+    else:
+        log.warning("  reel: manşet YOK → küçük resimde hook CÜMLESİ görünecek "
+                    "(feed boyutunda okunmaz)")
     _phase("senaryo(LLM)")
 
     # 2b) AI KURGUCU: anlatımı okuyup kurgu kararlarını verir (tempo, kesme efekti,
@@ -369,6 +382,31 @@ def produce_reel_video(
                  f"→ video {duration_s:.1f}sn")
 
     timeline = build_reel_timeline(narration, words, duration_s=duration_s)
+
+    # TEMPO BÖLGELERİ: hook hızlı → gövde sabit → TEPE yavaş → gövde sabit.
+    # TTS baştan sona tek hızda okur; insan anlatıcı okumaz. Açılışta hızlıdır
+    # (izleyici ilk saniyede kalma kararını verir), açıklamada yavaşlar (ağırlık verir).
+    # Yeniden seslendirmiyoruz: mp3'ü bölge bölge atempo'yla geriyoruz ve kelime
+    # zamanlarını PARÇALI-DOĞRUSAL olarak kesin yeniden eşliyoruz (bkz. reel_tempo).
+    # ASR ŞART — duraklamadaki gerekçenin aynısı: kelime zamanı yoksa bölge sınırları
+    # oransal tahmindir ve hız değişimi bir hecenin ORTASINA düşer (duyulur bir kayma).
+    # DURAKLAMADAN ÖNCE koşar: duraklama noktası bu yeni çizelgeden okunmalı.
+    if words and getattr(reel, "tempo_zones", True):
+        zones = plan_zones(timeline.seg_spans, peak_seg=narration.peak_segment(),
+                           duration_s=duration_s)
+        if zones:
+            try:
+                mp3 = d.retime(mp3, work_dir / "narration_tempo.mp3", zones,
+                               ffmpeg_path=ffmpeg_path)
+                words = remap_words(words, zones)
+                yeni = retimed_duration_s(zones)
+                log.info(f"  reel[ses] tempo bölgeleri: hook ×{zones[0].tempo:g}, "
+                         f"tepe ×{zones[2].tempo:g} ({zones[2].start_s:.1f}-"
+                         f"{zones[2].end_s:.1f}s) → süre {duration_s:.1f} → {yeni:.1f}sn")
+                duration_s = yeni
+                timeline = build_reel_timeline(narration, words, duration_s=duration_s)
+            except Exception as e:   # tempo KOZMETİK — üretimi düşürmemeli
+                log.warning(f"  reel: tempo bölgeleri uygulanamadı ({e}) → tek tempo")
 
     # TEPE ÖNCESİ DURAKLAMA. Anlatım baştan sona aynı tempoda akıyordu; insan
     # anlatıcı ise en büyük açıklamadan hemen önce SUSAR — o sessizlik "şimdi bir
@@ -609,6 +647,21 @@ def produce_reel_video(
     except Exception:
         pass
 
+    # KOORDİNELİ KESİNTİ ANLARI: 3-5 beat sınırında dört kanal AYNI KAREDE ateşlenir
+    # (vuruş sesi + tam güçlü uzun efekt + altyazı darbesi + görüntü punch'ı); diğer
+    # kesimlerde SFX kısılır. Eskiden her kesimde her şey patlıyordu — uyaranın her
+    # yerde olması, hiçbir yerde olmaması demek (bkz. reel_interrupt).
+    interrupts: list[float] = []
+    if getattr(reel, "interrupts", True):
+        interrupts = select_interrupts(
+            cut_times, [a for (a, _b) in timeline.seg_spans[1:]],
+            duration_s=duration_s, peak_s=peak_end_s)
+        if interrupts:
+            log.info(f"  reel: {len(interrupts)} koordineli kesinti @ "
+                     + ", ".join(f"{t:.1f}s" for t in interrupts))
+        else:
+            log.info("  reel: beat sınırına oturan kesim yok → kesinti anı seçilmedi")
+
     # 6) Overlay render
     frames_dir = work_dir / "frames"
     d.render_reel_overlay_frames(
@@ -622,6 +675,7 @@ def produce_reel_video(
         markers=markers,
         numbers=numbers,
         peak_end_s=peak_end_s,
+        interrupts=interrupts,
     )
     _phase("overlay-render")
 
@@ -631,10 +685,15 @@ def produce_reel_video(
     # Havuz kategori klasörlü; kurgucunun sfx_plan'ı kesim başına kategoriyi seçer,
     # ve AYNI SES bir videoda TEKRAR ÇALMAZ (kullanıcı: "aynı sfx" şikâyeti).
     pool = discover_sfx(sfx_dir) if reel.transitions_whoosh else {}
+    # Kesinti anlarında kategori 'impact'e ZORLANIR (vuruş; whoosh onu taşımaz) ve
+    # seviye yükselir; öteki kesimlerde seviye kısılır → kontrast.
+    impact_at = impact_cut_indices(cut_times, interrupts)
     sfx_at_cut = pick_sfx_per_cut(pool, seed, len(cut_times),
-                                  sfx_plan=profile.sfx_plan)
+                                  sfx_plan=profile.sfx_plan, impact_at=impact_at)
+    cut_gains = sfx_gains(cut_times, interrupts) if interrupts else None
     n_uniq = len({str(p) for p in sfx_at_cut})
     log.info(f"  reel: {len(cut_times)} kesim, {n_uniq} farklı SFX"
+             + (f", {len(impact_at)} kesinti vuruşu" if impact_at else "")
              + (f" (kurgucu: {'/'.join(dict.fromkeys(profile.sfx_plan))})"
                 if profile.sfx_plan else ""))
 
@@ -694,7 +753,9 @@ def produce_reel_video(
         except Exception as e:   # müzik KOZMETİK — ölçüm çıkmazsa ham parça
             log.warning(f"  reel: müzik dengelenemedi ({e}) → ham parça")
 
-    punches = punch_times(numbers, peak_end_s)
+    # Görüntü punch'ı kesinti anlarında DA ateşlenir — dördüncü kanal. Ses vuruşuyla
+    # aynı karede olduğu için izleyici ikisini tek bir "olay" olarak algılar.
+    punches = punch_times(numbers, peak_end_s, extra=interrupts)
     if punches:
         log.info(f"  reel: vurgu punch-in @ "
                  + ", ".join(f"{t:.1f}s" for t in punches))
@@ -708,6 +769,7 @@ def produce_reel_video(
         music_duck=getattr(reel, "music_duck", True),
         riser=riser, impact=impact, reveal_s=peak_end_s,
         sfx_at_cut=sfx_at_cut,
+        sfx_gains=cut_gains,
         # VURGU PUNCH-IN: sayı söylenirken ve TEPE anında görüntü bir tık yaklaşır.
         # Kesme efektleri ritmi zamanlayıcıyla veriyordu; bu, ritmi İÇERİĞE bağlayan
         # tek hamle — insan kurgucunun yaptığı, otomasyonun yapmadığı şey.

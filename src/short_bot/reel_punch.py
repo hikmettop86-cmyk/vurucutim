@@ -33,15 +33,21 @@ def select_punches(times: list[float]) -> list[float]:
     return out
 
 
-def punch_times(numbers: list[dict] | None, peak_s: float | None) -> list[float]:
-    """Darbe anları: söylenen SAYILAR + TEPE.
+def punch_times(numbers: list[dict] | None, peak_s: float | None,
+                extra: list[float] | None = None) -> list[float]:
+    """Darbe anları: söylenen SAYILAR + TEPE + ``extra`` (koordineli kesintiler).
 
     Sayı ("tam 70 kanserojen") ve reveal, videonun tek gerçek vurgu noktalarıdır.
     Her kesimde darbe atmak ritmi öldürür — darbe SEYREK olduğu için işe yarar.
+
+    ``extra``: kesinti anları (bkz. reel_interrupt). Orada ses vuruşu ve efekt zaten
+    ateşleniyor; punch onlarla AYNI KAREDE olunca üçü tek bir "olay" olarak algılanır.
+    MIN_GAP_S ve MAX_PUNCHES yine geçerli — seyreklik korunur.
     """
     ts = [float(n["start_s"]) for n in (numbers or []) if n.get("start_s") is not None]
     if peak_s:
         ts.append(float(peak_s))
+    ts.extend(float(t) for t in (extra or []))
     return select_punches(ts)
 
 

@@ -45,6 +45,7 @@ def build_reel_overlay_html(
     markers: list | None = None,
     numbers: list | None = None,
     peak_end_s: float | None = None,
+    interrupts: list | None = None,   # koordineli kesinti anları (bkz. reel_interrupt)
     templates_dir: Path | None = None,
 ) -> str:
     if layout not in ("classic", "lower_left", "top_heavy"):
@@ -98,12 +99,14 @@ def build_reel_overlay_html(
         chip_text=contrast_text(highlight_color),
         hot_color=ensure_bright(highlight_color),
         hook=timeline.hook, close=timeline.close, handle=handle,
+        cover_title=getattr(timeline, "cover_title", "") or "",
         cta_text=cta_text,
         font=font, font_import=_FONT_IMPORTS.get(font, _FONT_IMPORTS["Montserrat"]),
         words=words, cards=cards, duration_s=f"{timeline.duration_s:.3f}",
         last_seg=last_seg, cuts=json.dumps(cuts),
         arrow_segs=json.dumps(arrow_segs), flash=flash, cut_effect=cut_effect,
         markers=json.dumps(markers or []),
+        interrupts=json.dumps([round(float(t), 3) for t in (interrupts or [])]),
         nums=json.dumps(
             [{"text": n["text"], "s": f"{float(n['start_s']):.3f}",
               "e": f"{float(n['end_s']):.3f}"} for n in (numbers or [])],
