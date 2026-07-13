@@ -20,6 +20,9 @@ from short_bot.footage_sources import build_footage_sources
 from short_bot.reel_assembler import assemble_reel as _assemble
 from short_bot.reel_markers import _marker_worthy_segs, build_markers
 from short_bot.reel_models import build_reel_timeline
+from short_bot.reel_pause import MIN_PAUSE_AT_S, REVEAL_PAUSE_S
+from short_bot.reel_pause import insert_pause as _pause
+from short_bot.reel_pause import shift_words
 from short_bot.reel_punch import punch_times
 from short_bot.reel_narration import write_reel_narration as _write_narr
 from short_bot.reel_numbers import find_numbers
@@ -88,6 +91,7 @@ class ReelDeps:
     probe_duration_s: Callable = _probe
     trailing_silence_s: Callable = _tail
     transcribe_words: Callable = _transcribe
+    insert_pause: Callable = _pause
     match_beat_clip: Callable = _match
     locate_subject: Callable = _locate
     render_reel_overlay_frames: Callable = _render
@@ -353,6 +357,31 @@ def produce_reel_video(
                  f"→ video {duration_s:.1f}sn")
 
     timeline = build_reel_timeline(narration, words, duration_s=duration_s)
+
+    # TEPE ÖNCESİ DURAKLAMA. Anlatım baştan sona aynı tempoda akıyordu; insan
+    # anlatıcı ise en büyük açıklamadan hemen önce SUSAR — o sessizlik "şimdi bir
+    # şey gelecek" der. Kesintisiz ses vurguyu düzleştirir, tepe cümlelerin
+    # arasında kaybolur.
+    # Yeniden seslendirmiyoruz (her ek ai33 çağrısı kredi + yeni arıza yüzeyi):
+    # mp3'e sessizlik enjekte edip kelime zamanlarını KESİN olarak kaydırıyoruz.
+    # ASR ŞART: kelime zamanları yoksa segment sınırları ORANSAL TAHMİNDİR ve
+    # sessizlik bir kelimenin ORTASINA düşebilir. Tahmine göre ses kesmeyiz.
+    peak_seg = narration.peak_segment()
+    pause_at = (timeline.seg_spans[peak_seg][0]
+                if words and 0 < peak_seg < len(timeline.seg_spans) else 0.0)
+    if pause_at >= MIN_PAUSE_AT_S:
+        paused = work_dir / "narration_paced.mp3"
+        try:
+            mp3 = d.insert_pause(mp3, paused, at_s=pause_at,
+                                 dur_s=REVEAL_PAUSE_S, ffmpeg_path=ffmpeg_path)
+            words = shift_words(words, pause_at, REVEAL_PAUSE_S)
+            duration_s += REVEAL_PAUSE_S
+            timeline = build_reel_timeline(narration, words, duration_s=duration_s)
+            log.info(f"  reel[ses] tepe öncesi {REVEAL_PAUSE_S:.2f}sn duraklama "
+                     f"@ {pause_at:.1f}s (beat {narration.peak_beat})")
+        except Exception as e:   # duraklama KOZMETİK — üretimi düşürmemeli
+            log.warning(f"  reel: tepe duraklaması eklenemedi ({e}) → duraklamasız devam")
+
     log.info(f"  reel: ses {duration_s:.1f}s, {len(timeline.words)} kelime")
 
     # 5) Beat başına footage (+ belirteç-uygun segmentlerde nesne konumu)
