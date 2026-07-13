@@ -172,7 +172,7 @@
               <input type="number" name="reel_music_volume" step="0.01" min="0" max="1"
                      value="{{ '%.2f' % (c.reel.music_volume if c.reel else 0.10) }}"
                      class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
-              <span class="text-xs text-claude-muted">Anlatım 1.00 — müzik altta kalmalı (öneri 0.10)</span>
+              <span class="text-xs text-claude-muted">Ducking açıkken bu, müziğin KONUŞMA BOŞLUKLARINDAKİ seviyesidir (öneri 0.30)</span>
             </label>
             <label class="block">
               <span class="text-xs text-claude-muted uppercase tracking-wide">SFX sesi</span>
@@ -217,6 +217,8 @@
               {% if not c.reel or c.reel.visual_loop %}checked{% endif %}> 🔁 Görsel loop</label>
             <label class="flex items-center gap-2" title="AI kurgucu anlatımı okur; tempo, kesme efekti, kesim başına SFX ve müzik ruh halini İÇERİĞE göre seçer. Kapalıysa kararlar rastgele havuzdan gelir."><input type="checkbox" name="reel_ai_director"
               {% if not c.reel or c.reel.ai_director %}checked{% endif %}> 🎬 AI kurgucu</label>
+            <label class="flex items-center gap-2" title="Müzik konuşma altında otomatik kısılır, boşluklarda yükselir. Kapalıysa müzik sabit seviyede kalır ve enerji taşımaz."><input type="checkbox" name="reel_music_duck"
+              {% if not c.reel or c.reel.music_duck %}checked{% endif %}> 🎚️ Müzik ducking</label>
             <label class="flex items-center gap-2"><input type="checkbox" name="reel_arrows_enabled"
               {% if not c.reel or c.reel.arrows_enabled %}checked{% endif %}> Oklar</label>
             <label class="flex items-center gap-2"><input type="checkbox" name="reel_flash"

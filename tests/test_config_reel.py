@@ -38,7 +38,9 @@ def test_channel_with_reel_block_parses(tmp_path):
     assert cfg.reel.voice_id == "elevenlabs_abc"
     assert cfg.reel.target_duration_s == (25, 45)
     assert cfg.reel.cut_pacing == "fast"
-    assert cfg.reel.music_volume == 0.10  # default
+    # Ducking açıkken bu, müziğin BOŞLUKTAKİ seviyesi (0.10 "gömülü" değeri artık
+    # gereksiz — müzik konuşma altında kompresörle zaten çekiliyor)
+    assert cfg.reel.music_volume == 0.30  # default
 
 
 def test_reel_enabled_without_voice_id_rejected():

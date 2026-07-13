@@ -12,6 +12,19 @@ W, H = 1080, 1920
 _ZOOMPAN = ("zoompan=z='if(lte(on,9),1.16-0.0178*on,min(1.06,1.0+0.0006*(on-9)))'"
             ":x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s=1080x1920:fps=30")
 
+# --- SES MİKSİ ------------------------------------------------------------
+# DUCKING: müzik konuşma altında otomatik çekilir, boşluklarda yükselir. Bu olmadan
+# müzik ya duyulmaz (sabit -20 dB'de gömülü) ya da konuşmayı boğar. Release yeterince
+# uzun olmalı, yoksa müzik heceler arasında "pompalar".
+DUCK_THRESHOLD = 0.03   # ölçüldü: bu eşik/oranla müzik konuşma altında ~11 dB çekilir
+DUCK_RATIO = 10         # (8 → sadece 6.7 dB; 12 → 14.4 dB, fazla sert/pompalı)
+DUCK_ATTACK_MS = 5
+DUCK_RELEASE_MS = 350
+# MASTER: YouTube ~-14 LUFS'a normalize eder. Oraya yakın teslim et, -1 dBTP pay bırak.
+MASTER_LUFS = -14
+MASTER_TP = -1
+MASTER_LIMIT = 0.891   # -1 dBFS tepe tavanı (aynı zamanda loudnorm'un NaN'ını kırpar)
+
 
 def _run(cmd) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, capture_output=True, text=True,
@@ -49,6 +62,7 @@ def assemble_reel(
     out_path: Path, cut_times: list[float], duration_s: float,
     fps: int = 30, ffmpeg_path: str = "ffmpeg", music_volume: float = 0.10,
     narration_volume: float = 1.0, sfx_volume: float = 0.22,
+    music_duck: bool = True,
     sfx_at_cut: list | None = None,
     zoom: bool = True, clip_starts: list | None = None,
     hook_punch: bool = False,
@@ -86,12 +100,33 @@ def assemble_reel(
         cmd = [ffmpeg_path, "-y", "-i", str(footage),
                "-framerate", str(fps), "-i", str(Path(frames_dir) / "f_%05d.png"),
                "-i", str(narration_path)]
-        parts = ["[0:v][1:v]overlay=0:0[v]", "[2:a]volume={:g}[nar]".format(narration_volume)]
+        parts = ["[0:v][1:v]overlay=0:0[v]"]
+        # Ducking için anlatım İKİ yere gider: mikse ve kompresörün yan-zincirine.
+        duck = music_path is not None and music_duck
+        if duck:
+            parts.append(f"[2:a]volume={narration_volume:g},asplit=2[nar][narsc]")
+        else:
+            parts.append(f"[2:a]volume={narration_volume:g}[nar]")
         labels = ["[nar]"]
         idx = 3
         if music_path is not None:
             cmd += ["-stream_loop", "-1", "-i", str(music_path)]
-            parts.append(f"[{idx}:a]volume={music_volume:g}[bgm]")
+            parts.append(f"[{idx}:a]volume={music_volume:g}[bgm0]")
+            if duck:
+                # DUCKING: müzik konuşma altında otomatik çekilir, BOŞLUKLARDA
+                # yükselir. Bu olmadan müziği duyulur seviyeye çıkarmak konuşmayı
+                # boğar → izleyici kelime ayıklamak için çaba harcar → kaydırma.
+                # Kısa formatta enerjiyi taşıyan mekanizma budur.
+                # apad ŞART: sidechaincompress çıkışı girişten ~0.3sn KISA (iç
+                # gecikme). Padsiz kalırsa videonun SONUNDA müzik kesiliyor — ve
+                # sonda susan müzik LOOP'U BOZAR: izleyici videonun bittiğini
+                # duyar, başa dönmez. amix duration=first olduğu için pad zararsız.
+                parts.append(f"[bgm0][narsc]sidechaincompress="
+                             f"threshold={DUCK_THRESHOLD:g}:ratio={DUCK_RATIO:g}:"
+                             f"attack={DUCK_ATTACK_MS:g}:release={DUCK_RELEASE_MS:g},"
+                             f"apad[bgm]")
+            else:
+                parts.append("[bgm0]anull[bgm]")
             labels.append("[bgm]")
             idx += 1
         if sfx_at_cut and cut_times:
@@ -105,8 +140,17 @@ def assemble_reel(
                              f"volume={sfx_volume:g}[wh{k}]")
                 labels.append(f"[wh{k}]")
                 idx += 1
+        # MASTER: YouTube ~-14 LUFS'a normalize eder; oraya yakın teslim edip -1 dBTP
+        # pay bırakmak transcode'da kırpılmayı önler.
         parts.append(f"{''.join(labels)}amix=inputs={len(labels)}:"
-                     f"duration=first:dropout_transition=0:normalize=0[a]")
+                     f"duration=first:dropout_transition=0:normalize=0[mixed]")
+        # alimiter ŞART (kozmetik değil): loudnorm'un tek-geçiş dinamik modu amix
+        # çıkışında NaN/Inf örnek üretebiliyor ve AAC kodlayıcı kareyi reddediyor
+        # ("Input contains (near) NaN/+-Inf" → Error submitting audio frame).
+        # Limiter bunu kırpar — ve zaten doğru mastering zinciri budur:
+        # normalize → tepe sınırla. aresample: loudnorm çıkışı 192 kHz'e yükselir.
+        parts.append(f"[mixed]loudnorm=I={MASTER_LUFS:g}:TP={MASTER_TP:g}:LRA=11,"
+                     f"alimiter=limit={MASTER_LIMIT:g},aresample=48000[a]")
         cmd += ["-filter_complex", ";".join(parts), "-map", "[v]", "-map", "[a]",
                 "-t", f"{duration_s:.3f}", "-c:v", "libx264", "-preset", "veryfast",
                 "-crf", "21", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k",

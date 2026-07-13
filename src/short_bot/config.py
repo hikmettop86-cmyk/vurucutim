@@ -133,7 +133,11 @@ class ReelConfig(BaseModel):
     transitions_whoosh: bool = True
     transitions_zoom: bool = True
     music_mood: Literal["upbeat", "neutral", "calm"] = "upbeat"
-    music_volume: float = Field(default=0.10, ge=0.0, le=1.0)
+    # Müzik seviyesi = BOŞLUKTAKİ seviye. Ducking açıkken konuşma altında otomatik
+    # çekilir, o yüzden 0.10 gibi "gömülü" bir değer gereksiz — müzik hiç enerji
+    # taşımaz. 0.30 boşluklarda duyulur, konuşma altında kompresör indirir.
+    music_volume: float = Field(default=0.30, ge=0.0, le=1.0)
+    music_duck: bool = True     # müzik konuşma altında kısılsın (sidechain)
     # SFX kesim başına çalar (45sn'de ~18 kez). Eskiden assembler'da SABİT 0.6'ydı
     # (anlatım 1.0) → "sfx sesleri çok baskın". Vurgu olmalı, konuşmayla yarışmamalı.
     sfx_volume: float = Field(default=0.22, ge=0.0, le=1.0)

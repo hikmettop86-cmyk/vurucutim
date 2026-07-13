@@ -48,9 +48,36 @@ every beat.
 
 TOPIC SEED: {topic}
 
+=== YAPI: LİSTE DEĞİL, ARK (EN ÖNEMLİ KURAL) ===
+A list of facts LEAKS viewers. Every fact that fully resolves is an EXIT RAMP:
+the viewer got the information, curiosity CLOSED, and second 12 has no reason to
+lead to second 13. Write an ARC instead:
+
+  hook  → aç: tek bir vaat, cevaplanmamış bir soru
+  beat 0 → İLK ÖDEME (gerçek bir bilgi ver — ama vurucu olanı DEĞİL)
+  beats  → TIRMANIŞ: her beat bir öncekinin üstüne çıkar
+  TEPE   → EN ŞOK EDİCİ bilgi. ORTADA. (peak_beat ile işaretle)
+  son beat → TWIST: hook'u YENİDEN BAĞLAMLANDIRIR
+  close  → hook'un SÖZCÜKLERİNİ geri çağırır (callback) → video başa döner
+
+- EN İYİ BİLGİYİ BAŞA KOYMA (front-load YASAK). En şok edici olanı ORTAYA koy.
+  Baştaki en iyi bilgi = geri kalanı yokuş aşağı = doğrusal düşüş.
+- MİKRO-DÖNGÜ: her beat, bir sonrakine BORÇ bırakarak bitmeli — asla temiz
+  kapanmamalı. Türkçe bağlaçlar (her beat'in sonuna birini koy):
+    "Ama asıl garip olan şu:" / "Ve burada iş çığırından çıkıyor."
+    "Sebebi ise sandığın şey değil." / "Bir de bunu duymadın:"
+  Bu bağlaçlar izleyicinin kendine borçlandığı ANLARDIR — retention onlarla ayakta durur.
+
 OUTPUT a JSON object:
 - "hook": FIRST spoken sentence in {lang}. A curiosity question or surprising claim,
   under 2 seconds. Never start with a date.
+  YASAK AÇILIŞLAR: "Bunu biliyor muydunuz?" (200 milisaniyede içinden cevaplanır →
+  gerilim çöker → kaydırır), "Merhaba arkadaşlar", "Bugün sizlere ... anlatacağım".
+  Cevaplanabilir bir evet/hayır sorusu HOOK DEĞİLDİR.
+- "peak_beat": 0-based index of the beat that carries the BIGGEST shock/reveal.
+  It must be in the MIDDLE of the beat list, not the first and not the last.
+  Bu, beğeni tetiğinin ve abone isteğinin yerleşeceği andır: beğeni bir karar değil,
+  DUYGUSAL BOŞALMADIR — boşalacak bir tepe yoksa beğeni de gelmez.
 - "hook_visual": a SHORT English stock-footage query (2-4 COMMON words) for the
   OPENING shot. This is the MOST IMPORTANT frame of the video — the viewer decides
   in 1 second whether to keep watching. Pick the most STRIKING, CONCRETE, visually
@@ -77,8 +104,15 @@ OUTPUT a JSON object:
       descriptions like "storm cloud interior ice crystals turbulence" — those return
       zero results. English only.
     - "keyword": a SHORT ALL-CAPS on-screen tag in {lang} (max 40 chars, 1-3 words)
-- "close": LAST spoken sentence in {lang}. It must bridge back to the hook when the
-  video loops. No "abone ol"/"subscribe".
+- "close": LAST spoken sentence in {lang}. LOOP CALLBACK — it must REUSE THE HOOK'S
+  OWN WORDS so the video falls back into its own beginning. Shorts loop, and every
+  replay counts as a separate view; a faceless video loops INVISIBLY (no face, no
+  body language, no cue that it restarted). A close that "wraps things up" throws
+  that away.
+    Hook:  "Piramitleri köleler yapmadı."
+    Close: "...ve işte bu yüzden, piramitleri köleler yapmadı."   ← geri çağırır
+    KÖTÜ:  "Doğa her zaman şaşırtıcıdır."   ← hiçbir sözcüğü paylaşmıyor, video BİTER
+  Kapanış hook'un en az bir ANLAMLI SÖZCÜĞÜNÜ tekrar etmeli. No "abone ol"/"subscribe".
 - "mood": one of "upbeat" | "neutral" | "calm"
 
 HARD RULES:

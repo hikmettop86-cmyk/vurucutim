@@ -128,6 +128,7 @@ def save_reel(slug):
                                      old.music_volume if old else 0.10),
             sfx_volume=_form_float("reel_sfx_volume",
                                    old.sfx_volume if old else 0.22),
+            music_duck=request.form.get("reel_music_duck") == "on",
         )
     except Exception as e:  # pydantic ValidationError vb.
         flash(f"Reel ayarları geçersiz: {e}", "error")

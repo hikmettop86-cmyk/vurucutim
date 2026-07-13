@@ -7,7 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from short_bot.text_normalize import strip_non_turkish_diacritics
 
@@ -41,11 +41,43 @@ class ReelNarration(BaseModel):
     # görüntü alakasız" — hook, soyut bir beat sorgusunun çöp fallback'ini almıştı).
     hook_visual: str = Field(default="", max_length=120)
     close_visual: str = Field(default="", max_length=120)
+    # TEPE: videonun EN BÜYÜK reveal'inin hangi beat olduğu. Beğeni tetiği ve abone
+    # isteği buna göre yerleşir — ikisi de tepeden SONRA gelmeli. Beğeni bir karar
+    # değil DUYGUSAL BOŞALMADIR; boşalacak bir tepe yoksa beğeni de gelmez.
+    # -1 = LLM söylemedi → ORTA beat varsayılır ("en iyi bilgiyi öne koyma" hatasına
+    # düşmektense ortaya varsay).
+    peak_beat: int = Field(default=-1)
 
     @field_validator("hook", "close", mode="before")
     @classmethod
     def _norm(cls, v):
         return strip_non_turkish_diacritics(v) if isinstance(v, str) else v
+
+    @model_validator(mode="after")
+    def _resolve_peak(self):
+        """Tepe indeksini menzile OTUR (LLM uydurma indeks verse de üretim çökmesin)."""
+        n = len(self.beats)
+        if n and not (0 <= self.peak_beat < n):
+            object.__setattr__(self, "peak_beat", n // 2)
+        return self
+
+    def peak_segment(self) -> int:
+        """Tepenin SEGMENT indeksi (hook segment 0 olduğu için +1)."""
+        return self.peak_beat + 1
+
+    def close_echoes_hook(self) -> bool:
+        """LOOP kontrolü: kapanış hook'un sözcüklerini geri çağırıyor mu?
+
+        Kapanış hook'la hiç ortak İÇERİK sözcüğü paylaşmıyorsa video 'biter' ve
+        izleyici döngüye girmez — oysa her tekrar oynatma ayrı bir izlenme sayılır.
+        """
+        def _content_words(s: str) -> set[str]:
+            import re
+            words = re.findall(r"\w+", s.lower())
+            return {w for w in words if len(w) >= 4}   # ek/edat gürültüsünü at
+
+        hook_w = _content_words(self.hook)
+        return bool(hook_w and (hook_w & _content_words(self.close)))
 
     def segments(self) -> list[str]:
         return [self.hook, *[b.text for b in self.beats], self.close]

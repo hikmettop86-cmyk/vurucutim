@@ -391,6 +391,19 @@ def produce_reel_video(
                  f"({sum(1 for si, _a, _b in subcuts if si in worthy)} alt-kesim "
                  f"tarandı), {_time.perf_counter() - _mk_t0:.1f}s")
 
+    # TEPE ANI: en büyük reveal'in bittiği saniye. Beğeni tetiği ve abone isteği
+    # BURADAN SONRA yerleşir — izleyici değeri daha yeni yaşadı, istek nedensel
+    # olarak haklı çıkar. Sonda istemek en kötü slottu (dopamin harcanmış + loop ölür).
+    peak_seg = narration.peak_segment()
+    peak_end_s = None
+    if 0 <= peak_seg < len(timeline.seg_spans):
+        peak_end_s = timeline.seg_spans[peak_seg][1]
+        log.info(f"  reel: tepe = beat {narration.peak_beat} "
+                 f"(segment {peak_seg}, {peak_end_s:.1f}s) → beğeni+abone oradan sonra")
+    if not narration.close_echoes_hook():
+        log.warning("  reel: kapanış hook'un sözcüklerini GERİ ÇAĞIRMIYOR → "
+                    "video 'biter', izleyici döngüye girmez (loop kaybı)")
+
     # Storyblocks footage için açılmış olabilecek kalıcı sync_playwright'ı KAPAT:
     # aksi hâlde aynı thread'de reel_render'ın sync_playwright'ı "Playwright Sync
     # API inside the asyncio loop" hatası verir. close() idempotent; kullanılmadıysa
@@ -413,6 +426,7 @@ def produce_reel_video(
         font=reel.font,
         markers=markers,
         numbers=numbers,
+        peak_end_s=peak_end_s,
     )
     _phase("overlay-render")
 
@@ -446,6 +460,7 @@ def produce_reel_video(
         cut_times=cut_times, duration_s=duration_s, fps=fps, ffmpeg_path=ffmpeg_path,
         music_volume=reel.music_volume,
         sfx_volume=getattr(reel, "sfx_volume", 0.22),
+        music_duck=getattr(reel, "music_duck", True),
         sfx_at_cut=sfx_at_cut,
         zoom=("zoom" in profile.transitions),
         clip_starts=clip_starts,
