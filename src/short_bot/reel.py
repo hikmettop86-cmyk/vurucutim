@@ -19,6 +19,7 @@ from short_bot.footage_matcher import match_beat_clip as _match
 from short_bot.footage_sources import build_footage_sources
 from short_bot.reel_assembler import assemble_reel as _assemble
 from short_bot.reel_markers import _marker_worthy_segs, build_markers
+from short_bot.music_profile import MusicProfile, profile_music
 from short_bot.reel_models import build_reel_timeline
 from short_bot.reel_pause import MIN_PAUSE_AT_S, REVEAL_PAUSE_S
 from short_bot.reel_pause import insert_pause as _pause
@@ -655,6 +656,22 @@ def produce_reel_video(
         except (FileNotFoundError, OSError) as e:
             log.info(f"  reel: '{profile.music_mood}' müziği yok ({e}), mevcut müzik")
 
+    # Müzik profili: sessiz girişi atla + kütüphane seviye farkını eşitle.
+    # Ölçüldü — parçaları 0:00'dan başlatınca müzik konuşmanın 37 dB altında
+    # kalıyordu (olması gereken ~12 dB): çoğu stok parça yavaş kuruluyor.
+    mprof = MusicProfile(0.0, 0.0)
+    if music_path is not None:
+        try:
+            # Önbellek müzik köküne yazılır: work_dir geçici, her koşuda silinir —
+            # ebur128 geçişini her videoda tekrarlamanın anlamı yok.
+            mprof = profile_music(
+                Path(music_path), ffmpeg_path=ffmpeg_path,
+                cache_path=Path(music_path).parent.parent / "_profiles.json")
+            log.info(f"  reel: müzik girişi {mprof.start_s:.1f}sn atlandı, "
+                     f"seviye {mprof.gain_db:+.1f} dB eşitlendi")
+        except Exception as e:   # müzik KOZMETİK — profil çıkmazsa ham parça
+            log.warning(f"  reel: müzik profili çıkarılamadı ({e}) → ham parça")
+
     punches = punch_times(numbers, peak_end_s)
     if punches:
         log.info(f"  reel: vurgu punch-in @ "
@@ -664,6 +681,7 @@ def produce_reel_video(
         narration_path=mp3, music_path=music_path, out_path=out_path,
         cut_times=cut_times, duration_s=duration_s, fps=fps, ffmpeg_path=ffmpeg_path,
         music_volume=reel.music_volume,
+        music_start_s=mprof.start_s, music_gain_db=mprof.gain_db,
         sfx_volume=getattr(reel, "sfx_volume", 0.22),
         music_duck=getattr(reel, "music_duck", True),
         riser=riser, impact=impact, reveal_s=peak_end_s,

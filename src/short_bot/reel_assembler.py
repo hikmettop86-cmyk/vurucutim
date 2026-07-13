@@ -107,6 +107,8 @@ def assemble_reel(
     color_grade: bool = True,         # master renk grade + klip normalizasyonu
     seed: int = 0,                    # Ken Burns hareketi (deterministik)
     punch_at: list[float] | None = None,   # vurgu anlarında zoom darbesi (bkz. reel_punch)
+    music_start_s: float = 0.0,       # parçanın sessiz girişini atla (bkz. music_profile)
+    music_gain_db: float = 0.0,       # kütüphane seviye farkını eşitle
 ) -> Path:
     """Segment klipleri + overlay + ses → mp4. clip_paths ve seg_spans aynı boyda."""
     out_path = Path(out_path)
@@ -173,8 +175,15 @@ def assemble_reel(
         labels = ["[nar]"]
         idx = 3
         if music_path is not None:
-            cmd += ["-stream_loop", "-1", "-i", str(music_path)]
-            parts.append(f"[{idx}:a]volume={music_volume:g}[bgm0]")
+            # GİRİŞİ ATLA + SEVİYEYİ EŞİTLE. Parçaları 0:00'dan başlatıyorduk; stok
+            # müziklerin çoğu yavaş kuruluyor (ölçüldü: bir parça tam gücüne 60
+            # SANİYEDE ulaşıyor) → 30sn'lik shorts yalnız sessiz girişi kullanıyor
+            # ve müzik DUYULMUYORDU. Kütüphanedeki 24.9 dB'lik seviye yayılımı da
+            # aynı ayarla bir videoyu sessiz, ötekini bağıran yapıyordu.
+            seek = ["-ss", f"{music_start_s:.2f}"] if music_start_s > 0 else []
+            cmd += ["-stream_loop", "-1", *seek, "-i", str(music_path)]
+            gain = f"volume={music_gain_db:g}dB," if music_gain_db else ""
+            parts.append(f"[{idx}:a]{gain}volume={music_volume:g}[bgm0]")
             if duck:
                 # DUCKING: müzik konuşma altında otomatik çekilir, BOŞLUKLARDA
                 # yükselir. Bu olmadan müziği duyulur seviyeye çıkarmak konuşmayı

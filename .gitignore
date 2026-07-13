@@ -81,3 +81,4 @@ remotion/.cache/
 
 # Git worktrees (project-local, isolated dev branches)
 .worktrees/
+assets/music/_profiles.json
