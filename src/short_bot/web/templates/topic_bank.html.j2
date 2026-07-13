@@ -1,80 +1,121 @@
 {% extends "base.html.j2" %}
 {% block title %}Konu Bankası — {{ channel.name }}{% endblock %}
+
+{# Kısa sayı: 38.268.892 okunmaz, "38,3 M" okunur. Kanıt metriği olduğu için göz
+   bir bakışta kavramalı. Binde BOŞLUKLU "B" — "98B" bin mi milyar mı belirsizdi. #}
+{% macro kisa(n) %}
+  {%- if n >= 1000000 -%}{{ ('%.1f'|format(n / 1000000))|replace('.', ',') }} M
+  {%- elif n >= 1000 -%}{{ ('%.1f'|format(n / 1000))|replace('.', ',') }} B
+  {%- else -%}{{ n }}{%- endif -%}
+{% endmacro %}
+
 {% block content %}
-<div class="max-w-4xl mx-auto p-6">
-  <h1 class="text-2xl font-bold mb-1">🎯 Konu Bankası — {{ channel.name }}</h1>
-  <p class="text-sm opacity-70 mb-4">Nişte patlamış videolardan damıtılmış
-    kanıtlanmış konular. Üretim bunlardan ilham alır; kullanılan işaretlenir.</p>
+<div class="max-w-5xl mx-auto p-6">
 
-  <form method="post" action="/channels/{{ slug }}/topic-bank/refresh" class="mb-4">
-    <button class="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-semibold">
-      🔄 Yenile (YouTube)</button>
-  </form>
-
-  <details class="mb-4 border border-claude-border rounded-lg p-3" {% if channel.reference_channels %}open{% endif %}>
-    <summary class="text-sm font-semibold cursor-pointer">📺 Referans kanallar
-      ({{ channel.reference_channels|length }}) — opsiyonel</summary>
-    <form method="post" action="/channels/{{ slug }}/topic-bank/refs" class="mt-2">
-      <textarea name="reference_channels" rows="3"
-                placeholder="https://www.youtube.com/@KanalAdi (her satıra bir kanal)"
-                class="w-full border border-claude-border rounded-lg px-3 py-2 text-sm font-mono">{{ channel.reference_channels|join('\n') }}</textarea>
-      <div class="text-xs opacity-60 mt-1">Senin formatını yapan rakip/örnek kanallar.
-        Yenile'de ÖNCE bu kanalların kendi ortalamasına göre patlayan shorts'ları
-        madenlenir (format+kitle garantili, kota ~3 birim/kanal); yeterse arama atlanır.</div>
-      <button class="mt-2 px-3 py-1.5 rounded-lg bg-claude-surface-alt border border-claude-border text-xs font-semibold">Kaydet</button>
+  <div class="flex items-start justify-between gap-4 mb-6">
+    <div>
+      <h1 class="text-2xl font-bold text-claude-text">Konu Bankası</h1>
+      <p class="text-sm text-claude-muted mt-1">
+        {{ channel.name }} · nişinde patlamış videolardan damıtılmış
+        <span class="text-claude-text font-medium">{{ rows|length }} kanıtlanmış konu</span>.
+        Üretilen konu listeden düşer, bir daha üretilmez.
+      </p>
+    </div>
+    <form method="post" action="/channels/{{ slug }}/topic-bank/refresh" class="flex-shrink-0">
+      <button class="px-4 py-2 rounded-lg bg-claude-accent hover:opacity-90 text-white
+                     text-sm font-semibold shadow-sm">Yenile</button>
     </form>
-  </details>
+  </div>
 
   {% with messages = get_flashed_messages() %}
     {% for m in messages %}
-      <div class="mb-3 p-3 rounded-lg bg-cyan-900/40 text-sm">{{ m }}</div>
+      <div class="mb-4 px-4 py-3 rounded-lg bg-claude-surface border border-claude-border
+                  text-sm text-claude-text">{{ m }}</div>
     {% endfor %}
   {% endwith %}
 
+  <details class="mb-6 rounded-lg border border-claude-border bg-claude-surface"
+           {% if channel.reference_channels %}open{% endif %}>
+    <summary class="px-4 py-3 text-sm font-semibold text-claude-text cursor-pointer select-none">
+      Referans kanallar
+      <span class="text-claude-muted font-normal">({{ channel.reference_channels|length }}) — opsiyonel</span>
+    </summary>
+    <form method="post" action="/channels/{{ slug }}/topic-bank/refs" class="px-4 pb-4">
+      <textarea name="reference_channels" rows="3"
+                placeholder="https://www.youtube.com/@KanalAdi (her satıra bir kanal)"
+                class="w-full bg-white border border-claude-border rounded-lg px-3 py-2
+                       text-sm font-mono text-claude-text">{{ channel.reference_channels|join('\n') }}</textarea>
+      <p class="text-xs text-claude-muted mt-2">Senin formatını yapan rakip/örnek kanallar.
+        Yenile'de önce bunların kendi ortalamasına göre patlayan shorts'ları madenlenir
+        (format ve kitle garantili); yeterse arama atlanır.</p>
+      <button class="mt-3 px-3 py-1.5 rounded-lg bg-white border border-claude-border
+                     text-xs font-semibold text-claude-text hover:bg-claude-surface-alt">
+        Kaydet</button>
+    </form>
+  </details>
+
   {% if not rows %}
-    <p class="opacity-60 text-sm">Banka boş — "Yenile (YouTube)" ile doldurun.
-      Sorgu birkaç dakika sürebilir.</p>
+    <div class="rounded-xl border border-dashed border-claude-border bg-claude-surface
+                px-6 py-12 text-center">
+      <p class="text-claude-text font-medium">Banka boş</p>
+      <p class="text-sm text-claude-muted mt-1">
+        "Yenile" ile nişindeki patlamış videolardan konu madenle. Birkaç dakika sürer.
+      </p>
+    </div>
   {% else %}
-  <table class="w-full text-sm">
-    <thead>
-      <tr class="text-left text-xs uppercase opacity-50">
-        <th class="py-2">Konu</th><th>Durum</th><th></th>
-      </tr>
-    </thead>
-    <tbody>
+    <div class="space-y-3">
     {% for r in rows %}
-      <tr class="border-b border-white/10 align-top {{ 'opacity-40' if r.status != 'active' }}">
-        <td class="py-2 pr-3">{{ r.topic }}
-          <div class="text-xs opacity-60 mt-0.5">
-            {% if r.source_title %}{{ r.source_title }} — {% endif %}
-            {{ '{:,}'.format(r.views) }} izlenme / {{ '{:,}'.format(r.subs) }} abone
-            {% if r.hook_pattern %} · {{ r.hook_pattern }}{% endif %}
+      {# PATLAMA KATSAYISI kanıtın özüdür: 38M izlenme 98B abonelik bir kanaldan
+         geldiyse video kanalın kendi boyutunu ~390 KAT aşmış demektir. Ham izlenme
+         sayısı bunu göstermez — büyük kanalda 38M sıradan olabilir. #}
+      {% set kat = (r.views // r.subs) if r.subs else 0 %}
+      <article class="rounded-xl border border-claude-border bg-white p-5
+                      hover:border-claude-accent/40 transition-colors">
+        <div class="flex items-start gap-5">
+          <div class="flex-1 min-w-0">
+            <p class="text-claude-text leading-snug">{{ r.topic }}</p>
+
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-3 text-xs">
+              {% if kat >= 10 %}
+              <span class="px-2 py-0.5 rounded-md bg-claude-accent/10 text-claude-accent
+                           font-semibold">{{ kat }}× patlama</span>
+              {% endif %}
+              <span class="text-claude-muted">
+                <span class="text-claude-text font-medium">{{ kisa(r.views) }}</span> izlenme
+              </span>
+              <span class="text-claude-muted">
+                <span class="text-claude-text font-medium">{{ kisa(r.subs) }}</span> abone kanal
+              </span>
+              {% if r.hook_pattern %}
+              <span class="px-2 py-0.5 rounded-md bg-claude-surface-alt text-claude-muted">
+                {{ r.hook_pattern }}</span>
+              {% endif %}
+            </div>
+
+            {% if r.source_title %}
+            <p class="text-xs text-claude-muted mt-2 truncate" title="{{ r.source_title }}">
+              kaynak: {{ r.source_title }}</p>
+            {% endif %}
           </div>
-        </td>
-        <td class="py-2 text-xs whitespace-nowrap">
-          {% if r.status == 'active' %}<span class="text-emerald-400">aktif</span>
-          {% elif r.status == 'used' %}<span class="text-cyan-400">kullanıldı</span>
-          {% else %}<span class="text-red-400">reddedildi</span>{% endif %}
-        </td>
-        <td class="py-2 text-right whitespace-nowrap">
-          {# Konuyu KULLANICI seçer: normal üretimde başlığı LLM seçiyor, burada
-             zorlanıyor. Üretime verilen konu ANINDA 'used' işaretlenir ve listeden
-             düşer — aksi hâlde aynı konu ikinci kez üretilebilirdi. #}
-          <form method="post" action="/channels/{{ slug }}/topic-bank/{{ r.id }}/produce"
-                class="inline"
-                onsubmit="return confirm('Bu konudan video üretilsin mi? (~10 dk)')">
-            <button class="text-xs px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500
-                           text-white font-semibold">▶ Bu konudan üret</button>
-          </form>
-          <form method="post" action="/channels/{{ slug }}/topic-bank/{{ r.id }}/reject"
-                class="inline ml-2">
-            <button class="text-xs text-red-500 hover:text-red-400">Reddet</button>
-          </form>
-        </td>
-      </tr>
+
+          <div class="flex flex-col items-stretch gap-2 flex-shrink-0">
+            {# Konuyu KULLANICI seçer: normal üretimde başlığı LLM seçer. Üretime
+               verilen konu ANINDA 'used' işaretlenir ve listeden düşer. #}
+            <form method="post" action="/channels/{{ slug }}/topic-bank/{{ r.id }}/produce"
+                  onsubmit="return confirm('Bu konudan video üretilsin mi? (~10 dk)')">
+              <button class="w-full px-4 py-2 rounded-lg bg-claude-accent hover:opacity-90
+                             text-white text-sm font-semibold whitespace-nowrap">
+                Bu konudan üret</button>
+            </form>
+            <form method="post" action="/channels/{{ slug }}/topic-bank/{{ r.id }}/reject">
+              <button class="w-full px-4 py-1.5 rounded-lg text-xs text-claude-muted
+                             hover:text-claude-accent">Reddet</button>
+            </form>
+          </div>
+        </div>
+      </article>
     {% endfor %}
-    </tbody>
-  </table>
+    </div>
   {% endif %}
 </div>
 {% endblock %}

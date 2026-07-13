@@ -273,14 +273,28 @@ def refresh_topic_bank(eng, channel_slug: str, niche_query: str, *,
                                 keywords=keywords,
                                 reference_channels=reference_channels)
     log.info(f"topic_miner: youtube_api → {len(mined)} konu")
-    existing = [r["topic"] for r in all_bank_topics(eng, channel_slug)]
+    bank = all_bank_topics(eng, channel_slug)
+    existing = [r["topic"] for r in bank]
+    # KAYNAK VİDEO ELEMESİ. Metin benzerliği yetmiyor: aynı videodan damıtılan iki
+    # konu FARKLI cümlelerle yazılıyor ("Sigara içtiğinizde her organ toksik hasar
+    # görür" / "Sigara içtiğinizde yıkıcı bir reaksiyon başlar") ve fuzzy oran
+    # eşiğin altında kalıyor — bankada aynı olgunun iki kaydı birikiyordu (gerçek
+    # durum: üç mükerrer çift). Aynı video = aynı olgu; bir tanesi yeter.
+    sources = {(r.get("source_title") or "").strip().lower()
+               for r in bank if (r.get("source_title") or "").strip()}
     fresh, dup = [], 0
     for r in mined:
+        src = (r.get("source_title") or "").strip().lower()
+        if src and src in sources:
+            dup += 1
+            continue
         if any(fuzz.ratio(r["topic"].lower(), e.lower()) > _DUP_THRESHOLD
                for e in existing):
             dup += 1
             continue
         existing.append(r["topic"])   # aynı partide de tekrar önle
+        if src:
+            sources.add(src)
         fresh.append(r)
     insert_bank_topics(eng, channel_slug, fresh)
     return {"added": len(fresh), "skipped_dup": dup}
