@@ -55,6 +55,11 @@ _PREFLIGHT = {
     "stalled": "ai33 kuyruk takılı (preflight zaman aşımı); üretim iptal, kredi harcanmadı.",
     "error": "ai33 preflight başarısız — servis yanıt vermiyor.",
 }
+# GEÇİCİ hatalar: servis anlık yanıt vermiyor / kuyruk takılmış → yeniden dene.
+# KALICI olanlar (auth/no-key/no-voice) burada YOK: beklemenin faydası olmaz.
+_PREFLIGHT_TRANSIENT = {"error", "stalled"}
+PREFLIGHT_RETRIES = 3
+PREFLIGHT_BACKOFF_S = 8
 
 
 @dataclass(frozen=True)
@@ -200,8 +205,21 @@ def produce_reel_video(
         _t0 = _time.perf_counter()
         log.info(f"  reel[süre] {name}: {dt:.1f}s")
 
-    # 1) Preflight (LLM/TTS kredisi harcamadan)
-    verdict = d.health_check(voice_id=reel.voice_id, api_key=ai33_api_key, tmp_dir=work_dir)
+    # 1) Preflight (LLM/TTS kredisi harcamadan). GEÇİCİ kesintiyi yeniden dene:
+    # ai33 üç kez "yanıt vermiyor" deyip koşuyu düşürdü, hemen ardından elle
+    # kontrolde SAĞLIKLI çıktı. "error"/"stalled" geçicidir; "auth"/"no-key"/
+    # "no-voice" KALICIDIR — onlarda beklemenin faydası yok, anında dur.
+    verdict = ""
+    for attempt in range(1, PREFLIGHT_RETRIES + 1):
+        verdict = d.health_check(voice_id=reel.voice_id, api_key=ai33_api_key,
+                                 tmp_dir=work_dir)
+        if verdict == "healthy" or verdict not in _PREFLIGHT_TRANSIENT:
+            break
+        if attempt < PREFLIGHT_RETRIES:
+            wait = PREFLIGHT_BACKOFF_S * attempt
+            log.warning(f"  reel: ai33 preflight '{verdict}' (deneme {attempt}/"
+                        f"{PREFLIGHT_RETRIES}) → {wait}sn sonra yeniden")
+            _time.sleep(wait)
     if verdict != "healthy":
         raise RuntimeError(_PREFLIGHT.get(verdict, f"ai33 preflight: {verdict}"))
     log.info("  reel: ai33 preflight healthy")

@@ -90,13 +90,21 @@ def test_assemble_gets_subcut_clips(tmp_path):
     assert kw["duration_s"] == 30.0
 
 
-@pytest.mark.parametrize("verdict,match", [
-    ("stalled", "kuyruk"), ("auth", "AI33_API_KEY"), ("no-key", "AI33_API_KEY")])
-def test_preflight_failure_stops_before_llm(tmp_path, verdict, match):
+@pytest.mark.parametrize("verdict,match,n_health", [
+    # GEÇİCİ ("stalled"): yeniden denenir — ai33 üç kez anlık kesinti verip koşuyu
+    # düşürdü, hemen ardından SAĞLIKLI çıktı. KALICI (auth/no-key): anında dur,
+    # beklemenin faydası yok.
+    ("stalled", "kuyruk", 3),
+    ("auth", "AI33_API_KEY", 1),
+    ("no-key", "AI33_API_KEY", 1)])
+def test_preflight_failure_stops_before_llm(tmp_path, verdict, match, n_health,
+                                            monkeypatch):
+    monkeypatch.setattr("time.sleep", lambda *_a: None)   # geri çekilmeyi hızlandır
     calls = []
     with pytest.raises(RuntimeError, match=match):
         _call(_deps(calls, health=verdict), tmp_path)
-    assert calls == ["health"]
+    assert calls == ["health"] * n_health
+    assert "narr" not in calls, "preflight geçmeden LLM kredisi harcandı"
 
 
 def test_requires_reel_enabled(tmp_path):
