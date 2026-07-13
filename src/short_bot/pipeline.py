@@ -34,6 +34,7 @@ from short_bot.extractor import (
     _is_google_news_url,
 )
 from short_bot.script_writer import write_script
+from short_bot import run_context
 from short_bot.assets import download_and_blur_thumb, pick_music
 from short_bot.renderer import render_frames, build_html
 from short_bot.overflow import (
@@ -397,16 +398,16 @@ _RUN_SUB_LOGGERS = (
 # FileHandler is attached to the same shared sub-logger and they all
 # receive every log record — galatasaray's run log was getting NFL/Putin
 # query lines from other channels' concurrent runs.
-_active_run = threading.local()
-
-
+# Thread-local artık short_bot.run_context'te: paralel vision çağrıları (worker
+# thread'ler) ebeveynin koşusunu DEVRALABİLSİN diye. İki ayrı depo olsaydı devralma
+# çalışmaz ve worker logları run dosyasına hiç düşmezdi (gerçek ölçüm yanılsaması:
+# "12 klip için 1 vision yargısı" — oysa 24 yargı yapılmıştı, görünmüyorlardı).
 def _set_active_run_log_path(log_path: str) -> None:
-    _active_run.log_path = log_path
+    run_context.set_log_path(log_path)
 
 
 def _clear_active_run_log_path() -> None:
-    if hasattr(_active_run, "log_path"):
-        del _active_run.log_path
+    run_context.clear_log_path()
 
 
 class _RunFileFilter(logging.Filter):
@@ -418,8 +419,7 @@ class _RunFileFilter(logging.Filter):
         self._log_path = log_path
 
     def filter(self, record: logging.LogRecord) -> bool:
-        active = getattr(_active_run, "log_path", None)
-        return active == self._log_path
+        return run_context.get_log_path() == self._log_path
 
 
 def _setup_logger(log_path: Path) -> logging.Logger:

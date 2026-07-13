@@ -403,10 +403,14 @@ def produce_reel_video(
         # PARALEL: her konum ölçümü bir vision çağrısı (~2-3sn). 15 alt-kesim sıralı
         # ölçülünce 30 saniye yiyordu; sonuçlar birbirinden bağımsız.
         from concurrent.futures import ThreadPoolExecutor
+
+        from short_bot.run_context import get_log_path, pool_initializer
         todo = [(i, si) for i, (si, _a, _b) in enumerate(subcuts) if si in worthy]
         found: dict[int, SubjectPos] = {}
         if todo:
-            with ThreadPoolExecutor(max_workers=LOCATE_WORKERS) as ex:
+            with ThreadPoolExecutor(max_workers=LOCATE_WORKERS,
+                                    initializer=pool_initializer,
+                                    initargs=(get_log_path(),)) as ex:
                 for (i, _si), pos in zip(todo, ex.map(lambda t: _locate_at(*t), todo)):
                     found[i] = pos
         positions = [found.get(i, SubjectPos(found=False))

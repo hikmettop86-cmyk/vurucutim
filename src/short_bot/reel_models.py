@@ -55,10 +55,24 @@ class ReelNarration(BaseModel):
 
     @model_validator(mode="after")
     def _resolve_peak(self):
-        """Tepe indeksini menzile OTUR (LLM uydurma indeks verse de üretim çökmesin)."""
+        """Tepeyi geçerli ARALIĞA otur: ne İLK ne SON beat olabilir.
+
+        Prompt bunu söylüyor ama LLM uymuyor. GERÇEK HATA (short_id=750): 3 beat
+        varken peak_beat=2 (SONUNCU) dendi → tepe videonun %80'ine kaydı → beğeni
+        ve abone tetikleri sonda kaldı. Araştırma tepeyi ~%50'de istiyor.
+
+        Kod ZORLAR: 3+ beat varsa tepe [1, n-2] aralığında; 2 beat varsa 0.
+        Menzil dışı/uydurma indeks → ORTA beat (üretim asla çökmez).
+        """
         n = len(self.beats)
-        if n and not (0 <= self.peak_beat < n):
-            object.__setattr__(self, "peak_beat", n // 2)
+        if not n:
+            return self
+        lo, hi = (1, n - 2) if n >= 3 else (0, max(0, n - 1))
+        p = self.peak_beat
+        if not (lo <= p <= hi):
+            p = n // 2 if n >= 3 else 0
+            p = min(max(p, lo), hi)
+            object.__setattr__(self, "peak_beat", p)
         return self
 
     def peak_segment(self) -> int:

@@ -556,6 +556,9 @@ def match_beat_clip(query: str, *, api_key: str = "", cache_dir: Path,
                 if len(todo) > 1:
                     from concurrent.futures import ThreadPoolExecutor
 
+                    from short_bot.run_context import (get_log_path,
+                                                       pool_initializer)
+
                     def _judge(item):
                         _c, _u = item
                         try:
@@ -564,7 +567,13 @@ def match_beat_clip(query: str, *, api_key: str = "", cache_dir: Path,
                         except Exception as e:  # noqa: BLE001 — biri patlarsa diğerleri sürsün
                             log.warning(f"footage vision doğrulama hatası: {e}")
 
-                    with ThreadPoolExecutor(max_workers=GATE_WORKERS) as ex:
+                    # Worker'lar ebeveynin KOŞU BAĞLAMINI devralır — yoksa kapı
+                    # logları run dosyasına HİÇ DÜŞMEZ (thread-local filtre) ve
+                    # teşhis "vision çalışmıyor" sanır.
+                    with ThreadPoolExecutor(
+                            max_workers=GATE_WORKERS,
+                            initializer=pool_initializer,
+                            initargs=(get_log_path(),)) as ex:
                         list(ex.map(_judge, todo))
                     for _c, _u in todo:
                         prewarmed.add(_u)
