@@ -12,9 +12,12 @@ için ``short_bot.tts.align`` kullanılır.
 """
 from __future__ import annotations
 
+import logging
 import os
 import time
 from pathlib import Path
+
+log = logging.getLogger(__name__)
 
 BASE_URL = "https://api.ai33.pro"
 
@@ -40,6 +43,9 @@ POST_TIMEOUT_S = 60.0
 TASK_TIMEOUT_S = 30.0
 DOWNLOAD_TIMEOUT_S = 180.0
 DOWNLOAD_RETRIES = 3       # ses hazır ama indirme kopabilir (10054) — kredi yanmasın
+# Poll'de 429: görev ZATEN gönderildi, kredi harcandı → geri çekil, terk etme.
+RATE_LIMIT_BACKOFF_S = 10   # artan: 10, 20, 30...
+RATE_LIMIT_MAX_WAIT_S = 60
 
 
 class Ai33Error(RuntimeError):
@@ -132,6 +138,7 @@ def synthesize(
             raise Ai33Error("ai33 yanıtında task_id yok")
 
         start = now()
+        rate_hits = 0
         while True:
             if now() - start > poll_timeout_s:
                 raise Ai33TimeoutError(
@@ -144,6 +151,18 @@ def synthesize(
             except Exception:
                 # Geçici ağ kopması (timeout/reset) poll'u DÜŞÜRMESİN — task sunucuda
                 # işlemeye devam ediyor; üstteki poll_timeout_s guard'ı süreyi sınırlar.
+                continue
+            # HIZ SINIRI (429) POLL'DE GEÇİCİDİR: görev ZATEN gönderildi ve sunucuda
+            # işleniyor — KREDİ HARCANDI. Fırlatmak, ödediğimiz sonucu terk etmek
+            # olur. Geri çekil, beklemeye devam et; poll_timeout_s zaten sonsuz
+            # beklemeyi engelliyor. (POST'taki 429 farklı: orada hata veriyoruz,
+            # çünkü henüz bir şey gönderilmedi.)
+            if getattr(r, "status_code", 200) == 429:
+                rate_hits += 1
+                wait = min(RATE_LIMIT_BACKOFF_S * rate_hits, RATE_LIMIT_MAX_WAIT_S)
+                log.warning(f"  ai33 poll hız sınırı ({rate_hits}. kez) → {wait}sn "
+                            f"bekle, görev sunucuda sürüyor (task={task_id})")
+                sleep(wait)
                 continue
             _check_status(r, "task poll")
             task = r.json() or {}
