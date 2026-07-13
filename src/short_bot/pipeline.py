@@ -1151,6 +1151,24 @@ def _run_rss(*, channel, run_id, log, eng, settings,
     return RunResult(run_id=run_id, status="success", short_path=out_path, error=None)
 
 
+def _safe_generate(gen_fn, *, log, attempt: int):
+    """Senaryo üret; LLM yanıtı GEÇERSİZSE fırlatma, None dön.
+
+    GERÇEK HATA (run 830): 3 deneme hakkı varken 2. denemede LLM'in ürettiği vurgu
+    paragrafta birebir geçmedi → pydantic ValidationError → generate_quote fırlattı
+    → TÜM KOŞU DÜŞTÜ, 3. denemeye hiç sıra gelmedi. Doğrulama hatası bir LLM
+    kaprisidir; tekrar (duplicate) nasıl bir deneme tüketip devam ediyorsa, geçersiz
+    yanıt da öyle davranmalı.
+    """
+    try:
+        return gen_fn()
+    except KeyboardInterrupt:
+        raise            # kullanıcı durdurduysa YUTMA
+    except Exception as e:  # noqa: BLE001 — LLM kaprisi koşuyu düşürmesin
+        log.warning(f"  geçersiz LLM yanıtı (deneme {attempt}): {e} → sonraki deneme")
+        return None
+
+
 def _run_generator(*, channel, run_id, log, eng, settings,
                    music_root, templates_dir, cache_dir) -> RunResult:
     """6-phase generator pipeline."""
@@ -1192,15 +1210,19 @@ def _run_generator(*, channel, run_id, log, eng, settings,
     chosen_result = None
     for attempt in range(1, channel.generator.max_retries + 1):
         log.info(f"[2/6] generate attempt {attempt}/{channel.generator.max_retries}")
-        result = generate_quote(
-            channel=channel, dna=channel.dna,
-            forbidden_texts=forbidden, topic_distribution=topic_dist,
-            claude_path=gen_call.claude_path,
-            model=gen_model,
-            backend=gen_call.backend,
-            api_key=gen_call.api_key,
-            proven_topics=proven,
-        )
+        result = _safe_generate(
+            lambda: generate_quote(
+                channel=channel, dna=channel.dna,
+                forbidden_texts=forbidden, topic_distribution=topic_dist,
+                claude_path=gen_call.claude_path,
+                model=gen_model,
+                backend=gen_call.backend,
+                api_key=gen_call.api_key,
+                proven_topics=proven,
+            ),
+            log=log, attempt=attempt)
+        if result is None:
+            continue          # geçersiz yanıt → tekrar gibi bir deneme tüketir
 
         log.info(f"[3/6] dedup-check (text={result.text[:60]!r})")
         verdict = check_duplicate(eng, channel.slug, result, forbidden,
@@ -1223,7 +1245,7 @@ def _run_generator(*, channel, run_id, log, eng, settings,
 
     if chosen_result is None:
         msg = (f"{channel.slug}: {channel.generator.max_retries} attempts all "
-               f"duplicate. Last attempt: {last_text[:80]!r}")
+               f"duplicate or invalid. Last attempt: {last_text[:80]!r}")
         finish_run(eng, run_id, status="failed",
                    short_id=None, error=msg)
         raise GeneratorRetryExhausted(msg)
