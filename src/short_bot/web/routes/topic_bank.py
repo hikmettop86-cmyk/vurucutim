@@ -95,6 +95,36 @@ def refresh(slug):
     return redirect(url_for("topic_bank.page", slug=slug))
 
 
+@bp.post("/channels/<slug>/topic-bank/<int:topic_id>/produce")
+def produce(slug, topic_id):
+    """Bankadaki BU konudan video üret.
+
+    Normal üretimde başlığı LLM seçer (bankadan ilham alarak). Burada seçim
+    kullanıcınındır: konu ZORLANIR, rotasyon ve tekrar-denetimi devre dışı kalır.
+    """
+    from short_bot.web.runs import launch_pipeline
+    cfg = _load_cfg(slug)
+    eng = init_db(current_app.config["SHORTBOT_DB_PATH"])
+    row = next((r for r in all_bank_topics(eng, slug) if int(r["id"]) == topic_id), None)
+    if row is None:
+        abort(404)
+    launch_pipeline(
+        channel=cfg,
+        settings=current_app.config["SHORTBOT_SETTINGS"],
+        db_path=current_app.config["SHORTBOT_DB_PATH"],
+        music_root=current_app.config["SHORTBOT_MUSIC_ROOT"],
+        templates_dir=current_app.config["SHORTBOT_TEMPLATES_DIR"],
+        cache_dir=current_app.config["SHORTBOT_CACHE_DIR"],
+        lock_dir=current_app.config["SHORTBOT_LOCK_DIR"],
+        logs_dir=current_app.config["SHORTBOT_LOGS_DIR"],
+        trigger="manual",
+        forced_topic=row["topic"],
+    )
+    flash(f"'{str(row['topic'])[:60]}' konusundan üretim başladı (arka planda, ~10 dk).",
+          "success")
+    return redirect(url_for("topic_bank.page", slug=slug))
+
+
 @bp.post("/channels/<slug>/topic-bank/<int:topic_id>/reject")
 def reject(slug, topic_id):
     _load_cfg(slug)

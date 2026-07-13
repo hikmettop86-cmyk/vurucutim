@@ -92,6 +92,23 @@ def update_generated_short_id(eng: Engine, generated_id: int, short_id: int) -> 
                      .values(short_id=short_id))
 
 
+def generated_id_for_text(eng: Engine, channel: str, text: str) -> int | None:
+    """Bu metin bu kanalda daha önce üretildiyse kaydın id'si.
+
+    (channel, text_hash) BENZERSİZ. Kullanıcı bir başlığı bilerek TEKRAR ürettiğinde
+    (panelden "yeniden üret" / "bu konudan üret") yeni satır açılamaz — var olanı
+    yeniden kullanmak gerekir, yoksa üretim benzersizlik kısıtına çarpıp düşer.
+    """
+    with eng.connect() as conn:
+        row = conn.execute(
+            select(generated_items.c.id)
+            .where(generated_items.c.channel == channel)
+            .where(generated_items.c.text_hash == text_hash(text))
+            .limit(1)
+        ).fetchone()
+    return int(row[0]) if row else None
+
+
 def exists_hash(eng: Engine, channel: str, hash_value: str) -> bool:
     with eng.connect() as conn:
         row = conn.execute(

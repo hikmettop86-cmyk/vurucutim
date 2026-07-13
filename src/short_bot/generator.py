@@ -53,6 +53,7 @@ def build_generator_prompt(
     forbidden_texts: list[str],
     topic_distribution: dict[str, int],
     proven_topics: list[dict] | None = None,
+    forced_topic: str | None = None,
 ) -> str:
     ph = get_phrases(channel.language)
     if channel.generator is None:
@@ -113,6 +114,21 @@ def build_generator_prompt(
             "UYDURMA YASAĞI: Seçtiğin olgunun DIŞINDA yeni 'gerçek' UYDURMA. Emin "
             "olmadığın tarih, sayı, isim, mekanizma EKLEME. Bilmediğin detayı "
             "yazmak yerine olgunun bilinen kısmını derinleştir.\n")
+
+    if forced_topic:
+        # KULLANICI KONUYU SEÇTİ. Bu durumda ne banka seçimi ne konu rotasyonu ne de
+        # "daha önce üretilmiş" yasağı geçerli — kullanıcı bilerek bu başlığı istedi
+        # (panelden "yeniden üret" ya da bankadan seçim). Bloklar kalırsa LLM başka
+        # bir konuya kayar.
+        forbidden_block = ""
+        rotation_block = ""
+        proven_block = (
+            "\nKONU ZORUNLU (kullanıcı seçti):\n"
+            f"{forced_topic}\n"
+            'Çıktının "text" alanı TAM OLARAK bu başlık olmalı; içeriği bu olgunun '
+            "etrafında yaz — başka konuya kayma.\n"
+            "UYDURMA YASAĞI: Bu olgunun DIŞINDA yeni 'gerçek' UYDURMA. Emin olmadığın "
+            "tarih, sayı, isim, mekanizma EKLEME.\n")
 
     forbidden_tone = ", ".join(dna.tone.forbidden) if dna.tone.forbidden else "—"
 
@@ -227,12 +243,14 @@ def generate_quote(
     backend: str = "claude_cli",
     api_key: str | None = None,
     proven_topics: list[dict] | None = None,
+    forced_topic: str | None = None,
 ) -> GeneratorResult:
     prompt = build_generator_prompt(
         channel=channel, dna=dna,
         forbidden_texts=forbidden_texts,
         topic_distribution=topic_distribution,
         proven_topics=proven_topics,
+        forced_topic=forced_topic,
     )
     result = run_json(
         prompt, GeneratorResult,
@@ -240,6 +258,12 @@ def generate_quote(
         backend=backend, api_key=api_key,
         retries=2, timeout_s=180,
     )
+    # Konu kullanıcı tarafından seçildiyse banka zorlaması ANLAMSIZ: seçim zaten
+    # yapılmış. bank_id'yi de temizle — yoksa alakasız bir banka kaydı "used"
+    # işaretlenir ve rotasyondan düşer.
+    if forced_topic:
+        result.bank_id = None
+        return result
     if not proven_topics:
         return result
     # Banka doluysa seçim ZORUNLU: LLM atlarsa ya da uydurma id verirse bir kez

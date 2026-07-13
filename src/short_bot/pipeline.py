@@ -50,8 +50,8 @@ from short_bot.generator import (
     GeneratorRetryExhausted, check_duplicate, generate_quote,
 )
 from short_bot.generated_db import (
-    insert_generated, recent_generated_texts, topic_distribution,
-    update_generated_short_id,
+    generated_id_for_text, insert_generated, recent_generated_texts,
+    topic_distribution, update_generated_short_id,
 )
 from short_bot.image_picker import pick_image_for_generator
 import os
@@ -518,6 +518,7 @@ def run_pipeline(
     lock_dir: Path | None = None,
     trigger: str = "cli",
     preselected_item=None,   # NewsItem | None — manuel feed seciminde dolu
+    forced_topic: str | None = None,   # panelden secilen baslik (yeniden uret / konu bankasi)
 ) -> RunResult:
     eng = init_db(db_path)
     log_path = logs_dir / f"{datetime.now(timezone.utc):%Y%m%d_%H%M%S}_{channel.slug}.log"
@@ -553,6 +554,7 @@ def run_pipeline(
                         channel=channel, run_id=run_id, log=log, eng=eng,
                         settings=settings, music_root=music_root,
                         templates_dir=templates_dir, cache_dir=cache_dir,
+                        forced_topic=forced_topic,
                     )
                 if channel.content_source == "feed":
                     return _run_feed(
@@ -1170,7 +1172,8 @@ def _safe_generate(gen_fn, *, log, attempt: int):
 
 
 def _run_generator(*, channel, run_id, log, eng, settings,
-                   music_root, templates_dir, cache_dir) -> RunResult:
+                   music_root, templates_dir, cache_dir,
+                   forced_topic: str | None = None) -> RunResult:
     """6-phase generator pipeline."""
     log.info("[1/6] prepare (forbidden + topic distribution)")
     forbidden = recent_generated_texts(
@@ -1206,6 +1209,9 @@ def _run_generator(*, channel, run_id, log, eng, settings,
     else:
         gen_model = gen_call.model
 
+    if forced_topic:
+        log.info(f"  konu KULLANICI tarafından seçildi: {forced_topic[:80]!r}")
+
     last_text = ""
     chosen_result = None
     for attempt in range(1, channel.generator.max_retries + 1):
@@ -1219,10 +1225,18 @@ def _run_generator(*, channel, run_id, log, eng, settings,
                 backend=gen_call.backend,
                 api_key=gen_call.api_key,
                 proven_topics=proven,
+                forced_topic=forced_topic,
             ),
             log=log, attempt=attempt)
         if result is None:
             continue          # geçersiz yanıt → tekrar gibi bir deneme tüketir
+
+        # Konuyu KULLANICI seçtiyse tekrar-denetimi ATLANIR: "yeniden üret" ve
+        # "bu başlıktan üret" zaten var olan bir başlığı bilerek tekrarlar —
+        # dedup burada çalışırsa istek her seferinde çöpe gider.
+        if forced_topic:
+            chosen_result = result
+            break
 
         log.info(f"[3/6] dedup-check (text={result.text[:60]!r})")
         verdict = check_duplicate(eng, channel.slug, result, forbidden,
@@ -1251,11 +1265,20 @@ def _run_generator(*, channel, run_id, log, eng, settings,
         raise GeneratorRetryExhausted(msg)
 
     # Record as 'used' WITHOUT short_id yet (filled after render)
-    generated_id = insert_generated(
-        eng, channel=channel.slug, text=chosen_result.text,
-        topic_tag=chosen_result.topic_tag, language=channel.language,
-        status="used", short_id=None,
-    )
+    # Zorlanan konuda başlık ZATEN kayıtlı olabilir — (channel, text_hash) benzersiz
+    # olduğu için yeni satır açılamaz. Var olanı yeniden kullan; yoksa "yeniden üret"
+    # her seferinde benzersizlik kısıtına çarpıp düşerdi.
+    existing = (generated_id_for_text(eng, channel.slug, chosen_result.text)
+                if forced_topic else None)
+    if existing is not None:
+        generated_id = existing
+        log.info(f"  → mevcut kayıt yeniden kullanıldı: generated_id={generated_id}")
+    else:
+        generated_id = insert_generated(
+            eng, channel=channel.slug, text=chosen_result.text,
+            topic_tag=chosen_result.topic_tag, language=channel.language,
+            status="used", short_id=None,
+        )
 
     # Banka rotasyonu: LLM kanıtlanmış konu seçtiyse kaydı 'used' işaretle
     # (uydurma id → mark no-op; hata üretimi asla durdurmaz).

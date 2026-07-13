@@ -56,9 +56,18 @@
           {% elif r.status == 'used' %}<span class="text-cyan-400">kullanıldı</span>
           {% else %}<span class="text-red-400">reddedildi</span>{% endif %}
         </td>
-        <td class="py-2 text-right">
+        <td class="py-2 text-right whitespace-nowrap">
+          {# Konuyu KULLANICI seçer: normal üretimde başlığı LLM seçiyor, burada
+             zorlanıyor. "kullanıldı" olanlar da yeniden üretilebilir. #}
+          <form method="post" action="/channels/{{ slug }}/topic-bank/{{ r.id }}/produce"
+                class="inline"
+                onsubmit="return confirm('Bu konudan video üretilsin mi? (~10 dk)')">
+            <button class="text-xs px-2 py-1 rounded bg-cyan-500/20 text-cyan-300
+                           hover:bg-cyan-500/30">▶ Bu konudan üret</button>
+          </form>
           {% if r.status == 'active' %}
-          <form method="post" action="/channels/{{ slug }}/topic-bank/{{ r.id }}/reject">
+          <form method="post" action="/channels/{{ slug }}/topic-bank/{{ r.id }}/reject"
+                class="inline ml-2">
             <button class="text-xs text-red-400 hover:text-red-300">Reddet</button>
           </form>
           {% endif %}

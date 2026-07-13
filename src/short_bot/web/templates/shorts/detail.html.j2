@@ -13,6 +13,15 @@
             class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm text-claude-text">
       ⎘ URL kopyala
     </button>
+    {# Kanalı normal çalıştırmak BAŞKA bir konu getirir (başlığı LLM seçer).
+       Burada başlık zorlanır → aynı konu, yeni video. Eskisi SİLİNMEZ. #}
+    <form method="POST" action="/shorts/{{ s.id }}/regenerate" class="inline"
+          onsubmit="return confirm('Aynı başlıkla yeniden üretilsin mi? (~10 dk, yeni bir short olarak eklenir)')">
+      <button type="submit"
+              class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm text-claude-text">
+        ↻ Yeniden üret
+      </button>
+    </form>
     <form method="POST" action="/shorts/{{ s.id }}/delete" class="inline"
           onsubmit="return confirm('Bu short silinsin mi?')">
       <button type="submit"

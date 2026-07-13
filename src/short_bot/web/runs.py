@@ -12,7 +12,8 @@ def launch_pipeline(*, channel, settings, db_path: Path,
                     music_root: Path, templates_dir: Path,
                     cache_dir: Path, lock_dir: Path, logs_dir: Path,
                     trigger: str = "manual",
-                    preselected_item=None) -> threading.Thread:
+                    preselected_item=None,
+                    forced_topic: str | None = None) -> threading.Thread:
     """Start pipeline in a daemon thread. Returns the thread object."""
     def _runner():
         try:
@@ -23,6 +24,7 @@ def launch_pipeline(*, channel, settings, db_path: Path,
                 cache_dir=cache_dir, lock_dir=lock_dir,
                 logs_dir=logs_dir, trigger=trigger,
                 preselected_item=preselected_item,
+                forced_topic=forced_topic,
             )
         except Exception:
             # Pipeline already records its own DB row + per-run log on internal

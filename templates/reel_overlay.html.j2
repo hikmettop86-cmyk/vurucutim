@@ -13,7 +13,8 @@ html,body{width:1080px;height:1920px;overflow:hidden;background:transparent;
 #glitch{position:absolute;inset:0;pointer-events:none;opacity:0;mix-blend-mode:screen;
   background:repeating-linear-gradient(0deg,rgba(255,0,90,.35) 0 2px,rgba(0,0,0,0) 2px 5px,
     rgba(0,205,255,.35) 5px 7px,rgba(0,0,0,0) 7px 12px)}
-#bar{position:absolute;top:0;left:0;height:12px;width:0%;background:{{ hot_color }};box-shadow:0 0 20px rgba(0,0,0,.4)}
+/* top:0 OYNATICININ üst barının (geri/arama) altında kalıyordu → hiç görünmüyordu. */
+#bar{position:absolute;top:96px;left:0;height:12px;width:0%;background:{{ hot_color }};box-shadow:0 0 20px rgba(0,0,0,.4)}
 .big{position:absolute;top:300px;left:60px;right:60px;text-align:center;font-size:104px;font-weight:900;
   line-height:1.05;letter-spacing:-2px;display:none;-webkit-text-stroke:3px #000;paint-order:stroke fill;text-shadow:0 8px 30px rgba(0,0,0,.9)}
 .big.on{display:block}
@@ -58,19 +59,42 @@ html,body{width:1080px;height:1920px;overflow:hidden;background:transparent;
   transform:translate(-50%,34px);box-shadow:0 0 0 4px rgba(0,0,0,.55),0 6px 16px rgba(0,0,0,.6);
   animation:mk-under-grow .4s ease-out both}
 @keyframes mk-under-grow{0%{transform:translate(-50%,34px) scaleX(0)}100%{transform:translate(-50%,34px) scaleX(1)}}
-#scrim{position:absolute;left:0;right:0;bottom:0;height:640px;background:linear-gradient(0deg,rgba(0,0,0,.6),rgba(0,0,0,0))}
-.cap{position:absolute;left:0;right:0;bottom:300px;padding:0 60px;text-align:center;font-size:82px;font-weight:900;
+/* ——— YOUTUBE SHORTS GÜVENLİ BÖLGESİ ———
+   Video 1080x1920 üretilse de OYNATICI onun üstüne kendi arayüzünü çizer. Gerçek
+   telefondan ölçüldü (Shorts, 917x2048 ekran → video y 136-1803 arasına oturuyor):
+     • kanal adı satırı .... video y 1421-1502
+     • video başlığı ....... video y 1525-1588
+     • "Yapay zeka" rozeti . video y 1611-1680
+     • görüntülenme satırı . video y 1697-1767
+     • üst bar (geri/arama)  video y    0-  62
+     • sağ eylem rayı ...... video x > 919, y 1121-1732
+   Yani ALT %26 ve ÜST 62px OYNATICINIndir, bizim değil.
+
+   GERÇEK HATA: altyazılar (bottom:300 → y 1440-1620), ABONE ÇİPİ (bottom:250 →
+   y 1620-1690) ve handle (y 1730-1790) tam bu bandın içindeydi — izleyici abone
+   çağrısını HİÇ GÖRMÜYORDU. İlerleme çubuğu da üst barın altında kalıyordu.
+
+   KURAL: içerik y 90 ile 1440 ARASINDA kalmalı. Aşağıdaki yerleşim buna göre:
+     üst bar↓  bar 96 | kart 200 | hook 300-1020 | numpop 700-850
+               like 876-1020 | cta 1080-1160 | ALTYAZI 1180-1380 | ↑oynatıcı UI */
+/* Karartma altyazının YENİ yerini de kapsamalı: altyazı 1180'e çıktı, 640px'lik
+   scrim ancak 1280'den başlıyordu → üst satır okunaksız kalırdı. */
+#scrim{position:absolute;left:0;right:0;bottom:0;height:820px;background:linear-gradient(0deg,rgba(0,0,0,.6),rgba(0,0,0,0))}
+.cap{position:absolute;left:0;right:0;bottom:540px;padding:0 60px;text-align:center;font-size:82px;font-weight:900;
   line-height:1.15;letter-spacing:-1px;-webkit-text-stroke:3px #000;paint-order:stroke fill;text-shadow:0 6px 26px rgba(0,0,0,.95)}
 .cap .w{display:none;margin:0 12px;color:#fff}
 /* yalnız otomatik sığdırma ölçümü için: gizli kelimenin genişliği ölçülemez */
 .cap.measure .w{display:inline}
 .cap .w.vis{display:inline}
 .cap .w.hot{color:{{ hot_color }};display:inline-block;transform:scale(1.09)}
-#handle{position:absolute;bottom:150px;left:0;right:0;text-align:center;font-size:44px;font-weight:800;text-shadow:0 3px 12px rgba(0,0,0,.9);opacity:.9}
+/* Handle ÜST-SAĞA taşındı: altta oynatıcının kanal/başlık satırının altında
+   kalıyordu (ölçüldü). Üst-sağ köşe Shorts'ta da TikTok/Reels'te de boştur. */
+#handle{position:absolute;top:110px;right:40px;text-align:right;font-size:36px;font-weight:800;
+  text-shadow:0 3px 12px rgba(0,0,0,.9);opacity:.75}
 /* 56px + nowrap, kadraja SIĞMIYORDU: "Bu seri devam ediyor — ABONE OL" sağdan
    kesiliyordu ("...ABONE O"). Çözüm sarma DEĞİL (sarma altyazıya biner):
    font küçült + metinleri KISA tut (bkz. reel_subscribe.CTA_MAX_CHARS). */
-#cta{position:absolute;bottom:250px;left:50%;transform:translateX(-50%);
+#cta{position:absolute;bottom:760px;left:50%;transform:translateX(-50%);
   background:{{ highlight_color }};color:{{ chip_text }};font-weight:900;font-size:46px;
   padding:16px 36px;border-radius:16px;white-space:nowrap;display:none;
   max-width:1000px;overflow:hidden;
@@ -78,15 +102,11 @@ html,body{width:1080px;height:1920px;overflow:hidden;background:transparent;
 #cta.on{display:block}
 /* BEĞENİ TETİĞİ: tepeden hemen sonra, SESSİZ bir nabız. Anlatım saniyesi harcamaz,
    izleyiciyi rahatsız etmez — duygusal dalganın üstüne biner. */
-/* Konum GÜVENLİ BÖLGEDE olmalı. bottom:640 altyazıya biniyordu: "Her 👍erde
-   bulunuyorlar!" — emoji kelimeyi eziyordu. Harita (1920 yük.):
-     chip top 200 | numpop top 700-850 | ALTYAZI bottom 300-580 | cta bottom 250
-   bottom:760 + 120px → numpop'un 166px altında, altyazının 178px üstünde. */
-#like{position:absolute;bottom:760px;left:50%;transform:translateX(-50%) scale(0);
+#like{position:absolute;bottom:900px;left:50%;transform:translateX(-50%) scale(0);
   font-size:120px;line-height:1.2;opacity:0;
   filter:drop-shadow(0 10px 30px rgba(0,0,0,.65))}
 /* layout varyantları — marka aynı, konum/hiza farklı */
-.stage.lower_left .cap{text-align:left;left:60px;right:220px;bottom:360px}
+.stage.lower_left .cap{text-align:left;left:60px;right:220px;bottom:540px}
 .stage.lower_left .big{text-align:left;left:60px;right:120px}
 .stage.lower_left .card{left:60px;transform:rotate(-3deg)}
 .stage.top_heavy .cap{bottom:auto;top:1180px}
@@ -130,11 +150,26 @@ const W=[...document.querySelectorAll('.cap .w')],CARDS=[...document.querySelect
 const HOOK=document.getElementById('hook'),CLOSE=document.getElementById('close'),BAR=document.getElementById('bar');
 
 // ——— OTOMATİK SIĞDIRMA ———
-// Türkçe kelimeler uzayabiliyor ("düşündüğümüzden" 15 harf). Kutudan geniş TEK bir
-// kelimeyi CSS kaydıramaz — sessizce taşırır. Gerçek hata (short 758): hook kartı
-// hem sağa hem sola taştı, kelimelerin başı/sonu kesildi.
-// Kelimeyi kırmak (break-word) Türkçede okunmaz hâle getirir; çözüm PUNTOYU KÜÇÜLTMEK.
-// Yükleme anında bir kez çalışır → tüm kareler aynı puntoyu görür (deterministik).
+// Türkçe kelimeler uzayabiliyor ("düşündüğümüzden" 15 harf). Kutudan geniş bir satırı
+// CSS kaydıramaz — sessizce TAŞIRIR. Gerçek hata (short 758): hook kartının kelimeleri
+// sağdan ve soldan kesildi. Kelimeyi ortadan kırmak (break-word) Türkçede okunmaz hâle
+// getirir; çözüm PUNTOYU KÜÇÜLTMEK. Yükleme anında bir kez çalışır → tüm kareler aynı
+// puntoyu görür (deterministik, kare-dedup bozulmaz).
+const SAFE_X = 60;      // kadraj kenarından bırakılacak pay (px)
+
+// TAŞMAYI scrollWidth İLE ÖLÇMEK YETMİYOR: metin ORTALI olduğunda satır kutudan iki
+// yana EŞİT taşar ve scrollWidth yalnız SAĞ taşmayı sayar — 960px kutuda 1086px'lik
+// bir satır için scrollWidth hâlâ 960 döner (ölçüldü). O yüzden satırların GERÇEK
+// mürekkep sınırlarına bakıyoruz: hiçbir satır kadrajın SAFE_X payına girmemeli.
+function lineOverflow(el){
+  const rg=document.createRange(); rg.selectNodeContents(el);
+  let worst=0;
+  for(const r of rg.getClientRects()){
+    if(r.width<=0) continue;
+    worst=Math.max(worst, SAFE_X-r.left, r.right-(1080-SAFE_X));
+  }
+  return worst;   // >0 → taşıyor
+}
 function fitBox(el,{minScale=0.55,maxH=0}={}){
   if(!el) return;
   // Hook/close normalde display:none — GİZLİ ELEMANIN ÖLÇÜSÜ SIFIRDIR, ölçmek için
@@ -146,16 +181,15 @@ function fitBox(el,{minScale=0.55,maxH=0}={}){
   const floor=base*minScale;
   let size=base;
   // 2px'lik adımlar: gözle fark edilmez, en kötü ihtimalle ~23 tur.
-  while(size>floor && (el.scrollWidth>el.clientWidth || (maxH && el.scrollHeight>maxH))){
+  while(size>floor && (lineOverflow(el)>0 || (maxH && el.scrollHeight>maxH))){
     size-=2; el.style.fontSize=size+'px';
   }
   el.style.display=prev;
 }
-// Altyazıda her an yalnız birkaç kelime görünür; taşma ancak TEK kelime kutudan
-// genişse olur. Hepsini geçici olarak görünür yapıp ölçmek bunu tam yakalar:
-// satır kaydırma çok kelimeyi kurtarır, tek uzun kelimeyi kurtaramaz.
-// Vurgulu kelimenin scale(1.09)'u DÜZENİ etkilemez (transform'dur) ve kutunun her iki
-// yanındaki 60px dolgu görsel taşmayı zaten emer — ayrıca pay bırakmaya gerek yok.
+// Altyazıda her an yalnız birkaç kelime görünür. Hepsini geçici olarak görünür yapıp
+// ölçmek EN KÖTÜ durumu verir: gerçek gösterimde satır daha kısa olacağı için sığar.
+// Vurgulu kelimenin scale(1.09)'u DÜZENİ etkilemez (transform'dur) ve SAFE_X payı
+// görsel taşmayı emer.
 function fitCap(){
   const cap=document.querySelector('.cap'); if(!cap) return;
   cap.classList.add('measure');
@@ -164,7 +198,9 @@ function fitCap(){
 }
 window.__fit=function(){
   // Hook/close ekranın üst yarısında; altyazı bloğuna sarkmasın diye yükseklik sınırı.
-  fitBox(HOOK,{maxH:820}); fitBox(CLOSE,{maxH:820}); fitCap();
+  // maxH 720: hook/kapanış kartı top:300'den başlar → en fazla y=1020'ye iner,
+  // yani abone çipinin (1080) üstünde kalır. 820 olsaydı çipe binerdi.
+  fitBox(HOOK,{maxH:720}); fitBox(CLOSE,{maxH:720}); fitCap();
 };
 const FLASH=document.getElementById('flash'),MLAYER=document.getElementById('markers');
 const RGB=document.getElementById('rgbsplit'),LEAK=document.getElementById('lightleak'),GLITCH=document.getElementById('glitch');

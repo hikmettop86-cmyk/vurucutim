@@ -131,6 +131,46 @@ def run_now():
     return render_template("_partials/run_status.html.j2", status="running", run_id=None)
 
 
+@bp.route("/shorts/<int:short_id>/regenerate", methods=["POST"])
+def regenerate(short_id):
+    """Aynı başlıkla YENİDEN üret.
+
+    Kanalı normal çalıştırmak başka bir konu getirir (başlığı LLM seçer). Burada
+    başlık ZORLANIR — kusurlu çıkan bir videoyu düzeltilmiş boru hattıyla yeniden
+    üretmenin tek yolu bu.
+
+    Eskisini SİLMEZ: yeni bir short olarak üretilir, karşılaştırıp eskisini elle
+    silebilirsin (üretim 8-11 dk sürüyor; üzerine yazıp geri dönüşü yok etmek
+    kötü bir takas olurdu).
+    """
+    s = Short.query.filter_by(id=short_id).first()
+    if s is None or s.deleted_at is not None:
+        abort(404)
+    channel_path = (current_app.config["SHORTBOT_CONFIG_DIR"] / "channels"
+                    / f"{s.channel}.yaml")
+    if not channel_path.exists():
+        abort(404)
+    launch_pipeline(
+        channel=load_channel(channel_path),
+        settings=current_app.config["SHORTBOT_SETTINGS"],
+        db_path=current_app.config["SHORTBOT_DB_PATH"],
+        music_root=current_app.config["SHORTBOT_MUSIC_ROOT"],
+        templates_dir=current_app.config["SHORTBOT_TEMPLATES_DIR"],
+        cache_dir=current_app.config["SHORTBOT_CACHE_DIR"],
+        lock_dir=current_app.config["SHORTBOT_LOCK_DIR"],
+        logs_dir=current_app.config["SHORTBOT_LOGS_DIR"],
+        trigger="manual",
+        forced_topic=s.title,
+    )
+    flash(f"'{s.title[:60]}' aynı başlıkla yeniden üretiliyor (arka planda, ~10 dk). "
+          f"Bittiğinde yeni bir short olarak listeye düşecek.", "success")
+    if request.headers.get("HX-Request"):
+        resp = make_response("", 200)
+        resp.headers["HX-Redirect"] = url_for("shorts.list_view")
+        return resp
+    return redirect(url_for("shorts.list_view"))
+
+
 @bp.route("/shorts/<int:short_id>/delete", methods=["POST"])
 def delete(short_id):
     """Soft-delete a short by setting deleted_at timestamp."""
