@@ -19,7 +19,12 @@ def _narration():
 
 
 def _asr_words(n, step=1.0):
-    return [TimedWord(word=f"w{i}", start_s=i * step, end_s=(i + 1) * step, seg=-1)
+    """ASR kelimeleri anlatimin KENDI kelimeleri: cizelge artik SAYI esitligine
+    degil ESLESTIRMEYE dayaniyor (whisper senaryoyla ayni kelimelere bolmez).
+    Uydurma "w0/w1" hicbir seye eslesmez ve orantili yedege duserdi."""
+    words = _narration().full_text().split()
+    return [TimedWord(word=words[i] if i < len(words) else f"x{i}",
+                      start_s=i * step, end_s=(i + 1) * step, seg=-1)
             for i in range(n)]
 
 
@@ -56,18 +61,32 @@ def test_timeline_beats_span_first_to_last_word_of_segment():
     assert tl.beats[1].start_s == tl.beats[0].end_s
 
 
-def test_timeline_falls_back_to_proportional_on_count_mismatch():
-    """ASR farkli sayida kelime cikardiysa sure orantili dagitilir."""
+def test_timeline_eslesen_kelimeler_asr_zamanini_alir_sayi_tutmasa_da():
+    """ASR eksik kelime cikardiysa ESLESENLER yine gercek zamanini alir.
+
+    Eskiden sayi tutmazsa TUM hizalama atiliyordu; whisper senaryoyla ayni
+    kelimelere bolmedigi icin bu neredeyse her videoda oluyordu ve altyazi sese
+    hic kilitlenmiyordu (olculdu: ikinci yarida 3.2sn gecikme).
+    """
     n = _narration()
     tl = build_timeline(n, _asr_words(5), duration_s=20.0)
 
     assert len(tl.words) == n.word_count()
     assert tl.words[0].start_s == 0.0
+    assert tl.words[4].start_s == 4.0        # ASR zamani, orantili DEGIL
     assert tl.words[-1].end_s == pytest.approx(20.0)
     # monoton artan, bosluksuz
     for a, b in zip(tl.words, tl.words[1:]):
         assert a.end_s <= b.start_s + 1e-9
         assert a.start_s < a.end_s
+
+
+def test_timeline_hicbiri_eslesmezse_orantiliya_duser():
+    n = _narration()
+    bos = [TimedWord(word=f"zzz{i}", start_s=float(i), end_s=float(i) + 0.5, seg=-1)
+           for i in range(5)]
+    tl = build_timeline(n, bos, duration_s=20.0)
+    assert tl.words[-1].end_s == pytest.approx(20.0)
 
 
 def test_timeline_falls_back_when_asr_empty():

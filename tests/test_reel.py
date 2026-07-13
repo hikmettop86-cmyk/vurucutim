@@ -33,6 +33,7 @@ def _deps(calls, health="healthy"):
                                        Path(kw["out_path"]).write_bytes(b"mp3"),
                                        Path(kw["out_path"]))[2],
         probe_duration_s=lambda p, **kw: (calls.append("probe"), 30.0)[1],
+        trailing_silence_s=lambda p, **kw: 0.0,
         transcribe_words=lambda p, **kw: (calls.append("asr"), [])[1],
         match_beat_clip=lambda q, **kw: (calls.append(("match", q)),
                                          Path(kw["cache_dir"]).joinpath(f"{q[:3]}.mp4"))[1]
@@ -146,3 +147,82 @@ def test_match_with_fallback_last_resort_drops_vision(tmp_path):
     assert clip == Path("c.mp4")
     assert tries[-1] is False        # son çağrı vision'sız (boş dönmesin)
     assert gated is False            # DOĞRULANMADI → tekrar havuzuna girmemeli
+
+
+class _W:
+    """Whisper kelimesi."""
+
+    def __init__(self, word, i):
+        self.word = word; self.start_s = float(i); self.end_s = i + 0.9
+
+
+def _heard_deps(calls, transcripts):
+    """Her TTS çağrısında sıradaki whisper çözümünü döndüren sahte bağımlılıklar."""
+    d = _deps(calls)
+    seq = iter(transcripts)
+    return type(d)(**{**d.__dict__,
+                      "transcribe_words": lambda p, **kw: (
+                          calls.append("asr"),
+                          [_W(w, i) for i, w in enumerate(next(seq).split())])[1]})
+
+
+def test_tts_okumadigi_obek_icin_yeniden_seslendirir(tmp_path):
+    # ai33 arada bir metnin bir öbeğini sessizce atlıyor (gerçek vaka: short 757).
+    # Whisper zaten hizalama için çalıştığından bunu bedava yakalayabiliyoruz.
+    full = _narr().full_text()
+    eksik = " ".join(full.split()[:2] + full.split()[8:])  # ortadan 6 kelime düşür
+    calls = []
+    _call(_heard_deps(calls, [eksik, full]), tmp_path)
+    assert sum(1 for c in calls if isinstance(c, tuple) and c[0] == "tts") == 2
+
+
+def test_saglam_seslendirme_tek_seferde_gecer(tmp_path):
+    full = _narr().full_text()
+    calls = []
+    _call(_heard_deps(calls, [full]), tmp_path)
+    assert sum(1 for c in calls if isinstance(c, tuple) and c[0] == "tts") == 1
+
+
+def test_israrli_tts_arizasi_uretimi_oldurmez(tmp_path):
+    # Denemeler tükenirse video ÜRETİLMELİ: kusurlu video, video yokluğundan yeğdir.
+    full = _narr().full_text()
+    eksik = " ".join(full.split()[:2])
+    calls = []
+    out = _call(_heard_deps(calls, [eksik] * 3), tmp_path)
+    assert out == tmp_path / "out.mp4"
+    assert sum(1 for c in calls if isinstance(c, tuple) and c[0] == "tts") == 3
+
+
+def _tail_deps(calls, tails):
+    """Her TTS çağrısında sıradaki 'sondaki sessizlik' değerini döndürür."""
+    d = _deps(calls)
+    seq = iter(tails)
+    full = _narr().full_text()
+    return type(d)(**{**d.__dict__,
+                      "trailing_silence_s": lambda p, **kw: next(seq),
+                      "transcribe_words": lambda p, **kw: (
+                          calls.append("asr"),
+                          [_W(w, i) for i, w in enumerate(full.split())])[1]})
+
+
+def test_sondaki_uzun_sessizlik_yeniden_seslendirtir(tmp_path):
+    # ai33 öbek düşürünce dosyayı sessizlikle dolduruyor. Duyulan metin TEMİZ
+    # görünse bile (whisper sessizlikte uydurabiliyor) bu işaret yakalar.
+    calls = []
+    _call(_tail_deps(calls, [5.0, 0.2]), tmp_path)
+    assert sum(1 for c in calls if isinstance(c, tuple) and c[0] == "tts") == 2
+
+
+def test_kisa_sessizlik_yeniden_seslendirtmez(tmp_path):
+    calls = []
+    _call(_tail_deps(calls, [0.3]), tmp_path)
+    assert sum(1 for c in calls if isinstance(c, tuple) and c[0] == "tts") == 1
+
+
+def test_olu_hava_video_suresinden_kesilir(tmp_path):
+    # Sondaki sessizlik kesilmezse video konuşmasız akar (döngü kırılır) ve
+    # altyazılar o boşluğa yayılıp sesin gerisine düşer.
+    calls = []
+    _call(_tail_deps(calls, [5.0, 5.0, 5.0]), tmp_path)   # hiç düzelmiyor
+    kw = next(c[1] for c in calls if isinstance(c, tuple) and c[0] == "assemble")
+    assert kw["duration_s"] == pytest.approx(30.0 - (5.0 - 0.4))

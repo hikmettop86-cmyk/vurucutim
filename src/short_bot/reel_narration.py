@@ -9,6 +9,7 @@ import logging
 
 from short_bot.claude_cli import run_json
 from short_bot.reel_models import ReelNarration
+from short_bot.reel_phrases import OVERUSED, find_overused, pick_styles
 
 log = logging.getLogger(__name__)
 
@@ -40,10 +41,15 @@ def _language_name(code: str) -> str:
     return _PROMPT_LANGUAGE_NAMES.get(code, "Turkish")
 
 
-def build_reel_prompt(topic: str, channel, hook_patterns=None) -> str:
+def build_reel_prompt(topic: str, channel, hook_patterns=None, seed: int = 0) -> str:
     lo_w, hi_w = reel_word_budget(channel.reel.target_duration_s)
     lo_s, hi_s = channel.reel.target_duration_s
     lang = _language_name(channel.language)
+    # Bağlaçlar CÜMLE olarak verilince LLM birebir kopyalıyordu (ölçüldü: üç
+    # anlatımın ikisinde aynı iki cümle). Artık YÖNERGE veriyoruz ve yönergeler
+    # seed'e göre dönüyor — her video farklı bir alt küme görür.
+    connective_block = "\n".join(f"    • {s}" for s in pick_styles(seed, 4))
+    banned_block = "\n".join(f"    ✗ \"{p}\"" for p in OVERUSED)
     hook_block = ""
     if hook_patterns:
         pats = "\n".join(f"- {p}" for p in hook_patterns)
@@ -72,10 +78,13 @@ lead to second 13. Write an ARC instead:
 - EN İYİ BİLGİYİ BAŞA KOYMA (front-load YASAK). En şok edici olanı ORTAYA koy.
   Baştaki en iyi bilgi = geri kalanı yokuş aşağı = doğrusal düşüş.
 - MİKRO-DÖNGÜ: her beat, bir sonrakine BORÇ bırakarak bitmeli — asla temiz
-  kapanmamalı. Türkçe bağlaçlar (her beat'in sonuna birini koy):
-    "Ama asıl garip olan şu:" / "Ve burada iş çığırından çıkıyor."
-    "Sebebi ise sandığın şey değil." / "Bir de bunu duymadın:"
-  Bu bağlaçlar izleyicinin kendine borçlandığı ANLARDIR — retention onlarla ayakta durur.
+  kapanmamalı. Bu borç anları retention'ı ayakta tutan şeydir.
+  Aşağıdakiler CÜMLE DEĞİL, YÖNERGEDİR — cümleyi SEN yazacaksın, videonun kendi
+  içeriğinden. Her beat'in sonuna bunlardan birinin İŞLEVİNİ gören bir geçiş koy:
+{connective_block}
+  HAZIR KALIP KOPYALAMA: aşağıdaki ifadeler AŞINMIŞTIR, birebir ya da benzerini
+  kullanman YASAK (kullanılırsa metin reddedilir):
+{banned_block}
 
 OUTPUT a JSON object:
 - "hook": FIRST spoken sentence in {lang}. A curiosity question or surprising claim,
@@ -168,6 +177,16 @@ def _budget_feedback(actual: int, lo_w: int, hi_w: int) -> str:
     return f"\n\nUZAT: sadece {actual} kelime vardı, alt sınır {lo_w}. Detay ekle.\n"
 
 
+def _phrase_feedback(bad: list[str]) -> str:
+    """Yakalanan aşınmış kalıpları LLM'e GÖSTER. Soyut 'kalıp kullanma' uyarısı
+    işe yaramıyor; ne yaptığını birebir söylemek işe yarıyor."""
+    lines = "\n".join(f'  ✗ "{p}"' for p in bad)
+    return (f"\n\nHATA — HAZIR KALIP: Metninde şu aşınmış ifadeler geçiyor:\n{lines}\n"
+            f"Bunlar her videoda tekrarlandığı için içerik OTOMASYON ÜRÜNÜ gibi "
+            f"okunuyor. Aynı İŞLEVİ gören (izleyiciyi bir sonraki beat'e borçlandıran) "
+            f"ama BU VİDEONUN İÇERİĞİNDEN doğan cümleler kur. Yeniden yaz.\n")
+
+
 MIN_BEATS = 3
 
 
@@ -216,12 +235,12 @@ def write_reel_narration(topic: str, *, channel, claude_path: str = "claude",
                          api_key: str | None = None,
                          hook_angle: str = "", series_directive: str = "",
                          comment_line: str = "",
-                         hook_patterns=None) -> ReelNarration:
+                         hook_patterns=None, seed: int = 0) -> ReelNarration:
     reel = getattr(channel, "reel", None)
     if reel is None:
         raise ValueError("write_reel_narration: channel.reel tanımlı değil")
     lo_w, hi_w = reel_word_budget(reel.target_duration_s)
-    prompt = build_reel_prompt(topic, channel, hook_patterns=hook_patterns)
+    prompt = build_reel_prompt(topic, channel, hook_patterns=hook_patterns, seed=seed)
     if hook_angle:
         prompt = prompt + f"\n\nAÇILIŞ AÇISI: {hook_angle}\n"
     if series_directive:
@@ -238,19 +257,36 @@ def write_reel_narration(topic: str, *, channel, claude_path: str = "claude",
             f"kapanışlar YASAK — cevapsız kalırlar.\n"
             f"Kapanışın LOOP CALLBACK görevi bozulmasın: önce hook'un sözcüklerini "
             f"geri çağır, soruyu EN SONA koy.\n")
-    n = run_json(prompt, ReelNarration, claude_path=claude_path, model=model,
-                 backend=backend, api_key=api_key, retries=3)
-    if lo_w <= n.word_count() <= hi_w:
+    def _budgeted(p: str) -> ReelNarration:
+        n = run_json(p, ReelNarration, claude_path=claude_path, model=model,
+                     backend=backend, api_key=api_key, retries=3)
+        if lo_w <= n.word_count() <= hi_w:
+            return n
+        # LLM'i bir kez daha ikna etmeyi dene — SONUCU KONTROL ET (eskiden edilmiyordu:
+        # ikinci deneme de taşınca 112 kelime olduğu gibi gidiyor, video 53sn oluyordu).
+        n2 = run_json(p + _budget_feedback(n.word_count(), lo_w, hi_w), ReelNarration,
+                      claude_path=claude_path, model=model, backend=backend,
+                      api_key=api_key, retries=3)
+        if lo_w <= n2.word_count() <= hi_w:
+            return n2
+        # İkna olmadı → KESİN olarak sığdır (kısa kalan da fazla uzun olandan iyidir).
+        best = n2 if abs(n2.word_count() - hi_w) < abs(n.word_count() - hi_w) else n
+        log.warning(f"  senaryo bütçeye uymadı ({n.word_count()} → {n2.word_count()} "
+                    f"kelime, sınır {lo_w}-{hi_w}) → kısaltılıyor")
+        return fit_word_budget(best, lo_w=lo_w, hi_w=hi_w)
+
+    n = _budgeted(prompt)
+
+    # AŞINMIŞ KALIP DENETİMİ. Prompt'a "kullanma" demek YETMİYOR: ölçüldü, model
+    # yasak dediğimiz cümleleri yine kuruyor. Yakalayıp yeniden yazdırıyoruz —
+    # LLM çağrısı ucuz, tekrar eden kalıp ise videoyu "otomasyon" diye ele veriyor.
+    bad = find_overused(n.full_text())
+    if not bad:
         return n
-    # LLM'i bir kez daha ikna etmeyi dene — SONUCU KONTROL ET (eskiden edilmiyordu:
-    # ikinci deneme de taşınca 112 kelime olduğu gibi gidiyor, video 53sn oluyordu).
-    retry = prompt + _budget_feedback(n.word_count(), lo_w, hi_w)
-    n2 = run_json(retry, ReelNarration, claude_path=claude_path, model=model,
-                  backend=backend, api_key=api_key, retries=3)
-    if lo_w <= n2.word_count() <= hi_w:
-        return n2
-    # İkna olmadı → KESİN olarak sığdır (kısa kalan da fazla uzun olandan iyidir).
-    best = n2 if abs(n2.word_count() - hi_w) < abs(n.word_count() - hi_w) else n
-    log.warning(f"  senaryo bütçeye uymadı ({n.word_count()} → {n2.word_count()} "
-                f"kelime, sınır {lo_w}-{hi_w}) → kısaltılıyor")
-    return fit_word_budget(best, lo_w=lo_w, hi_w=hi_w)
+    log.warning(f"  senaryo aşınmış kalıp kullandı ({', '.join(bad)}) → yeniden yazılıyor")
+    n2 = _budgeted(prompt + _phrase_feedback(bad))
+    still = find_overused(n2.full_text())
+    if still:
+        log.warning(f"  kalıp ikinci denemede de geçti ({', '.join(still)}) → "
+                    f"mevcut metin kullanılıyor")
+    return n2

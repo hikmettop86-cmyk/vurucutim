@@ -20,6 +20,7 @@ from short_bot.footage_sources import build_footage_sources
 from short_bot.reel_assembler import assemble_reel as _assemble
 from short_bot.reel_markers import _marker_worthy_segs, build_markers
 from short_bot.reel_models import build_reel_timeline
+from short_bot.reel_punch import punch_times
 from short_bot.reel_narration import write_reel_narration as _write_narr
 from short_bot.reel_numbers import find_numbers
 from short_bot.reel_pacing import plan_subcuts, subcut_clip_index
@@ -268,7 +269,7 @@ def produce_reel_video(
                                        hook_angle=profile.hook_angle,
                                        series_directive=bits.series_directive,
                                        comment_line=bits.comment_line,
-                                       hook_patterns=hook_patterns)
+                                       hook_patterns=hook_patterns, seed=seed)
     log.info(f"  reel: {narration.word_count()} kelime, {len(narration.beats)} beat")
     _phase("senaryo(LLM)")
 
@@ -634,6 +635,10 @@ def produce_reel_video(
         music_duck=getattr(reel, "music_duck", True),
         riser=riser, impact=impact, reveal_s=peak_end_s,
         sfx_at_cut=sfx_at_cut,
+        # VURGU PUNCH-IN: sayı söylenirken ve TEPE anında görüntü bir tık yaklaşır.
+        # Kesme efektleri ritmi zamanlayıcıyla veriyordu; bu, ritmi İÇERİĞE bağlayan
+        # tek hamle — insan kurgucunun yaptığı, otomasyonun yapmadığı şey.
+        punch_at=punch_times(numbers, peak_end_s),
         zoom=("zoom" in profile.transitions),
         subject_xs=subject_xs,
         color_grade=getattr(reel, "color_grade", True),

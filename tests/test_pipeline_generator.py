@@ -245,3 +245,51 @@ def test_generator_pipeline_legacy_when_bg_video_disabled(monkeypatch, tmp_path)
     assert result.status == "success"
     assert captured.get("bg_video_path") is None
     assert captured.get("fg_scale", 1.0) == 1.0
+
+
+def test_forced_topic_dedup_denetimini_atlar(tmp_path):
+    """Kullanıcı konuyu SEÇTİYSE tekrar-denetimi çalışmamalı.
+
+    "Yeniden üret" ve "bu konudan üret" zaten VAR OLAN bir başlığı bilerek
+    tekrarlar. Dedup burada devrede kalırsa istek her seferinde 'duplicate' diye
+    çöpe gider ve düğme hiç çalışmaz.
+    """
+    cfg = _gen_channel(tmp_path)
+    logs = tmp_path / "logs"; logs.mkdir()
+
+    from short_bot.db import init_db
+    from short_bot.generated_db import insert_generated
+    eng = init_db(tmp_path / "db.sqlite")
+    fixed = _ok_result("Tekrarlı söz.")
+    insert_generated(eng, channel="sevgi", text=fixed.text,
+                     topic_tag=fixed.topic_tag, language="tr",
+                     status="used", short_id=None)
+    eng.dispose()
+
+    seen = {}
+
+    def _spy(**kw):
+        seen.update(kw)
+        return fixed
+
+    with patch("short_bot.pipeline.generate_quote", side_effect=_spy), \
+         patch("short_bot.pipeline.pick_image_for_generator", return_value=None), \
+         patch("short_bot.pipeline.pick_music", return_value=Path("dummy.mp3")), \
+         patch("short_bot.pipeline.render_frames"), \
+         patch("short_bot.pipeline.compose_video") as compose:
+        def _w(frames_dir, music, op, **kw):
+            op.parent.mkdir(parents=True, exist_ok=True)
+            op.write_bytes(b"fake")
+        compose.side_effect = _w
+
+        result = run_pipeline(
+            channel=cfg, settings=_settings(),
+            db_path=tmp_path / "db.sqlite",
+            music_root=tmp_path, templates_dir=tmp_path,
+            cache_dir=tmp_path / "cache",
+            lock_dir=tmp_path / "locks", logs_dir=logs, trigger="test",
+            forced_topic="Tekrarlı söz.",
+        )
+
+    assert seen["forced_topic"] == "Tekrarlı söz."
+    assert result.status == "success", f"dedup zorlanan konuyu düşürdü: {result.error}"

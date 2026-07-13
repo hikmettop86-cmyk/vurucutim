@@ -10,6 +10,7 @@ from pathlib import Path
 
 from short_bot.reel_framing import SUBJECT_BIAS, ken_burns, ken_burns_vf
 from short_bot.reel_grade import grade_vf, luma_delta, measure_luma
+from short_bot.reel_punch import punch_vf
 
 W, H = 1080, 1920
 _ZOOMPAN = ("zoompan=z='if(lte(on,9),1.16-0.0178*on,min(1.06,1.0+0.0006*(on-9)))'"
@@ -105,6 +106,7 @@ def assemble_reel(
     subject_xs: list | None = None,   # alt-kesim başına öznenin yatay konumu (0-1)
     color_grade: bool = True,         # master renk grade + klip normalizasyonu
     seed: int = 0,                    # Ken Burns hareketi (deterministik)
+    punch_at: list[float] | None = None,   # vurgu anlarında zoom darbesi (bkz. reel_punch)
 ) -> Path:
     """Segment klipleri + overlay + ses → mp4. clip_paths ve seg_spans aynı boyda."""
     out_path = Path(out_path)
@@ -154,7 +156,14 @@ def assemble_reel(
         cmd = [ffmpeg_path, "-y", "-i", str(footage),
                "-framerate", str(fps), "-i", str(Path(frames_dir) / "f_%05d.png"),
                "-i", str(narration_path)]
-        parts = ["[0:v][1:v]overlay=0:0[v]"]
+        # VURGU PUNCH-IN: sayı/tepe anlarında görüntü bir tık yaklaşır — sesle
+        # görüntüyü kilitleyen tek hamle. Overlay'den ÖNCE uygulanır: yazılar
+        # zoom'la birlikte büyümemeli, yoksa altyazı kadrajdan taşar.
+        pvf = punch_vf(punch_at or [], w=W, h=H)
+        if pvf:
+            parts = [f"[0:v]{pvf}[pv]", "[pv][1:v]overlay=0:0[v]"]
+        else:
+            parts = ["[0:v][1:v]overlay=0:0[v]"]
         # Ducking için anlatım İKİ yere gider: mikse ve kompresörün yan-zincirine.
         duck = music_path is not None and music_duck
         if duck:

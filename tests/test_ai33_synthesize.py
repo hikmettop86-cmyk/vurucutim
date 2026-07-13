@@ -218,3 +218,54 @@ def test_synthesize_empty_text_raises(tmp_path):
 def test_synthesize_no_api_key_raises(tmp_path):
     with pytest.raises(Ai33AuthError, match="AI33_API_KEY"):
         synthesize("x", voice_id="v", api_key="", out_path=tmp_path / "n.mp3")
+
+
+class Http5xxSession(FakeSession):
+    """Ses indirme GET'i ilk ``fail_n`` çağrıda 5xx döner (gözlenen: HTTP 503).
+
+    İstisna FIRLATMAZ — geçerli bir yanıt döner; bu yüzden yalnız istisna yakalayan
+    retry bunu kaçırıyordu ve tek bir 503 tüm üretimi öldürüyordu.
+    """
+
+    def __init__(self, *a, fail_n=0, code=503, **kw):
+        super().__init__(*a, **kw)
+        self.fail_n = fail_n
+        self.code = code
+
+    def get(self, url, **kw):
+        if "/v1/task/" in url:
+            self.gets.append((url, kw))
+            return self.task_resps.pop(0)
+        if self.fail_n > 0:
+            self.fail_n -= 1
+            return FakeResponse(self.code)
+        self.gets.append((url, kw))
+        return self.audio_resp
+
+
+def _done_task():
+    return [FakeResponse(200, {"status": "done",
+                               "metadata": {"audio_url": "https://cdn/x.mp3"}})]
+
+
+def test_synthesize_download_retries_on_5xx(tmp_path):
+    # Ses sunucuda hazır ve kredi harcandı: geçici 503 için vazgeçmek hem parayı
+    # hem üretimi çöpe atar.
+    out = tmp_path / "n.mp3"
+    sess = Http5xxSession(post_resp=FakeResponse(200, {"task_id": "t1"}),
+                          task_resps=_done_task(),
+                          audio_resp=FakeResponse(200, content=b"mp3-ok"),
+                          fail_n=2)
+    synthesize("x", voice_id="v", api_key="k", out_path=out,
+               session=sess, sleep=lambda s: None, now=_clock())
+    assert out.read_bytes() == b"mp3-ok"
+
+
+def test_synthesize_download_4xx_does_not_retry(tmp_path):
+    # 4xx KALICI: beklemek düzeltmez, hemen ve anlaşılır biçimde başarısız ol.
+    sess = Http5xxSession(post_resp=FakeResponse(200, {"task_id": "t1"}),
+                          task_resps=_done_task(), fail_n=99, code=404)
+    with pytest.raises(Ai33Error, match="ses indirme"):
+        synthesize("x", voice_id="v", api_key="k", out_path=tmp_path / "n.mp3",
+                   session=sess, sleep=lambda s: None, now=_clock())
+    assert sess.fail_n == 98      # tek deneme: yeniden denenmedi

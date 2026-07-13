@@ -20,8 +20,12 @@ def _timeline():
         ],
         close="İşte arının emeği.", mood="upbeat",
     )
-    asr = [TimedWord(word=f"w{i}", start_s=float(i), end_s=float(i+1), seg=-1)
-           for i in range(n.word_count())]
+    # ASR kelimeleri anlatımın KENDİ kelimeleri olmalı: zaman çizelgesi artık
+    # eşleştirmeyle hizalıyor (whisper senaryoyla aynı kelimelere bölmediği için
+    # salt SAYI eşitliğine güvenilemez). Uydurma "w0/w1" hiçbir şeye eşleşmez ve
+    # oransal yedeğe düşerdi — üretimdeki yolu sınamamış olurduk.
+    asr = [TimedWord(word=w, start_s=float(i), end_s=float(i+1), seg=-1)
+           for i, w in enumerate(n.full_text().split())]
     return build_reel_timeline(n, asr, duration_s=float(n.word_count()))
 
 

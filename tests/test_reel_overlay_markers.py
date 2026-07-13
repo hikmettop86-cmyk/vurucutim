@@ -10,8 +10,10 @@ def _tl():
                ReelBeat(text="Enzimlerle işler bunu.", visual_query="bee macro", keyword="ENZİM"),
                ReelBeat(text="Peteğe biriktirir hemen.", visual_query="honeycomb", keyword="PETEK")],
         close="İşte arının emeği.", mood="upbeat")
-    asr = [TimedWord(word=f"w{i}", start_s=float(i), end_s=float(i+1), seg=-1)
-           for i in range(n.word_count())]
+    # ASR kelimeleri anlatımın KENDİ kelimeleri: çizelge artık eşleştirmeyle
+    # hizalıyor, uydurma "w0/w1" oransal yedeğe düşer (üretim yolunu sınamaz).
+    asr = [TimedWord(word=w, start_s=float(i), end_s=float(i+1), seg=-1)
+           for i, w in enumerate(n.full_text().split())]
     return build_reel_timeline(n, asr, duration_s=float(n.word_count()))
 
 
