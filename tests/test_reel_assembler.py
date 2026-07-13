@@ -62,7 +62,11 @@ def test_assemble_missing_clip_raises(tmp_path):
 
 
 def test_assemble_mixes_sfx_per_cut(tmp_path, monkeypatch):
-    """sfx_at_cut'taki her SFX kesme anına adelay+volume=0.6 ile mixlenir."""
+    """sfx_at_cut'taki her SFX kesme anına adelay + AYARLANABİLİR volume ile mixlenir.
+
+    Seviye eskiden SABİT 0.6'ydı (anlatım 1.0) → "sfx sesleri çok baskın".
+    Artık ReelConfig.sfx_volume'dan gelir (varsayılan 0.22 = konuşmanın ~14 dB altı).
+    """
     clips = []
     for i in range(3):
         c = tmp_path / f"c{i}.mp4"
@@ -92,8 +96,30 @@ def test_assemble_mixes_sfx_per_cut(tmp_path, monkeypatch):
     # her SFX final montaj komutunda -i girdisi olarak yer alır
     assert str(sfx_a) in final and str(sfx_b) in final
     fc = final[final.index("-filter_complex") + 1]
-    assert "adelay=1000|1000,volume=0.6" in fc
-    assert "adelay=2000|2000,volume=0.6" in fc
+    assert "adelay=1000|1000,volume=0.22" in fc     # varsayılan seviye
+    assert "adelay=2000|2000,volume=0.22" in fc
+    # SFX anlatımdan BELİRGİN alta gömülü olmalı (vurgu, yarış değil)
+    assert "volume=1[nar]" in fc
+
+
+def test_sfx_volume_is_configurable(tmp_path, monkeypatch):
+    """Kanal ayarı seviyeyi ezebilmeli — kullanıcı kulakla ince ayar yapabilsin."""
+    clips = [tmp_path / "c0.mp4"]; clips[0].write_bytes(b"x")
+    narration = Path(__file__).parent / "fixtures" / "music_sample_2s.mp3"
+    sfx = tmp_path / "s.mp3"; sfx.write_bytes(b"s")
+    cmds = []
+    monkeypatch.setattr(reel_assembler, "_run",
+                        lambda cmd: (cmds.append(list(cmd)),
+                                     subprocess.CompletedProcess(cmd, 0, "", ""))[1])
+    assemble_reel(
+        clip_paths=clips, seg_spans=[(0.0, 2.0)], frames_dir=tmp_path / "frames",
+        narration_path=narration, music_path=None, out_path=tmp_path / "out.mp4",
+        cut_times=[1.0], duration_s=2.0, sfx_at_cut=[sfx], zoom=False,
+        sfx_volume=0.05,
+    )
+    final = next(c for c in cmds if "-filter_complex" in c)
+    fc = final[final.index("-filter_complex") + 1]
+    assert "volume=0.05" in fc and "volume=0.22" not in fc
 
 
 def test_assemble_skips_none_sfx(tmp_path, monkeypatch):
@@ -126,7 +152,7 @@ def test_assemble_skips_none_sfx(tmp_path, monkeypatch):
     fc = final[final.index("-filter_complex") + 1]
     assert str(sfx_b) in final
     assert "adelay=1000|1000" not in fc      # ilk kesme (None) atlandı
-    assert "adelay=2000|2000,volume=0.6" in fc
+    assert "adelay=2000|2000,volume=0.22" in fc
 
 
 def test_assemble_zoom_fallback_on_failure(tmp_path, monkeypatch):

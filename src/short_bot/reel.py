@@ -339,15 +339,9 @@ def produce_reel_video(
         log.info(f"  reel[süre] footage seg{si} ('{query[:30]}'): {len(got)} klip, "
                  f"{_time.perf_counter() - _seg_t0:.1f}s")
         clips_by_seg[si] = got
-        if si in worthy:
-            pos_by_seg[si] = d.locate_subject(got[0], query, vision_call=vision_call,
-                                              ffmpeg_path=ffmpeg_path)
-        else:
-            pos_by_seg[si] = SubjectPos(found=False)
     # GÖRSEL LOOP: kapanış klibi = hook klibi → video başa sarınca sahne zıplamaz.
     if getattr(reel, "visual_loop", True) and n_segs > 1 and 0 in clips_by_seg:
         clips_by_seg[n_segs - 1] = [clips_by_seg[0][0]]
-    seg_positions = [pos_by_seg[i] for i in range(n_segs)]
     _phase("footage+vision")
 
     # ALT-KESİM PLANI yukarıda (footage'dan önce) hesaplandı — klip sayısı ondan türedi.
@@ -373,10 +367,28 @@ def produce_reel_video(
     if numbers:
         log.info(f"  reel: {len(numbers)} sayı vurgusu → {[n['text'] for n in numbers]}")
 
-    # Belirteçler: nesne konumuna göre per-segment (kapalıysa boş → arrow_frequency='off')
-    markers = (build_markers(seg_positions, marker_kit=profile.marker_kit,
-                             frequency=reel.arrow_frequency, seed=seed)
-               if reel.arrows_enabled else [])
+    # BELİRTEÇLER: konum ALT-KESİM BAŞINA ölçülür — o alt-kesimde GERÇEKTEN gösterilen
+    # klipten ve onun GERÇEK başlangıç saniyesinden. Eskiden segmentin İLK klibinden
+    # ölçülüp segment boyunca çiziliyordu; hızlı kesimde segment 3 farklı klip
+    # gösterdiği için marker ölçülmediği kliplerin üstünde BOŞLUĞU işaretliyordu.
+    markers = []
+    if reel.arrows_enabled and worthy:
+        _mk_t0 = _time.perf_counter()
+        positions = []
+        for i, (si, _a, _b) in enumerate(subcuts):
+            if si not in worthy:
+                positions.append(SubjectPos(found=False))
+                continue
+            q = timeline.seg_queries[si] or _first_q
+            positions.append(d.locate_subject(
+                clip_paths[i], q, vision_call=vision_call,
+                ffmpeg_path=ffmpeg_path, at_s=clip_starts[i] + 0.4))
+        markers = build_markers(subcuts, positions,
+                                marker_kit=profile.marker_kit,
+                                frequency=reel.arrow_frequency, seed=seed)
+        log.info(f"  reel: {len(markers)} belirteç "
+                 f"({sum(1 for si, _a, _b in subcuts if si in worthy)} alt-kesim "
+                 f"tarandı), {_time.perf_counter() - _mk_t0:.1f}s")
 
     # Storyblocks footage için açılmış olabilecek kalıcı sync_playwright'ı KAPAT:
     # aksi hâlde aynı thread'de reel_render'ın sync_playwright'ı "Playwright Sync
@@ -432,6 +444,7 @@ def produce_reel_video(
         narration_path=mp3, music_path=music_path, out_path=out_path,
         cut_times=cut_times, duration_s=duration_s, fps=fps, ffmpeg_path=ffmpeg_path,
         music_volume=reel.music_volume,
+        sfx_volume=getattr(reel, "sfx_volume", 0.22),
         sfx_at_cut=sfx_at_cut,
         zoom=("zoom" in profile.transitions),
         clip_starts=clip_starts,

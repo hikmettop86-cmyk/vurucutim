@@ -48,7 +48,8 @@ def assemble_reel(
     frames_dir: Path, narration_path: Path, music_path: Path | None,
     out_path: Path, cut_times: list[float], duration_s: float,
     fps: int = 30, ffmpeg_path: str = "ffmpeg", music_volume: float = 0.10,
-    narration_volume: float = 1.0, sfx_at_cut: list | None = None,
+    narration_volume: float = 1.0, sfx_volume: float = 0.22,
+    sfx_at_cut: list | None = None,
     zoom: bool = True, clip_starts: list | None = None,
     hook_punch: bool = False,
 ) -> Path:
@@ -98,7 +99,10 @@ def assemble_reel(
                 if k >= len(sfx_at_cut) or sfx_at_cut[k] is None:
                     continue
                 cmd += ["-i", str(sfx_at_cut[k])]
-                parts.append(f"[{idx}:a]adelay={int(ct*1000)}|{int(ct*1000)},volume=0.6[wh{k}]")
+                # Seviye ayardan gelir (eskiden SABİT 0.6 → anlatımla yarışıyordu).
+                # Kütüphanedeki SFX zaten kırpılmış + seviyesi eşitlenmiş vurgular.
+                parts.append(f"[{idx}:a]adelay={int(ct*1000)}|{int(ct*1000)},"
+                             f"volume={sfx_volume:g}[wh{k}]")
                 labels.append(f"[wh{k}]")
                 idx += 1
         parts.append(f"{''.join(labels)}amix=inputs={len(labels)}:"

@@ -134,6 +134,9 @@ class ReelConfig(BaseModel):
     transitions_zoom: bool = True
     music_mood: Literal["upbeat", "neutral", "calm"] = "upbeat"
     music_volume: float = Field(default=0.10, ge=0.0, le=1.0)
+    # SFX kesim başına çalar (45sn'de ~18 kez). Eskiden assembler'da SABİT 0.6'ydı
+    # (anlatım 1.0) → "sfx sesleri çok baskın". Vurgu olmalı, konuşmayla yarışmamalı.
+    sfx_volume: float = Field(default=0.22, ge=0.0, le=1.0)
     font: Literal["Montserrat", "Anton", "Bebas Neue", "Oswald",
                   "Poppins", "Inter", "Archivo Black"] = "Montserrat"
     verify_footage: bool = True

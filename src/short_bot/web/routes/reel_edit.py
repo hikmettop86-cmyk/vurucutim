@@ -124,7 +124,10 @@ def save_reel(slug):
             cta_enabled=request.form.get("reel_cta_enabled") == "on",
             cta_text_custom=request.form.get("reel_cta_text_custom", old.cta_text_custom if old else ""),
             comment_question=request.form.get("reel_comment_question") == "on",
-            music_volume=(old.music_volume if old else 0.10),
+            music_volume=_form_float("reel_music_volume",
+                                     old.music_volume if old else 0.10),
+            sfx_volume=_form_float("reel_sfx_volume",
+                                   old.sfx_volume if old else 0.22),
         )
     except Exception as e:  # pydantic ValidationError vb.
         flash(f"Reel ayarları geçersiz: {e}", "error")

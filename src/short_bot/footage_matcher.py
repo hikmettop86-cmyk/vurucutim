@@ -301,22 +301,30 @@ class _LocateVerdict(BaseModel):
     y: float = 0.5
 
 
-def _extract_cropped_frame(clip: Path, ffmpeg_path: str, out: Path) -> Path | None:
-    """Klibin ~ortasından 9:16 cover-crop'lu, ≤384px kare çıkarır."""
+def _extract_cropped_frame(clip: Path, ffmpeg_path: str, out: Path,
+                           at_s: float = 1.0) -> Path | None:
+    """Klipten ``at_s`` anında 9:16 cover-crop'lu, ≤384px kare çıkarır."""
     import subprocess
     vf = ("scale=1080:1920:force_original_aspect_ratio=increase,"
           "crop=1080:1920,scale=384:-1")
     try:
-        p = subprocess.run([ffmpeg_path, "-y", "-ss", "1", "-i", str(clip),
-                            "-vf", vf, "-frames:v", "1", str(out)],
+        p = subprocess.run([ffmpeg_path, "-y", "-ss", f"{max(0.0, at_s):.3f}",
+                            "-i", str(clip), "-vf", vf, "-frames:v", "1", str(out)],
                            capture_output=True, timeout=30)
         return out if out.exists() and out.stat().st_size > 0 else None
     except Exception:
         return None
 
 
-def locate_subject(clip_path, query, *, vision_call=None, ffmpeg_path="ffmpeg") -> SubjectPos:
+def locate_subject(clip_path, query, *, vision_call=None, ffmpeg_path="ffmpeg",
+                   at_s: float = 1.0) -> SubjectPos:
     """Klibin final-kare görünümünde ana nesnenin normalize (x,y) merkezini bulur.
+
+    ``at_s``: kareyi klibin HANGİ saniyesinden al. Alt-kesim klibin ortasından
+    başlıyorsa ve özne (uçan arı) hareket ediyorsa, sabit 1. saniyeden ölçülen
+    konum ekranda BOŞLUĞU işaretler — çağıran o alt-kesimin gerçek başlangıcını
+    geçmeli.
+
     vision yok/hata/found=false → SubjectPos(found=False)."""
     if vision_call is None:
         return SubjectPos(found=False)
@@ -325,7 +333,8 @@ def locate_subject(clip_path, query, *, vision_call=None, ffmpeg_path="ffmpeg") 
     try:
         with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tf:
             frame = Path(tf.name)
-        if _extract_cropped_frame(Path(clip_path), ffmpeg_path, frame) is None:
+        if _extract_cropped_frame(Path(clip_path), ffmpeg_path, frame,
+                                  at_s=at_s) is None:
             return SubjectPos(found=False)
         prompt = (
             f'Bu 9:16 karede TEK, net, işaret-edilebilir bir ANA nesne var mı: '

@@ -48,6 +48,52 @@ _UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
 
 MIN_BYTES = 8_000   # bozuk/boş indirme reddi (gerçek SFX ~70KB+)
 
+# --- SFX ses hijyeni -------------------------------------------------------
+# Mixkit "sfx" indirmelerinin bir kısmı SFX DEĞİL, ambiyans YATAĞI (technology/1000
+# = 25.4sn). Kesimler ~2.5sn'de bir olduğu için 25 saniyelik bir ses AYNI ANDA 10
+# SFX'in üst üste binmesine yol açıyordu — "sfx sesleri çok baskın" şikâyetinin ana
+# kaynağı buydu. Ayrıca dosyalar arası seviye farkı 20.3 dB'ydi (cinematic -12.4 dB
+# vs click -32.7 dB): bir vurgu fısıltı, diğeri patlama.
+MAX_SFX_S = 1.5          # SFX bir VURGUDUR, yatak değil
+SFX_FADE_S = 0.12        # kırpma tıkırtısı olmasın
+SFX_TARGET_LUFS = -23    # anlatımın BELİRGİN altında (vurgu, yarış değil)
+
+
+def normalize_sfx(path, *, ffmpeg_path: str = "ffmpeg") -> "Path | None":
+    """SFX dosyasını yerinde VURGUYA çevir: kırp + fade + seviye eşitle.
+
+    Idempotent (kütüphane tekrar taranabilir). Bozuk/çözülemeyen dosya → None,
+    dosyaya DOKUNULMAZ (fail-open: tek bozuk dosya kurulumu düşürmez).
+    """
+    import os
+    import shutil
+    import subprocess
+    import tempfile
+
+    p = Path(path)
+    fd, tmp_name = tempfile.mkstemp(suffix=".mp3")
+    os.close(fd)          # Windows: açık tanıtıcı ffmpeg'in yazmasını engeller
+    tmp = Path(tmp_name)
+    try:
+        cmd = [
+            ffmpeg_path, "-y", "-v", "error", "-i", str(p),
+            "-af", (f"atrim=0:{MAX_SFX_S},asetpts=N/SR/TB,"
+                    f"afade=t=out:st={max(0.0, MAX_SFX_S - SFX_FADE_S):g}:d={SFX_FADE_S:g},"
+                    f"loudnorm=I={SFX_TARGET_LUFS}:TP=-3:LRA=11"),
+            "-ar", "44100", "-b:a", "128k", str(tmp),
+        ]
+        r = subprocess.run(cmd, capture_output=True, timeout=60)
+        if r.returncode != 0 or not tmp.exists() or tmp.stat().st_size < 1000:
+            log.info(f"assets_library: SFX normalize atlandı ({p.name})")
+            return None
+        shutil.move(str(tmp), str(p))
+        return p
+    except Exception as e:  # noqa: BLE001 — tek dosya tüm kurulumu düşürmesin
+        log.info(f"assets_library: SFX normalize hatası ({p.name}): {e}")
+        return None
+    finally:
+        tmp.unlink(missing_ok=True)
+
 
 def _default_get(url, **kw):
     import requests
@@ -106,6 +152,11 @@ def _fill(kind: str, cat: str, page_url: str, dest_dir: Path, want: int,
         if out.exists():
             continue
         if download(u, out, http_get=http_get) is not None:
+            if kind == "sfx":
+                # İndirilen ham "sfx"in bir kısmı 25sn'lik ambiyans YATAĞI ve
+                # dosyalar arası 20 dB seviye farkı var → kütüphaneye VURGU
+                # olarak girsin (kırpılmış + seviyesi eşitlenmiş).
+                normalize_sfx(out)
             added += 1
             if progress:
                 progress(f"{kind}/{cat}: {have + added}/{want}")

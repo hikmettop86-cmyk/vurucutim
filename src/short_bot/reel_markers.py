@@ -1,13 +1,23 @@
-"""Reel belirteçleri: vision konumuna göre per-segment marker seçimi (saf)."""
+"""Reel belirteçleri: vision konumuna göre ALT-KESİM başına marker seçimi (saf).
+
+Eskiden marker SEGMENT başına üretiliyordu ve konum segmentin İLK klibinden
+ölçülüyordu. Hızlı kesim açıkken bir segmentte 3 FARKLI klip gösterildiği için
+marker, ölçülmediği kliplerin üstünde de çiziliyor ve BOŞLUĞU işaretliyordu
+(gerçek şikâyet: arı videosunda kırmızı işaretçi havada duruyor).
+
+Artık konum, gösterilen KLİBİN kendisinden ve o alt-kesimin gerçek başlangıç
+saniyesinden ölçülür; marker yalnız o alt-kesim penceresinde görünür.
+"""
 from __future__ import annotations
+
 import hashlib
 
 MARKER_TYPES = ("arrow", "ring", "pulse", "box", "spotlight", "underline")
 MARKER_CONF_MIN = 0.55   # marker yalnız güvenle bulunmuş TEKİL nesnede çıkar
 
 
-def _marker_worthy_segs(n_segs: int, frequency: str) -> list[int]:
-    # reel_render.build_reel_overlay_html'deki arrow_segs mantığının aynısı:
+def marker_worthy_segs(n_segs: int, frequency: str) -> list[int]:
+    """Hangi segmentler marker alabilir (hook/kapanış ASLA: kart ekranı kaplar)."""
     beat_segs = list(range(1, n_segs - 1))
     if frequency == "off":
         return []
@@ -16,18 +26,44 @@ def _marker_worthy_segs(n_segs: int, frequency: str) -> list[int]:
     return beat_segs
 
 
-def build_markers(seg_positions, *, marker_kit, frequency="beats", seed=0) -> list[dict]:
+# Geriye-uyum takma adı (eski çağıranlar/testler)
+_marker_worthy_segs = marker_worthy_segs
+
+
+def build_markers(subcuts, positions, *, marker_kit, frequency="beats",
+                  seed=0) -> list[dict]:
+    """Alt-kesim başına ölçülmüş konumlardan marker listesi üret.
+
+    ``subcuts``   : [(segment_index, t0, t1), ...] — zaman sırasında
+    ``positions`` : subcuts ile HİZALI SubjectPos listesi (o alt-kesimin KENDİ
+                    klibinden, KENDİ başlangıç saniyesinden ölçülmüş)
+
+    Segment başına EN FAZLA BİR marker: her alt-kesime koymak görsel gürültü olur.
+    Aynı segmentte birden çok güvenli ölçüm varsa en YÜKSEK güvenli seçilir.
+
+    Dönüş: [{"seg", "t0", "t1", "type", "x", "y"}, ...]
+    """
     kit = tuple(marker_kit) or ("arrow",)
-    worthy = set(_marker_worthy_segs(len(seg_positions), frequency))
+    n_segs = (max(si for si, _a, _b in subcuts) + 1) if subcuts else 0
+    worthy = set(marker_worthy_segs(n_segs, frequency))
+
+    best: dict[int, tuple] = {}   # seg -> (conf, t0, t1, x, y)
+    for (si, t0, t1), pos in zip(subcuts, positions):
+        if si not in worthy:
+            continue
+        conf = float(getattr(pos, "confidence", 0.0) or 0.0)
+        if not (getattr(pos, "found", False) and getattr(pos, "discrete", False)
+                and conf >= MARKER_CONF_MIN):
+            continue
+        cand = (conf, t0, t1, float(pos.x), float(pos.y))
+        if si not in best or cand[0] > best[si][0]:
+            best[si] = cand
+
     out = []
-    for i, pos in enumerate(seg_positions):
-        if i not in worthy:
-            continue
-        if not (getattr(pos, "found", False)
-                and getattr(pos, "discrete", False)
-                and getattr(pos, "confidence", 0.0) >= MARKER_CONF_MIN):
-            continue
-        h = int(hashlib.sha1(f"{seed}:mk:{i}".encode()).hexdigest(), 16)
-        out.append({"seg": i, "type": kit[h % len(kit)],
-                    "x": round(float(pos.x), 4), "y": round(float(pos.y), 4)})
+    for si in sorted(best):
+        conf, t0, t1, x, y = best[si]
+        h = int(hashlib.sha1(f"{seed}:mk:{si}".encode()).hexdigest(), 16)
+        out.append({"seg": si, "t0": round(t0, 3), "t1": round(t1, 3),
+                    "type": kit[h % len(kit)],
+                    "x": round(x, 4), "y": round(y, 4)})
     return out

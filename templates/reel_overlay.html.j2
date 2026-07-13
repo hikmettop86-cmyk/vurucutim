@@ -98,7 +98,10 @@ const LEAD=0.08,CHUNK=3,DUR={{ duration_s }},LAST={{ last_seg }},CTA_S=2.5;
 const CUTS={{ cuts }};
 const ARROWSEGS={{ arrow_segs }};   // legacy: belirteçler artık MARKERS'tan gelir
 const MARKERS={{ markers }};
-const MK={};for(const m of MARKERS){MK[m.seg]=m;}
+// Belirteç ZAMAN PENCERESİNE bağlıdır (t0..t1), segmente DEĞİL: konum o alt-kesimde
+// gösterilen KLİPTEN ölçüldü. Segmente bağlarsak marker, aynı segmentin diğer
+// kliplerinin üstünde de çizilir ve BOŞLUĞU işaretler (gerçek hata).
+function activeMarker(t){for(const m of MARKERS){if(t>=m.t0&&t<m.t1)return m;}return null;}
 const NUMS={{ nums }};
 const NP=document.getElementById('numpop');
 const MCLS={arrow:'mk-arrow',ring:'mk-ring',pulse:'mk-pulse',box:'mk-box',spotlight:'mk-spot',underline:'mk-under'};
@@ -108,7 +111,7 @@ const HOOK=document.getElementById('hook'),CLOSE=document.getElementById('close'
 const FLASH=document.getElementById('flash'),MLAYER=document.getElementById('markers');
 const RGB=document.getElementById('rgbsplit'),LEAK=document.getElementById('lightleak'),GLITCH=document.getElementById('glitch');
 const CTA=document.getElementById('cta');
-let ch=-1,ps=null,ic=0,mkSeg=-999;
+let ch=-1,ps=null,ic=0,mkSeg='';   // mkSeg: aktif belirtecin kimliği (t0:type)
 for(const w of W){const sg=+w.dataset.seg;if(sg!==ps||ic===CHUNK){ch++;ic=0;ps=sg;}w.dataset.chunk=ch;ic++;}
 window.__seek=function(tms){
   const t=tms/1000,lead=t+LEAD;let seg=0,chk=-1;
@@ -120,9 +123,12 @@ window.__seek=function(tms){
   /* Çubuğu 0.25% adıma yuvarla (2.7px): ardışık kareler AYNILAŞIR → renderer
      screenshot yerine kopyalayabilir (kare-dedup, 3-4x hızlı). Görsel fark yok. */
   BAR.style.width=(Math.round(Math.min(100,(t/DUR)*100)*4)/4)+'%';
-  const m=MK[seg];
-  if(m){if(seg!==mkSeg){MLAYER.innerHTML='<div class="mk '+(MCLS[m.type]||'mk-arrow')+'" style="left:'+(m.x*1080)+'px;top:'+(m.y*1920)+'px"></div>';mkSeg=seg;}}
-  else if(mkSeg!==-999){MLAYER.innerHTML='';mkSeg=-999;}
+  const m=activeMarker(t);
+  const mkey=m?(m.t0+':'+m.type):'';
+  if(mkey!==mkSeg){
+    MLAYER.innerHTML=m?('<div class="mk '+(MCLS[m.type]||'mk-arrow')+'" style="left:'+(m.x*1080)+'px;top:'+(m.y*1920)+'px"></div>'):'';
+    mkSeg=mkey;
+  }
   let op=0;if(CUT_EFFECT!=='none'){for(const ct of CUTS){const dt=t-ct;if(dt>=0&&dt<0.12)op=Math.max(op,1-dt/0.12);}}
   // seçilen efekti kesme yakınlığı (op) ile uygula; op seek-driven → deterministik
   FLASH.style.opacity=(CUT_EFFECT==='flash')?op*0.85:0;
