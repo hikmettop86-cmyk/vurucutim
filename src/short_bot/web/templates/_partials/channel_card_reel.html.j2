@@ -58,9 +58,14 @@
       {% if c.content_source == 'generator' %}
       <a href="/channels/{{ c.slug }}/topic-bank" class="px-2 py-1 text-claude-text hover:bg-claude-surface-alt rounded text-xs" title="Kanıtlanmış konu bankası">🎯 Konu</a>
       {% endif %}
-      {# SERİ: ark görünür olmalı — sıradaki bölümün konusu ÜRETİMDEN ÖNCE bilinsin. #}
-      {% if c.reel and c.reel.series_enabled %}
-      <a href="/channels/{{ c.slug }}/series" class="px-2 py-1 text-claude-text hover:bg-claude-surface-alt rounded text-xs" title="Seri: bölümler + sıradaki konu">📚 Seri</a>
+      {# SERİ — HER reel kanalında görünür, seri modu KAPALI olsa bile.
+         GERÇEK HATA: düğmeyi yalnız series_enabled iken gösteriyordum → kısır döngü.
+         Seriyi açmak için sayfaya gitmen gerekiyordu, sayfaya gitmek için de serinin
+         açık olması. Kapalı hâli sayfanın kendisi anlatıyor ve tek tıkla açtırıyor. #}
+      {% if c.reel %}
+      <a href="/channels/{{ c.slug }}/series"
+         class="px-2 py-1 rounded text-xs {% if c.reel.series_enabled %}text-claude-accent hover:bg-claude-accent-soft{% else %}text-claude-muted hover:bg-claude-surface-alt{% endif %}"
+         title="{% if c.reel.series_enabled %}Seri: bölümler + sıradaki konu{% else %}Seri modu kapalı — açmak için tıkla{% endif %}">📚 Seri</a>
       {% endif %}
     </div>
   </div>

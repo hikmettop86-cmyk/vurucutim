@@ -67,6 +67,13 @@ def page(slug):
     aktif = active_arc(eng, slug) if mod == "planned" else None
     taslak = draft_arc(eng, slug) if mod == "planned" else None
 
+    # Ark ancak TOHUMU kadar iyidir: gerçek koşuda bankanın en yeni kaydı kanalın
+    # nişinden uzaktı ve planlayıcı onu sadakatle genişletti. Kullanıcı tohumu
+    # SEÇEBİLMELİ — bankadaki aktif konular burada listelenir.
+    from short_bot.db import active_bank_topics
+    banka = (active_bank_topics(eng, slug, limit=12)
+             if (mod == "planned" and not taslak and not aktif) else [])
+
     # SIRADAKİ BÖLÜM: bir sonraki koşunun ne üreteceği. Sayfanın asıl cevabı bu.
     plan = plan_episode(son, arc_max=arc_max)
     if aktif and aktif["remaining"] > 0:
@@ -91,7 +98,7 @@ def page(slug):
     return render_template(
         "series.html.j2", slug=slug, channel=cfg,
         enabled=bool(reel and reel.series_enabled),
-        mode=mod, episodes=gecmis, next=sonraki,
+        mode=mod, episodes=gecmis, next=sonraki, bank=banka,
         series_title=baslik, active_arc=aktif, draft=taslak,
         past_arcs=[a for a in arc_history(eng, slug)
                    if not aktif or a["id"] != aktif["id"]],
@@ -116,10 +123,19 @@ def plan_arc_route(slug):
         flash("Zaten onay bekleyen bir taslak var — önce onu onayla ya da sil.", "info")
         return redirect(url_for("series.page", slug=slug))
 
-    # Tohum konu: kullanıcı verdiyse o, yoksa bankanın en yeni aktif kaydı.
+    # TOHUM KONU. Ark ancak tohumu kadar iyidir — gerçek koşuda bankanın en yeni
+    # kaydı kanalın nişinden uzaktı ("vücudun onarım gücü" kanalına SAKIZ EFSANESİ
+    # arkı çıktı) ve planlayıcı onu sadakatle genişletti. O yüzden tohumu KULLANICI
+    # seçebilmeli; boş bırakırsa bankanın en yenisine düşülür (eski davranış).
     tohum = (request.form.get("seed_topic") or "").strip()
     bank_id = None
-    if not tohum:
+    if tohum:
+        # Bankadan seçildiyse id de gelir → üretilen konu bankadan düşsün.
+        try:
+            bank_id = int(request.form.get("bank_id") or 0) or None
+        except ValueError:
+            bank_id = None
+    else:
         aktifler = active_bank_topics(eng, slug, limit=1)
         if not aktifler:
             flash("Konu bankası boş — önce 'Konu' sayfasından yenile ya da bir tohum "
@@ -177,25 +193,50 @@ def discard(slug, arc_id):
     return redirect(url_for("series.page", slug=slug))
 
 
-# --- SERİ BAŞLIĞI ----------------------------------------------------------
+# --- AÇ / BAŞLIK -----------------------------------------------------------
+
+def _save_reel(cfg, slug: str, **degisiklik) -> None:
+    """Kanal YAML'ındaki reel bloğunu güncelle (pydantic model → model_copy)."""
+    import dataclasses
+
+    from short_bot.config import save_channel
+    reel = cfg.reel.model_copy(update=degisiklik)
+    path = current_app.config["SHORTBOT_CONFIG_DIR"] / "channels" / f"{slug}.yaml"
+    save_channel(path, dataclasses.replace(cfg, reel=reel))
+
+
+@bp.post("/channels/<slug>/series/enable")
+def enable(slug):
+    """Seri modunu TEK TIKLA aç (+ başlık yoksa DNA'dan öner).
+
+    Eskiden kullanıcının Ayarlar'a gidip onay kutusunu bulması gerekiyordu — ve
+    Seri düğmesi de yalnız seri AÇIKKEN görünüyordu, yani kısır döngü vardı.
+    Kapalı sayfa artık kendini açtırıyor.
+    """
+    from short_bot.reel_arc import suggest_series_title
+    cfg = _load_cfg(slug)
+    if getattr(cfg, "reel", None) is None or not cfg.reel.enabled:
+        flash("Bu kanal reel formatında değil — seri modu yalnız reel kanallarda çalışır.",
+              "error")
+        return redirect(url_for("series.page", slug=slug))
+
+    baslik = (cfg.reel.series_title or "").strip()
+    if not baslik:
+        baslik = suggest_series_title(cfg, _llm_call())
+    _save_reel(cfg, slug, series_enabled=True, series_title=baslik)
+    flash(f"Seri modu açıldı — başlık: '{baslik}'. Şimdi bir ark planla.", "success")
+    return redirect(url_for("series.page", slug=slug))
+
 
 @bp.post("/channels/<slug>/series/suggest-title")
 def suggest_title(slug):
     """Kanal DNA'sından seri başlığı öner ve YAML'a yaz (kullanıcı değiştirebilir)."""
-    import dataclasses
-
-    from short_bot.config import save_channel
-    from short_bot.reel_arc import suggest_series_title
     cfg = _load_cfg(slug)
     baslik = suggest_series_title(cfg, _llm_call())
     if not baslik:
         flash("Başlık önerilemedi — Ayarlar'dan elle yazabilirsin.", "error")
         return redirect(url_for("series.page", slug=slug))
-    reel = dataclasses.replace(cfg.reel, series_title=baslik) \
-        if dataclasses.is_dataclass(cfg.reel) else cfg.reel.model_copy(
-            update={"series_title": baslik})
-    path = current_app.config["SHORTBOT_CONFIG_DIR"] / "channels" / f"{slug}.yaml"
-    save_channel(path, dataclasses.replace(cfg, reel=reel))
+    _save_reel(cfg, slug, series_title=baslik)
     flash(f"Seri başlığı: '{baslik}' — beğenmezsen Ayarlar'dan değiştir.", "success")
     return redirect(url_for("series.page", slug=slug))
 

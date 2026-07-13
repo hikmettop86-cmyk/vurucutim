@@ -94,6 +94,10 @@ def create_app(
     # Register Jinja2 filters
     from short_bot.web.cron_describe import cron_human
     app.jinja_env.filters["cron_human"] = cron_human
+    # Jinja'nın |upper filtresi Unicode'un DİLDEN BAĞIMSIZ eşlemesini kullanır:
+    # "Bilim" → "BILIM". Türkçede "i"nin büyüğü "İ"dir. Şablonlarda |tr_upper kullan.
+    from short_bot.text_normalize import turkish_upper
+    app.jinja_env.filters["tr_upper"] = turkish_upper
 
     # Register blueprints
     from short_bot.web.routes import register_blueprints

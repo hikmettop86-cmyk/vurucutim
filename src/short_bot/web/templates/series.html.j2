@@ -27,17 +27,37 @@
   {% endwith %}
 
   {% if not enabled %}
+    {# Kapalı sayfa KENDİNİ AÇTIRIR. Eskiden "Ayarlardan aç" diyordu ve Seri düğmesi
+       de yalnız seri AÇIKKEN görünüyordu — kısır döngü. #}
     <div class="rounded-xl border border-dashed border-claude-border bg-claude-surface
                 px-6 py-10 text-center">
-      <p class="text-claude-text font-medium">Seri modu kapalı</p>
-      <p class="text-sm text-claude-muted mt-2 max-w-lg mx-auto">
-        Seri modu, aboneliği bir <b>ricadan takasa</b> çevirir: her bölüm kendi tepesini
-        öder, sonra yeni bir kapı açar — ve o kapının cevabı bir sonraki bölümdedir.
-        İzleyici bir videoya değil, bir <b>seriye</b> abone olur.
+      <p class="text-claude-text font-medium text-lg">Seri modu kapalı</p>
+      <p class="text-sm text-claude-muted mt-3 max-w-xl mx-auto leading-relaxed">
+        Bu kanal şu an <b>bağımsız videolar</b> üretiyor: her video tam cevabı verir,
+        merak kapanır ve izleyicide abonelikle çözülecek bir ihtiyaç kalmaz.
+        Seri modu bunu değiştirir — aboneliği bir <b>ricadan takasa</b> çevirir.
       </p>
-      <a href="/channels/{{ slug }}/edit-reel"
-         class="inline-block mt-4 px-4 py-2 rounded-lg bg-claude-accent text-white
-                text-sm font-semibold hover:opacity-90">Ayarlardan aç</a>
+      <div class="mt-5 max-w-lg mx-auto text-left text-sm text-claude-muted space-y-2">
+        <p>• Her bölüm kendi tepesini <b>öder</b> (beğeni oradan gelir), sonra yeni bir
+          <b>kapı</b> açar — cevabı bir sonraki bölümdedir.</p>
+        {# |upper DEĞİL |tr_upper: Jinja'nın upper'ı "Bilim" → "BILIM" yapar (Türkçede
+           "i"nin büyüğü "İ"dir). Rozet bu hatayı yapamaz. #}
+        <p>• Kare sıfırda <b>bölüm rozeti</b> ("{{ channel.name.split()[0]|tr_upper }} #1")
+          → feed'de tanınma.</p>
+        <p>• Abone çipi "Her gün yeni" değil <b>"#2 yarın — ABONE OL"</b> olur.</p>
+        <p>• Planlı arkta ilk bölüm <b>"3 bölümlük seri"</b> diye ilan eder: izleyici
+          bir videoya değil bir <b>seriye</b> abone olur.</p>
+      </div>
+      <form method="post" action="/channels/{{ slug }}/series/enable" class="mt-6">
+        <button class="px-5 py-2.5 rounded-lg bg-claude-accent text-white
+                       text-sm font-semibold hover:opacity-90">
+          Seri modunu aç</button>
+      </form>
+      <p class="text-xs text-claude-muted mt-3">
+        Başlık yoksa kanal DNA'sından önerilir. Her şey
+        <a href="/channels/{{ slug }}/edit-reel" class="text-claude-accent hover:underline">Ayarlar</a>'dan
+        geri alınabilir.
+      </p>
     </div>
   {% else %}
 
@@ -147,13 +167,6 @@
         </div>
 
         <div class="flex flex-col gap-2 flex-shrink-0">
-          {% if mode == 'planned' and not draft and not active_arc %}
-          <form method="post" action="/channels/{{ slug }}/series/plan-arc">
-            <button class="w-full px-4 py-2 rounded-lg bg-claude-accent text-white
-                           text-sm font-semibold hover:opacity-90 whitespace-nowrap">
-              Yeni ark planla</button>
-          </form>
-          {% endif %}
           {% if next.source == 'zincir' %}
           <form method="post" action="/channels/{{ slug }}/series/break-arc"
                 onsubmit="return confirm('Zincir kesilsin mi? Sıradaki bölüm konu bankasından taze bir konu alacak (bölüm numarası korunur).')">
@@ -165,6 +178,59 @@
         </div>
       </div>
     </article>
+
+    {# ── YENİ ARK PLANLA ──────────────────────────────────────────────────
+       ARK ANCAK TOHUMU KADAR İYİDİR. Gerçek koşuda bankanın EN YENİ kaydı kanalın
+       nişinden uzaktı ("vücudun onarım gücü" kanalına SAKIZ EFSANESİ arkı çıktı) ve
+       planlayıcı onu sadakatle genişletti. Tohumu KULLANICI seçmeli. #}
+    {% if mode == 'planned' and not draft and not active_arc %}
+    <section class="rounded-xl border border-claude-border bg-white p-5 mb-6">
+      <h2 class="text-sm font-semibold text-claude-text mb-1">Yeni ark planla</h2>
+      <p class="text-xs text-claude-muted mb-4">
+        Ark ancak <b>tohumu kadar iyidir</b>. Bankadan bir konu seç ya da kendin yaz —
+        LLM onu {{ arc_len }} bölümlük tırmanan bir seriye böler.
+      </p>
+      <form method="post" action="/channels/{{ slug }}/series/plan-arc" x-data="{ seed: '', bid: '' }">
+        {% if bank %}
+        <div class="space-y-2 mb-4 max-h-64 overflow-y-auto">
+          {% for r in bank %}
+          <label class="flex items-start gap-3 p-3 rounded-lg border cursor-pointer
+                        transition-colors"
+                 :class="seed === {{ r.topic|tojson }} ? 'border-claude-accent bg-claude-accent/5' : 'border-claude-border hover:bg-claude-surface'">
+            <input type="radio" name="_pick" class="mt-1"
+                   @change="seed = {{ r.topic|tojson }}; bid = '{{ r.id }}'">
+            <span class="text-sm text-claude-text leading-snug">{{ r.topic }}</span>
+          </label>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-xs text-claude-muted mb-3">
+          Konu bankası boş —
+          <a href="/channels/{{ slug }}/topic-bank" class="text-claude-accent hover:underline">yenile</a>
+          ya da aşağıya kendin yaz.
+        </p>
+        {% endif %}
+
+        <label class="block">
+          <span class="text-xs text-claude-muted uppercase tracking-wide">
+            Kendi tohumun (bankadaki seçimi ezer)</span>
+          {# @input'ta bid TEMİZLENİR: bankadan seçip sonra elle yazarsan id eski
+             seçimde kalır ve YANLIŞ banka konusu "kullanıldı" işaretlenirdi. #}
+          <input type="text" x-model="seed" @input="bid = ''"
+                 placeholder="ör. Kırık kemik nasıl kaynar?"
+                 class="mt-1 w-full bg-white border border-claude-border rounded-lg
+                        px-3 py-2 text-sm">
+        </label>
+        <input type="hidden" name="seed_topic" :value="seed">
+        <input type="hidden" name="bank_id" :value="bid">
+
+        <button class="mt-4 px-4 py-2 rounded-lg bg-claude-accent text-white text-sm
+                       font-semibold hover:opacity-90">
+          Ark planla</button>
+        <span class="text-xs text-claude-muted ml-2">Plan onayına düşer — üretim başlamaz.</span>
+      </form>
+    </section>
+    {% endif %}
 
     {# ── AKTİF ARKIN İLERLEMESİ ──────────────────────────────────────────── #}
     {% if active_arc %}

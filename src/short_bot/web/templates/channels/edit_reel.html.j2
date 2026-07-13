@@ -299,6 +299,20 @@
             <small class="text-claude-muted">Kare sıfırda rozet olarak görünür:
               "BİLİNMEYEN TARİH #47"</small>
           </label>
+          {# Ark ayarları YALNIZ seri modu açıkken çalışır. Kapalıyken de görünmeleri
+             "ark açık ama seri yok" izlenimi veriyordu (gerçek kullanıcı şikâyeti) —
+             bu yüzden görsel olarak seri anahtarına BAĞLIYORUZ. #}
+          <div class="pl-4 border-l-2 {% if c.reel and c.reel.series_enabled %}border-claude-accent{% else %}border-claude-border{% endif %} space-y-3">
+          <p class="text-xs -ml-1 {% if c.reel and c.reel.series_enabled %}text-claude-muted{% else %}text-claude-accent{% endif %}">
+            {% if c.reel and c.reel.series_enabled %}
+              ↳ Ark ayarları — <a href="/channels/{{ c.slug }}/series" class="text-claude-accent hover:underline font-semibold">Seri sayfası →</a>
+            {% else %}
+              ↳ <b>Seri modu KAPALI</b> — aşağıdaki ark ayarları etkisiz.
+              Yukarıdaki anahtarı aç, sonra
+              <a href="/channels/{{ c.slug }}/series" class="underline font-semibold">Seri sayfasından</a>
+              ark planla.
+            {% endif %}
+          </p>
           <label class="block">
             <span class="text-xs text-claude-muted uppercase tracking-wide">Ark modu</span>
             <select name="reel_arc_mode"
@@ -326,6 +340,7 @@
               modda daha güçlü bir vaat ("5 bölümlük seri") ama her bölümün üretilmesi
               gerekir; zincir modunda konuyu nişinden sürükler.</small>
           </label>
+          </div>{# /ark ayarları — seri moduna bağlı #}
           <label class="flex items-start justify-between gap-3 text-sm">
             <span>Feed kimliği kilidi
               <small class="block text-claude-muted">Aksan rengi ve yerleşim her videoda
