@@ -11,9 +11,27 @@
         <span class="font-medium">{{ r.channel }}</span>
         <span class="text-claude-muted text-xs">{{ r.trigger }}</span>
         <span class="text-claude-muted text-xs">başladı {{ r.started_at.strftime('%H:%M:%S') }}</span>
+        {# TAKILI KOŞU: süreci ölen bir koşu (çökme, kapatma, zaman aşımı) DB'de
+           sonsuza dek "çalışıyor" kalır — kendini temizleyecek kimse yoktur.
+           Normal üretim 8-14 dk sürüyor; bunun üstü şüphelidir. #}
+        <span x-show="(now - start) > {{ stale_after_s }}"
+              class="text-xs px-2 py-0.5 rounded bg-red-500/15 text-red-500 font-medium">
+          takılmış olabilir
+        </span>
         <span class="ml-auto font-mono text-xs text-claude-muted">
           <span x-text="String(Math.floor((now - start) / 60)).padStart(2, '0') + ':' + String(Math.floor((now - start) % 60)).padStart(2, '0')"></span> geçti
         </span>
+        {# İPTAL: rota vardı ama YALNIZ klasik kanal düzenleme sayfasındaydı — reel
+           kanalları oraya hiç uğramıyor, dolayısıyla takılı koşuyu temizlemenin
+           arayüzde hiçbir yolu yoktu. #}
+        <form method="POST" action="/runs/{{ r.id }}/cancel" class="inline"
+              onsubmit="return confirm('Bu koşu iptal edilsin mi?')">
+          <button type="submit"
+                  class="text-xs px-2 py-1 rounded border border-claude-border
+                         text-claude-muted hover:text-red-500 hover:border-red-500">
+            ✕ İptal
+          </button>
+        </form>
       </div>
 
       {# 8-stage pipeline visualizer #}

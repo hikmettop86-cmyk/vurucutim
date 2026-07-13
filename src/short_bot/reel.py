@@ -38,6 +38,10 @@ from short_bot.tts.fidelity import worst_drop
 
 log = logging.getLogger(__name__)
 
+
+class RunCancelled(RuntimeError):
+    """Kullanıcı koşuyu panelden iptal etti."""
+
 # Belirteç konumları birbirinden BAĞIMSIZ vision çağrıları (~2-3sn) — paralel ölç.
 # 15 alt-kesim sıralı ölçülünce 30 saniye yiyordu.
 LOCATE_WORKERS = 5
@@ -216,6 +220,7 @@ def produce_reel_video(
     llm_backend: str = "claude_cli", llm_api_key: str | None = None,
     whisper_quality: str = "auto", whisper_device: str = "auto",
     vision_call=None, seed: int = 0, deps: ReelDeps | None = None,
+    cancel_check=None,   # panelden iptal edildiyse faz sınırında dur
     hook_patterns=None, assets_root: Path | None = None,
 ) -> Path:
     reel = getattr(channel, "reel", None)
@@ -242,6 +247,11 @@ def produce_reel_video(
     _phase_t = {}
 
     def _phase(name: str) -> None:
+        # İPTAL: kullanıcı panelden durdurduysa bir sonraki fazı BAŞLATMA. Footage
+        # gibi uzun bir faz ortasında kesemeyiz ama sınırda durmak, yanan LLM/TTS/
+        # vision kredisini ve dakikaları kurtarır.
+        if cancel_check is not None and cancel_check():
+            raise RunCancelled("üretim panelden iptal edildi")
         nonlocal _t0
         dt = _time.perf_counter() - _t0
         _phase_t[name] = dt

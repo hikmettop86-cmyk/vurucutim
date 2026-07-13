@@ -374,6 +374,20 @@ def start_run(eng: Engine, channel: str, trigger: str, log_path: str) -> int:
         return result.inserted_primary_key[0]
 
 
+def is_run_cancelled(eng: Engine, run_id: int) -> bool:
+    """Kullanıcı bu koşuyu panelden iptal etti mi?
+
+    İptal düğmesi DB'de statüyü 'cancelled' yapar. Boru hattı bunu FAZ SINIRLARINDA
+    yoklar ve durur — yoksa düğme yalan söylerdi: arayüzde iptal görünürken arka
+    planda iş sürer, LLM/TTS/vision kredisi yanmaya devam ederdi.
+    """
+    with eng.connect() as conn:
+        row = conn.execute(
+            select(runs.c.status).where(runs.c.id == run_id)
+        ).fetchone()
+    return bool(row) and row[0] == "cancelled"
+
+
 def finish_run(
     eng: Engine, run_id: int, *,
     status: str, short_id: int | None = None, error: str | None = None,

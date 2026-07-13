@@ -15,7 +15,9 @@ from pathlib import Path
 from filelock import FileLock, Timeout
 
 from short_bot.config import ChannelConfig, Settings, resolve_ai_call
+from short_bot.reel import RunCancelled
 from short_bot.db import (
+    is_run_cancelled,
     init_db, mark_processed, record_short, record_rss_item,
     start_run, finish_run, get_last_youtube_upload_at,
     get_feed,
@@ -572,6 +574,12 @@ def run_pipeline(
                        error="lock busy: pipeline already running for this channel")
             return RunResult(run_id=run_id, status="failed", short_path=None,
                              error="lock busy")
+        except RunCancelled:
+            # Kullanıcı panelden durdurdu — HATA DEĞİL. 'failed' yazmak yanıltır ve
+            # kullanıcının bilerek verdiği kararı arıza gibi gösterir.
+            log.info("koşu panelden iptal edildi")
+            finish_run(eng, run_id, status="cancelled", short_id=None, error=None)
+            return RunResult(run_id=run_id, status="cancelled", short_path=None, error=None)
         except Exception as e:
             log.exception("pipeline failed")
             finish_run(eng, run_id, status="failed", short_id=None, error=str(e))
@@ -1310,6 +1318,7 @@ def _run_generator(*, channel, run_id, log, eng, settings,
                 work_dir=Path(reel_tmp), log=log, llm_call=gen_call,
                 vision_call=reel_call, seed=generated_id,
                 hook_patterns=hook_pats,
+                cancel_check=lambda: is_run_cancelled(eng, run_id),
             )
             render_ms = int((time.perf_counter() - t0) * 1000)
         log.info(f"  → {reel_out.name} ({render_ms}ms)")
@@ -1589,7 +1598,7 @@ def _render_and_compose(
 def _reel_produce_or_none(
     *, channel, topic, out_path, settings, secrets, music_root, templates_dir,
     cache_dir, work_dir, log, llm_call, vision_call, seed: int = 0,
-    hook_patterns=None,
+    hook_patterns=None, cancel_check=None,
 ) -> "Path | None":
     """Kanal reel ise reel videoyu üretip out_path döndürür; değilse None."""
     reel = getattr(channel, "reel", None)
@@ -1620,6 +1629,7 @@ def _reel_produce_or_none(
         whisper_quality=getattr(settings, "whisper_quality", "auto"),
         whisper_device=getattr(settings, "whisper_device", "auto"),
         vision_call=vision_call, seed=seed,
+        cancel_check=cancel_check,
         hook_patterns=hook_patterns,
         # SFX + AI-kurgucu kütüphanesinin kökü: music_root'un üst klasörü
         # (music_root paketlenmiş uygulamada taşınır; assets/ ona bitişiktir).

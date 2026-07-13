@@ -8,6 +8,11 @@ from short_bot.web.activity import (
     ALL_TYPES, build_activity_events, compute_summary_24h, list_running_runs,
 )
 
+# Normal üretim 8-14 dk sürüyor (ölçüldü). Bunun üstünde çalışan bir koşu
+# muhtemelen TAKILMIŞTIR: süreci ölen koşu DB'de sonsuza dek 'çalışıyor'
+# kalır, çünkü kendini temizleyecek kimse yoktur.
+STALE_RUN_AFTER_S = 20 * 60
+
 bp = Blueprint("activity", __name__)
 
 
@@ -67,6 +72,7 @@ def view():
         "activity.html.j2",
         summary=summary,
         running=running,
+        stale_after_s=STALE_RUN_AFTER_S,
         events=events,
         channels=channels,
         f_channel=f["channel"] or "",
@@ -119,4 +125,5 @@ def live_runs_partial():
     """htmx partial: renders only the live-runs section."""
     eng = init_db(current_app.config["SHORTBOT_DB_PATH"])
     running = list_running_runs(eng)
-    return render_template("_partials/activity_live_runs.html.j2", running=running)
+    return render_template("_partials/activity_live_runs.html.j2", running=running,
+                           stale_after_s=STALE_RUN_AFTER_S)

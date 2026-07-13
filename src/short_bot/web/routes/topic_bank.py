@@ -12,7 +12,8 @@ from flask import (Blueprint, abort, current_app, flash, redirect,
                    render_template, url_for)
 
 from short_bot.config import load_channel
-from short_bot.db import all_bank_topics, init_db, reject_bank_topic
+from short_bot.db import (all_bank_topics, init_db, mark_bank_topic_used,
+                          reject_bank_topic)
 from short_bot.topic_miner import refresh_topic_bank
 
 bp = Blueprint("topic_bank", __name__)
@@ -32,9 +33,16 @@ def _load_cfg(slug: str):
 
 @bp.get("/channels/<slug>/topic-bank")
 def page(slug):
+    """YALNIZ aktif konular listelenir.
+
+    Üretilmiş ('used') ve reddedilmiş konular DB'DE KALIR — mükerrer üretimi asıl
+    engelleyen şey odur (üretim prompt'u yalnız aktif kayıtları görür). Ama listede
+    durmalarının bir faydası yok: kullanıcı onlara yanlışlıkla basıp aynı videoyu
+    ikinci kez üretebiliyordu.
+    """
     cfg = _load_cfg(slug)
     eng = init_db(current_app.config["SHORTBOT_DB_PATH"])
-    rows = all_bank_topics(eng, slug)
+    rows = [r for r in all_bank_topics(eng, slug) if r["status"] == "active"]
     return render_template("topic_bank.html.j2", slug=slug, channel=cfg, rows=rows)
 
 
@@ -106,8 +114,11 @@ def produce(slug, topic_id):
     cfg = _load_cfg(slug)
     eng = init_db(current_app.config["SHORTBOT_DB_PATH"])
     row = next((r for r in all_bank_topics(eng, slug) if int(r["id"]) == topic_id), None)
-    if row is None:
+    if row is None or row["status"] != "active":
         abort(404)
+    # ÜRETİME VERİLEN KONU ANINDA 'used' — aksi hâlde kullanıcı (ya da LLM, banka
+    # prompt'u aktif kayıtları görüyor) aynı konuyu ikinci kez üretebilirdi.
+    mark_bank_topic_used(eng, topic_id)
     launch_pipeline(
         channel=cfg,
         settings=current_app.config["SHORTBOT_SETTINGS"],
