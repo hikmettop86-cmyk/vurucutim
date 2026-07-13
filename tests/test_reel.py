@@ -226,3 +226,12 @@ def test_olu_hava_video_suresinden_kesilir(tmp_path):
     _call(_tail_deps(calls, [5.0, 5.0, 5.0]), tmp_path)   # hiç düzelmiyor
     kw = next(c[1] for c in calls if isinstance(c, tuple) and c[0] == "assemble")
     assert kw["duration_s"] == pytest.approx(30.0 - (5.0 - 0.4))
+
+
+def test_montaja_vurgu_darbeleri_gecer(tmp_path):
+    """TEPE anı montaja punch olarak gitmeli — yoksa görüntü ritmi sesle kilitlenmez."""
+    calls = []
+    _call(_deps(calls), tmp_path)
+    kw = next(c[1] for c in calls if isinstance(c, tuple) and c[0] == "assemble")
+    assert kw["punch_at"], "vurgu darbesi montaja hiç geçmedi"
+    assert all(0 <= t <= kw["duration_s"] for t in kw["punch_at"])

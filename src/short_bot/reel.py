@@ -626,6 +626,10 @@ def produce_reel_video(
         except (FileNotFoundError, OSError) as e:
             log.info(f"  reel: '{profile.music_mood}' müziği yok ({e}), mevcut müzik")
 
+    punches = punch_times(numbers, peak_end_s)
+    if punches:
+        log.info(f"  reel: vurgu punch-in @ "
+                 + ", ".join(f"{t:.1f}s" for t in punches))
     d.assemble_reel(
         clip_paths=clip_paths, seg_spans=seg_spans, frames_dir=frames_dir,
         narration_path=mp3, music_path=music_path, out_path=out_path,
@@ -638,7 +642,7 @@ def produce_reel_video(
         # VURGU PUNCH-IN: sayı söylenirken ve TEPE anında görüntü bir tık yaklaşır.
         # Kesme efektleri ritmi zamanlayıcıyla veriyordu; bu, ritmi İÇERİĞE bağlayan
         # tek hamle — insan kurgucunun yaptığı, otomasyonun yapmadığı şey.
-        punch_at=punch_times(numbers, peak_end_s),
+        punch_at=punches,
         zoom=("zoom" in profile.transitions),
         subject_xs=subject_xs,
         color_grade=getattr(reel, "color_grade", True),

@@ -45,28 +45,33 @@ def punch_times(numbers: list[dict] | None, peak_s: float | None) -> list[float]
     return select_punches(ts)
 
 
-def punch_vf(times: list[float], *, w: int = 1080, h: int = 1920) -> str:
+def punch_vf(times: list[float], *, w: int = 1080, h: int = 1920,
+             fps: int = 30) -> str:
     """Zoom darbelerini ffmpeg filtre zincirine çevirir. Darbe yoksa boş string.
 
-    ``scale`` kareyi t'ye bağlı olarak BÜYÜTÜR (``eval=frame`` şart: varsayılanda
-    ifade yalnız BİR kez hesaplanır ve zoom sabit kalır), merkez ``crop`` fazlasını
-    keser → merkeze doğru yaklaşma.
+    ``zoompan`` kullanılır — kadrajı MERKEZDEN yakınlaştırmanın çalışan tek yolu bu.
 
-    Neden crop ile daraltıp scale ile büyütmüyoruz: ``crop`` filtresinin ``eval``
-    seçeneği YOKTUR — w/h bir kez hesaplanır, zaman ifadesi işlemez (denendi).
+    ÇALIŞMAYAN yollar (ikisi de denendi ve ÖLÇÜLDÜ):
+      • ``crop`` ile daraltmak: crop'un ``eval`` seçeneği YOK, w/h bir kez hesaplanır.
+      • ``scale(eval=frame)`` + ``crop``: kare büyüyor ama crop'un ``iw``'si BAĞLANTININ
+        sabit genişliğini görüyor, gerçek kare genişliğini değil → x hep 0 çıkıyor ve
+        zoom merkeze değil SOL-ÜST KÖŞEYE çakılıyor (karelerde doğrulandı: darbe
+        anında sol-üstteki içerik yerinde kalıyordu, oysa merkez zoomda kadraj dışına
+        çıkmalıydı).
+
+    zoompan'de zaman ``on`` (çıkış kare no) üzerinden kurulur; d=1 olduğu için
+    ``t = on/fps``.
     """
     pts = select_punches(times)
     if not pts:
         return ""
     d = PUNCH_DECAY_S
+    tv = f"(on/{fps})"   # zoompan'de 't' yok — kare numarasından zaman üret
     # term(p): darbe anında 1, d saniye sonra 0 — aradaki her yerde doğrusal iner.
-    terms = [f"between(t,{p:.3f},{p + d:.3f})*(1-(t-{p:.3f})/{d:g})" for p in pts]
+    terms = [f"between({tv},{p:.3f},{p + d:.3f})*(1-({tv}-{p:.3f})/{d:g})" for p in pts]
     peak = terms[0]
     for t in terms[1:]:
         peak = f"max({peak},{t})"
     z = f"1+{PUNCH_AMOUNT:g}*({peak})"
-    # Boyutlar ÇİFT olmalı (yuv420p) — tek sayı libx264'ü düşürür.
-    # İfadeler TIRNAK içinde: içlerindeki virgüller (between(t,a,b)) aksi hâlde
-    # filtre seçeneği ayracı sanılır ve grafik ayrıştırılamaz.
-    return (f"scale=w='ceil({w}*({z})/2)*2':h='ceil({h}*({z})/2)*2':eval=frame,"
-            f"crop={w}:{h}")
+    return (f"zoompan=z='{z}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
+            f":d=1:s={w}x{h}:fps={fps}")

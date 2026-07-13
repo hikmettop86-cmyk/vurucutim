@@ -159,7 +159,7 @@ def assemble_reel(
         # VURGU PUNCH-IN: sayı/tepe anlarında görüntü bir tık yaklaşır — sesle
         # görüntüyü kilitleyen tek hamle. Overlay'den ÖNCE uygulanır: yazılar
         # zoom'la birlikte büyümemeli, yoksa altyazı kadrajdan taşar.
-        pvf = punch_vf(punch_at or [], w=W, h=H)
+        pvf = punch_vf(punch_at or [], w=W, h=H, fps=fps)
         if pvf:
             parts = [f"[0:v]{pvf}[pv]", "[pv][1:v]overlay=0:0[v]"]
         else:
