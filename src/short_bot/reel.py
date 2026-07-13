@@ -55,18 +55,26 @@ class ReelDeps:
 def _match_with_fallback(d, query, *, topic_q, api_key, cache_dir, verify,
                          vision_call, footage_deps=None, topic_pool=None, anchor="",
                          ffmpeg_path="ffmpeg", budget=None, reuse_clips=None,
-                         reuse_idx=0, exclude=None, context=""):
+                         reuse_idx=0, exclude=None, context="", seen=None):
     """Footage eşleştirmeyi kademeli, KONUDA-KALAN yedeklerle dener.
 
-    Sıra: (1) tam sorgu, (2) ilk 2 kelime, (3) konu tohumu, (4) kanal çıpası —
-    hepsi vision + topic_pool gate'li. Son çare (5): çıpa sorgusu vision'sız
-    (arama TERİMİ çıpa olduğundan sonuç konuda; ham ilk-2-kelime garbage grab YOK).
-    ``footage_deps`` kaynak zincirini (öncelik-sıralı) taşır.
+    KAPI MERDİVENİ (hepsi vision'lı):
+      1. KATI  — sorgunun ANA ÖZNESİ görünmeli: tam sorgu → ilk 2 kelime → konu
+         tohumu → kanal çıpası.
+      2. GEVŞEK — ana özne yoksa da BAĞLAMA UYAN destekleyici b-roll kabul (kondor
+         videosunda süzülen kartal, And Dağları). Gerçek koşuda katı kapı hiçbir
+         şey geçirmeyince vision'SIZ çöp alınıyordu (dağda yürüyen turist);
+         bağlam-b-roll ondan çok daha iyidir.
+      3. TEKRAR — bu videonun kabul edilmiş kliplerinden dönüşümlü biri.
+      4. SON ÇARE — vision'sız arama. Artık neredeyse hiç ulaşılmaz.
 
-    Dönüş: ``(clip, gated)`` — ``gated`` False ise klip vision kapısından GEÇMEDİ
-    (son çare). Çağıran onu tekrar havuzuna KOYMAZ: gerçek hata short_id=171'de
-    doğrulanmamış bir insan-anatomi illüstrasyonu tekrar çıpası olup videonun
-    22 saniyesini ele geçirmişti.
+    ``seen``: video-geneli vision yargı önbelleği → aynı aday iki kez yargılanmaz,
+    bütçe yalnız YENİ adaylara harcanır.
+
+    Dönüş: ``(clip, gated)`` — ``gated`` False ise klip vision kapısından GEÇMEDİ.
+    Çağıran onu tekrar havuzuna KOYMAZ: gerçek hata short_id=171'de doğrulanmamış
+    bir insan-anatomi illüstrasyonu tekrar çıpası olup videonun 22 saniyesini
+    ele geçirmişti.
     """
     words = query.split()
     stages = [query]
@@ -79,18 +87,33 @@ def _match_with_fallback(d, query, *, topic_q, api_key, cache_dir, verify,
     # Tarama bütçesi SEGMENT boyunca paylaşılır: tüm fallback aşamaları aynı
     # kovadan yer → tek segment onlarca Storyblocks indirmesiyle dakikalar yakamaz.
     b = budget if budget is not None else {"gate": 0, "dl": 0}
+    # 1) KATI kapı: sorgunun ana öznesi görünmeli.
     for q in stages:
         clip = d.match_beat_clip(q, api_key=api_key, cache_dir=cache_dir,
                                  verify=verify, vision_call=vision_call,
                                  deps=footage_deps, topic_pool=topic_pool,
                                  ffmpeg_path=ffmpeg_path, budget=b,
-                                 exclude=exclude, context=context)
+                                 exclude=exclude, context=context, seen=seen)
         if clip is not None:
             return clip, True
-    # Vision kapısından geçen aday YOK. Çıpayı vision'sız aramak ÇÖP getiriyor
-    # (gerçek hata: soyut 'oto-kanibalizm' beat'i → çıpa 'science history' →
-    # tablo pazarı açılış karesi). Bunun yerine: bu videoda ZATEN kabul edilmiş
-    # (konuda) bir klibi tekrar kullan — tekrar, alakasızdan iyidir.
+    # 2) GEVŞEK kapı: ana özne yok ama BAĞLAMA uyan destekleyici b-roll kabul.
+    # Önbellekteki adaylar yeniden yargılanmaz → bu geçiş neredeyse bedava.
+    # Bütçe TAZE: katı geçişte tükendiyse gevşek geçiş hiç aday göremezdi.
+    if verify and vision_call is not None:
+        for q in stages:
+            clip = d.match_beat_clip(q, api_key=api_key, cache_dir=cache_dir,
+                                     verify=True, vision_call=vision_call,
+                                     deps=footage_deps, topic_pool=topic_pool,
+                                     ffmpeg_path=ffmpeg_path,
+                                     budget={"gate": 0, "dl": 0},
+                                     exclude=exclude, context=context,
+                                     relaxed=True, seen=seen)
+            if clip is not None:
+                log.info(f"  footage: '{query[:30]}' katı kapıdan geçmedi → "
+                         f"BAĞLAMA UYAN b-roll kabul edildi")
+                return clip, True
+    # 3) TEKRAR: bu videoda ZATEN kabul edilmiş (konuda) bir klibi yeniden kullan —
+    # tekrar, alakasızdan iyidir.
     if reuse_clips:
         # DÖNÜŞÜMLÜ seç, hep sonuncuyu DEĞİL: eski kod reuse_clips[-1] diyordu, bu
         # yüzden arka arkaya birkaç segment kapıdan geçemeyince hepsi AYNI klibi
@@ -278,6 +301,10 @@ def produce_reel_video(
     # klibi buraya girmez — yoksa tek çöp görüntü tüm videonun çıpası olur.
     reuse_pool: list[Path] = []
     reuse_idx = 0
+    # Video-geneli vision yargı önbelleği: aynı aday İKİ KEZ yargılanmaz. Gerçek
+    # koşuda 67 vision çağrısının çoğu aynı martı/pelikan/kelebek döngüsüydü;
+    # bütçe onlara gidince YENİ adaylara hiç sıra gelmiyordu.
+    seen_verdicts: dict = {}
     for si in order:
         query = timeline.seg_queries[si]
         if query is None:
@@ -298,7 +325,7 @@ def produce_reel_video(
                 budget={"gate": 0, "dl": 0},
                 reuse_clips=reuse_pool, reuse_idx=reuse_idx,
                 exclude=set(used_clips),
-                context=_video_context)
+                context=_video_context, seen=seen_verdicts)
             if clip is None or clip in got:
                 break        # yeni klip gelmedi → mevcutlarla yetin (fail-open)
             if clip in reuse_pool:

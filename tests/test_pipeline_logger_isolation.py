@@ -61,6 +61,37 @@ def test_sub_logger_only_writes_to_active_run(tmp_path):
     )
 
 
+def test_reel_pipeline_modules_reach_the_run_log(tmp_path):
+    """Reel üretiminin TÜM aşamaları run loguna düşmeli.
+
+    Bunlar listede yokken reel koşusunun logu sadece 'reel modu: footage-sürüklü
+    üretim' satırında donuyordu: kurgucunun seçtiği müzik/SFX, footage red
+    gerekçeleri, faz süreleri ve 'SÜRE ÖZET' yalnız stdout'a gidiyordu — panelden
+    bir reel koşusunun neden yavaş/yanlış olduğu GÖRÜLEMİYORDU.
+    """
+    log_path = tmp_path / "reel_run.log"
+    logger = _setup_logger(log_path)
+    reel_modules = (
+        "short_bot.reel",             # faz süreleri, alt-kesim, SFX, müzik
+        "short_bot.reel_director",    # kurgucunun kararı + gerekçesi
+        "short_bot.reel_render",
+        "short_bot.footage_matcher",  # vision red gerekçeleri
+        "short_bot.footage_sources",
+        "short_bot.tts.align",
+    )
+    try:
+        _set_active_run_log_path(str(log_path))
+        for name in reel_modules:
+            logging.getLogger(name).info(f"MARKER_{name}")
+    finally:
+        _clear_active_run_log_path()
+        _teardown_logger(logger)
+
+    text = log_path.read_text(encoding="utf-8")
+    missing = [n for n in reel_modules if f"MARKER_{n}" not in text]
+    assert not missing, f"run loguna düşmeyen reel modülleri: {missing}"
+
+
 def test_sub_logger_writes_when_no_active_run_set(tmp_path):
     """Backward-compat: if no active run is set in the thread (e.g. test
     or one-off CLI), the run-attached file handler still receives logs
