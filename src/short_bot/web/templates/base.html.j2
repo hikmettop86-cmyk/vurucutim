@@ -73,13 +73,10 @@
         <a href="/" class="nav-link hover:text-claude-text {% if p == '/' %}active{% endif %}">Dashboard</a>
         <a href="/activity" class="nav-link hover:text-claude-text {% if p.startswith('/activity') %}active{% endif %}">Akış</a>
         <a href="/shorts" class="nav-link hover:text-claude-text {% if p.startswith('/shorts') %}active{% endif %}">Shorts</a>
-        <a href="/rss" class="nav-link hover:text-claude-text {% if p.startswith('/rss') %}active{% endif %}">RSS</a>
         <a href="{{ url_for('feeds.list_view') }}" class="nav-link hover:text-claude-text {% if p.startswith('/feeds') %}active{% endif %}">RSS Havuzu</a>
         <a href="/channels" class="nav-link hover:text-claude-text {% if p.startswith('/channels') %}active{% endif %}">Kanallar</a>
         <a href="/youtube" class="nav-link hover:text-claude-text {% if p.startswith('/youtube') %}active{% endif %}">YouTube</a>
         <a href="/scheduler/timeline" class="nav-link hover:text-claude-text {% if p.startswith('/scheduler') %}active{% endif %}">Cron</a>
-        <a href="/trends" class="nav-link hover:text-claude-text {% if p.startswith('/trends') %}active{% endif %}">Trendler</a>
-        <a href="/insights" class="nav-link hover:text-claude-text {% if p.startswith('/insights') %}active{% endif %}">İçgörüler</a>
         <a href="/logs" class="nav-link hover:text-claude-text {% if p.startswith('/logs') %}active{% endif %}">Loglar</a>
       </div>
       <span class="flex items-center gap-2 text-xs flex-shrink-0">
