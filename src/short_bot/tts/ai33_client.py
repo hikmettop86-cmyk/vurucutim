@@ -173,21 +173,31 @@ def synthesize(
                        or task.get("output_uri") or task.get("audio_url"))
                 if not url:
                     raise Ai33Error(f"ai33 task bitti ama ses URL'i yok (task={task_id})")
-                # Ses SUNUCUDA hazır (kredi harcandı) — indirme sırasındaki tek bir
-                # bağlantı kopması (10054/ChunkedEncoding) tüm üretimi düşürmesin.
+                # Ses SUNUCUDA hazır (kredi harcandı) — indirmedeki geçici bir arıza
+                # tüm üretimi düşürmesin. İki tür geçici arıza var ve İKİSİ DE
+                # yeniden denenmeli:
+                #   • bağlantı kopması (10054/ChunkedEncoding) → istisna fırlatır
+                #   • sunucu 5xx (gözlenen: HTTP 503) → GEÇERLİ bir yanıt döner,
+                #     bu yüzden istisna yakalamak yetmiyordu (gerçek hata: 503
+                #     ilk turda kabul edilip üretimi öldürdü).
+                # 4xx yeniden denenmez: kalıcıdır, beklemenin faydası yok.
                 audio = None
-                last_err: Exception | None = None
+                last_err: Exception | str | None = None
                 for attempt in range(1, DOWNLOAD_RETRIES + 1):
                     try:
-                        audio = sess.get(url, timeout=DOWNLOAD_TIMEOUT_S)
-                        break
+                        resp = sess.get(url, timeout=DOWNLOAD_TIMEOUT_S)
                     except Exception as e:
                         last_err = e
-                        if attempt < DOWNLOAD_RETRIES:
-                            sleep(2.0 * attempt)
+                    else:
+                        if resp.status_code < 500:
+                            audio = resp
+                            break
+                        last_err = f"HTTP {resp.status_code}"
+                    if attempt < DOWNLOAD_RETRIES:
+                        sleep(2.0 * attempt)
                 if audio is None:
                     raise Ai33Error(
-                        f"ai33 ses indirme {DOWNLOAD_RETRIES} denemede de koptu "
+                        f"ai33 ses indirme {DOWNLOAD_RETRIES} denemede de başarısız "
                         f"(task={task_id}): {last_err}")
                 _check_status(audio, "ses indirme")
                 out_path.write_bytes(audio.content)
