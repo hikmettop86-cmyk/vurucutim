@@ -8,6 +8,9 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from short_bot.reel_framing import SUBJECT_BIAS, ken_burns, ken_burns_vf
+from short_bot.reel_grade import grade_vf, luma_delta, measure_luma
+
 W, H = 1080, 1920
 _ZOOMPAN = ("zoompan=z='if(lte(on,9),1.16-0.0178*on,min(1.06,1.0+0.0006*(on-9)))'"
             ":x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s=1080x1920:fps=30")
@@ -39,15 +42,43 @@ _PUNCH = ("zoompan=z='if(lte(on,45),1.25-0.0055*on,1.0)'"
 
 def _normalize_segment(clip: Path, span_s: float, out: Path, *, fps: int,
                        ffmpeg: str, zoom: bool, start_s: float = 0.0,
-                       punch: bool = False) -> None:
-    base = f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H}"
-    zoom_f = _PUNCH if punch else _ZOOMPAN
-    vf_zoom = f"{base},{zoom_f},format=yuv420p"
-    vf_plain = f"{base},fps={fps},format=yuv420p"
+                       punch: bool = False, subject_x: float | None = None,
+                       move: dict | None = None, grade: str = "") -> None:
+    """Klibi 9:16 segmente çevir: ÖZNE-FARKINDA crop + Ken Burns + master grade.
+
+    ÖZNE-FARKINDA CROP: 16:9'u 9:16'ya kırparken hep MERKEZDEN kesiyorduk —
+    araştırma bunu otomatik faceless videonun "1 numaralı görsel ele veren işareti"
+    diye adlandırıyor (özne kenardaysa yarısı kesilir). Özne konumunu ZATEN
+    biliyoruz (locate_subject); artık kadraj ona göre kayıyor.
+
+    GRADE: farklı kaynaklardan gelen kliplerin renk zıplaması, "bunu bir script
+    birleştirdi" diye bağırır. Ortak look + klibe özel parlaklık normalizasyonu.
+    """
+    # Özneyi izleyen crop. Kaynak boyutu bilinmediği için crop'u ifadeyle kur:
+    # scale ile kısa kenarı doldur, sonra ÖZNENİN etrafından kes.
+    if subject_x is None:
+        crop = f"crop={W}:{H}"
+    else:
+        sx = min(1.0, max(0.0, float(subject_x)))
+        # (iw-ow) kadar yer var; özneyi ortala, kenara dayanmasın diye SUBJECT_BIAS.
+        cx = f"(iw-{W})/2+((iw*{sx:g}-{W}/2)-(iw-{W})/2)*{SUBJECT_BIAS:g}"
+        crop = f"crop={W}:{H}:x='max(0,min(iw-{W},{cx}))':y='(ih-{H})/2'"
+    base = f"scale={W}:{H}:force_original_aspect_ratio=increase,{crop}"
+
+    if punch:
+        motion = _PUNCH
+    elif move is not None:
+        motion = ken_burns_vf(move, w=W, h=H, fps=fps,
+                              frames=max(1, int(span_s * fps)), subject_x=subject_x)
+    else:
+        motion = _ZOOMPAN
+    tail = f",{grade}" if grade else ""
+    vf_zoom = f"{base},{motion}{tail},format=yuv420p"
+    vf_plain = f"{base},fps={fps}{tail},format=yuv420p"
     # start_s: AYNI klibin farklı anından başla (alt-kesim çeşitliliği) — hızlı
     # kesimde bir beat'in alt-kesimleri aynı klibi tekrar kullanabilir.
     seek = ["-ss", f"{start_s:.3f}"] if start_s > 0 else []
-    for vf in ([vf_zoom, vf_plain] if (zoom or punch) else [vf_plain]):
+    for vf in ([vf_zoom, vf_plain] if (zoom or punch or move) else [vf_plain]):
         p = _run([ffmpeg, "-y", "-stream_loop", "-1", *seek, "-i", str(clip),
                   "-t", f"{span_s:.3f}", "-vf", vf, "-an",
                   "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", str(out)])
@@ -71,6 +102,9 @@ def assemble_reel(
     sfx_at_cut: list | None = None,
     zoom: bool = True, clip_starts: list | None = None,
     hook_punch: bool = False,
+    subject_xs: list | None = None,   # alt-kesim başına öznenin yatay konumu (0-1)
+    color_grade: bool = True,         # master renk grade + klip normalizasyonu
+    seed: int = 0,                    # Ken Burns hareketi (deterministik)
 ) -> Path:
     """Segment klipleri + overlay + ses → mp4. clip_paths ve seg_spans aynı boyda."""
     out_path = Path(out_path)
@@ -85,13 +119,28 @@ def assemble_reel(
         td = Path(td)
         seg_files = []
         starts = list(clip_starts or [])
+        # MASTER GRADE: klip başına parlaklık ölçümü ÖNBELLEKLENİR — aynı klip birçok
+        # alt-kesimde geçiyor, her seferinde ölçmek boşuna.
+        luma_cache: dict[str, float] = {}
         for i, (clip, (a, b)) in enumerate(zip(clip_paths, seg_spans)):
             span = max(0.5, b - a)
             sf = td / f"seg_{i}.mp4"
+            g = ""
+            if color_grade:
+                key = str(clip)
+                if key not in luma_cache:
+                    luma_cache[key] = measure_luma(Path(clip), ffmpeg_path)
+                g = grade_vf(luma_delta(luma_cache[key]))
             _normalize_segment(Path(clip), span, sf, fps=fps,
                                ffmpeg=ffmpeg_path, zoom=zoom,
                                start_s=(starts[i] if i < len(starts) else 0.0),
-                               punch=(hook_punch and i == 0))
+                               punch=(hook_punch and i == 0),
+                               subject_x=(subject_xs[i]
+                                          if subject_xs and i < len(subject_xs)
+                                          else None),
+                               move=(None if (hook_punch and i == 0)
+                                     else ken_burns(seed=seed, index=i)),
+                               grade=g)
             seg_files.append(sf)
         lst = td / "concat.txt"
         lst.write_text("".join(f"file '{f.as_posix()}'\n" for f in seg_files),

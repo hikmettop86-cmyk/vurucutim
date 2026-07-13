@@ -106,19 +106,6 @@ def _segment_word_counts(narration: Narration) -> list[int]:
     return [len(s.split()) for s in narration.segments()]
 
 
-def _proportional_times(words: list[str], duration_s: float) -> list[tuple[float, float]]:
-    """Kelimelere karakter uzunluğuna orantılı, boşluksuz zaman dilimleri ver."""
-    weights = [max(1, len(w)) for w in words]
-    total = sum(weights)
-    times: list[tuple[float, float]] = []
-    cursor = 0.0
-    for i, wgt in enumerate(weights):
-        span = duration_s * wgt / total
-        start = cursor
-        end = duration_s if i == len(weights) - 1 else cursor + span
-        times.append((start, end))
-        cursor = end
-    return times
 
 
 def build_timeline(
@@ -144,15 +131,12 @@ def build_timeline(
             words_flat.append(w)
             segs_flat.append(seg_idx)
 
-    if len(asr_words) == len(words_flat) and asr_words:
-        times = [(w.start_s, w.end_s) for w in asr_words]
-    else:
-        if asr_words:
-            log.warning(
-                f"ASR kelime sayısı ({len(asr_words)}) anlatımla "
-                f"({len(words_flat)}) tutmadı — orantılı dağıtım kullanılıyor"
-            )
-        times = _proportional_times(words_flat, duration_s)
+    # Kelime SAYISI tutmazsa hizalamayı ATMA — EŞLEŞTİR. whisper metni senaryoyla
+    # aynı kelimelere bölmez ("altı"→"6"), yani sayı sık sık tutmaz ve bu yol
+    # pratikte hep orantılı dağıtıma düşüyordu: altyazı sese hiç kilitlenmiyordu
+    # (aynı kusur reel yolunda ölçüldü — ikinci yarıda 3.2sn gecikme).
+    from short_bot.caption_align import align_to_asr
+    times = align_to_asr(words_flat, asr_words, duration_s)
 
     timed = [TimedWord(word=w, start_s=t[0], end_s=t[1], seg=s)
              for w, s, t in zip(words_flat, segs_flat, times)]

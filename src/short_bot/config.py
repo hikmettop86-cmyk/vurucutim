@@ -149,6 +149,13 @@ class ReelConfig(BaseModel):
     fast_cuts: bool = True      # segment-içi hızlı kesim (1.5-3sn'de b-roll değişir)
     number_pop: bool = True     # anlatımdaki sayıları ekranda büyük vurgula
     visual_loop: bool = True    # kapanış klibi = hook klibi (loop hissi)
+    # ÖZNE-FARKINDA KADRAJ: 16:9 → 9:16 kırpma öznenin ETRAFINDAN yapılır.
+    # Merkez-crop, otomatik faceless videonun "1 numaralı görsel ele veren işareti"
+    # (özne kenardaysa yarısı kesilir).
+    subject_framing: bool = True
+    # MASTER RENK GRADE: farklı kaynaklardan gelen kliplerin renk ZIPLAMASI
+    # "bunu bir script birleştirdi" diye bağırır. Ortak look + klip normalizasyonu.
+    color_grade: bool = True
     # AI kurgucu (2026-07-13): anlatımı okuyup tempo/efekt/SFX/müzik seçer.
     # Kapalıysa kararlar eski seed-hash havuzlarından gelir (içerikten habersiz).
     ai_director: bool = True

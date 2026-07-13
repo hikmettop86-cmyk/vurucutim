@@ -292,6 +292,9 @@ def produce_reel_video(
     # zaten whisper çalıştırdığımızdan denetim bedava: duyulanı senaryoyla kıyasla.
     script = narration.full_text()
     mp3 = work_dir / "narration.mp3"
+    # Senaryo ve duyulan metin LOGA yazılır: anlatım geçici dizinde üretilip silindiği
+    # için, sonradan "video neyi söyledi, neyi söylemedi" sorusunu ancak log yanıtlar.
+    log.info(f"  reel[ses] senaryo: {script}")
     for attempt in range(1, TTS_FIDELITY_RETRIES + 2):
         d.synthesize(script, voice_id=reel.voice_id, api_key=ai33_api_key,
                      out_path=mp3, speed=reel.speed)
@@ -309,7 +312,11 @@ def produce_reel_video(
             log.warning("  reel: whisper kelime çıkaramadı, TTS sadakati denetlenemedi")
             break
 
-        drop = worst_drop(script, " ".join(w.word for w in words))
+        heard = " ".join(w.word for w in words)
+        drop = worst_drop(script, heard)
+        log.info(f"  reel[ses] duyulan: {heard}")
+        log.info(f"  reel[ses] en uzun bitişik kayıp: {drop.count} kelime"
+                 + (f" → '{drop.phrase}'" if drop.count else ""))
         if drop.ok:
             break
         if attempt <= TTS_FIDELITY_RETRIES:

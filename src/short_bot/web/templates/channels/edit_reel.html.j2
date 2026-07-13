@@ -219,6 +219,10 @@
               {% if not c.reel or c.reel.ai_director %}checked{% endif %}> 🎬 AI kurgucu</label>
             <label class="flex items-center gap-2" title="Müzik konuşma altında otomatik kısılır, boşluklarda yükselir. Kapalıysa müzik sabit seviyede kalır ve enerji taşımaz."><input type="checkbox" name="reel_music_duck"
               {% if not c.reel or c.reel.music_duck %}checked{% endif %}> 🎚️ Müzik ducking</label>
+            <label class="flex items-center gap-2" title="16:9 klibi 9:16'ya kırparken kadraj ÖZNENİN etrafından kesilir. Kapalıysa hep merkezden kesilir ve kenardaki özne yarım kalır."><input type="checkbox" name="reel_subject_framing"
+              {% if not c.reel or c.reel.subject_framing %}checked{% endif %}> 🎯 Özne-farkında kadraj</label>
+            <label class="flex items-center gap-2" title="Tüm kliplere ortak renk grade + parlaklık normalizasyonu. Kapalıysa farklı kaynaklardan gelen klipler arasında renk zıplar."><input type="checkbox" name="reel_color_grade"
+              {% if not c.reel or c.reel.color_grade %}checked{% endif %}> 🎨 Renk grade</label>
             <label class="flex items-center gap-2"><input type="checkbox" name="reel_arrows_enabled"
               {% if not c.reel or c.reel.arrows_enabled %}checked{% endif %}> Oklar</label>
             <label class="flex items-center gap-2"><input type="checkbox" name="reel_flash"

@@ -9,6 +9,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from short_bot.caption_align import align_to_asr
 from short_bot.text_normalize import strip_non_turkish_diacritics
 
 
@@ -156,18 +157,6 @@ class ReelTimeline:
     close: str
 
 
-def _proportional(words: list[str], duration_s: float) -> list[tuple[float, float]]:
-    weights = [max(1, len(w)) for w in words]
-    total = sum(weights)
-    out, cursor = [], 0.0
-    for i, w in enumerate(weights):
-        span = duration_s * w / total
-        end = duration_s if i == len(weights) - 1 else cursor + span
-        out.append((cursor, end))
-        cursor = end
-    return out
-
-
 def build_reel_timeline(narration: "ReelNarration", asr_words: list[TimedWord],
                         *, duration_s: float) -> "ReelTimeline":
     if duration_s <= 0:
@@ -180,10 +169,7 @@ def build_reel_timeline(narration: "ReelNarration", asr_words: list[TimedWord],
             words_flat.append(w)
             segs_flat.append(seg_idx)
 
-    if len(asr_words) == len(words_flat) and asr_words:
-        times = [(w.start_s, w.end_s) for w in asr_words]
-    else:
-        times = _proportional(words_flat, duration_s)
+    times = align_to_asr(words_flat, asr_words, duration_s)
 
     timed = [TimedWord(word=w, start_s=t[0], end_s=t[1], seg=s)
              for w, s, t in zip(words_flat, segs_flat, times)]
