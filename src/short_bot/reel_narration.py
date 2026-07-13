@@ -86,6 +86,17 @@ HARD RULES:
           warrior"  → stok kütüphane bir ESKRİMCİ döndürür. FELAKET.
     İYİ:  query "bacteriophage virus microscope" (videonun gerçek öznesi).
   Her sorgu, videonun ANA KONUSUYLA doğrudan ilişkili somut bir nesne olmalı.
+- ÖZNEYİ ADIYLA YAZ (ÇOK ÖNEMLİ): HER visual_query, videonun öznesini ADIYLA
+  içermeli (tür/nesne adı) — genel bir KATEGORİ adı DEĞİL. Genel kategori, stok
+  kütüphaneden BAŞKA BİR CANLI getirir ve izleyici yanlış hayvanı görür.
+    KÖTÜ: konu kanguru yavrusu → "tiny newborn animal"       → stok bir KUŞ getirdi
+          konu kanguru yavrusu → "climbing struggling animal" → stok KEÇİ getirdi
+          konu kanguru yavrusu → "desert wildlife predator"   → stok VAŞAK getirdi
+    İYİ:  "newborn kangaroo joey", "kangaroo joey climbing pouch",
+          "kangaroo mother pouch", "dingo australia"
+  Kural: sorguda konunun ADI (kangaroo / condor / bee / bacteriophage) GEÇMELİ.
+  "Bulunabilir olsun" kuralı bunu EZMEZ: yanlış özneyi bulmaktansa hiç bulmamak
+  iyidir — kod, bulamayınca konunun dünyasından güvenli b-roll'e düşer.
 - Plain spoken language, no markdown/emoji/brackets. Add a genuinely interesting
   angle, not a dry list.
 {hook_block}Return ONLY the JSON object."""
