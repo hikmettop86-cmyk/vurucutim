@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Callable
 
 from short_bot.audio_probe import probe_duration_s as _probe
+from short_bot.audio_probe import trailing_silence_s as _tail
 from short_bot.footage_matcher import FootageDeps, SubjectPos, download_banked
 from short_bot.footage_matcher import locate_subject as _locate
 from short_bot.footage_matcher import match_beat_clip as _match
@@ -68,6 +69,14 @@ PREFLIGHT_BACKOFF_S = 8
 # ai33 arada bir metnin bir öbeğini sessizce okumadan geçiyor (bkz. tts/fidelity).
 # Arıza aralıklı olduğu için yeniden göndermek çoğu zaman düzeltiyor.
 TTS_FIDELITY_RETRIES = 2
+# Öbek düşürdüğünde ai33 dosyayı beklenen uzunluğa SESSİZLİKLE dolduruyor. Ölçüldü:
+# sağlam seslendirmede sondaki sessizlik 0.00sn, öbek düşen üç koşuda 3.4 / 3.8 / 6.9sn.
+# Bu işaret whisper'dan BAĞIMSIZ — ve gerekli: whisper sessizlikte metin uydurup
+# sadakat denetimini kandırabiliyor (short 759'da tam olarak bunu yaptı).
+TTS_MAX_TAIL_S = 1.5
+# Kalması gereken nefes payı. Fazlası kesilir: 7 saniye ölü hava izleyiciye videonun
+# bittiğini söyler ve döngüyü kırar.
+TAIL_KEEP_S = 0.4
 
 
 @dataclass(frozen=True)
@@ -76,6 +85,7 @@ class ReelDeps:
     health_check: Callable = _health
     synthesize: Callable = _synth
     probe_duration_s: Callable = _probe
+    trailing_silence_s: Callable = _tail
     transcribe_words: Callable = _transcribe
     match_beat_clip: Callable = _match
     locate_subject: Callable = _locate
@@ -288,8 +298,14 @@ def produce_reel_video(
     # 3) TTS + 4) süre/hizalama — SADAKAT DENETİMİ İKİSİNİ BİRBİRİNE BAĞLAR.
     # ai33 metnin bir öbeğini okumadan geçebiliyor: hata dönmüyor, ses geçerli,
     # süresi bile normal. Altyazılar senaryodan üretildiği için okunmamış kelimeler
-    # ekranda görünmeye devam eder ve video ileri zıplamış gibi olur. Hizalama için
-    # zaten whisper çalıştırdığımızdan denetim bedava: duyulanı senaryoyla kıyasla.
+    # ekranda görünmeye devam eder ve video ileri zıplamış gibi olur.
+    #
+    # İKİ BAĞIMSIZ İŞARETE bakılır, çünkü tek başına ikisi de kandırılabiliyor:
+    #   • SONDAKİ SESSİZLİK — öbek düşünce ai33 dosyayı sessizlikle dolduruyor.
+    #     Ölçüldü: sağlam 0.00sn, bozuk 3.4/3.8/6.9sn. whisper'dan bağımsızdır.
+    #   • OKUNMAYAN ÖBEK — duyulan metin senaryoyla kıyaslanır (bkz. tts/fidelity).
+    # İkincisi tek başına yetmedi: whisper sessizlikte metin UYDURUP denetimi
+    # geçirdi (gerçek hata, short 759) — bu yüzden sessizlik ölçüsü şart.
     script = narration.full_text()
     mp3 = work_dir / "narration.mp3"
     # Senaryo ve duyulan metin LOGA yazılır: anlatım geçici dizinde üretilip silindiği
@@ -301,32 +317,39 @@ def produce_reel_video(
         _phase("tts(ai33)")
 
         duration_s = d.probe_duration_s(mp3, ffprobe_path="ffprobe")
+        tail = d.trailing_silence_s(mp3, duration_s=duration_s, ffmpeg_path=ffmpeg_path)
         words = d.transcribe_words(mp3, language=channel.language,
                                    quality=whisper_quality, device=whisper_device)
         _phase("whisper-hizalama")
 
-        if not words:
-            # Whisper hiç kelime çıkaramadı → sadakati YARGILAYAMAYIZ. Yeniden
-            # seslendirmek kör atış olur ve kredi yakar; olduğu gibi devam et
-            # (altyazılar zaten oransal yedeğe düşer).
-            log.warning("  reel: whisper kelime çıkaramadı, TTS sadakati denetlenemedi")
-            break
-
         heard = " ".join(w.word for w in words)
-        drop = worst_drop(script, heard)
+        drop = worst_drop(script, heard) if words else None
         log.info(f"  reel[ses] duyulan: {heard}")
-        log.info(f"  reel[ses] en uzun bitişik kayıp: {drop.count} kelime"
-                 + (f" → '{drop.phrase}'" if drop.count else ""))
-        if drop.ok:
+        log.info(f"  reel[ses] sonda sessizlik: {tail:.1f}sn | en uzun bitişik kayıp: "
+                 + (f"{drop.count} kelime" + (f" → '{drop.phrase}'" if drop.count else "")
+                    if drop else "ölçülemedi (whisper kelime çıkaramadı)"))
+
+        bad = tail > TTS_MAX_TAIL_S or (drop is not None and not drop.ok)
+        if not bad:
             break
+        why = (f"{tail:.1f}sn sessizlik bıraktı" if tail > TTS_MAX_TAIL_S
+               else f"{drop.count} kelime okumadı ('{drop.phrase}')")
         if attempt <= TTS_FIDELITY_RETRIES:
-            log.warning(f"  reel: TTS {drop.count} kelime okumadı ('{drop.phrase}')"
-                        f" → yeniden seslendiriliyor ({attempt}/{TTS_FIDELITY_RETRIES})")
+            log.warning(f"  reel: TTS {why} → yeniden seslendiriliyor "
+                        f"({attempt}/{TTS_FIDELITY_RETRIES})")
         else:
-            # Üst üste başarısız: ses eksik ama en azından altyazı onu göstermesin
-            # diye devam ediyoruz — video üretmemektense kusurlu üretmek yeğdir.
-            log.warning(f"  reel: TTS sadakati sağlanamadı ({drop.count} kelime eksik),"
-                        f" mevcut ses kullanılıyor")
+            # Üst üste başarısız: ses eksik ama video üretmemektense kusurlu üretmek
+            # yeğdir. Ölü hava aşağıda yine de kesilir.
+            log.warning(f"  reel: TTS sadakati sağlanamadı ({why}), mevcut ses kullanılıyor")
+
+    # ÖLÜ HAVAYI KES: montaj -t duration_s ile hem videoyu hem sesi burada bitirir.
+    # Konuşmasız saniyeler izleyiciye videonun bittiğini söyler ve döngüyü kırar;
+    # ayrıca altyazılar o sessizliğe yayılıp sesin gerisine düşer.
+    if tail > TAIL_KEEP_S:
+        kirpilan = tail - TAIL_KEEP_S
+        duration_s -= kirpilan
+        log.info(f"  reel[ses] sondaki {kirpilan:.1f}sn ölü hava kesildi "
+                 f"→ video {duration_s:.1f}sn")
 
     timeline = build_reel_timeline(narration, words, duration_s=duration_s)
     log.info(f"  reel: ses {duration_s:.1f}s, {len(timeline.words)} kelime")
