@@ -30,10 +30,22 @@ class ReelBeat(BaseModel):
         return v.strip()
 
 
+# Kapanış DAR: uzun kapanış close segmentini şişirir (bir koşuda videonun %27'si)
+# ve ekranı 13 saniye statik bir metin bloğu kaplar. Araştırma: outro ≤5sn, statik
+# son kare LOOP'U ÖLDÜRÜR — izleyici bittiğini görür, başa dönmez.
+CLOSE_MAX_CHARS = 120
+# Yorum sorusu AYRI alan: close'a sığdırılınca 160 karakter sınırını aşıp ÜRETİMİ
+# DÜŞÜRÜYORDU. İkisi de KONUŞULUR ama dev kapanış kartı yalnız callback'i gösterir.
+COMMENT_MAX_CHARS = 90
+
+
 class ReelNarration(BaseModel):
     hook: str = Field(min_length=5, max_length=140)
     beats: list[ReelBeat] = Field(min_length=3, max_length=6)
-    close: str = Field(min_length=5, max_length=160)
+    close: str = Field(min_length=5, max_length=CLOSE_MAX_CHARS)
+    # İKİLİ yorum sorusu (opsiyonel). Taşarsa KIRPILIR — bir karakterlik taşma
+    # yüzünden koca bir üretim (LLM + TTS + footage + montaj) çöpe gitmemeli.
+    comment: str = Field(default="", max_length=COMMENT_MAX_CHARS)
     mood: Literal["upbeat", "neutral", "calm"]
     # Hook/close KENDİ görsel sorgusu (İngilizce stok araması). Boşsa ilk/son
     # beat'in sorgusu ödünç alınır (eski davranış). Hook videonun en kritik
@@ -48,10 +60,18 @@ class ReelNarration(BaseModel):
     # düşmektense ortaya varsay).
     peak_beat: int = Field(default=-1)
 
-    @field_validator("hook", "close", mode="before")
+    @field_validator("hook", "close", "comment", mode="before")
     @classmethod
     def _norm(cls, v):
         return strip_non_turkish_diacritics(v) if isinstance(v, str) else v
+
+    @field_validator("comment", mode="before")
+    @classmethod
+    def _trim_comment(cls, v):
+        """Taşan yorum sorusunu KIRP — üretimi düşürme (bkz. COMMENT_MAX_CHARS)."""
+        if isinstance(v, str) and len(v) > COMMENT_MAX_CHARS:
+            return v[:COMMENT_MAX_CHARS].rstrip()
+        return v
 
     @model_validator(mode="after")
     def _resolve_peak(self):
@@ -94,7 +114,11 @@ class ReelNarration(BaseModel):
         return bool(hook_w and (hook_w & _content_words(self.close)))
 
     def segments(self) -> list[str]:
-        return [self.hook, *[b.text for b in self.beats], self.close]
+        """Konuşulan segmentler. Yorum sorusu KAPANIŞ SEGMENTİNİN sonuna eklenir:
+        SESLİ sorulmazsa yanıt gelmez. Ama dev kapanış KARTI yalnız ``close``u
+        gösterir (bkz. reel_render) — soru altyazıda okunur, ekranı kaplamaz."""
+        close = f"{self.close} {self.comment}".strip() if self.comment else self.close
+        return [self.hook, *[b.text for b in self.beats], close]
 
     def segment_queries(self) -> list[str | None]:
         """Segment başına footage sorgusu. hook/close kendi sorgusunu kullanır;

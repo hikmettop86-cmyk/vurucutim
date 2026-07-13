@@ -122,6 +122,13 @@ OUTPUT a JSON object:
     Close: "...ve işte bu yüzden, piramitleri köleler yapmadı."   ← geri çağırır
     KÖTÜ:  "Doğa her zaman şaşırtıcıdır."   ← hiçbir sözcüğü paylaşmıyor, video BİTER
   Kapanış hook'un en az bir ANLAMLI SÖZCÜĞÜNÜ tekrar etmeli. No "abone ol"/"subscribe".
+  KISA TUT (en fazla 120 karakter, ~12 kelime). Uzun kapanış close segmentini şişirir
+  (bir koşuda videonun %27'siydi) ve ekranı 13 saniye STATİK bir metin bloğu kaplar —
+  outro LOOP'U ÖLDÜRÜR: izleyici bittiğini görür ve başa dönmez.
+  YORUM SORUSUNU BURAYA KOYMA — onun kendi alanı var ("comment").
+- "comment": videonun İÇERİĞİNE bağlı, DÜŞÜK EFORLU yorum sorusu (en fazla 90
+  karakter). Ayrı alan çünkü "close" ile birleşince hem sınırı aşıyor hem dev
+  kapanış kartını şişiriyordu. Boş bırakılabilir.
 - "mood": one of "upbeat" | "neutral" | "calm"
 
 HARD RULES:
