@@ -1,7 +1,7 @@
 """LLM reel senaryo yazıcı: konu → ReelNarration (beat başına görsel sorgu).
 
 Seslendirme metni kanal dilinde, her beat için SOMUT İngilizce görsel sorgu
-(Pexels EN'de zengin). Kelime bütçesi ~2.2 kelime/sn (ai33 Türkçe ölçümü).
+(Pexels EN'de zengin). Kelime bütçesi ~1.95 kelime/sn (gerçek koşularda ölçüldü).
 """
 from __future__ import annotations
 
@@ -12,7 +12,10 @@ from short_bot.reel_models import ReelNarration
 
 log = logging.getLogger(__name__)
 
-WORDS_PER_SECOND = 2.2   # ai33/ElevenLabs Türkçe ölçümü
+# ÖLÇÜM (gerçek koşular): 96 kelime/48.6sn = 1.98 | 92/43.4 = 2.12 | 112/53.3 = 2.10
+# 2.2 varsayımı fazla İYİMSERDİ → üst sınır 99 kelime, gerçekte 48-53 saniye video.
+# En YAVAŞ ölçülen hıza göre bütçele: 45 saniyeyi aşmamak, kısa kalmaktan önemli.
+WORDS_PER_SECOND = 1.95
 
 # Prompt İngilizce yazıldığından dil adları da İngilizce verilir. locale.LANGUAGE_NAMES
 # yerel adları döndürüyor ("tr" -> "Türkçe") ve İngilizce prompt'a uymadığından burada

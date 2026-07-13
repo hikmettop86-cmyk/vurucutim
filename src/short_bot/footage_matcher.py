@@ -16,7 +16,12 @@ from short_bot.footage_sources import PexelsSource
 log = logging.getLogger(__name__)
 
 MIN_CLIP_S = 2
-MAX_CHECK = 5   # her sorguda kaynak başına en fazla kaç aday çekilir
+# Her sorguda kaynak başına kaç aday çekilir. 5 ÇOK AZDI: ölçümde "ultramarathon
+# desert running" sorgusunda ilk 5 adayın HİÇBİRİ katı kapıdan geçmiyordu (hepsi
+# "özne yok, bağlamda" → bankaya düşüyordu) — yani videolarda öznenin KENDİSİ yerine
+# hep ortam b-roll'ü çıkıyordu. 12'ye çıkarınca gerçek ultramaratoncu klibi bulundu.
+# Vision artık PARALEL olduğu için maliyeti kabul edilebilir (12 aday ≈ 2 tur).
+MAX_CHECK = 12
 
 # TARAMA BÜTÇESİ — vision DOĞRULUĞU maliyetten önemli (kullanıcı kararı), ama her
 # vision çağrısı ~3sn. Eski değerler (10/5/3) çok dardı: bütçe ilk sorguda dolup
@@ -26,17 +31,17 @@ MAX_CHECK = 5   # her sorguda kaynak başına en fazla kaç aday çekilir
 #   1. ``seen`` önbelleği: aynı aday iki kez yargılanmaz
 #   2. ``bank``: katı kapıdan geçemeyen ama BAĞLAMDA olan adaylar not edilir →
 #      yedek için İKİNCİ BİR TARAMA gerekmez (asıl yavaşlık oradan geliyordu)
-MAX_GATE_CHECKS = 14   # en fazla kaç aday vision kapısından geçirilir
+MAX_GATE_CHECKS = 24   # en fazla kaç aday vision kapısından geçirilir
 # MAX_DOWNLOADS, MAX_PER_SOURCE'tan BELİRGİN ŞEKİLDE BÜYÜK olmalı: thumbnail'ı
 # olmayan kaynak (Storyblocks) her adayı yargılamak için İNDİRMEK zorunda; tavan
 # dar olursa tek kaynak indirme bütçesini bitirip zincirdeki diğer kaynakları
 # aç bırakır ve klip hiç bulunamaz.
-MAX_DOWNLOADS = 16     # en fazla kaç klip indirilir
-MAX_PER_SOURCE = 6     # tek kaynaktan en fazla kaç aday denenir (tekel olmasın)
+MAX_DOWNLOADS = 20     # en fazla kaç klip indirilir
+MAX_PER_SOURCE = 12    # tek kaynaktan en fazla kaç aday denenir (tekel olmasın)
 # Vision kapısı çağrıları PARALEL: her çağrı ~3sn ve sıralıyken footage aşaması
 # üretimin %82'sini yiyordu (161 çağrı → 832sn). Çağrı SAYISI ve DOĞRULUK aynı
 # kalır; yalnız bekleme üst üste biner. 6 işçi OpenRouter'ı zorlamıyor.
-GATE_WORKERS = 6
+GATE_WORKERS = 8
 # Küçük resim indirmesi: paralel tarama CDN'i zorluyor; tek bir 503 doğrulamayı
 # tamamen atlatıp DOĞRULANMAMIŞ klibi videoya sokuyordu.
 THUMB_RETRIES = 3
