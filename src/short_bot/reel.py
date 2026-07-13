@@ -27,12 +27,16 @@ from short_bot.reel_sfx import discover_sfx, pick_sfx_per_cut
 from short_bot.tts.ai33_client import health_check as _health
 from short_bot.tts.ai33_client import synthesize as _synth
 from short_bot.tts.align import transcribe_words as _transcribe
+from short_bot.tts.fidelity import worst_drop
 
 log = logging.getLogger(__name__)
 
 # Belirteç konumları birbirinden BAĞIMSIZ vision çağrıları (~2-3sn) — paralel ölç.
 # 15 alt-kesim sıralı ölçülünce 30 saniye yiyordu.
 LOCATE_WORKERS = 5
+# Kadrajı yalnız GÜVENLE bulunmuş özneye kaydır. Yanlış yere kaydırmak, merkez
+# crop'tan BETERDİR (özne büsbütün kadraj dışında kalır).
+FRAME_CONF_MIN = 0.6
 
 
 def _probe_s(path, ffmpeg_path: str = "ffmpeg") -> float:
@@ -60,6 +64,10 @@ _PREFLIGHT = {
 _PREFLIGHT_TRANSIENT = {"error", "stalled"}
 PREFLIGHT_RETRIES = 3
 PREFLIGHT_BACKOFF_S = 8
+
+# ai33 arada bir metnin bir öbeğini sessizce okumadan geçiyor (bkz. tts/fidelity).
+# Arıza aralıklı olduğu için yeniden göndermek çoğu zaman düzeltiyor.
+TTS_FIDELITY_RETRIES = 2
 
 
 @dataclass(frozen=True)
@@ -277,19 +285,44 @@ def produce_reel_video(
             profile = build_variation_profile(channel, seed, edit_plan=edit_plan)
         _phase("kurgucu(LLM)")
 
-    # 3) TTS
+    # 3) TTS + 4) süre/hizalama — SADAKAT DENETİMİ İKİSİNİ BİRBİRİNE BAĞLAR.
+    # ai33 metnin bir öbeğini okumadan geçebiliyor: hata dönmüyor, ses geçerli,
+    # süresi bile normal. Altyazılar senaryodan üretildiği için okunmamış kelimeler
+    # ekranda görünmeye devam eder ve video ileri zıplamış gibi olur. Hizalama için
+    # zaten whisper çalıştırdığımızdan denetim bedava: duyulanı senaryoyla kıyasla.
+    script = narration.full_text()
     mp3 = work_dir / "narration.mp3"
-    d.synthesize(narration.full_text(), voice_id=reel.voice_id, api_key=ai33_api_key,
-                 out_path=mp3, speed=reel.speed)
-    _phase("tts(ai33)")
+    for attempt in range(1, TTS_FIDELITY_RETRIES + 2):
+        d.synthesize(script, voice_id=reel.voice_id, api_key=ai33_api_key,
+                     out_path=mp3, speed=reel.speed)
+        _phase("tts(ai33)")
 
-    # 4) Süre + hizalama + zaman çizelgesi
-    duration_s = d.probe_duration_s(mp3, ffprobe_path="ffprobe")
-    words = d.transcribe_words(mp3, language=channel.language,
-                               quality=whisper_quality, device=whisper_device)
+        duration_s = d.probe_duration_s(mp3, ffprobe_path="ffprobe")
+        words = d.transcribe_words(mp3, language=channel.language,
+                                   quality=whisper_quality, device=whisper_device)
+        _phase("whisper-hizalama")
+
+        if not words:
+            # Whisper hiç kelime çıkaramadı → sadakati YARGILAYAMAYIZ. Yeniden
+            # seslendirmek kör atış olur ve kredi yakar; olduğu gibi devam et
+            # (altyazılar zaten oransal yedeğe düşer).
+            log.warning("  reel: whisper kelime çıkaramadı, TTS sadakati denetlenemedi")
+            break
+
+        drop = worst_drop(script, " ".join(w.word for w in words))
+        if drop.ok:
+            break
+        if attempt <= TTS_FIDELITY_RETRIES:
+            log.warning(f"  reel: TTS {drop.count} kelime okumadı ('{drop.phrase}')"
+                        f" → yeniden seslendiriliyor ({attempt}/{TTS_FIDELITY_RETRIES})")
+        else:
+            # Üst üste başarısız: ses eksik ama en azından altyazı onu göstermesin
+            # diye devam ediyoruz — video üretmemektense kusurlu üretmek yeğdir.
+            log.warning(f"  reel: TTS sadakati sağlanamadı ({drop.count} kelime eksik),"
+                        f" mevcut ses kullanılıyor")
+
     timeline = build_reel_timeline(narration, words, duration_s=duration_s)
     log.info(f"  reel: ses {duration_s:.1f}s, {len(timeline.words)} kelime")
-    _phase("whisper-hizalama")
 
     # 5) Beat başına footage (+ belirteç-uygun segmentlerde nesne konumu)
     # Öncelik-sıralı kaynak zinciri (Pexels + opsiyonel Pixabay): biri bulamazsa
@@ -430,8 +463,17 @@ def produce_reel_video(
     # klipten ve onun GERÇEK başlangıç saniyesinden. Eskiden segmentin İLK klibinden
     # ölçülüp segment boyunca çiziliyordu; hızlı kesimde segment 3 farklı klip
     # gösterdiği için marker ölçülmediği kliplerin üstünde BOŞLUĞU işaretliyordu.
+    # ÖZNE KONUMU — TEK ölçüm, İKİ kullanım:
+    #   a) ÇERÇEVELEME: 16:9 → 9:16 kırpma öznenin ETRAFINDAN yapılır. Eskiden hep
+    #      MERKEZDEN kesiyorduk; araştırma bunu otomatik faceless videonun "1 numaralı
+    #      görsel ele veren işareti" diye adlandırıyor (özne kenardaysa yarısı kesilir).
+    #      Konumu ZATEN ölçüyorduk ama yalnız marker'da kullanıyorduk.
+    #   b) BELİRTEÇLER: (yalnız marker-uygun segmentlerde, güven eşiğiyle)
     markers = []
-    if reel.arrows_enabled and worthy:
+    subject_xs: list = [None] * len(subcuts)
+    want_frame = getattr(reel, "subject_framing", True) and vision_call is not None
+    want_marks = reel.arrows_enabled and bool(worthy)
+    if want_frame or want_marks:
         _mk_t0 = _time.perf_counter()
 
         def _locate_at(i: int, si: int) -> SubjectPos:
@@ -440,12 +482,13 @@ def produce_reel_video(
                                     ffmpeg_path=ffmpeg_path,
                                     at_s=clip_starts[i] + 0.4)
 
-        # PARALEL: her konum ölçümü bir vision çağrısı (~2-3sn). 15 alt-kesim sıralı
-        # ölçülünce 30 saniye yiyordu; sonuçlar birbirinden bağımsız.
+        # PARALEL: her ölçüm bir vision çağrısı (~2-3sn); sıralıyken 30 saniye yiyordu.
         from concurrent.futures import ThreadPoolExecutor
 
         from short_bot.run_context import get_log_path, pool_initializer
-        todo = [(i, si) for i, (si, _a, _b) in enumerate(subcuts) if si in worthy]
+        # Çerçeveleme açıksa TÜM alt-kesimler ölçülür; değilse yalnız marker'lılar.
+        todo = [(i, si) for i, (si, _a, _b) in enumerate(subcuts)
+                if want_frame or si in worthy]
         found: dict[int, SubjectPos] = {}
         if todo:
             with ThreadPoolExecutor(max_workers=LOCATE_WORKERS,
@@ -455,12 +498,21 @@ def produce_reel_video(
                     found[i] = pos
         positions = [found.get(i, SubjectPos(found=False))
                      for i in range(len(subcuts))]
-        markers = build_markers(subcuts, positions,
-                                marker_kit=profile.marker_kit,
-                                frequency=reel.arrow_frequency, seed=seed)
-        log.info(f"  reel: {len(markers)} belirteç "
-                 f"({sum(1 for si, _a, _b in subcuts if si in worthy)} alt-kesim "
-                 f"tarandı), {_time.perf_counter() - _mk_t0:.1f}s")
+
+        if want_frame:
+            # Kadrajı yalnız GÜVENLE bulunmuş özneye kaydır. Emin değilsek merkez
+            # (None) — yanlış yere kaydırmak, merkez-crop'tan beterdir.
+            subject_xs = [(p.x if (p.found and p.confidence >= FRAME_CONF_MIN)
+                           else None) for p in positions]
+            n_fr = sum(1 for x in subject_xs if x is not None)
+            log.info(f"  reel: {n_fr}/{len(subcuts)} alt-kesimde özne-farkında kadraj")
+
+        if want_marks:
+            markers = build_markers(subcuts, positions,
+                                    marker_kit=profile.marker_kit,
+                                    frequency=reel.arrow_frequency, seed=seed)
+        log.info(f"  reel: {len(markers)} belirteç, {len(todo)} konum ölçümü, "
+                 f"{_time.perf_counter() - _mk_t0:.1f}s")
 
     # TEPE ANI: en büyük reveal'in bittiği saniye. Beğeni tetiği ve abone isteği
     # BURADAN SONRA yerleşir — izleyici değeri daha yeni yaşadı, istek nedensel
@@ -553,6 +605,9 @@ def produce_reel_video(
         riser=riser, impact=impact, reveal_s=peak_end_s,
         sfx_at_cut=sfx_at_cut,
         zoom=("zoom" in profile.transitions),
+        subject_xs=subject_xs,
+        color_grade=getattr(reel, "color_grade", True),
+        seed=seed,
         clip_starts=clip_starts,
         hook_punch=True,
     )

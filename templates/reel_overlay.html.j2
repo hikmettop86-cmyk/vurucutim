@@ -62,6 +62,8 @@ html,body{width:1080px;height:1920px;overflow:hidden;background:transparent;
 .cap{position:absolute;left:0;right:0;bottom:300px;padding:0 60px;text-align:center;font-size:82px;font-weight:900;
   line-height:1.15;letter-spacing:-1px;-webkit-text-stroke:3px #000;paint-order:stroke fill;text-shadow:0 6px 26px rgba(0,0,0,.95)}
 .cap .w{display:none;margin:0 12px;color:#fff}
+/* yalnız otomatik sığdırma ölçümü için: gizli kelimenin genişliği ölçülemez */
+.cap.measure .w{display:inline}
 .cap .w.vis{display:inline}
 .cap .w.hot{color:{{ hot_color }};display:inline-block;transform:scale(1.09)}
 #handle{position:absolute;bottom:150px;left:0;right:0;text-align:center;font-size:44px;font-weight:800;text-shadow:0 3px 12px rgba(0,0,0,.9);opacity:.9}
@@ -126,6 +128,44 @@ const MCLS={arrow:'mk-arrow',ring:'mk-ring',pulse:'mk-pulse',box:'mk-box',spotli
 const CUT_EFFECT='{{ cut_effect }}';   // kesme efekti türü (flash|glitch|rgbsplit|lightleak|none)
 const W=[...document.querySelectorAll('.cap .w')],CARDS=[...document.querySelectorAll('.card')];
 const HOOK=document.getElementById('hook'),CLOSE=document.getElementById('close'),BAR=document.getElementById('bar');
+
+// ——— OTOMATİK SIĞDIRMA ———
+// Türkçe kelimeler uzayabiliyor ("düşündüğümüzden" 15 harf). Kutudan geniş TEK bir
+// kelimeyi CSS kaydıramaz — sessizce taşırır. Gerçek hata (short 758): hook kartı
+// hem sağa hem sola taştı, kelimelerin başı/sonu kesildi.
+// Kelimeyi kırmak (break-word) Türkçede okunmaz hâle getirir; çözüm PUNTOYU KÜÇÜLTMEK.
+// Yükleme anında bir kez çalışır → tüm kareler aynı puntoyu görür (deterministik).
+function fitBox(el,{minScale=0.55,maxH=0}={}){
+  if(!el) return;
+  // Hook/close normalde display:none — GİZLİ ELEMANIN ÖLÇÜSÜ SIFIRDIR, ölçmek için
+  // geçici olarak göster, sonra sınıflara geri bırak.
+  const prev=el.style.display;
+  el.style.display='block';
+  el.style.fontSize='';   // stil sayfasındaki puntoya dön → fit ÇAĞRI SAYISINDAN bağımsız
+  const base=parseFloat(getComputedStyle(el).fontSize);
+  const floor=base*minScale;
+  let size=base;
+  // 2px'lik adımlar: gözle fark edilmez, en kötü ihtimalle ~23 tur.
+  while(size>floor && (el.scrollWidth>el.clientWidth || (maxH && el.scrollHeight>maxH))){
+    size-=2; el.style.fontSize=size+'px';
+  }
+  el.style.display=prev;
+}
+// Altyazıda her an yalnız birkaç kelime görünür; taşma ancak TEK kelime kutudan
+// genişse olur. Hepsini geçici olarak görünür yapıp ölçmek bunu tam yakalar:
+// satır kaydırma çok kelimeyi kurtarır, tek uzun kelimeyi kurtaramaz.
+// Vurgulu kelimenin scale(1.09)'u DÜZENİ etkilemez (transform'dur) ve kutunun her iki
+// yanındaki 60px dolgu görsel taşmayı zaten emer — ayrıca pay bırakmaya gerek yok.
+function fitCap(){
+  const cap=document.querySelector('.cap'); if(!cap) return;
+  cap.classList.add('measure');
+  fitBox(cap,{minScale:0.6});
+  cap.classList.remove('measure');
+}
+window.__fit=function(){
+  // Hook/close ekranın üst yarısında; altyazı bloğuna sarkmasın diye yükseklik sınırı.
+  fitBox(HOOK,{maxH:820}); fitBox(CLOSE,{maxH:820}); fitCap();
+};
 const FLASH=document.getElementById('flash'),MLAYER=document.getElementById('markers');
 const RGB=document.getElementById('rgbsplit'),LEAK=document.getElementById('lightleak'),GLITCH=document.getElementById('glitch');
 const CTA=document.getElementById('cta'),LIKE=document.getElementById('like');

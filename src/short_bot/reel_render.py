@@ -131,6 +131,15 @@ def render_reel_overlay_frames(
         except Exception:
             pass  # DOM zaten set edildi; font yüklenemedIyse fallback font kullanılır
 
+        # Metni kutusuna sığdır — FONTLAR OTURDUKTAN SONRA, ilk kareden ÖNCE.
+        # Ölçüm gerçek fonta bağlı: yedek fontla ölçersek punto yanlış çıkar.
+        # Bir kez çalışır, tüm kareler aynı puntoyu görür (kare-dedup bozulmaz).
+        try:
+            pg.evaluate("()=>document.fonts&&document.fonts.ready")
+            pg.evaluate("()=>window.__fit&&window.__fit()")
+        except Exception:
+            pass  # __fit yoksa (eski şablon) eski davranış: sığdırma yapılmaz
+
         # KARE-DEDUP: overlay ardışık karelerde çoğu zaman DEĞİŞMEZ (karaoke kelimesi
         # ~0.4sn'de bir değişir). Şablonun __sig() imzası aynıysa screenshot (~137ms)
         # yerine önceki PNG kopyalanır (~1ms) → render 3-4x hızlanır. __sig yoksa
