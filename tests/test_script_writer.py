@@ -111,27 +111,33 @@ def test_build_script_prompt_tr_states_header_char_limits():
 
 
 def test_script_header_top_max_25():
-    from pydantic import ValidationError
-    with pytest.raises(ValidationError):
-        Script(
-            header_top="X" * 26,
-            header_bottom="Y",
-            photo_overlay="Z",
-            body_paragraph="Yeterince uzun bir paragraf metni icin asgari kosul.",
-            highlights=[], category="X", mood="neutral",
-        )
+    """Taşan başlık KIRPILIR, üretimi düşürmez.
+
+    Eskiden ValidationError'du: LLM "VÜCUDUN GİZEMLİ MEKANİZMASI" (26 karakter)
+    yazınca 3/3 deneme düşüyor ve koca bir üretim (LLM + TTS + footage + montaj)
+    çöpe gidiyordu — bir karakter yüzünden. Görsel taşma riski kırpmayla zaten yok.
+    """
+    s = Script(
+        header_top="X" * 26,
+        header_bottom="Y",
+        photo_overlay="Z",
+        body_paragraph="Yeterince uzun bir paragraf metni icin asgari kosul.",
+        highlights=[], category="X", mood="neutral",
+    )
+    assert len(s.header_top) == 25
+
 
 
 def test_script_header_bottom_max_35():
-    from pydantic import ValidationError
-    with pytest.raises(ValidationError):
-        Script(
-            header_top="X",
-            header_bottom="Y" * 36,
-            photo_overlay="Z",
-            body_paragraph="Yeterince uzun bir paragraf metni icin asgari kosul.",
-            highlights=[], category="X", mood="neutral",
-        )
+    """Alt başlık da KIRPILIR (aynı gerekçe)."""
+    s = Script(
+        header_top="X",
+        header_bottom="Y" * 40,
+        photo_overlay="Z",
+        body_paragraph="Yeterince uzun bir paragraf metni icin asgari kosul.",
+        highlights=[], category="X", mood="neutral",
+    )
+    assert len(s.header_bottom) == 35
 
 
 def test_write_script_forwards_backend_and_api_key():

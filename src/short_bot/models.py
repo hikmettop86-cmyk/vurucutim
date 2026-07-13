@@ -38,6 +38,15 @@ class Highlight(BaseModel):
         return strip_non_turkish_diacritics(v) if isinstance(v, str) else v
 
 
+# Başlık/etiket alanlarının üst sınırları. Bir karakterlik taşma ÜRETİMİ DÜŞÜRMEMELİ:
+# gerçek hata — LLM "VÜCUDUN GİZEMLİ MEKANİZMASI" (26 karakter) yazdı, header_top 25
+# sınırlıydı, 3/3 deneme ValidationError'la düştü ve koca bir üretim (LLM + TTS +
+# footage + montaj) iptal oldu. Üstelik bu alan reel kanalında hiç kullanılmıyor.
+# Kırpmak güvenli: görsel taşma riski zaten kalkıyor.
+_TRIM_LIMITS = {"header_top": 25, "header_bottom": 35, "photo_overlay": 60,
+                "category": 30}
+
+
 class Script(BaseModel):
     header_top: str = Field(min_length=1, max_length=25)
     header_bottom: str = Field(min_length=1, max_length=35)
@@ -52,6 +61,17 @@ class Script(BaseModel):
     @classmethod
     def _normalize_text(cls, v):
         return strip_non_turkish_diacritics(v) if isinstance(v, str) else v
+
+    @field_validator("header_top", "header_bottom", "photo_overlay", "category",
+                     mode="before")
+    @classmethod
+    def _trim_overflow(cls, v, info):
+        """Taşan BAŞLIK/ETİKET alanını kırp (gövde metni HARİÇ — orayı kırpmak
+        cümleyi yarım bırakır, LLM yeniden yazsın diye hata verilir)."""
+        limit = _TRIM_LIMITS.get(info.field_name)
+        if isinstance(v, str) and limit and len(v) > limit:
+            return v[:limit].rstrip()
+        return v
 
     @model_validator(mode="after")
     def highlights_must_be_substrings(self) -> "Script":
