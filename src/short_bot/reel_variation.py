@@ -25,7 +25,18 @@ _TRANSITION_SETS = (
     ("flash", "zoom"),
     ("zoom",),
 )
-_CUT_PACINGS = ("medium", "fast", "medium", "slow")
+# UYARAN YOĞUNLUĞU: araştırma her 1.5-2.0 saniyede bir görsel değişim istiyor
+# (10 saniyede 5-7). "slow" (3.2-4.5sn) HAVUZDAN ÇIKARILDI: gerçek koşuda 34.4
+# saniyelik videoya YALNIZ 9 kesim düştü = 3.8sn/kesim, hedefin çok altında.
+#
+# NOT: "görsel değişim" yalnız kesim değil — zoom/push/pan da sayılır. Ken Burns
+# ve vurgu punch-in'leri (Faz 2) gelince yoğunluğu onlar da taşıyacak ve daha
+# yavaş tempo tekrar anlamlı olabilir. Şimdilik TEK aracımız kesim.
+#
+# MALİYET YOK: daha çok alt-kesim, segmentin ZATEN indirilmiş kliplerini dönüşümlü
+# kullanır — ekstra footage indirmesi ya da vision çağrısı gerekmez.
+CUT_PACINGS = ("medium", "fast", "medium", "fast")
+_CUT_PACINGS = CUT_PACINGS   # geriye-uyum takma adı
 _MARKER_KITS = (("arrow",), ("ring",), ("arrow", "ring"), ("pulse", "box"),
                 ("box",), ("ring", "pulse"), ("spotlight",), ("underline", "arrow"))
 # Kesme geçiş efekti çeşitliliği (overlay CUTS'ta uygulanır); seed'e göre seçilir.

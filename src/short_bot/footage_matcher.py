@@ -58,6 +58,10 @@ class _FootageVerdict(BaseModel):
     matches: bool = False
     in_context: bool = False   # ana özne olmasa da videoya ait mi (destekleyici b-roll)
     clear: bool = True     # görüntü net/okunaklı mı (çok karanlık/bulanık DEĞİL)
+    # HOOK için EK ve DAHA YÜKSEK eşik: kare sıfır videonun en ÇARPICI karesi olmalı.
+    # Alakalı + net ama SIKICI bir açılış karesi, TTS ilk kelimesini söylemeden
+    # kaydırılır — ve o kaydırma YouTube'un sıralama zincirindeki İLK halkadır.
+    striking: bool = False
     reason: str = ""
 
 
@@ -105,10 +109,20 @@ def _judge_prompt(query: str, context: str = "") -> str:
         f'boş/anlamsız kare, ağır filigran/yazı kaplı. (Karanlık AMA net bir sahne '
         f'— ör. siyah zeminde parlayan mikroplar — clear=true.)\n\n'
 
+        f'4) striking — AÇILIŞ KARESİ TESTİ: Bu kare bir Shorts akışında PARMAĞI '
+        f'DURDURUR MU? İzlemelerin çoğu SESSİZ başlar; kare tek başına "burada '
+        f'ilginç bir şey var" demeli.\n'
+        f'   striking=true: net bir ÖZNE, güçlü kontrast/renk, yakın çekim, tuhaf '
+        f'ya da çarpıcı bir an.\n'
+        f'   striking=false: boş/uzak manzara, karanlık-belirsiz su altı, düz zemin, '
+        f'"güzel ama olay yok" kare. GERÇEK HATA: bir kirpi balığı videosunun ilk 4 '
+        f'saniyesi neredeyse siyah, boş bir resif oldu — izleyici daha ilk kelimeyi '
+        f'duymadan KAYDIRIR.\n\n'
+
         f'Ayrıca gördüğünü 1 kısa İngilizce cümleyle tarif et.\n'
         f'SADECE JSON: {{"content": "<English description>", '
         f'"in_context": true|false, "matches": true|false, "clear": true|false, '
-        f'"reason": "<kısa Türkçe gerekçe>"}}'
+        f'"striking": true|false, "reason": "<kısa Türkçe gerekçe>"}}'
     )
 
 
@@ -264,7 +278,8 @@ def _tag(v: "_FootageVerdict", ok: bool) -> str:
 
 
 def verify_clip_matches(image_url: str, query: str, *, vision_call=None, pool=None,
-                        context: str = "", seen: dict | None = None) -> bool:
+                        context: str = "", seen: dict | None = None,
+                        hook: bool = False) -> bool:
     """Thumbnail bu sorguyu KARŞILIYOR MU — vision'ın katı per-sorgu yargısı.
 
     Eski kelime-havuzu kapısı KALDIRILDI: soyut alanlarda (anchor='science history')
@@ -293,7 +308,9 @@ def verify_clip_matches(image_url: str, query: str, *, vision_call=None, pool=No
     def _decide(v: "_FootageVerdict") -> bool:
         # clear HER İKİ eşikte de şart: konuya uysa bile KARANLIK/BULANIK klip
         # retention öldürür (gerçek hata: 6sn ne olduğu anlaşılmayan siyah kütle).
-        return bool(v.clear) and bool(v.matches)
+        ok = bool(v.clear) and bool(v.matches)
+        # HOOK'un işi alakalı olmak DEĞİL, KAYDIRMAYI DURDURMAK: ek eşik.
+        return ok and bool(v.striking) if hook else ok
 
     # ANAHTAR (SORGU, GÖRSEL): ``matches`` SORGUYA karşı verilen bir yargıdır.
     # Yalnız görsele göre önbelleklemek, "ocean low tide path" için verilen [ok]
@@ -461,7 +478,8 @@ def match_beat_clip(query: str, *, api_key: str = "", cache_dir: Path,
                     deps: FootageDeps | None = None, topic_pool=None,
                     ffmpeg_path: str = "ffmpeg", budget: dict | None = None,
                     exclude: set | None = None, context: str = "",
-                    seen: dict | None = None, bank: list | None = None) -> Path | None:
+                    seen: dict | None = None, bank: list | None = None,
+                    hook: bool = False) -> Path | None:
     """Sorguya uyan tek klibi kaynak zincirinden indirip yolunu döndürür.
 
     Kaynakları ``deps.sources`` öncelik sırasında dener; her kaynak için
@@ -563,7 +581,8 @@ def match_beat_clip(query: str, *, api_key: str = "", cache_dir: Path,
                         _c, _u = item
                         try:
                             d.verify_footage(_u, query, vision_call=vision_call,
-                                             pool=topic_pool, context=context, seen=seen)
+                                             pool=topic_pool, context=context,
+                                             seen=seen, hook=hook)
                         except Exception as e:  # noqa: BLE001 — biri patlarsa diğerleri sürsün
                             log.warning(f"footage vision doğrulama hatası: {e}")
 
@@ -598,7 +617,7 @@ def match_beat_clip(query: str, *, api_key: str = "", cache_dir: Path,
                     try:
                         ok = d.verify_footage(thumb_url, query,
                                               vision_call=vision_call, pool=topic_pool,
-                                              context=context, seen=seen)
+                                              context=context, seen=seen, hook=hook)
                     except Exception as e:
                         log.warning(f"footage vision doğrulama hatası: {e}")
                         ok = True   # doğrulama patlarsa arama sırasına güven

@@ -78,7 +78,8 @@ class ReelDeps:
 def _match_with_fallback(d, query, *, topic_q, api_key, cache_dir, verify,
                          vision_call, footage_deps=None, topic_pool=None, anchor="",
                          ffmpeg_path="ffmpeg", budget=None, reuse_clips=None,
-                         reuse_idx=0, exclude=None, context="", seen=None):
+                         reuse_idx=0, exclude=None, context="", seen=None,
+                         hook=False):
     """Footage eşleştirmeyi kademeli, KONUDA-KALAN yedeklerle dener.
 
     KAPI MERDİVENİ (hepsi vision'lı):
@@ -119,9 +120,26 @@ def _match_with_fallback(d, query, *, topic_q, api_key, cache_dir, verify,
                                  deps=footage_deps, topic_pool=topic_pool,
                                  ffmpeg_path=ffmpeg_path, budget=b,
                                  exclude=exclude, context=context, seen=seen,
-                                 bank=bank)
+                                 bank=bank, hook=hook)
         if clip is not None:
             return clip, True
+    # 1b) HOOK'ta hiçbir aday ÇARPICI çıkmadıysa: çarpıcılık şartını düşür ama
+    # ALAKA + NETLİĞİ koru. Alakalı-ama-sıkıcı bir açılış karesi, ortam b-roll'ünden
+    # iyidir. YARGILAR ÖNBELLEKTE → bu geçiş SIFIR vision çağrısına mal olur, yalnız
+    # eşik değişir.
+    if hook:
+        for q in stages:
+            clip = d.match_beat_clip(q, api_key=api_key, cache_dir=cache_dir,
+                                     verify=verify, vision_call=vision_call,
+                                     deps=footage_deps, topic_pool=topic_pool,
+                                     ffmpeg_path=ffmpeg_path,
+                                     budget={"gate": 0, "dl": 0},
+                                     exclude=exclude, context=context, seen=seen,
+                                     bank=bank, hook=False)
+            if clip is not None:
+                log.info(f"  footage: hook için ÇARPICI aday yok → alakalı+net "
+                         f"klip kabul edildi ('{q[:30]}')")
+                return clip, True
     # 2) BAĞLAM B-ROLL'Ü: ana özne yok ama konunun dünyasından, net bir klip.
     # YENİDEN ARAMA YOK, YENİDEN VISION YOK — adaylar katı taramada zaten yargılandı.
     # (Bunu ayrı bir ikinci tarama olarak kurmak canlı koşuda 121 vision çağrısına
@@ -362,7 +380,11 @@ def produce_reel_video(
                 budget={"gate": 0, "dl": 0},
                 reuse_clips=reuse_pool, reuse_idx=reuse_idx,
                 exclude=set(used_clips),
-                context=_video_context, seen=seen_verdicts)
+                context=_video_context, seen=seen_verdicts,
+                # HOOK: videonun en kritik karesi — ek "çarpıcılık" eşiği.
+                # Alakalı+net ama SIKICI bir açılış karesi, TTS ilk kelimesini
+                # söylemeden kaydırılır (gerçek hata: 4sn boyunca boş karanlık resif).
+                hook=(si == 0))
             if clip is None or clip in got:
                 break        # yeni klip gelmedi → mevcutlarla yetin (fail-open)
             if clip in reuse_pool:
