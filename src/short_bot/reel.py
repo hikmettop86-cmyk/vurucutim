@@ -19,7 +19,8 @@ from short_bot.footage_matcher import match_beat_clip as _match
 from short_bot.footage_sources import build_footage_sources
 from short_bot.reel_assembler import assemble_reel as _assemble
 from short_bot.reel_markers import _marker_worthy_segs, build_markers
-from short_bot.music_profile import MusicProfile, profile_music
+from short_bot.music_profile import (MUSIC_UNDER_SPEECH_DB, music_gain_db,
+                                     profile_music, speech_lufs)
 from short_bot.reel_models import build_reel_timeline
 from short_bot.reel_pause import MIN_PAUSE_AT_S, REVEAL_PAUSE_S
 from short_bot.reel_pause import insert_pause as _pause
@@ -659,7 +660,7 @@ def produce_reel_video(
     # Müzik profili: sessiz girişi atla + kütüphane seviye farkını eşitle.
     # Ölçüldü — parçaları 0:00'dan başlatınca müzik konuşmanın 37 dB altında
     # kalıyordu (olması gereken ~12 dB): çoğu stok parça yavaş kuruluyor.
-    mprof = MusicProfile(0.0, 0.0)
+    m_start, m_gain = 0.0, 0.0
     if music_path is not None:
         try:
             # Önbellek müzik köküne yazılır: work_dir geçici, her koşuda silinir —
@@ -667,10 +668,15 @@ def produce_reel_video(
             mprof = profile_music(
                 Path(music_path), ffmpeg_path=ffmpeg_path,
                 cache_path=Path(music_path).parent.parent / "_profiles.json")
-            log.info(f"  reel: müzik girişi {mprof.start_s:.1f}sn atlandı, "
-                     f"seviye {mprof.gain_db:+.1f} dB eşitlendi")
-        except Exception as e:   # müzik KOZMETİK — profil çıkmazsa ham parça
-            log.warning(f"  reel: müzik profili çıkarılamadı ({e}) → ham parça")
+            konusma = speech_lufs(mp3, ffmpeg_path=ffmpeg_path)
+            m_start = mprof.start_s
+            m_gain = music_gain_db(mprof, konusma, reel.music_volume)
+            log.info(f"  reel: müzik girişi {m_start:.1f}sn atlandı | "
+                     f"konuşma {konusma if konusma is None else round(konusma,1)} LUFS, "
+                     f"müzik {mprof.lufs:.1f} → {m_gain:+.1f} dB ile "
+                     f"{MUSIC_UNDER_SPEECH_DB:+.0f} dB altına oturtuldu")
+        except Exception as e:   # müzik KOZMETİK — ölçüm çıkmazsa ham parça
+            log.warning(f"  reel: müzik dengelenemedi ({e}) → ham parça")
 
     punches = punch_times(numbers, peak_end_s)
     if punches:
@@ -681,7 +687,7 @@ def produce_reel_video(
         narration_path=mp3, music_path=music_path, out_path=out_path,
         cut_times=cut_times, duration_s=duration_s, fps=fps, ffmpeg_path=ffmpeg_path,
         music_volume=reel.music_volume,
-        music_start_s=mprof.start_s, music_gain_db=mprof.gain_db,
+        music_start_s=m_start, music_gain_db=m_gain,
         sfx_volume=getattr(reel, "sfx_volume", 0.22),
         music_duck=getattr(reel, "music_duck", True),
         riser=riser, impact=impact, reveal_s=peak_end_s,

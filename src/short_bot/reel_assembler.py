@@ -30,6 +30,62 @@ MASTER_TP = -1
 MASTER_LIMIT = 0.891   # -1 dBFS tepe tavanı (aynı zamanda loudnorm'un NaN'ını kırpar)
 
 
+# Ses karesi düşüşü sessizdir; bu kadar boşluk KUSUR sayılır (kodlayıcı gecikmesi
+# ~0.05sn olabilir, gerçek düşüşler saniyeler mertebesindeydi).
+MAX_AUDIO_GAP_S = 0.5
+
+
+def measure_lufs(path: Path, ffmpeg_path: str = "ffmpeg") -> float | None:
+    """Karışımın bütünleşik yüksekliği (LUFS). İki geçişli mastering için:
+    ölçüp SABİT kazanç uygularız — dinamik loudnorm NaN üretip AAC'nin kare
+    düşürmesine yol açıyordu."""
+    import json as _json
+    p = _run([ffmpeg_path, "-hide_banner", "-i", str(path), "-af",
+              "loudnorm=I=-14:TP=-1:LRA=11:print_format=json", "-f", "null", "-"])
+    err = p.stderr or ""
+    i = err.find('"input_i"')
+    if i < 0:
+        return None
+    a, b = err.rfind("{", 0, i), err.find("}", i)
+    try:
+        return float(_json.loads(err[a:b + 1])["input_i"])
+    except Exception:
+        return None
+
+
+def _duration(path: Path) -> float | None:
+    p = _run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
+              "-of", "default=nw=1:nk=1", str(path)])
+    try:
+        return float((p.stdout or "").strip())
+    except Exception:
+        return None
+
+
+def audio_gap_s(video: Path, duration_s: float, ffmpeg_path: str = "ffmpeg") -> float:
+    """Videonun sesinde KAÇ SANİYE eksik var.
+
+    ffmpeg ses karesi düşürdüğünde çıkış kodu 0 verir: zaman damgaları ilerler ama
+    örnekler yoktur. Örnek sayısı × 1024 / örnekleme_hızı ile beklenen süreyi
+    kıyaslamak bunu yakalar (gerçek hata: 310 kare = 6.6sn sessizce düşmüştü).
+    """
+    # csv alanları ffprobe'un KENDİ sırasında gelir, istenen sırada değil —
+    # anahtarla okumak şart (ilk denemede sample_rate/nb_frames yer değiştirdi ve
+    # denetim bozuk videoyu "temiz" gördü).
+    p = _run(["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries",
+              "stream=nb_frames,sample_rate", "-of", "default=nw=1", str(video)])
+    alan = {}
+    for ln in (p.stdout or "").splitlines():
+        if "=" in ln:
+            k, v = ln.split("=", 1)
+            alan[k.strip()] = v.strip()
+    try:
+        icerik = int(alan["nb_frames"]) * 1024 / int(alan["sample_rate"])
+    except Exception:
+        return 0.0     # okunamadıysa yargılama (fail-open)
+    return max(0.0, duration_s - icerik)
+
+
 def _run(cmd) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, capture_output=True, text=True,
                           encoding="utf-8", errors="replace")
@@ -232,22 +288,55 @@ def assemble_reel(
                              f"volume={sfx_volume:g}[wh{k}]")
                 labels.append(f"[wh{k}]")
                 idx += 1
-        # MASTER: YouTube ~-14 LUFS'a normalize eder; oraya yakın teslim edip -1 dBTP
-        # pay bırakmak transcode'da kırpılmayı önler.
         parts.append(f"{''.join(labels)}amix=inputs={len(labels)}:"
                      f"duration=first:dropout_transition=0:normalize=0[mixed]")
-        # alimiter ŞART (kozmetik değil): loudnorm'un tek-geçiş dinamik modu amix
-        # çıkışında NaN/Inf örnek üretebiliyor ve AAC kodlayıcı kareyi reddediyor
-        # ("Input contains (near) NaN/+-Inf" → Error submitting audio frame).
-        # Limiter bunu kırpar — ve zaten doğru mastering zinciri budur:
-        # normalize → tepe sınırla. aresample: loudnorm çıkışı 192 kHz'e yükselir.
-        parts.append(f"[mixed]loudnorm=I={MASTER_LUFS:g}:TP={MASTER_TP:g}:LRA=11,"
-                     f"alimiter=limit={MASTER_LIMIT:g},aresample=48000[a]")
-        cmd += ["-filter_complex", ";".join(parts), "-map", "[v]", "-map", "[a]",
-                "-t", f"{duration_s:.3f}", "-c:v", "libx264", "-preset", "veryfast",
-                "-crf", "21", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k",
-                "-movflags", "+faststart", str(out_path)]
-        p = _run(cmd)
+        # MASTER — İKİ GEÇİŞ, TEK GEÇİŞ DEĞİL.
+        # loudnorm'un tek-geçiş DİNAMİK modu NaN/Inf örnek üretebiliyor; AAC kodlayıcı
+        # o kareleri REDDEDİYOR ve ffmpeg onları SESSİZCE DÜŞÜRÜP çıkış kodu 0
+        # veriyor. Sonuç: zaman damgaları 32sn'ye gidiyor ama seste yalnız 25sn'lik
+        # örnek var — ses ortadan atlıyor ve sonda kesiliyor. Ölçüldü: üretilen iki
+        # videoda 310 ses karesi (6.6sn) düşmüş. alimiter bunu KURTARMIYOR: limiter
+        # NaN'ı kırpmaz, NaN'ı geçirir.
+        #
+        # Çözüm kaynağı kurutmak: karışımı ÖNCE ölç, SONRA sabit kazanç uygula.
+        # Sabit kazanç NaN üretemez. (Yan fayda: dinamik loudnorm dinamiği de
+        # eziyordu — sabit kazanç anlatımın nefesini korur.)
+        # Ses geçişi TÜM girdileri korur (indeksler [2:a], [3:a]... kaymasın) ama
+        # yalnız ses grafiğini kullanır — video filtreleri bağlanmadan bırakılamaz.
+        n_vparts = 2 if pvf else 1
+        mix_wav = td / "mix.wav"
+        p = _run(list(cmd) + ["-filter_complex", ";".join(parts[n_vparts:]),
+                              "-map", "[mixed]", "-t", f"{duration_s:.3f}",
+                              "-vn", "-c:a", "pcm_s16le", str(mix_wav)])
+        if p.returncode != 0:
+            raise RuntimeError(f"ses miksi başarısız: {p.stderr[-500:]}")
+        gain = MASTER_LUFS - (measure_lufs(mix_wav, ffmpeg_path) or MASTER_LUFS)
+
+        cmd2 = [ffmpeg_path, "-y", "-i", str(footage),
+                "-framerate", str(fps), "-i", str(Path(frames_dir) / "f_%05d.png"),
+                "-i", str(mix_wav)]
+        vparts = [f"[0:v]{pvf}[pv]", "[pv][1:v]overlay=0:0[v]"] if pvf \
+            else ["[0:v][1:v]overlay=0:0[v]"]
+        # SABİT kazanç + tepe sınırlayıcı: doğru mastering zinciri (normalize →
+        # tepe sınırla) ve NaN üretemez.
+        vparts.append(f"[2:a]volume={gain:.2f}dB,"
+                      f"alimiter=limit={MASTER_LIMIT:g},aresample=48000[a]")
+        cmd2 += ["-filter_complex", ";".join(vparts), "-map", "[v]", "-map", "[a]",
+                 "-t", f"{duration_s:.3f}", "-c:v", "libx264", "-preset", "veryfast",
+                 "-crf", "21", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k",
+                 "-movflags", "+faststart", str(out_path)]
+        p = _run(cmd2)
         if p.returncode != 0:
             raise RuntimeError(f"final montaj başarısız: {p.stderr[-800:]}")
+
+        # SES BÜTÜNLÜK DENETİMİ. ffmpeg ses karesi düşürdüğünde ÇIKIŞ KODU 0 verir —
+        # bozulma sessizdir. Ölçüt MİKSİN kendi uzunluğu: "ses videodan kısa" ayrı
+        # bir durumdur (anlatım bitmiştir), biz KODLAYICININ düşürdüğü kareleri
+        # arıyoruz. Mikste 32sn örnek varken çıkışta 25sn olması KUSURDUR.
+        beklenen = min(duration_s, _duration(mix_wav) or duration_s)
+        eksik = audio_gap_s(out_path, beklenen, ffmpeg_path)
+        if eksik > MAX_AUDIO_GAP_S:
+            raise RuntimeError(
+                f"montaj sesin {eksik:.1f} saniyesini düşürdü (süre {duration_s:.1f}sn "
+                f"ama örnekler daha kısa) — video sessizce bozuk çıkardı")
     return out_path

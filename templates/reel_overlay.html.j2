@@ -87,10 +87,11 @@ html,body{width:1080px;height:1920px;overflow:hidden;background:transparent;
 .cap.measure .w{display:inline}
 .cap .w.vis{display:inline}
 .cap .w.hot{color:{{ hot_color }};display:inline-block;transform:scale(1.09)}
-/* Handle ÜST-SAĞA taşındı: altta oynatıcının kanal/başlık satırının altında
-   kalıyordu (ölçüldü). Üst-sağ köşe Shorts'ta da TikTok/Reels'te de boştur. */
-#handle{position:absolute;top:110px;right:40px;text-align:right;font-size:36px;font-weight:800;
-  text-shadow:0 3px 12px rgba(0,0,0,.9);opacity:.75}
+/* Handle ALTTA kalır. Oynatıcının kanal/başlık satırının altında kalıyor ve çoğu
+   zaman görünmüyor — ama izleyici için önemli değil (YouTube zaten kanal adını
+   gösteriyor); üst-sağa taşımak kadrajın temiz köşesini harcıyordu. */
+#handle{position:absolute;bottom:150px;left:0;right:0;text-align:center;font-size:44px;
+  font-weight:800;text-shadow:0 3px 12px rgba(0,0,0,.9);opacity:.9}
 /* 56px + nowrap, kadraja SIĞMIYORDU: "Bu seri devam ediyor — ABONE OL" sağdan
    kesiliyordu ("...ABONE O"). Çözüm sarma DEĞİL (sarma altyazıya biner):
    font küçült + metinleri KISA tut (bkz. reel_subscribe.CTA_MAX_CHARS). */

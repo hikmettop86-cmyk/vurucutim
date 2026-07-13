@@ -168,11 +168,16 @@
               </select>
             </label>
             <label class="block">
-              <span class="text-xs text-claude-muted uppercase tracking-wide">Müzik sesi</span>
+              <span class="text-xs text-claude-muted uppercase tracking-wide">Müzik sesi (ince ayar)</span>
               <input type="number" name="reel_music_volume" step="0.01" min="0" max="1"
-                     value="{{ '%.2f' % (c.reel.music_volume if c.reel else 0.10) }}"
+                     value="{{ '%.2f' % (c.reel.music_volume if c.reel else 0.30) }}"
                      class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
-              <span class="text-xs text-claude-muted">Ducking açıkken bu, müziğin KONUŞMA BOŞLUKLARINDAKİ seviyesidir (öneri 0.30)</span>
+              {# Seviye artık ELLE tutturulmuyor: her videoda anlatımın ve parçanın
+                 seviyesi ölçülüp müzik konuşmanın sabit mesafe altına oturtuluyor.
+                 Bu alan yalnız ±4 dB'lik bir dokunuş — dengeyi bozamaz. #}
+              <span class="text-xs text-claude-muted">Müzik seviyesi <b>otomatik</b> dengeleniyor
+                (her videoda anlatıma göre ölçülür). Bu alan yalnız ince ayar:
+                0.30 = nötr, düşürmek kısar, yükseltmek açar (en fazla ±4 dB).</span>
             </label>
             <label class="block">
               <span class="text-xs text-claude-muted uppercase tracking-wide">SFX sesi</span>
