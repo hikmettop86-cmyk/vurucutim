@@ -49,29 +49,55 @@ def test_varsayilan_seri_basligi():
 
 # --- LLM YÖNERGELERİ -------------------------------------------------------
 
-def test_baglac_yonergeleri_KAYNAKLA_ayni():
-    from short_bot.reel_phrases import CONNECTIVE_STYLES
-    assert PACK.connective_styles == list(CONNECTIVE_STYLES)
+def test_baglac_yonergeleri_DONDURULMUS():
+    """Sekiz bağlaç yönergesi, eski reel_phrases.CONNECTIVE_STYLES'tan birebir.
+
+    (Sabitler artık kodda yok — tr.json onların yerini aldı. Eşitlik, sabitler hâlâ
+    ayaktayken doğrulandı ve commit edildi; burada değerleri DONDURUYORUZ ki paket
+    sessizce kaymasın.)
+    """
     assert len(PACK.connective_styles) == 8
+    assert PACK.connective_styles[0].startswith("BEKLENTİYİ KIR:")
+    assert PACK.connective_styles[1].startswith("ÖLÇEĞİ BÜYÜT:")
+    assert PACK.connective_styles[2].startswith("GİZLİ AKTÖR:")
+    assert PACK.connective_styles[3].startswith("GERİ SAYIM:")
+    assert PACK.connective_styles[4].startswith("ÇELİŞKİ AÇ:")
+    assert PACK.connective_styles[5].startswith("MALİYETİ İMA ET:")
+    assert PACK.connective_styles[6].startswith("KİŞİSELLEŞTİR:")
+    assert PACK.connective_styles[7].startswith("SON ANDA ÇEVİR:")
 
 
-def test_yorum_yonergeleri_KAYNAKLA_ayni():
-    from short_bot.reel_subscribe import COMMENT_STYLES
-    assert PACK.comment_styles == list(COMMENT_STYLES)
+def test_yorum_yonergeleri_DONDURULMUS():
     assert len(PACK.comment_styles) == 4
+    assert PACK.comment_styles[0].startswith("İKİLİ SORU:")
+    assert PACK.comment_styles[1].startswith("KİŞİSEL HATIRLAMA:")
+    assert PACK.comment_styles[2].startswith("DOĞRULAMA:")
+    assert PACK.comment_styles[3].startswith("EKSİĞİ BUL:")
 
 
 # --- DENETÇİ ---------------------------------------------------------------
 
-def test_asinmis_kaliplar_KAYNAKLA_ayni():
-    from short_bot.reel_phrases import OVERUSED
-    assert PACK.overused == list(OVERUSED)
+def test_asinmis_kaliplar_DONDURULMUS():
+    assert PACK.overused == [
+        "ama asıl garip olan şu",
+        "ve burada iş çığırından çıkıyor",
+        "sebebi ise sandığın şey değil",
+        "bir de bunu duymadın",
+        "bir de şunu duyun",
+        "peki tüm bu",
+        "inanılmaz ama gerçek",
+    ]
 
 
-def test_kalip_orintuleri_KAYNAKLA_ayni():
-    from short_bot.reel_phrases import OVERUSED_PATTERNS
-    paket = [(op.label, op.pattern) for op in PACK.overused_patterns]
-    assert paket == list(OVERUSED_PATTERNS)
+def test_kalip_orintuleri_DONDURULMUS():
+    desenler = [op.pattern for op in PACK.overused_patterns]
+    assert desenler == [
+        r"\bbiliyor mu(ydunuz|ydun|sun|sunuz)\b",
+        r"\bduymu[sş] mu(ydunuz|ydun)\b",
+        r"\bmerhaba\s+(arkada[sş]lar|dostlar|herkese)\b",
+        r"\bbug[uü]n\s+siz(lere|e)\b",
+        r"\bhaz[ıi]r m[ıi](s[ıi]n|s[ıi]n[ıi]z)\b",
+    ]
 
 
 def test_kalip_orintuleri_GERCEK_KACAGI_hala_yakalar():
@@ -88,19 +114,26 @@ def test_meta_tail_TURKCE_meta_dilini_soker():
     assert re.search(PACK.meta_tail_pattern, metin, re.IGNORECASE)
 
 
-def test_meta_tail_KAYNAK_regexle_ayni_davranir():
-    """reel_series._META ile aynı metinleri yakalamalı."""
-    from short_bot.reel_series import _META
-    ornekler = [
+def test_meta_tail_DOGRU_metinleri_yakalar():
+    """Eski reel_series._META ile birebir aynı davranış.
+
+    (Transkripsiyon eşitliği, _META hâlâ ayaktayken doğrulandı; artık tek kaynak
+    paket. Burada davranışın kendisini sabitliyoruz.)
+    """
+    paket = re.compile(PACK.meta_tail_pattern, re.IGNORECASE)
+    yakalanmali = [
         "Ev kedilerinden iyi olmalarının sırrını 2. bölümde açıklıyoruz.",
         "Fener balığının ışığını bir sonraki bölümde anlatacağım.",
         "Bunu yarın göstereceğim.",
-        "Fener balığının ışığını üreten simbiyotik bakteri",   # meta YOK
-        "Kalbin kendi elektriğini üretmesi",                    # meta YOK
     ]
-    paket = re.compile(PACK.meta_tail_pattern, re.IGNORECASE)
-    for m in ornekler:
-        assert bool(paket.search(m)) == bool(_META.search(m)), m
+    yakalanmamali = [
+        "Fener balığının ışığını üreten simbiyotik bakteri",
+        "Kalbin kendi elektriğini üretmesi",
+    ]
+    for m in yakalanmali:
+        assert paket.search(m), f"meta dil KAÇTI: {m!r}"
+    for m in yakalanmamali:
+        assert not paket.search(m), f"masum konu KIRPILDI: {m!r}"
 
 
 # --- SERİ YÖNERGELERİ: DONDURULMUŞ ÇIKTIYLA BİREBİR ------------------------
@@ -114,15 +147,17 @@ def test_altin_dosya_TUM_dallari_kapsar():
 
 
 def test_seri_yonergeleri_DONDURULMUS_CIKTIYLA_ayni():
-    """Canlı series_directive(), dondurulmuş çıktıyla BİREBİR aynı mı?
+    """CANLI series_directive() — artık paketten besleniyor — dondurulmuş çıktıyla
+    BİREBİR aynı mı?
 
-    Task 6'dan ÖNCE bu totolojik (eski fonksiyon, kendi çıktısı). Task 6'dan SONRA
-    fonksiyon paketten beslendiği için gerçek regresyon kalkanı olur.
+    Altın dosya, ESKİ (Türkçe sabit) fonksiyon hâlâ ayaktayken üretildi. Bu test o
+    yüzden gerçek bir regresyon kalkanı: Türkçe kanalların LLM'e giden seri yönergesi
+    bu refactor'dan zerre etkilenmedi.
     """
     from short_bot.reel_series import EpisodePlan, series_directive
     for ad, v in ALTIN.items():
         plan = EpisodePlan(**v["plan"])
-        uretilen = series_directive(plan, v["series_title"])
+        uretilen = series_directive(plan, v["series_title"], pack=PACK)
         assert uretilen == v["directive"], f"{ad}: seri yönergesi DEĞİŞTİ"
 
 

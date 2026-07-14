@@ -74,6 +74,11 @@ def page(slug):
     banka = (active_bank_topics(eng, slug, limit=12)
              if (mod == "planned" and not taslak and not aktif) else [])
 
+    # Ekran metni ve meta temizliği kanalın DİLİNDEN gelir: Almanca kanalın önizlemesi
+    # Türkçe rozet/çip göstermemeli.
+    from short_bot.lang_pack import load_pack
+    pack = load_pack(cfg.language)
+
     # SIRADAKİ BÖLÜM: bir sonraki koşunun ne üreteceği. Sayfanın asıl cevabı bu.
     plan = plan_episode(son, arc_max=arc_max)
     if aktif and aktif["remaining"] > 0:
@@ -82,7 +87,7 @@ def page(slug):
         kaynak = "plan"
         arc_pos, arc_total = i + 1, aktif["total"]
     elif plan.continue_from and mod == "chain":
-        konu, kaynak = clean_open_loop(plan.continue_from), "zincir"
+        konu, kaynak = clean_open_loop(plan.continue_from, pack=pack), "zincir"
         arc_pos, arc_total = plan.arc_pos, arc_max
     else:
         konu, kaynak = "", "banka"
@@ -90,8 +95,8 @@ def page(slug):
 
     sonraki = {
         "episode_no": plan.episode_no,
-        "badge": episode_badge(baslik, plan.episode_no),
-        "cta": trade_cta(plan.next_no),
+        "badge": episode_badge(baslik, plan.episode_no, pack=pack),
+        "cta": trade_cta(plan.next_no, pack=pack),
         "topic": konu, "source": kaynak,
         "arc_pos": arc_pos, "arc_total": arc_total,
     }

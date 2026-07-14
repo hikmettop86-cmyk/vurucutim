@@ -9,7 +9,8 @@ import logging
 
 from short_bot.claude_cli import run_json
 from short_bot.reel_models import ReelNarration
-from short_bot.reel_phrases import OVERUSED, find_overused, pick_styles
+from short_bot.lang_pack import load_pack
+from short_bot.reel_phrases import find_overused, pick_styles
 
 log = logging.getLogger(__name__)
 
@@ -45,11 +46,14 @@ def build_reel_prompt(topic: str, channel, hook_patterns=None, seed: int = 0) ->
     lo_w, hi_w = reel_word_budget(channel.reel.target_duration_s)
     lo_s, hi_s = channel.reel.target_duration_s
     lang = _language_name(channel.language)
+    # Yönergeler ve yasaklı kalıplar DİL PAKETİNDEN gelir: Almanca kanalın anlatım
+    # LLM'ine Türkçe yönerge ve Türkçe örnek cümle vermek dil sızıntısı davetiyesidir.
+    pack = load_pack(channel.language)
     # Bağlaçlar CÜMLE olarak verilince LLM birebir kopyalıyordu (ölçüldü: üç
     # anlatımın ikisinde aynı iki cümle). Artık YÖNERGE veriyoruz ve yönergeler
     # seed'e göre dönüyor — her video farklı bir alt küme görür.
-    connective_block = "\n".join(f"    • {s}" for s in pick_styles(seed, 4))
-    banned_block = "\n".join(f"    ✗ \"{p}\"" for p in OVERUSED)
+    connective_block = "\n".join(f"    • {s}" for s in pick_styles(seed, 4, pack=pack))
+    banned_block = "\n".join(f"    ✗ \"{p}\"" for p in pack.overused)
     hook_block = ""
     if hook_patterns:
         pats = "\n".join(f"- {p}" for p in hook_patterns)
@@ -310,11 +314,12 @@ def write_reel_narration(topic: str, *, channel, claude_path: str = "claude",
     # AŞINMIŞ KALIP DENETİMİ. Prompt'a "kullanma" demek YETMİYOR: ölçüldü, model
     # yasak dediğimiz cümleleri yine kuruyor. Yakalayıp yeniden yazdırıyoruz —
     # LLM çağrısı ucuz, tekrar eden kalıp ise videoyu "otomasyon" diye ele veriyor.
-    bad = find_overused(n.full_text())
+    pack = load_pack(channel.language)
+    bad = find_overused(n.full_text(), pack=pack)
     if bad:
         log.warning(f"  senaryo aşınmış kalıp kullandı ({', '.join(bad)}) → yeniden yazılıyor")
         n = _budgeted(prompt + _phrase_feedback(bad))
-        still = find_overused(n.full_text())
+        still = find_overused(n.full_text(), pack=pack)
         if still:
             log.warning(f"  kalıp ikinci denemede de geçti ({', '.join(still)}) → "
                         f"mevcut metin kullanılıyor")

@@ -1,6 +1,23 @@
 """Reel abone mekanikleri: seri çerçevesi + yorum-sorusu + CTA son kartı.
 
 Deterministik (seed → sabit), havuzdan rotasyon (şablon parmak izi vermez).
+
+METİNLERİN TAMAMI DİL PAKETİNDEN gelir (lang_pack). Türkçe sabit oldukları sürece
+Almanca kanalın ekranına Türkçe "ABONE OL" çipi basılıyordu ve LLM'e Türkçe yorum-soru
+yönergesi gidiyordu.
+
+YORUM YEMİ — YÖNERGE, kalıp cümle DEĞİL.
+  Açık uçlu sorular ("Ne düşünüyorsun?") YÜKSEK EFORLUDUR ve cevapsız kalır. Yanıt ALAN
+  türler: İKİLİ/hangisi (tek harf yeter), kişisel hatırlama, doğrulama, eksiği-bul. Ama
+  iyi bir soru VİDEODAKİ SPESİFİK BİR ANA bağlı olmalı — jenerik kalıp bunu yapamaz. O
+  yüzden LLM'e cümleyi yazdırıyoruz, biz yalnız TÜRÜ dayatıyoruz. ("Yanlışı bul" türü
+  KASTEN YOK: kısa vadeli yorum için uzun vadeli OTORİTEYİ takas eder.)
+
+ABONE İSTEĞİ — "Daha fazlası için abone ol" araştırmanın adıyla andığı ölü ifadedir:
+  izleyici bunu on bin kez duydu, beyni filtreliyor ("YouTube beyaz gürültüsü").
+  İşleyen çerçeveler: DEĞER-SPESİFİK (ne alacağını söyle) ve SERİ (dönüşü alışkanlık
+  yapar). ÇİP TEK SATIR: 1080px genişliğe sığmalı — bu yüzden CTA_MAX_CHARS kod sabiti
+  ve dil paketleri ona uymak ZORUNDA (üretim anında doğrulanır).
 """
 from __future__ import annotations
 
@@ -8,46 +25,9 @@ import hashlib
 import logging
 from dataclasses import dataclass
 
+from short_bot.lang_pack import CTA_MAX_CHARS, load_pack
+
 log = logging.getLogger(__name__)
-
-# YORUM YEMİ — YÖNERGE, kalıp cümle DEĞİL.
-#
-# Açık uçlu sorular ("Ne düşünüyorsun?", "Hangisi seni en çok şaşırttı?") YÜKSEK
-# EFORLUDUR ve cevapsız kalır. Yanıt ALAN türler: İKİLİ/hangisi (tek harf yeter),
-# kişisel hatırlama, doğrulama, eksiği-bul. Ama iyi bir soru VİDEODAKİ SPESİFİK BİR
-# ANA bağlı olmalı — jenerik kalıp bunu yapamaz. O yüzden LLM'e cümleyi yazdırıyoruz,
-# biz yalnız TÜRÜ dayatıyoruz.
-#
-# "Yanlışı bul" türü KASTEN YOK: bilim/tarih kanalında kısa vadeli yorum için uzun
-# vadeli OTORİTEYİ takas eder — otorite bizim ürünümüz. Yerine "eksiği bul".
-COMMENT_STYLES = (
-    "İKİLİ SORU: videodaki iki şıkkı karşılaştıran, tek harfle (A/B) "
-    "cevaplanabilecek bir soru sor. Örnek kalıp: 'Sence hangisi daha çılgın: "
-    "A mı, B mi? Tek harf yaz.'",
-    "KİŞİSEL HATIRLAMA: 'Bunu kaç yaşında öğrendin?' gibi, izleyicinin kendi "
-    "deneyimini tek kelimeyle yazabileceği bir soru sor.",
-    "DOĞRULAMA: 'Bunu duyunca tüylerin diken diken olan bir ben miyim?' gibi, "
-    "onay ya da itiraz — ikisi de yorum getiren bir cümle kur.",
-    "EKSİĞİ BUL: 'Kasten bir detay atladım, bulabilir misin?' tarzı, izleyiciyi "
-    "videoya geri döndüren bir soru sor. (Kasten YANLIŞ bilgi verme — otoriteyi "
-    "asla takas etme.)",
-)
-
-# ABONE İSTEĞİ — "Daha fazlası için abone ol" ARAŞTIRMANIN ADIYLA ANDIĞI ölü ifade:
-# izleyici bunu on bin kez duydu, beyni filtreliyor ("YouTube beyaz gürültüsü").
-# İşleyen çerçeveler: DEĞER-SPESİFİK (ne alacağını söyle) ve SERİ (dönüşü alışkanlık
-# yapar; seri izleyicisi ilk-kez izleyiciden çok daha yüksek oranda abone olur).
-#
-# ÇİP TEK SATIR: 1080px genişliğe sığmalı. "Bu seri devam ediyor — ABONE OL" (30
-# karakter) sağdan KESİLİYORDU. Sarmaya izin vermek çözüm değil — iki satırlık çip
-# altyazının üstüne biner ve payoff'u kapatır (araştırma: CTA payoff'u KAPATMAMALI).
-CTA_MAX_CHARS = 24
-CTA_TEXTS = (
-    "Her gün yeni — ABONE OL",
-    "Yarın devamı — ABONE OL",
-    "Seri sürüyor — ABONE OL",
-    "Devamı yarın — ABONE OL",
-)
 
 
 @dataclass(frozen=True)
@@ -77,6 +57,7 @@ def build_subscribe_bits(channel, seed: int, episode=None) -> SubscribeBits:
     ve ikisi de kaybeder.
     """
     reel = channel.reel
+    pack = load_pack(channel.language)
     seri = episode is not None and getattr(episode, "enabled", True)
 
     series_directive = ""
@@ -84,22 +65,21 @@ def build_subscribe_bits(channel, seed: int, episode=None) -> SubscribeBits:
     if seri:
         from short_bot.reel_series import episode_badge
         from short_bot.reel_series import series_directive as _sd
-        title = (getattr(reel, "series_title", "") or "İlginç Bilgiler").strip()
-        series_directive = _sd(episode, title)
-        badge = episode_badge(title, episode.episode_no)
+        title = (getattr(reel, "series_title", "")
+                 or pack.default_series_title).strip()
+        series_directive = _sd(episode, title, pack=pack)
+        badge = episode_badge(title, episode.episode_no, pack=pack)
     elif getattr(reel, "series_enabled", False):
         # Seri açık ama bölüm planı gelmedi (eski çağıranlar / plan kurulamadı) →
         # eski davranış: yalnız bir teaser yönergesi, numara ve takas yok.
-        title = (getattr(reel, "series_title", "") or "İlginç Bilgiler").strip()
-        series_directive = (
-            f"Bu bir '{title}' serisinin bir bölümü. Kapanışı, izleyiciyi bir "
-            f"sonraki bölüm için meraklandıracak bir AÇIK DÖNGÜ / teaser ile bitir "
-            f"('bir sonrakinde daha da tuhafı var' tarzı)."
-        )
+        title = (getattr(reel, "series_title", "")
+                 or pack.default_series_title).strip()
+        series_directive = pack.series.teaser_fallback.format(title=title)
 
     comment_line = ""
     if getattr(reel, "comment_question", False) and not seri:
-        comment_line = COMMENT_STYLES[_idx(seed, "comment", len(COMMENT_STYLES))]
+        comment_line = pack.comment_styles[
+            _idx(seed, "comment", len(pack.comment_styles))]
 
     cta_text = ""
     if getattr(reel, "cta_enabled", False):
@@ -108,11 +88,14 @@ def build_subscribe_bits(channel, seed: int, episode=None) -> SubscribeBits:
             # TAKAS: numarası olan istek somut bir şey vaat eder ve ne zaman
             # geleceğini söyler. "Daha fazlası için abone ol" beyaz gürültüdür.
             from short_bot.reel_series import trade_cta
-            cta_text = trade_cta(episode.next_no)
+            cta_text = trade_cta(episode.next_no, pack=pack)
         else:
-            cta_text = custom or CTA_TEXTS[_idx(seed, "cta", len(CTA_TEXTS))]
+            cta_text = custom or pack.cta_texts[
+                _idx(seed, "cta", len(pack.cta_texts))]
         if len(cta_text) > CTA_MAX_CHARS:
-            # Kesilmiş çip ("...ABONE O") her şeyden kötü — kırp ve uyar.
+            # Paket metinleri ÜRETİM ANINDA doğrulandığı için buraya normalde yalnız
+            # cta_text_custom düşebilir (kullanıcının elle girdiği metin). Kesilmiş
+            # bir çip ("...ABONE O") her şeyden kötü — kırp ve uyar.
             log.warning(f"  abone çipi çok uzun ({len(cta_text)} > {CTA_MAX_CHARS} "
                         f"karakter), kırpılıyor: {cta_text!r}")
             cta_text = cta_text[:CTA_MAX_CHARS].rstrip()

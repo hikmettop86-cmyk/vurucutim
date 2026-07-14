@@ -1283,6 +1283,7 @@ def _run_generator(*, channel, run_id, log, eng, settings,
         log.info("  seri: BAĞIMSIZ slot → bölüm üretilmiyor, ark tüketilmiyor")
     elif reel_cfg is not None and reel_cfg.enabled and reel_cfg.series_enabled:
         from short_bot.db import active_arc, last_episode
+        from short_bot.lang_pack import load_pack
         from short_bot.reel_series import clean_open_loop, plan_episode
         try:
             episode = plan_episode(last_episode(eng, channel.slug),
@@ -1311,7 +1312,8 @@ def _run_generator(*, channel, run_id, log, eng, settings,
                 # gibi bir kuyruk ekliyor (ölçüldü). O metin burada ÜRETİM KONUSU
                 # oluyor — bölüm numarası geçen bir konu tohumu senaryo yazıcısını
                 # yanıltır. Kayıtta HAM hâli duruyor (teşhis).
-                forced_topic = clean_open_loop(episode.continue_from)
+                forced_topic = clean_open_loop(
+                    episode.continue_from, pack=load_pack(channel.language))
                 log.info(f"  seri: ark sürüyor → konu ÖNCEKİ BÖLÜMÜN KAPISINDAN "
                          f"geliyor: {forced_topic[:80]!r}")
             elif episode.continue_from:

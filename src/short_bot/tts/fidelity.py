@@ -21,6 +21,8 @@ import unicodedata
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 
+from short_bot.text_normalize import current_language, locale_fold
+
 # Bitişik kayıp bu uzunluğa ulaşırsa TTS parça düşürmüştür. 3: tek kelimelik ASR
 # ıskaları (ve bir-iki kelimelik yanlış duyumlar) altında kalsın, gerçek öbek
 # kaybı (ölçülen vaka: 5-6 kelime) üstünde kalsın.
@@ -37,17 +39,26 @@ _NUMBERS = {
 }
 
 
-def _fold(text: str) -> str:
-    """Türkçe-güvenli küçültme. ``"İ".lower()`` birleşik nokta üretir (i̇), bu da
-    kelimeleri eşleşmez kılar; harfleri önce elle eşliyoruz."""
-    return text.replace("İ", "i").replace("I", "ı").lower()
+def _fold(text: str, lang: str | None = None) -> str:
+    """Dile duyarlı küçültme (bkz. text_normalize.locale_fold)."""
+    return locale_fold(text, lang or current_language())
 
 
-def normalize_tokens(text: str) -> list[str]:
+def normalize_tokens(text: str, lang: str | None = None) -> list[str]:
     """Karşılaştırılabilir kelime dizisi: noktalama, kesme işareti ve sayı yazımı
-    farkları elenir."""
+    farkları elenir.
+
+    DİL ŞART. Türkçe eşlemesi 'I' → 'ı' yapıyor. Almanca senaryoda büyük 'Ich',
+    whisper dökümünde küçük 'ich' geldiğinde 'ıch' ≠ 'ich' olur ve sadakat denetimi
+    OLMAYAN bir kayıp bildirir. Almanca'da 'Ich/In/Ist/Immer' çok sık.
+
+    ``lang`` verilmezse aktif dil bağlamından okunur (run_pipeline kanalın dilini
+    kurar). Bu, altyazı hizalama zincirinin (caption_align → reel_models → tts.align)
+    dili elden ele taşımasını gereksiz kılıyor — ve o zincirde biri unutulursa hata
+    SESSİZ olurdu.
+    """
     out: list[str] = []
-    for raw in _fold(text).split():
+    for raw in _fold(text, lang).split():
         # Kesme işareti: senaryo "Amerika'nın", whisper "Amerika 'nın" verebilir.
         w = re.sub(r"[^\w]", "", unicodedata.normalize("NFC", raw), flags=re.UNICODE)
         if not w:
@@ -68,7 +79,7 @@ class Drop:
         return self.count < MAX_DROPPED_RUN
 
 
-def worst_drop(script: str, heard: str) -> Drop:
+def worst_drop(script: str, heard: str, lang: str | None = None) -> Drop:
     """Seslendirilmeyen en uzun bitişik kelime öbeği.
 
     Kayıp, ``delete`` kadar ``replace`` olarak da görünür: TTS öbeği atlayınca
@@ -76,7 +87,7 @@ def worst_drop(script: str, heard: str) -> Drop:
     (ölçülen vaka: 6 kelime yerine "ve"). Bu yüzden ölçüt NET kayıp — senaryo
     tarafındaki kelime sayısı eksi duyulan taraftaki.
     """
-    s, h = normalize_tokens(script), normalize_tokens(heard)
+    s, h = normalize_tokens(script, lang), normalize_tokens(heard, lang)
     worst = Drop(0, "")
     for tag, i1, i2, j1, j2 in SequenceMatcher(a=s, b=h, autojunk=False).get_opcodes():
         if tag == "equal":

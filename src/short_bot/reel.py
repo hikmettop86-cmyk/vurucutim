@@ -383,7 +383,7 @@ def produce_reel_video(
         _phase("whisper-hizalama")
 
         heard = " ".join(w.word for w in words)
-        drop = worst_drop(script, heard) if words else None
+        drop = worst_drop(script, heard, channel.language) if words else None
         log.info(f"  reel[ses] duyulan: {heard}")
         log.info(f"  reel[ses] sonda sessizlik: {tail:.1f}sn | en uzun bitişik kayıp: "
                  + (f"{drop.count} kelime" + (f" → '{drop.phrase}'" if drop.count else "")

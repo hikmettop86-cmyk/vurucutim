@@ -27,4 +27,36 @@ def test_TURKCE_sizintisi_YOK():
 
 
 def test_trade_cta():
-    assert EN.trade_cta.format(no=48) == "#48 tomorrow — SUB"
+    from short_bot.reel_series import trade_cta
+    assert trade_cta(48, pack=EN) == "#48 tomorrow — SUB"
+
+
+def test_rozet_NOKTASIZ_I():
+    """turkish_upper 'Big History' → 'BİG HİSTORY' yapardı."""
+    from short_bot.reel_series import episode_badge
+    assert episode_badge("Big History", 47, pack=EN) == "BIG HISTORY #47"
+
+
+def test_ingilizce_KLISE_yakalanir():
+    from short_bot.reel_phrases import find_overused
+    assert find_overused("Did you know that octopuses have three hearts?", pack=EN)
+    assert find_overused("Hey guys, today I'm going to show you something", pack=EN)
+    assert find_overused("Wait for it. The ending is wild.", pack=EN)
+
+
+def test_temiz_metin_GECER():
+    from short_bot.reel_phrases import find_overused
+    assert find_overused("An octopus has three hearts and blue blood.", pack=EN) == []
+
+
+def test_meta_dili_SOKULUR():
+    """İngilizce'de fiil önce ('I'll explain in episode 48'), Türkçe'de sonra."""
+    from short_bot.reel_series import clean_open_loop
+    ham = "The symbiotic bacterium I'll explain in episode 48."
+    assert clean_open_loop(ham, pack=EN) == "The symbiotic bacterium"
+
+
+def test_meta_OLMAYAN_metin_BOZULMAZ():
+    from short_bot.reel_series import clean_open_loop
+    temiz = "The symbiotic bacterium that produces the light"
+    assert clean_open_loop(temiz, pack=EN) == temiz

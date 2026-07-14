@@ -1,0 +1,68 @@
+{
+  "lang": "de",
+  "cta_texts": [
+    "Täglich neu — ABONNIEREN",
+    "Morgen mehr — ABO",
+    "Serie läuft — ABO",
+    "Teil 2 morgen — ABO"
+  ],
+  "trade_cta": "#{no} morgen — ABO",
+  "default_series_title": "Kuriose Fakten",
+  "comment_styles": [
+    "ENTWEDER-ODER-FRAGE: stelle eine Frage, die zwei Dinge aus dem Video vergleicht und mit einem einzigen Buchstaben (A/B) beantwortet werden kann. Muster: 'Was ist verrückter: A oder B? Schreib nur den Buchstaben.'",
+    "PERSÖNLICHE ERINNERUNG: stelle eine Frage, die der Zuschauer in einem Wort aus eigener Erfahrung beantworten kann ('Wie alt warst du, als du das gelernt hast?').",
+    "BESTÄTIGUNG: schreibe einen Satz, der Zustimmung ODER Widerspruch auslöst — beides erzeugt Kommentare ('Sag mir, dass ich nicht die Einzige bin, der es kalt den Rücken runterläuft').",
+    "LÜCKE FINDEN: 'Ich habe absichtlich ein Detail weggelassen — findest du es?' Schick den Zuschauer zurück ins Video. (NIEMALS falsche Informationen geben — Glaubwürdigkeit ist das Produkt.)"
+  ],
+  "connective_styles": [
+    "ERWARTUNG BRECHEN: deute an, dass die Erklärung, die sich der Zuschauer gerade im Kopf zurechtlegt, FALSCH ist. Verrate die richtige noch nicht.",
+    "MASSSTAB VERGRÖSSERN: deute an, dass die Zahl oder Tatsache, die du gerade genannt hast, klein wirkt gegen das, was noch kommt.",
+    "VERBORGENER AKTEUR: kündige an, dass es dahinter eine Ursache gibt, die du noch nicht genannt hast.",
+    "COUNTDOWN: sag, dass sich eine Schwelle nähert — dann schneide, ohne 'und dann' zu sagen.",
+    "WIDERSPRUCH ÖFFNEN: signalisiere, dass eine Tatsache dem widerspricht, was du gerade gesagt hast.",
+    "KOSTEN ANDEUTEN: sag, dass diese Fähigkeit oder Tatsache einen Preis hat. Verrate den Preis nicht.",
+    "PERSÖNLICH MACHEN: deute an, dass das auch im eigenen Körper oder Leben des Zuschauers passiert.",
+    "WENDUNG IM LETZTEN MOMENT: beginne mit 'aber' und kehre das Bild, das du gerade gezeichnet hast, um."
+  ],
+  "series": {
+    "header": "Dies ist FOLGE {no} von '{title}'. Die nächste wird Nummer {next_no} sein.",
+    "paying_promise": "DIESE FOLGE LÖST EIN VERSPRECHEN EIN. Die vorherige Folge hat dem Zuschauer Folgendes versprochen:\n  \"{promise}\"\nDer HÖHEPUNKT des Videos (peak_beat) muss genau DIESES Versprechen einlösen. Der Zuschauer hat für diese Antwort abonniert; erzählst du etwas anderes, ist der Handel gebrochen — er vertraut dir kein zweites Mal.",
+    "announce_arc": "SERIE ANKÜNDIGEN: dies ist die ERSTE Folge einer {arc_total}-TEILIGEN Serie namens '{arc_title}'. Sag irgendwo in der Erzählung (nicht im Hook — nach dem Höhepunkt) in einem Satz, dass die Serie {arc_total} Folgen hat und wohin sie führt. Niemand abonniert ein Video; man abonniert eine SERIE.",
+    "finale": "DIES IST DIE LETZTE FOLGE VON '{arc_title}'. Der Bogen schließt sich hier:\n  • Lass das Feld 'open_loop' LEER — die nächste Folge kommt mit einem NEUEN Thema.\n  • Aber die Serie ist NICHT vorbei: sag nach dem Höhepunkt in einem Satz, dass Folge {next_no} morgen kommt und ein NEUES Thema eröffnet.",
+    "planned_loop": "OFFENE TÜR — BEREITS FESTGELEGT, NICHT ERFINDEN. Das Thema der nächsten Folge ({next_no}) lautet:\n  \"{next_topic}\"\n  • Trage GENAU DIESES THEMA in das Feld 'open_loop' ein.\n  • Nenne DASSELBE Thema auch IM TEXT DES BEATS NACH DEM HÖHEPUNKT, mit deinen eigenen Worten, und verweise es an Folge {next_no}. NICHT im Abspann — der Abo-Chip erscheint genau in diesem Moment auf dem Bildschirm; ist das Versprechen noch nicht ausgesprochen, geht die Aufforderung ins Leere.\n    ✗ 'Aber die Geschichte endet hier nicht.'   ← sagt nichts darüber, was kommt\n    ✓ 'Aber dieses Licht stammt nicht vom Fisch selbst — das Bakterium, das es erzeugt, erkläre ich in Folge {next_no}.'",
+    "chain_loop": "OFFENE TÜR — PFLICHT. Diese Folge löst ihren eigenen Höhepunkt VOLLSTÄNDIG ein, schließt sich aber nicht: sie hinterlässt ein neues, SPEZIFISCHES Thema, das der Höhepunkt selbst aufgedeckt hat, und dessen Antwort liegt in Folge {next_no}. Das erfordert ZWEI GETRENNTE AUSGABEN:\n\n  1) Das FELD 'open_loop' = DAS THEMA DER NÄCHSTEN FOLGE (wird nie ausgesprochen).\n     Dieser Text wird WÖRTLICH als Produktionsthema für Folge {next_no} verwendet.\n     Keine Folgennummer, kein 'nächstes Mal', kein 'ich erkläre' — NUR das Thema.\n     ✗ 'Dieses Geheimnis verrate ich in Folge {next_no}.'\n     ✓ 'Das symbiotische Bakterium, das das Licht des Anglerfischs erzeugt'\n\n  2) DER BEAT NACH DEM HÖHEPUNKT = der AUSGESPROCHENE Cliffhanger.\n     Nenne dasselbe Thema DORT, mit deinen eigenen Worten, und verweise es an Folge {next_no}. NICHT im Abspann — der Abo-Chip erscheint genau in diesem Moment; ein unausgesprochenes Versprechen lässt die Aufforderung ins Leere gehen.\n     ✗ 'Aber die Geschichte endet hier nicht.'   ← sagt nichts darüber, was kommt\n     ✓ 'Aber dieses Licht stammt nicht vom Fisch selbst — das Bakterium, das es erzeugt, erkläre ich in Folge {next_no}.'\n\n  BEIDE müssen dasselbe Thema teilen (überlappende Wörter): das Feld BENENNT es, der Beat SPRICHT es aus.",
+    "teaser_fallback": "Dies ist eine Folge der Serie '{title}'. Beende den Abspann mit einer OFFENEN SCHLEIFE / einem Teaser, der den Zuschauer auf die nächste Folge neugierig macht ('die nächste ist noch verrückter')."
+  },
+  "overused": [
+    "aber jetzt kommt der hammer",
+    "und hier wird es richtig verrückt",
+    "der grund wird dich schockieren",
+    "das glaubst du mir nicht",
+    "wartet ab",
+    "lasst das mal sacken",
+    "und das ist noch nicht mal der verrückteste teil"
+  ],
+  "overused_patterns": [
+    {
+      "label": "Wusstest du schon …? (beantwortbare Ja/Nein-Frage — kein Hook)",
+      "pattern": "\\bwusstest du\\b"
+    },
+    {
+      "label": "Hast du dich schon gefragt …? (gleiches Muster)",
+      "pattern": "\\bhast du dich\\b.{0,20}\\bgefragt\\b"
+    },
+    {
+      "label": "Hallo/Hey Leute (Kanal-Intro — verschwendet die erste Sekunde)",
+      "pattern": "\\b(hallo|hey|hi)\\s+(leute|zusammen|freunde)\\b"
+    },
+    {
+      "label": "Heute zeige ich euch … (Ankündigung, kein Versprechen)",
+      "pattern": "\\bheute (zeige ich|werde ich euch zeigen)\\b"
+    },
+    {
+      "label": "Seid ihr bereit? (leere Floskel)",
+      "pattern": "\\bseid ihr bereit\\b"
+    }
+  ],
+  "meta_tail_pattern": "\\s*[—,;:-]*\\s*(erkl[äa]r|zeig|sag|verrat)\\w*\\s+ich[^.]*?(folge\\s+\\d+|n[äa]chsten\\s+folge|morgen)[^.]*?[.!?]?\\s*$"
+}

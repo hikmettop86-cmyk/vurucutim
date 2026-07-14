@@ -13,93 +13,57 @@ eder — tam da kırmaya çalıştığımız otomasyon parmak izi.
   2. DENETİM: üretilen anlatım aşınmış kalıplara karşı taranır; bulunursa LLM'e
      ne yaptığı söylenip yeniden yazdırılır. Prompt'a "kullanma" demek yetmiyor —
      ölçüldüğü gibi model yine kullanıyor.
+
+Yönergeler ve kalıplar artık DİL PAKETİNDEN geliyor (lang_pack). Türkçe sabit
+oldukları sürece Almanca kanalda denetçi HİÇBİR ŞEY yakalayamıyordu — ve bu sessizdi:
+hata yok, log yok, sadece koruma yok.
 """
 from __future__ import annotations
 
 import hashlib
 import re
 
-from short_bot.tts.fidelity import _fold
-
-# Mikro-döngü bağlaçları: her beat bir sonrakine BORÇ bırakarak bitmeli. Ama NASIL
-# yazılacağı LLM'e ait — biz İŞLEVİ tarif ediyoruz, cümleyi değil.
-CONNECTIVE_STYLES = (
-    "BEKLENTİYİ KIR: izleyicinin şu an aklından geçen açıklamanın YANLIŞ olduğunu "
-    "ima et, doğrusunu daha söyleme.",
-    "ÖLÇEĞİ BÜYÜT: az önce verdiğin sayının/olgunun aslında küçük kaldığını, asıl "
-    "büyüğün geldiğini sezdir.",
-    "GİZLİ AKTÖR: olayın ARKASINDA henüz adını anmadığın bir sebep olduğunu duyur.",
-    "GERİ SAYIM: bir eşiğe/ana yaklaşıldığını söyle — 've sonra' demeden kes.",
-    "ÇELİŞKİ AÇ: az önce söylediğinle çelişen bir gerçek olduğunu haber ver.",
-    "MALİYETİ İMA ET: bu yeteneğin/olgunun bir bedeli olduğunu söyle, bedeli sakla.",
-    "KİŞİSELLEŞTİR: bunun izleyicinin kendi bedeninde/hayatında da olduğunu ima et.",
-    "SON ANDA ÇEVİR: 'ama' ile başlayıp az önceki resmi tersine çeviren bir cümle kur.",
-)
-
-# ÖLÇÜLEN aşınmış kalıplar: prompt bunları örnek verdiği için LLM birebir kopyaladı.
-# Buraya giren bir ifade artık ÜRETİMDE REDDEDİLİR.
-OVERUSED = (
-    "ama asıl garip olan şu",
-    "ve burada iş çığırından çıkıyor",
-    "sebebi ise sandığın şey değil",
-    "bir de bunu duymadın",
-    "bir de şunu duyun",
-    "peki tüm bu",
-    "inanılmaz ama gerçek",
-)
-
-# KALIP denetimi — DİZGE denetimi yetmiyor.
-#
-# GERÇEK KAÇAK (bölüm #2): yasak listesinde "bunu biliyor muydunuz" vardı, LLM
-# "...sahip olduğunu biliyor muydunuz?" yazdı ve DENETİMDEN GEÇTİ. Yasak olan şey
-# bir dizge değil, bir KALIP: cevaplanabilir bir evet/hayır sorusu hook DEĞİLDİR —
-# izleyici onu 200 milisaniyede içinden cevaplar, gerilim çöker, kaydırır.
-#
-# (etiket, örüntü) — etiket LLM'e geri bildirimde gösterilir, örüntü metinde aranır.
-OVERUSED_PATTERNS = (
-    ("… biliyor muydunuz? (cevaplanabilir evet/hayır sorusu — hook değil)",
-     r"\bbiliyor mu(ydunuz|ydun|sun|sunuz)\b"),
-    ("… duymuş muydunuz? (aynı kalıp)",
-     r"\bduymu[sş] mu(ydunuz|ydun)\b"),
-    ("Merhaba arkadaşlar / dostlar (kanal açılışı — ilk saniyeyi harcar)",
-     r"\bmerhaba\s+(arkada[sş]lar|dostlar|herkese)\b"),
-    ("Bugün sizlere … anlatacağım (vaat değil, gündem duyurusu)",
-     r"\bbug[uü]n\s+siz(lere|e)\b"),
-    ("Hazır mısınız? (içi boş kalıp)",
-     r"\bhaz[ıi]r m[ıi](s[ıi]n|s[ıi]n[ıi]z)\b"),
-)
+from short_bot.text_normalize import locale_fold
 
 
-def _norm(text: str) -> str:
-    """Türkçe-güvenli küçültme + noktalama temizliği (kalıp eşleşmesi için)."""
-    return re.sub(r"[^\w\s]", " ", _fold(text)).replace("  ", " ")
+def _norm(text: str, lang: str) -> str:
+    """Dile duyarlı küçültme + noktalama temizliği (kalıp eşleşmesi için).
+
+    Dil ŞART: locale_fold Türkçe için 'I' → 'ı' yapıyor. Almanca metinde bu 'Ich'i
+    'ıch' yapar ve r'\\bich\\b' asla eşleşmez — denetçi çalışıyor görünüp sıfır şey
+    bulur. (Kalıplar bu yüzden noktalamasız yazılmalı: "what's up" → "what s up".)
+    """
+    return re.sub(r"[^\w\s]", " ", locale_fold(text, lang)).replace("  ", " ")
 
 
-def pick_styles(seed: int, n: int = 4) -> list[str]:
+def pick_styles(seed: int, n: int = 4, *, pack) -> list[str]:
     """Bu videonun göreceği bağlaç YÖNERGELERİ. Deterministik: aynı seed → aynı set.
 
     Havuzun tamamını her videoya vermek işe yaramaz — LLM ilk örneklere yapışıyor.
     Alt küme döndürmek, videodan videoya farklı bir tonu zorunlu kılar.
     """
-    n = max(1, min(n, len(CONNECTIVE_STYLES)))
-    idx = list(range(len(CONNECTIVE_STYLES)))
+    havuz = pack.connective_styles
+    n = max(1, min(n, len(havuz)))
+    idx = list(range(len(havuz)))
     # Deterministik karıştırma (Fisher-Yates, hash-güdümlü).
     for i in range(len(idx) - 1, 0, -1):
         h = int(hashlib.sha1(f"{seed}:conn:{i}".encode()).hexdigest(), 16)
         j = h % (i + 1)
         idx[i], idx[j] = idx[j], idx[i]
-    return [CONNECTIVE_STYLES[i] for i in idx[:n]]
+    return [havuz[i] for i in idx[:n]]
 
 
-def find_overused(text: str) -> list[str]:
+def find_overused(text: str, *, pack) -> list[str]:
     """Metindeki aşınmış kalıplar: hem BİREBİR ifadeler hem ÖRÜNTÜLER.
 
     Örüntü katmanı şart: dizge denetimi "bunu biliyor muydunuz"u yakalıyor ama
     "...sahip olduğunu biliyor muydunuz?"u KAÇIRIYOR (gerçek kaçak, bölüm #2) —
     oysa yasak olan şey dizge değil, kalıbın kendisi.
+
+    Dönen liste LLM'e geri bildirimde gösterilir, o yüzden ETİKETLER hedef dilde.
     """
-    t = _norm(text)
-    bulunan = [p for p in OVERUSED if _norm(p) in t]
-    bulunan += [etiket for etiket, oru in OVERUSED_PATTERNS
-                if re.search(oru, t, re.IGNORECASE)]
+    t = _norm(text, pack.lang)
+    bulunan = [p for p in pack.overused if _norm(p, pack.lang) in t]
+    bulunan += [op.label for op in pack.overused_patterns
+                if re.search(op.pattern, t, re.IGNORECASE)]
     return bulunan

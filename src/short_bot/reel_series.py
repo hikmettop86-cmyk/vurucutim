@@ -31,13 +31,12 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from short_bot.text_normalize import turkish_upper
+from short_bot.lang_pack import BADGE_MAX_CHARS  # noqa: F401 — dışarıdan import ediliyor
+from short_bot.text_normalize import locale_upper
 
 # Ark bu kadar bölümden sonra kesilir. Zincir uzadıkça konu, kanalın nişinden
 # uzaklaşır (her bölüm bir öncekinin kapısından doğuyor — sürüklenme birikimlidir).
 DEFAULT_ARC_MAX = 3
-# Rozet ve CTA tek satır: kadraja sığmalı (bkz. reel_subscribe.CTA_MAX_CHARS).
-BADGE_MAX_CHARS = 28
 
 
 @dataclass(frozen=True)
@@ -88,17 +87,18 @@ def plan_episode(last: dict | None, *, arc_max: int = DEFAULT_ARC_MAX) -> Episod
     return EpisodePlan(episode_no=no, arc_pos=1)
 
 
-def episode_badge(series_title: str, episode_no: int) -> str:
+def episode_badge(series_title: str, episode_no: int, *, pack) -> str:
     """Feed kimliği rozeti: "BİLİNMEYEN TARİH #47". Kare sıfırda görünür.
 
     Faceless kanalda FORMAT YÜZDÜR — izleyici seni yüzünden değil, feed'de tanıdığı
     biçimden hatırlar. Numara ayrıca serinin GERÇEK olduğunu kanıtlar: 47. bölüm
     varsa 48. de gelecektir, yani abonelik bir şey satın alır.
     """
-    # turkish_upper ŞART: Python'un .upper()'ı 'i' → 'I' yapar, oysa Türkçede 'i'nin
-    # büyüğü 'İ'dir. "BILINMEYEN TARIH" yazan bir marka rozeti, taşıması gereken
-    # özenin yokluğunu ilan eder.
-    t = turkish_upper((series_title or "").strip())
+    # locale_upper ŞART. Türkçede: Python'un .upper()'ı 'i' → 'I' yapar, oysa 'i'nin
+    # büyüğü 'İ'dir; "BILINMEYEN TARIH" yazan bir marka rozeti, taşıması gereken özenin
+    # yokluğunu ilan eder. Ama Türkçe eşlemesini ALMANCAYA uygulamak da aynı derecede
+    # yanlış: "Bier Garten" → "BİER GARTEN". Büyütme dile özgüdür.
+    t = locale_upper((series_title or "").strip(), pack.lang)
     if not t:
         return f"#{episode_no}"
     rozet = f"{t} #{episode_no}"
@@ -109,94 +109,63 @@ def episode_badge(series_title: str, episode_no: int) -> str:
     return t[:max(1, BADGE_MAX_CHARS - len(kuyruk))].rstrip() + kuyruk
 
 
-def trade_cta(next_no: int) -> str:
+def trade_cta(next_no: int, *, pack) -> str:
     """Abone isteği bir TAKASTIR: söz verilen cevap karşılığında abone.
 
     "Daha fazlası için abone ol" araştırmanın adıyla andığı ölü ifadedir (izleyicinin
     beyni onu YouTube beyaz gürültüsü olarak filtreliyor). Numara veren bir istek ise
     somut bir şey vaat eder ve ne zaman geleceğini söyler.
+
+    Şablon dil paketinden gelir ve ÜRETİM ANINDA doğrulanmıştır (render edilmiş hâli
+    ≤ CTA_MAX_CHARS) — burada kırpma yapılmaz.
     """
-    return f"#{next_no} yarın — ABONE OL"
+    return pack.trade_cta.format(no=next_no)
 
 
-def series_directive(plan: EpisodePlan, series_title: str) -> str:
+def series_directive(plan: EpisodePlan, series_title: str, *, pack) -> str:
     """Senaryo LLM'ine geçen seri yönergesi.
 
     İki iş yaptırır:
       1. Bu bölüm, önceki bölümün açtığı kapıyı ÖDEMELİ (ark sürüyorsa).
       2. Bu bölüm YENİ bir kapı açmalı (open_loop) ve o cümleyi TEPEDEN SONRAKİ
          beat'in içine dokumalı — abone çipi tam orada ateşleniyor.
+
+    Yönerge METİNLERİ dil paketinde. Almanca kanalın anlatım LLM'ine Türkçe talimat ve
+    Türkçe örnek cümle vermek dil sızıntısı davetiyesidir; pedagoji (ödenmiş tepe +
+    açık kapı) her dilde korunur, cümleler o dilde yeniden yazılır.
     """
     if not plan.enabled:
         return ""
-    t = (series_title or "İlginç Bilgiler").strip()
-    satirlar = [
-        f"Bu, '{t}' serisinin {plan.episode_no}. BÖLÜMÜ. Bir sonraki bölüm "
-        f"{plan.next_no} numaralı olacak.",
-    ]
+    t = (series_title or pack.default_series_title).strip()
+    s = pack.series
+    satirlar = [s.header.format(title=t, no=plan.episode_no, next_no=plan.next_no)]
+
     if plan.continue_from:
-        satirlar.append(
-            f"BU BÖLÜM BİR SÖZÜ ÖDÜYOR. Önceki bölüm izleyiciye şunu vaat etti:\n"
-            f'  "{plan.continue_from}"\n'
-            f"Videonun TEPESİ (peak_beat) tam olarak BU SÖZÜ ödemeli. İzleyici bu "
-            f"cevap için abone oldu; başka bir şey anlatırsan takas bozulur ve bir "
-            f"daha güvenmez.")
+        satirlar.append(s.paying_promise.format(promise=plan.continue_from,
+                                                no=plan.episode_no))
+
     # PLANLI ARKIN İLK BÖLÜMÜ SERİYİ İLAN EDER. İzleyici bir VİDEOYA abone olmaz, bir
     # SERİYE abone olur: "3 bölümlük bir seri" demek, tek adımlık bir vaatten çok daha
     # güçlü bir abone sebebidir.
     if plan.is_planned and plan.is_new_arc:
-        satirlar.append(
-            f"SERİYİ İLAN ET: bu, '{plan.arc_title}' adlı {plan.arc_total} BÖLÜMLÜK "
-            f"bir serinin İLK bölümü. Anlatımın bir yerinde (hook'ta değil, tepeden "
-            f"sonra) serinin {plan.arc_total} bölüm olduğunu ve nereye gittiğini bir "
-            f"cümleyle söyle. İzleyici bir videoya değil, bir SERİYE abone olur.")
+        satirlar.append(s.announce_arc.format(arc_title=plan.arc_title,
+                                              arc_total=plan.arc_total,
+                                              no=plan.episode_no))
 
     if plan.is_arc_finale:
         # Son bölüm: ödenmemiş vaat BIRAKMAZ (plan bitti) ama seri devam ediyor.
-        satirlar.append(
-            f"BU, '{plan.arc_title}' SERİSİNİN SON BÖLÜMÜ. Ark burada kapanıyor:\n"
-            f"  • 'open_loop' alanını BOŞ bırak — sıradaki bölüm YENİ bir konuyla gelecek.\n"
-            f"  • Ama seri BİTMİYOR: tepeden sonra, {plan.next_no}. bölümün yarın "
-            f"geleceğini ve YENİ bir konu açacağını bir cümleyle söyle.")
+        satirlar.append(s.finale.format(arc_title=plan.arc_title,
+                                        next_no=plan.next_no, no=plan.episode_no))
         return "\n".join(satirlar)
 
     if plan.next_topic:
         # PLANLI ARK: kapı UYDURULMAZ, planda YAZILI. LLM'in işi onu SÖYLEMEK.
-        satirlar.append(
-            f"AÇIK KAPI — PLANDA YAZILI, UYDURMA. Bir sonraki bölümün ({plan.next_no}) "
-            f"konusu ŞUDUR:\n"
-            f'  "{plan.next_topic}"\n'
-            f"  • 'open_loop' alanına BU KONUYU aynen yaz.\n"
-            f"  • AYNI konuyu TEPEDEN SONRAKİ BEAT'İN METNİNDE de, kendi sözcüklerinle "
-            f"an ve {plan.next_no}. bölüme havale et. Kapanışta DEĞİL — abone isteği "
-            f"ekranda tam o anda beliriyor; söz daha söylenmemişse istek boşa düşer.\n"
-            f"    ✗ 'Ama hikâye burada bitmiyor.'   ← neyin geleceğini söylemiyor\n"
-            f"    ✓ 'Ama o ışık balığın kendi değil — onu üreten bakteriyi "
-            f"{plan.next_no}. bölümde anlatıyorum.'")
+        satirlar.append(s.planned_loop.format(next_no=plan.next_no,
+                                              next_topic=plan.next_topic))
         return "\n".join(satirlar)
 
     # ZİNCİR MODU: plan yok → kapıyı LLM'in kendisi bulur.
-    satirlar.append(
-        f"AÇIK KAPI — ZORUNLU. Bu bölüm kendi tepesini TAM ÖDER, ama kapanmaz: "
-        f"tepenin AÇIĞA ÇIKARDIĞI yeni ve SPESİFİK bir konu bırakır; onun cevabı "
-        f"{plan.next_no}. bölümdedir. Bu İKİ AYRI ÇIKTI ister:\n"
-        f"\n"
-        f"  1) 'open_loop' ALANI = BİR SONRAKİ BÖLÜMÜN KONUSU (konuşulmaz).\n"
-        f"     Bu metin {plan.next_no}. bölümün üretim konusu olarak AYNEN kullanılacak.\n"
-        f"     Bölüm numarası / 'sonraki bölümde' / 'anlatacağım' GİRMEZ — sadece konu.\n"
-        f"     ✗ 'Bunun sırrını {plan.next_no}. bölümde açıklıyoruz.'\n"
-        f"     ✓ 'Fener balığının ışığını üreten simbiyotik bakteri'\n"
-        f"\n"
-        f"  2) TEPEDEN SONRAKİ BEAT'İN METNİ = SÖYLENEN cliffhanger.\n"
-        f"     Aynı konuyu ORADA, KENDİ SÖZCÜKLERİYLE an ve {plan.next_no}. bölüme "
-        f"havale et. Kapanışta DEĞİL — abone isteği ekranda tam o anda beliriyor; "
-        f"söz daha söylenmemişse istek boşa düşer.\n"
-        f"     ✗ 'Ama hikâye burada bitmiyor.'   ← neyin geleceğini söylemiyor\n"
-        f"     ✓ 'Ama o ışık balığın kendi değil — onu üreten bakteriyi "
-        f"{plan.next_no}. bölümde anlatıyorum.'\n"
-        f"\n"
-        f"  İKİSİ AYNI KONUYU paylaşmalı (ortak sözcükler): alan konuyu ADLANDIRIR, "
-        f"beat onu SÖYLER.")
+    satirlar.append(s.chain_loop.format(next_no=plan.next_no))
     return "\n".join(satirlar)
 
 
@@ -204,21 +173,14 @@ def series_directive(plan: EpisodePlan, series_title: str) -> str:
 # ilk gerçek koşuda tam olarak bunu yaptı). O metin bir sonraki bölümün ÜRETİM KONUSU
 # olarak kullanılıyor — içinde bölüm numarası ve "anlatıyoruz" geçen bir konu tohumu,
 # senaryo yazıcısını yanıltır. Prompt'ta yasakladık; burada da TEMİZLİYORUZ.
-# Karakter sınıfları HEM Türkçe HEM ASCII'yi tanır: LLM çıktısı normalde Türkçe
-# ('bölümde') ama aksan temizliğinden geçmiş ya da ASCII yazılmış metinler de gelebilir.
-_B = r"b[öo]l[üu]m"                                   # bölüm
-_V = r"(anlat|a[çc][ıi]kl|g[öo]ster|s[öo]yl|payla[şs])"   # anlatacağım / açıklıyoruz / ...
-# "… <konu> 2. bölümde açıklıyoruz." → sondaki HAVALE cümleciğini sök, konuyu bırak.
+#
+# Örüntünün KENDİSİ dil paketinde (pack.meta_tail_pattern): Almanca "erkläre ich in
+# Folge 48" Türkçe regex'e takılmaz ve o kirli metin bir sonraki bölümün konusu olur.
 # Sona ÇAPALI ($): cümlenin ortasındaki masum bir 'anlat' kelimesini yemesin.
-_META = re.compile(
-    rf"\s*[—,;:-]*\s*"
-    rf"(\d+\s*\.?\s*{_B}\w*|(bir\s+)?sonraki\s+{_B}\w*|yar[ıi]n)"
-    rf"[^.]*?{_V}\w*\s*[.!?]?\s*$",
-    re.IGNORECASE)
 _TAIL = re.compile(r"[\s.,;:—-]+$")
 
 
-def clean_open_loop(text: str) -> str:
+def clean_open_loop(text: str, *, pack) -> str:
     """Meta dili ayıkla: geriye KONUNUN KENDİSİ kalsın.
 
     'Ev kedilerinden iyi olmalarının bilimsel sırrını 2. bölümde açıklıyoruz.'
@@ -230,7 +192,8 @@ def clean_open_loop(text: str) -> str:
     s = (text or "").strip()
     if not s:
         return ""
-    kirpik = _TAIL.sub("", _META.sub("", s)).strip()
+    meta = re.compile(pack.meta_tail_pattern, re.IGNORECASE)
+    kirpik = _TAIL.sub("", meta.sub("", s)).strip()
     if len(kirpik.split()) < 3:
         return s
     return kirpik

@@ -1,9 +1,17 @@
 from short_bot.config import ReelConfig
-from short_bot.reel_subscribe import (CTA_TEXTS, COMMENT_STYLES,
-                                      SubscribeBits, build_subscribe_bits)
+from short_bot.lang_pack import load_pack
+from short_bot.reel_subscribe import SubscribeBits, build_subscribe_bits
+
+# Metinler artık DİL PAKETİNDE (tr.json = eski sabitlerin birebir kopyası;
+# bkz. test_lang_pack_tr_golden.py). Beklentiler DEĞİŞMEDİ.
+TR = load_pack("tr")
+CTA_TEXTS = TR.cta_texts
+COMMENT_STYLES = TR.comment_styles
 
 
 class _Ch:
+    language = "tr"
+
     def __init__(self, **reel_kw):
         self.reel = ReelConfig(enabled=True, voice_id="v", **reel_kw)
 

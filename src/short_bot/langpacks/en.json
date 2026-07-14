@@ -64,5 +64,5 @@
       "pattern": "\\bare you ready\\b"
     }
   ],
-  "meta_tail_pattern": "\\s*[—,;:-]*\\s*((in|on)\\s+)?(episode\\s+\\d+|the\\s+next\\s+(episode|part|one)|tomorrow)[^.]*?(explain|show|reveal|tell|cover|break down)\\w*\\s*[.!?]?\\s*$"
+  "meta_tail_pattern": "\\s*[—,;:-]*\\s*((i|we)\\s*['’]?\\s*(ll|will)?\\s+)?(explain|show|reveal|tell|cover|unpack)\\w*\\s+[^.]*?((in|on)\\s+)?(episode\\s+\\d+|the\\s+next\\s+(episode|part|one)|tomorrow)\\s*[.!?]?\\s*$"
 }
