@@ -51,7 +51,19 @@ def create_app(
 
     # Ensure schema exists (Phase 1+2 init_db is idempotent + adds pragmas)
     eng = init_db(db_path)
-    # Self-heal zombie runs from a prior crash/restart (releases stale locks too)
+    # Bir önceki çökme/yeniden başlatmadan kalan enkazı topla.
+    #
+    # Panel yeniden başlatılınca UÇUŞTAKİ ÜRETİM ÖLÜR (thread, sürecin içinde). Geriye
+    # 'running' bir koşu, 'producing'de donmuş bir otomasyon slotu ve sahipsiz bir kilit
+    # kalır. Slot geri alınmazsa otomasyon onu bir daha ele almaz — günün videosu
+    # sessizce yok olur (2026-07-14'te tam bu yaşandı).
+    from short_bot.db import reclaim_producing_slots
+    _geri = reclaim_producing_slots(eng)
+    if _geri:
+        import logging
+        logging.getLogger("short_bot.web").warning(
+            f"{_geri} otomasyon slotu 'producing'de öksüz kalmıştı → 'planned'a geri "
+            f"alındı (panel yeniden başlatılırken üretim ölmüş).")
     n = cleanup_zombie_runs(eng, Path(lock_dir), age_minutes=60)
     if n:
         import logging
@@ -88,6 +100,14 @@ def create_app(
         Path(secrets_path) if secrets_path is not None else Path("data") / "secrets.yaml"
     )
     app.config["SHORTBOT_SETTINGS"] = load_settings(config_dir / "settings.yaml")
+
+    # ÜRETİLEN dil paketleri kullanıcının yazılabilir dizinine gider. Kodla gelenler
+    # (tr, en) src/short_bot/langpacks/ altında; paketlenmiş Electron uygulamasında
+    # kurulum dizini salt-okunur olabilir ve üretilenlerin bir yere yazılması gerekir.
+    from short_bot.lang_pack import set_user_dir
+    _langpacks = config_dir / "langpacks"
+    _langpacks.mkdir(parents=True, exist_ok=True)
+    set_user_dir(_langpacks)
 
     db.init_app(app)
 

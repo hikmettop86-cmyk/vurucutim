@@ -1,0 +1,104 @@
+{% extends "base.html.j2" %}
+{% block title %}Dil Paketleri{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto p-6">
+
+  <div class="mb-6">
+    <h1 class="text-2xl font-bold text-claude-text">Dil Paketleri</h1>
+    <p class="text-sm text-claude-muted mt-1">
+      Bir kanalın ekranına basılan metinler (abone çipi, bölüm rozeti), anlatım LLM'ine
+      giden yönergeler ve <span class="text-claude-text font-medium">aşınmış-kalıp
+      denetçisi</span> — hepsi kanalın dilinden gelir. Paket yoksa o dilde kanal
+      kurulamaz.
+    </p>
+  </div>
+
+  {% with messages = get_flashed_messages() %}
+    {% for m in messages %}
+      <div class="mb-4 px-4 py-3 rounded-lg bg-claude-surface border border-claude-border
+                  text-sm text-claude-text whitespace-pre-line">{{ m }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <div class="space-y-4">
+  {% for d in diller %}
+    <article class="rounded-xl border bg-white p-5
+                    {% if d.var %}border-claude-border{% else %}border-red-200 bg-red-50{% endif %}">
+      <div class="flex items-start justify-between gap-4">
+        <div class="min-w-0">
+          <h2 class="text-lg font-semibold text-claude-text">
+            {{ d.name }}
+            <span class="text-sm font-normal text-claude-muted">({{ d.lang }})</span>
+          </h2>
+
+          {% if d.var %}
+            <p class="text-xs mt-1">
+              {% if d.uretilmis %}
+                <span class="px-2 py-0.5 rounded-md bg-claude-accent/10 text-claude-accent
+                             font-semibold">Sonnet 5 üretti</span>
+              {% else %}
+                <span class="px-2 py-0.5 rounded-md bg-claude-surface-alt text-claude-muted
+                             font-semibold">kodla gelir</span>
+              {% endif %}
+            </p>
+            <div class="flex flex-wrap gap-2 mt-3">
+              {% for c in d.pack.cta_texts %}
+                <span class="px-2 py-1 rounded-md bg-claude-surface-alt text-xs
+                             text-claude-text font-mono">{{ c }}</span>
+              {% endfor %}
+              <span class="px-2 py-1 rounded-md bg-claude-accent/10 text-xs
+                           text-claude-accent font-mono">
+                {{ d.pack.trade_cta.replace('{no}', '48') }}</span>
+            </div>
+            <p class="text-xs text-claude-muted mt-2">
+              {{ d.pack.overused|length }} yasaklı ifade ·
+              {{ d.pack.overused_patterns|length }} kalıp örüntüsü ·
+              rozet örneği: <span class="font-mono text-claude-text">{{ d.pack.default_series_title }} #47</span>
+            </p>
+          {% elif d.uretiliyor %}
+            <p class="text-sm text-claude-muted mt-1">Üretiliyor… (Sonnet 5, birkaç dakika)</p>
+          {% else %}
+            <p class="text-sm text-red-700 mt-1">
+              <b>Paket yok.</b> Bu dilde kanal kurulamaz. Türkçe pakete düşülmez —
+              Almanca bir kanalın ekranına Türkçe "ABONE OL" basması sessiz bir
+              bozulmadır.
+            </p>
+          {% endif %}
+        </div>
+
+        {% if not d.uretiliyor %}
+        <form method="post" action="/lang-packs/{{ d.lang }}/generate" class="flex-shrink-0"
+              onsubmit="return confirm('{{ d.name }} paketi Sonnet 5 ile {% if d.var %}YENİDEN {% endif %}üretilsin mi? (birkaç dakika)')">
+          <button class="px-4 py-2 rounded-lg text-sm font-semibold shadow-sm whitespace-nowrap
+                         {% if d.var %}bg-white border border-claude-border text-claude-text hover:bg-claude-surface-alt{% else %}bg-claude-accent text-white hover:opacity-90{% endif %}">
+            {% if d.var %}Yeniden üret{% else %}Sonnet 5 ile üret{% endif %}
+          </button>
+        </form>
+        {% endif %}
+      </div>
+
+      {% if d.var %}
+      <details class="mt-4">
+        <summary class="text-sm text-claude-muted cursor-pointer select-none
+                        hover:text-claude-accent">Paketi gör / düzenle</summary>
+        <form method="post" action="/lang-packs/{{ d.lang }}" class="mt-3">
+          <textarea name="json" rows="18" spellcheck="false"
+                    class="w-full bg-claude-surface border border-claude-border rounded-lg
+                           px-3 py-2 text-xs font-mono text-claude-text">{{ d.json }}</textarea>
+          <p class="text-xs text-claude-muted mt-2">
+            Kaydetmeden önce doğrulanır: abone çipi 24 karaktere sığmalı, seri
+            yönergelerinin yer tutucuları eksiksiz olmalı, regex'ler derlenmeli.
+            Geçmezse reddedilir ve sebebi söylenir.
+          </p>
+          <button class="mt-2 px-3 py-1.5 rounded-lg bg-white border border-claude-border
+                         text-xs font-semibold text-claude-text hover:bg-claude-surface-alt">
+            Kaydet</button>
+        </form>
+      </details>
+      {% endif %}
+    </article>
+  {% endfor %}
+  </div>
+</div>
+{% endblock %}

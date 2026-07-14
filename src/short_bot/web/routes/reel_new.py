@@ -11,7 +11,7 @@ from pydantic import ValidationError
 from short_bot.config import (ChannelConfig, GeneratorConfig, ReelConfig,
                               load_channel, resolve_ai_call, save_channel)
 from short_bot.dna import build_css_override, generate_dna
-from short_bot.locale import RSS_LOCALES, SUPPORTED_LANGUAGES
+from short_bot.locale import (LANGUAGE_NAMES, RSS_LOCALES, SUPPORTED_LANGUAGES)
 from short_bot.pexels import load_secrets as _load_secrets
 from short_bot.web.niche_finder import find_niches_ai, find_niches_data
 from short_bot.web.runs import launch_pipeline
@@ -114,6 +114,21 @@ def create():
     if not voice_id:
         flash("Reel kanalı için bir ses seç (voice_id boş).", "error")
         return redirect(url_for("reel_new.form"))
+
+    # DİL PAKETİ ŞART — ücretli DNA çağrısından ÖNCE bak.
+    #
+    # Paketi olmayan bir dilde kanal kurulursa: ekrana Türkçe "ABONE OL" çipi basılır,
+    # rozet Türkçe noktalı İ ile yazılır ("BİER GARTEN") ve aşınmış-kalıp denetçisi
+    # HİÇBİR ŞEY yakalamaz. Üçü de sessiz. Kanalı kurup bozuk çalıştırmaktansa kurulumu
+    # reddetmek yeğdir.
+    from short_bot.lang_pack import load_pack
+    try:
+        load_pack(language)
+    except RuntimeError:
+        flash(f"'{LANGUAGE_NAMES.get(language, language)}' dil paketi henüz üretilmedi. "
+              f"Bu dilde kanal kurmadan önce Dil Paketleri sayfasından üretin "
+              f"(Sonnet 5, birkaç dakika).", "error")
+        return redirect(url_for("lang_packs.page"))
 
     cfg_dir = current_app.config["SHORTBOT_CONFIG_DIR"]
     templates_dir = current_app.config["SHORTBOT_TEMPLATES_DIR"]
