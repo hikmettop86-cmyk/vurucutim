@@ -126,10 +126,19 @@ def test_madencilik_PATLARSA_cokmez(tmp_path, monkeypatch):
     assert autofill(eng, _Ch(), api_keys=["K"], llm_call=object(), now=NOW) == 0
 
 
-def test_API_anahtari_yoksa_dokunma(tmp_path):
+def test_API_anahtari_YOKKEN_de_doldurur(tmp_path, monkeypatch):
+    """DAVRANIŞ DEĞİŞTİ (ölçümle).
+
+    Eskiden `if not api_keys: return 0` — YouTube anahtarı yoksa banka HİÇ dolmuyordu.
+    Ama konu üretimi artık YouTube'a bağlı değil: kanıt yoksa model kendi bilgisiyle
+    üretiyor. Anahtar yalnız KANIT toplamak için; olmaması üretimi durdurmamalı.
+    """
+    monkeypatch.setattr(MINER, "refresh_topic_bank",
+                        lambda *a, **kw: {"added": 6, "skipped_dup": 0,
+                                          "rejected": 0})
     eng = _eng(tmp_path)
     _doldur(eng, 2)
-    assert autofill(eng, _Ch(), api_keys=[], llm_call=object(), now=NOW) == 0
+    assert autofill(eng, _Ch(), api_keys=[], llm=object(), now=NOW) == 6
 
 
 def test_generator_olmayan_kanal_atlanir(tmp_path, monkeypatch):
@@ -212,17 +221,24 @@ def test_madencilik_PATLASA_da_kota_korumasi_isler(tmp_path, monkeypatch):
 
 
 def test_doldurmadan_SONRA_da_dusukse_UYARIR(tmp_path, monkeypatch, caplog):
-    """Niş tükeniyor olabilir — kullanıcıya REFERANS KANAL öner."""
+    """Seviye hâlâ düşükse SEBEBİ söylenmeli.
+
+    Eski uyarı "niş tükeniyor, REFERANS KANAL ekleyin" diyordu. Ölçüm bunu ÇÜRÜTTÜ:
+    konu üretimi artık YouTube'a bağlı değil (kanıt yoksa model kendi üretiyor), yani
+    "niş tükendi" geçerli bir açıklama değil. Kalan sebepler sayılarla verilmeli:
+    kaç konu doğrulamada, kaç konu mükerrer diye elendi.
+    """
     import logging
 
     monkeypatch.setattr(MINER, "refresh_topic_bank",
-                        lambda *a, **kw: {"added": 1, "skipped_dup": 9})
+                        lambda *a, **kw: {"added": 1, "skipped_dup": 9,
+                                          "rejected": 2})
     eng = _eng(tmp_path)
     _doldur(eng, 2)
     with caplog.at_level(logging.WARNING):
         autofill(eng, _Ch(), api_keys=["K"], llm_call=object(), now=NOW)
-    assert "niş tükeniyor" in caplog.text.lower()
-    assert "REFERANS KANAL" in caplog.text
+    assert "2 konu doğrulamada" in caplog.text
+    assert "9 konu mükerrer" in caplog.text
 
 
 # --- SAYAÇ ----------------------------------------------------------------

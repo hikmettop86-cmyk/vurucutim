@@ -48,30 +48,57 @@ def page(slug):
                            low_water=LOW_WATER)
 
 
-def _miner_kwargs(cfg) -> dict:
-    """YouTube-API backend girdileri: çoklu anahtar + EN çıpa + damıtma LLM'i.
-
-    Madenci bedava 10K birim × anahtar kotasıyla saniyeler içinde biter;
-    anahtar yoksa rota net hatayla durur (NexLev kaldırıldı)."""
+def _secrets() -> dict:
     import yaml
+    try:
+        sp = current_app.config["SHORTBOT_SECRETS_PATH"]
+        return (yaml.safe_load(sp.read_text(encoding="utf-8"))
+                if sp.exists() else {}) or {}
+    except Exception:   # noqa: BLE001
+        return {}
+
+
+def _sonnet():
+    """Konu üretimi ve doğrulaması SONNET 5 ile koşar (Claude CLI → OpenRouter).
+
+    ÖLÇÜLDÜ: damıtma eskiden role='default' ile koşuyordu = google/gemini-3.1-flash-lite,
+    sistemin EN UCUZ modeli. Bankanın %85'i çöp oldu (27 aktif konudan 23'ü) ve bazıları
+    bilimsel olarak YANLIŞTI. Kanalın otoritesi ürünüdür.
+    """
+    from short_bot.llm_sonnet import sonnet_json
+    settings = current_app.config["SHORTBOT_SETTINGS"]
+    secrets = _secrets()
+
+    def _f(prompt, schema, **kw):
+        return sonnet_json(prompt, schema,
+                           claude_path=settings.claude_cli_path,
+                           openrouter_model=settings.openrouter_models.get(
+                               "script", "anthropic/claude-sonnet-5"),
+                           openrouter_key=secrets.get("openrouter_api_key"))
+    return _f
+
+
+def _miner_kwargs(cfg) -> dict:
+    """Kanıt madenciliği girdileri.
+
+    ``api_keys`` ARTIK ZORUNLU DEĞİL: anahtar yoksa madencilik atlanır ve konu kanıtsız
+    üretilir (bkz. topic_propose). ``llm_call`` yalnız arama SORGUSU üretimi için
+    (ucuz model yeter); konuyu YAZAN model ``llm`` (Sonnet 5).
+    """
     from short_bot.config import resolve_ai_call
     from short_bot.reel_relevance import derive_footage_anchor
     from short_bot.yt_outliers import resolve_youtube_api_keys
-    try:
-        sp = current_app.config["SHORTBOT_SECRETS_PATH"]
-        secrets = yaml.safe_load(sp.read_text(encoding="utf-8")) if sp.exists() else {}
-    except Exception:
-        secrets = {}
-    secrets = secrets or {}
+    secrets = _secrets()
     settings = current_app.config["SHORTBOT_SETTINGS"]
     try:
         llm_call = resolve_ai_call(settings, secrets, "default")
-    except Exception:
+    except Exception:   # noqa: BLE001
         llm_call = None
     tmpl = getattr(getattr(cfg, "dna", None), "search_query_template", "") or ""
     return {"api_keys": resolve_youtube_api_keys(secrets),
             "anchor": derive_footage_anchor(tmpl),
             "llm_call": llm_call,
+            "llm": _sonnet(),
             "keywords": list(getattr(cfg, "keywords", None) or []),
             "reference_channels": list(getattr(cfg, "reference_channels", None) or [])}
 
@@ -83,25 +110,49 @@ def refresh(slug):
     db_path = current_app.config["SHORTBOT_DB_PATH"]
     language = cfg.language
     miner_kw = _miner_kwargs(cfg)
-    if not miner_kw["api_keys"]:
-        # NexLev kaldırıldı — tek backend YouTube API; anahtar yoksa iş başlatma.
-        flash("YouTube API anahtarı yok — Ayarlar → YouTube Data API bölümünden "
-              "anahtar ekleyin.", "error")
-        return redirect(url_for("topic_bank.page", slug=slug))
+    anahtarsiz = not miner_kw["api_keys"]
 
     def _job():
         try:
             eng = init_db(db_path)
             res = refresh_topic_bank(eng, slug, niche_query,
                                      language=language, **miner_kw)
-            _LOG.info(f"[topic-bank] {slug}: +{res['added']} "
-                      f"(dup atlanan {res['skipped_dup']})")
+            _LOG.info(f"[topic-bank] {slug}: +{res['added']} konu "
+                      f"({res['skipped_dup']} mükerrer, "
+                      f"{res['rejected']} doğrulamada elendi)")
         except Exception as e:  # noqa: BLE001 — thread paneli düşürmesin
             _LOG.warning(f"[topic-bank] {slug} yenileme hatası: {e}")
 
     _start_thread(_job)
-    flash("Konu bankası yenileme başlatıldı — YouTube API ile genellikle 1 dk "
-          "içinde biter; sayfayı sonra yenileyin.", "info")
+    if anahtarsiz:
+        # ARTIK HATA DEĞİL: anahtar yoksa kanıt toplanmaz ama konu yine üretilir.
+        flash("YouTube API anahtarı yok — konular KANIT OLMADAN üretiliyor (model "
+              "kendi bilgisiyle). Kanıtlı konu için Ayarlar → YouTube Data API'den "
+              "anahtar ekleyin.", "info")
+    else:
+        flash("Konu bankası yenileniyor — birkaç dakika sürer; sayfayı sonra "
+              "yenileyin.", "info")
+    return redirect(url_for("topic_bank.page", slug=slug))
+
+
+@bp.post("/channels/<slug>/topic-bank/audit")
+def audit(slug):
+    """Bankayı denetle: içi boş / vaat eden / bilimsel olarak yanlış konuları reddet.
+
+    SENKRON. Denetim tek LLM çağrısı ve kullanıcı sonucu ANINDA görmeli ("kaç konu
+    elendi"). "Birkaç dakika içinde biter" diyen bir panel, sonucu asla göstermez —
+    aynı yalanı autopilot planlayıcısında yaşadık ve düzelttik.
+    """
+    from short_bot.topic_audit import audit_bank
+    cfg = _load_cfg(slug)
+    eng = init_db(current_app.config["SHORTBOT_DB_PATH"])
+    try:
+        res = audit_bank(eng, slug, language=cfg.language, llm=_sonnet())
+    except Exception as e:   # noqa: BLE001 — kullanıcıya SEBEBİ söyle
+        flash(f"Denetim başarısız: {e}", "error")
+        return redirect(url_for("topic_bank.page", slug=slug))
+    flash(f"{res['checked']} konu denetlendi, {res['rejected']} tanesi reddedildi "
+          f"(içi boş / vaat eden / bilimsel olarak yanlış).", "success")
     return redirect(url_for("topic_bank.page", slug=slug))
 
 

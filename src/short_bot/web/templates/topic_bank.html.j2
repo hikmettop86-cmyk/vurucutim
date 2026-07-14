@@ -21,10 +21,23 @@
         Üretilen konu listeden düşer, bir daha üretilmez.
       </p>
     </div>
-    <form method="post" action="/channels/{{ slug }}/topic-bank/refresh" class="flex-shrink-0">
-      <button class="px-4 py-2 rounded-lg bg-claude-accent hover:opacity-90 text-white
-                     text-sm font-semibold shadow-sm">Yenile</button>
-    </form>
+    <div class="flex items-center gap-2 flex-shrink-0">
+      {# Konu damıtması eskiden sistemin EN UCUZ modelinde koşuyordu ve bankanın %85'i
+         çöp oldu (ölçüldü); bazıları bilimsel olarak YANLIŞTI. Yeni konular üretim
+         anında doğrulanıyor — bu düğme ESKİ kayıtları temizler. #}
+      {% if rows %}
+      <form method="post" action="/channels/{{ slug }}/topic-bank/audit"
+            onsubmit="return confirm('Bankadaki {{ rows|length }} aktif konu Sonnet 5 ile denetlenecek. İçi boş, vaat eden ya da bilimsel olarak YANLIŞ olanlar REDDEDİLECEK. Devam edilsin mi?')">
+        <button class="px-4 py-2 rounded-lg bg-white border border-claude-border
+                       text-sm font-semibold text-claude-text hover:bg-claude-surface-alt">
+          Bankayı denetle</button>
+      </form>
+      {% endif %}
+      <form method="post" action="/channels/{{ slug }}/topic-bank/refresh">
+        <button class="px-4 py-2 rounded-lg bg-claude-accent hover:opacity-90 text-white
+                       text-sm font-semibold shadow-sm">Yenile</button>
+      </form>
+    </div>
   </div>
 
   {% with messages = get_flashed_messages() %}
@@ -88,16 +101,30 @@
             <p class="text-claude-text leading-snug">{{ r.topic }}</p>
 
             <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-3 text-xs">
+              {# KAYNAK: kanıtlı mı, üretilmiş mi? Kanıtsız bir konuyu kanıtlı sanmak
+                 sessiz bir yanılgıdır. #}
+              {% if r.source == 'llm' %}
+              <span class="px-2 py-0.5 rounded-md bg-claude-surface-alt text-claude-muted
+                           font-semibold" title="YouTube kanıtı yok — model kendi bilgisiyle üretti">
+                model önerisi</span>
+              {% elif r.source == 'reference' %}
+              <span class="px-2 py-0.5 rounded-md bg-claude-accent/10 text-claude-accent
+                           font-semibold" title="Referans kanalın kendi patlaması — format ve kitle kanıtlı">
+                referans kanal</span>
+              {% endif %}
               {% if kat >= 10 %}
               <span class="px-2 py-0.5 rounded-md bg-claude-accent/10 text-claude-accent
                            font-semibold">{{ kat }}× patlama</span>
               {% endif %}
+              {# Kanıtsız konuda izlenme/abone YOK — "0 izlenme" yazmak yanıltıcı olur. #}
+              {% if r.views %}
               <span class="text-claude-muted">
                 <span class="text-claude-text font-medium">{{ kisa(r.views) }}</span> izlenme
               </span>
               <span class="text-claude-muted">
                 <span class="text-claude-text font-medium">{{ kisa(r.subs) }}</span> abone kanal
               </span>
+              {% endif %}
               {% if r.hook_pattern %}
               <span class="px-2 py-0.5 rounded-md bg-claude-surface-alt text-claude-muted">
                 {{ r.hook_pattern }}</span>

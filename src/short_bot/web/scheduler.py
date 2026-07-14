@@ -254,17 +254,31 @@ def init_scheduler(app):
                            if sp.exists() else {}) or {}
             except Exception:
                 secrets = {}
+            # YouTube anahtarı ARTIK ZORUNLU DEĞİL: yoksa kanıt toplanmaz ama konu
+            # yine üretilir (model kendi bilgisiyle). Eskiden burada `return` vardı ve
+            # anahtarsız kurulumda banka HİÇ dolmuyordu.
             api_keys = resolve_youtube_api_keys(secrets)
-            if not api_keys:
-                return
             try:
                 llm_call = resolve_ai_call(settings, secrets, "default")
             except Exception:
                 llm_call = None
 
+            # KONUYU YAZAN MODEL: Sonnet 5 (Claude CLI → OpenRouter).
+            # Ölçüldü: damıtma role='default' ile koşuyordu = gemini-3.1-flash-lite,
+            # sistemin en ucuz modeli, ve bankanın %85'i çöp oldu.
+            from short_bot.llm_sonnet import sonnet_json
+
+            def _sonnet(prompt, schema, **kw):
+                return sonnet_json(prompt, schema,
+                                   claude_path=settings.claude_cli_path,
+                                   openrouter_model=settings.openrouter_models.get(
+                                       "script", "anthropic/claude-sonnet-5"),
+                                   openrouter_key=secrets.get("openrouter_api_key"))
+
             for cfg in list_channels(cfg_dir / "channels", enabled_only=True):
                 try:
-                    autofill(eng, cfg, api_keys=api_keys, llm_call=llm_call)
+                    autofill(eng, cfg, api_keys=api_keys, llm_call=llm_call,
+                             llm=_sonnet)
                 except Exception as e:  # noqa: BLE001 — bir kanal ötekileri durdurmasın
                     _LOG.warning(f"[banka] {cfg.slug} otomatik doldurma: {e}")
         except Exception as e:  # noqa: BLE001 — cron ÇÖKMEMELİ

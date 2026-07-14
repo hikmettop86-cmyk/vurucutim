@@ -52,20 +52,21 @@ def needs_refill(active_count: int, last_attempt: datetime | None,
     return (now - last_attempt) >= timedelta(hours=min_hours)
 
 
-def autofill(eng, cfg, *, api_keys, llm_call, now: datetime | None = None,
-             low_water: int = LOW_WATER, http_get=None) -> int:
+def autofill(eng, cfg, *, api_keys, llm_call=None, llm=None,
+             now: datetime | None = None, low_water: int = LOW_WATER,
+             http_get=None) -> int:
     """Kanalın bankası düşükse doldur. Eklenen konu sayısını döndürür (0 = dokunulmadı).
 
-    HİÇBİR HÂLDE ÇÖKMEZ — madencilik başarısız olursa üretim yine koşar (LLM konu
-    üretir). Ama LOGA GEÇER: banka kuruduysa sebebi burada aranır.
+    ``api_keys`` ARTIK ZORUNLU DEĞİL: anahtar yoksa kanıt madenciliği atlanır ve konu
+    KANITSIZ üretilir (bkz. topic_propose). Banka asla kurumaz.
+
+    HİÇBİR HÂLDE ÇÖKMEZ — ama LOGA GEÇER: banka kuruduysa sebebi burada aranır.
     """
     from short_bot.db import active_bank_count, kv_touch, kv_updated_at
     from short_bot.reel_relevance import derive_footage_anchor
     from short_bot.topic_miner import refresh_topic_bank
 
     if cfg.content_source != "generator" or cfg.generator is None:
-        return 0
-    if not api_keys:
         return 0
 
     now = now or datetime.now(timezone.utc)
@@ -85,20 +86,28 @@ def autofill(eng, cfg, *, api_keys, llm_call, now: datetime | None = None,
         res = refresh_topic_bank(
             eng, cfg.slug, cfg.generator.topic, language=cfg.language,
             api_keys=api_keys, anchor=derive_footage_anchor(tmpl),
-            llm_call=llm_call, http_get=http_get,
+            llm_call=llm_call, llm=llm, http_get=http_get,
             keywords=list(cfg.keywords or []),
             reference_channels=list(cfg.reference_channels or []))
     except Exception as e:   # noqa: BLE001 — üretimi DURDURMAMALI
         log.warning(f"[banka] {cfg.slug}: otomatik doldurma başarısız ({e}) — "
-                    f"banka {kalan} konuda kaldı. Referans kanal ekleyin ya da "
-                    f"'Yenile'ye elle basın.")
+                    f"banka {kalan} konuda kaldı. 'Yenile'ye elle basın.")
         return 0
 
     yeni = active_bank_count(eng, cfg.slug)
-    log.info(f"[banka] {cfg.slug}: +{res['added']} konu → {kalan} → {yeni} aktif")
+    log.info(f"[banka] {cfg.slug}: +{res['added']} konu "
+             f"({res.get('rejected', 0)} doğrulamada elendi, "
+             f"{res.get('skipped_dup', 0)} mükerrer) → {kalan} → {yeni} aktif")
     if yeni < low_water:
-        # Doldurma koştu ama seviye HÂLÂ düşük → niş tükeniyor olabilir.
+        # Doldurma koştu ama seviye HÂLÂ düşük. Konu üretimi artık YouTube'a bağlı
+        # değil (kanıt yoksa model kendi üretiyor), yani "niş tükendi" artık geçerli
+        # bir açıklama DEĞİL. Kalan olası sebepler:
+        #   • doğrulama kapısı çok şey eledi (model zayıf konu üretiyor)
+        #   • dedup çok şey eledi (banka zaten bu olguları içeriyor → niş DAR)
+        #   • LLM erişilemiyor (log'un üstünde görünür)
         log.warning(f"[banka] {cfg.slug}: doldurmadan SONRA da {yeni} konu var "
-                    f"(eşik {low_water}) → niş tükeniyor olabilir. En güçlü çare: "
-                    f"Konu Bankası sayfasından REFERANS KANAL ekleyin.")
+                    f"(eşik {low_water}). Bu turda {res.get('rejected', 0)} konu "
+                    f"doğrulamada, {res.get('skipped_dup', 0)} konu mükerrer diye "
+                    f"elendi. İkisi de yüksekse nişin kendisi dar olabilir — kanal "
+                    f"konusunu genişletin.")
     return int(res["added"])
