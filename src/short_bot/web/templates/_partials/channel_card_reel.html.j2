@@ -66,6 +66,11 @@
       <a href="/channels/{{ c.slug }}/series"
          class="px-2 py-1 rounded text-xs {% if c.reel.series_enabled %}text-claude-accent hover:bg-claude-accent-soft{% else %}text-claude-muted hover:bg-claude-surface-alt{% endif %}"
          title="{% if c.reel.series_enabled %}Seri: bölümler + sıradaki konu{% else %}Seri modu kapalı — açmak için tıkla{% endif %}">📚 Seri</a>
+      {# OTOMASYON: slotlar görünür olmalı — otomasyon açıkken cron KAPANDIĞI için
+         kullanıcının "neden üretmiyor?" diye sorabileceği tek yer burası. #}
+      <a href="/channels/{{ c.slug }}/autopilot"
+         class="px-2 py-1 rounded text-xs {% if c.autopilot and c.autopilot.enabled %}text-claude-accent hover:bg-claude-accent-soft{% else %}text-claude-muted hover:bg-claude-surface-alt{% endif %}"
+         title="{% if c.autopilot and c.autopilot.enabled %}Otomasyon açık — bugünün slotları{% else %}Otomasyon kapalı — açmak için tıkla{% endif %}">⚙️ Otomasyon</a>
       {% endif %}
     </div>
   </div>

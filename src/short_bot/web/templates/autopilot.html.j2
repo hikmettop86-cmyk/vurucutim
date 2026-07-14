@@ -1,0 +1,125 @@
+{% extends "base.html.j2" %}
+{% block title %}Otomasyon — {{ channel.name }}{% endblock %}
+
+{% macro durum(s) %}
+  {%- if s == 'planned' %}<span class="text-claude-muted">planlandı</span>
+  {%- elif s == 'producing' %}<span class="text-claude-accent">üretiliyor…</span>
+  {%- elif s == 'produced' %}<span class="text-claude-accent">üretildi, yükleniyor</span>
+  {%- elif s == 'scheduled' %}<span class="text-claude-accent font-semibold">yayına zamanlandı</span>
+  {%- elif s == 'published' %}<span class="text-green-600 font-semibold">yayında</span>
+  {%- elif s == 'failed' %}<span class="text-red-500 font-semibold">başarısız</span>
+  {%- elif s == 'skipped' %}<span class="text-red-500">kaçtı</span>
+  {%- endif %}
+{% endmacro %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto p-6">
+  <div class="flex items-start justify-between gap-4 mb-6">
+    <div>
+      <h1 class="text-2xl font-bold text-claude-text">Otomasyon</h1>
+      <p class="text-sm text-claude-muted mt-1">
+        {{ channel.name }}
+        {% if enabled %}
+        · günde {{ ap.daily_count }} video
+        · {{ '%02d'|format(ap.active_hours[0]) }}:00–{{ '%02d'|format(ap.active_hours[1]) }}:00
+        · {{ tz }}
+        · {{ 'YouTube zamanlar' if ap.publish_mode == 'publish_at' else 'uygulama yükler' }}
+        {% endif %}
+      </p>
+    </div>
+    {% if enabled %}
+    <form method="post" action="/channels/{{ slug }}/autopilot/disable"
+          onsubmit="return confirm('Otomasyon kapatılsın mı? Planlı slotlar üretilmeyecek ve kanalın normal cron''u yeniden devreye girecek.')">
+      <button class="px-4 py-2 rounded-lg bg-white border border-claude-border
+                     text-sm font-semibold text-claude-muted hover:text-red-500
+                     hover:border-red-500">Kapat</button>
+    </form>
+    {% endif %}
+  </div>
+
+  {% with messages = get_flashed_messages() %}
+    {% for m in messages %}
+      <div class="mb-4 px-4 py-3 rounded-lg bg-claude-surface border border-claude-border
+                  text-sm text-claude-text">{{ m }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  {% if not enabled %}
+    <div class="rounded-xl border border-dashed border-claude-border bg-claude-surface
+                px-6 py-10 text-center">
+      <p class="text-claude-text font-medium text-lg">Otomasyon kapalı</p>
+      <p class="text-sm text-claude-muted mt-3 max-w-xl mx-auto leading-relaxed">
+        Bu kanal şu an <b>cron'a</b> bağlı: cron ateşlenir, video üretilir ve
+        <b>üretim biter bitmez</b> yüklenir. Yani yayın saati üretim süresine bağlı
+        (9 dakika sürerse 13:09, 16 dakika sürerse 13:16) ve her gün aynı dakikaya düşer.
+      </p>
+      <div class="mt-5 max-w-lg mx-auto text-left text-sm text-claude-muted space-y-2">
+        <p>• Günde <b>N video</b>, aktif saatlere yayılmış slotlarda.</p>
+        <p>• Yayın saatleri <b>insan gibi gezinir</b> (13:00 → 13:10 → 13:04 → 13:00),
+          düz rastgele değil — ritim korunur, izleyici alışkanlık kurar.</p>
+        <p>• Üretim yayından <b>saatler önce</b> koşar; video gizli yüklenir ve
+          YouTube tam slot anında yayınlar. Uygulama o saatte açık olmak zorunda değil.</p>
+        <p>• Kanalın cron'u <b>devre dışı kalır</b> (çifte üretim olmasın diye).</p>
+      </div>
+      <form method="post" action="/channels/{{ slug }}/autopilot/enable" class="mt-6">
+        <button class="px-5 py-2.5 rounded-lg bg-claude-accent text-white
+                       text-sm font-semibold hover:opacity-90">
+          Otomasyonu aç</button>
+      </form>
+      <p class="text-xs text-claude-muted mt-3">
+        Varsayılan: günde 3 video, 10:00–22:00, yayından 1 saat önce üretim.
+        Her şey <a href="/channels/{{ slug }}/edit-reel"
+                   class="text-claude-accent hover:underline">Ayarlar</a>'dan geri alınabilir.
+      </p>
+    </div>
+  {% else %}
+    <div class="grid grid-cols-4 gap-3 mb-6">
+      {% for etiket, deger, renk in [
+          ('Bugün', summary.toplam, 'text-claude-text'),
+          ('Yayında', summary.published, 'text-green-600'),
+          ('Zamanlandı', summary.scheduled, 'text-claude-accent'),
+          ('Başarısız', summary.failed, 'text-red-500')] %}
+      <div class="rounded-xl border border-claude-border bg-white p-4 text-center">
+        <div class="text-2xl font-bold {{ renk }}">{{ deger }}</div>
+        <div class="text-xs text-claude-muted mt-1">{{ etiket }}</div>
+      </div>
+      {% endfor %}
+    </div>
+
+    {% for gun, baslik in [(today, 'Bugün'), (tomorrow, 'Yarın')] %}
+    <h2 class="text-sm font-semibold text-claude-muted uppercase tracking-wide mb-3">
+      {{ baslik }} <span class="normal-case font-normal">({{ gun }})</span></h2>
+    {% if days.get(gun) %}
+      <div class="space-y-2 mb-6">
+      {% for s in days[gun] %}
+        <div class="rounded-xl border {% if s.status in ('failed','skipped') %}border-red-200{% else %}border-claude-border{% endif %}
+                    bg-white p-4 flex items-center gap-4">
+          <div class="w-20 font-mono text-lg font-bold text-claude-text flex-shrink-0">
+            {{ s.local_time.strftime('%H:%M') if s.local_time else '—' }}</div>
+          <div class="flex-1 min-w-0">
+            <div class="text-sm">{{ durum(s.status) }}</div>
+            {% if s.error %}
+            <p class="text-xs text-red-500 mt-1">{{ s.error }}</p>
+            {% endif %}
+            {% if s.attempts > 1 %}
+            <p class="text-xs text-claude-muted mt-1">{{ s.attempts }} deneme</p>
+            {% endif %}
+          </div>
+          {% if s.short_id %}
+          <a href="/shorts/{{ s.short_id }}"
+             class="text-xs text-claude-muted hover:text-claude-accent flex-shrink-0">
+            videoyu aç →</a>
+          {% endif %}
+        </div>
+      {% endfor %}
+      </div>
+    {% else %}
+      <div class="rounded-xl border border-dashed border-claude-border
+                  bg-claude-surface px-4 py-6 text-center text-sm text-claude-muted mb-6">
+        Slot yok — planlayıcı birkaç dakika içinde yazacak.
+      </div>
+    {% endif %}
+    {% endfor %}
+  {% endif %}
+</div>
+{% endblock %}

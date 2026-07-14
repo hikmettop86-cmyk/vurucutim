@@ -228,6 +228,31 @@ def enable(slug):
     return redirect(url_for("series.page", slug=slug))
 
 
+@bp.post("/channels/<slug>/series/produce-now")
+def produce_now(slug):
+    """Sıradaki bölümü SLOT BEKLEMEDEN, ŞİMDİ üret.
+
+    Kullanıcının şikâyeti: "üret diye bir buton yok". Otomasyon açık olsa bile
+    kullanıcı bir bölümü hemen görmek isteyebilir; slotun gelmesini beklemek zorunda
+    kalmamalı. Bu üretim SLOT'A BAĞLANMAZ — normal bir manuel koşudur ve pipeline'ın
+    kendi yükleme kuralları geçerlidir.
+    """
+    from short_bot.web.runs import launch_pipeline
+    cfg = _load_cfg(slug)
+    launch_pipeline(
+        channel=cfg, settings=current_app.config["SHORTBOT_SETTINGS"],
+        db_path=current_app.config["SHORTBOT_DB_PATH"],
+        music_root=current_app.config["SHORTBOT_MUSIC_ROOT"],
+        templates_dir=current_app.config["SHORTBOT_TEMPLATES_DIR"],
+        cache_dir=current_app.config["SHORTBOT_CACHE_DIR"],
+        lock_dir=current_app.config["SHORTBOT_LOCK_DIR"],
+        logs_dir=current_app.config["SHORTBOT_LOGS_DIR"],
+        trigger="manual")
+    flash("Bölüm üretimi başladı (arka planda, ~10 dk). Akış sayfasından izleyebilirsin.",
+          "success")
+    return redirect(url_for("series.page", slug=slug))
+
+
 @bp.post("/channels/<slug>/series/suggest-title")
 def suggest_title(slug):
     """Kanal DNA'sından seri başlığı öner ve YAML'a yaz (kullanıcı değiştirebilir)."""
