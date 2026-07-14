@@ -1,0 +1,222 @@
+{% extends "base.html.j2" %}
+{% block title %}Kanal Kurma Ajanı{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto p-6">
+
+  <div class="mb-6">
+    <h1 class="text-2xl font-bold text-claude-text">Kanal Kurma Ajanı</h1>
+    <p class="text-sm text-claude-muted mt-1">
+      Bir cümle yaz, ajan kanalı kursun. Nişi araştırır, dil paketini hazırlar,
+      <span class="text-claude-text font-medium">hedef dilde konuşan bir anlatıcı ses
+      seçer</span>, kanal kimliğini üretir ve örnek konular yazar.
+      Kanal ancak sen onaylayınca kurulur.
+    </p>
+  </div>
+
+  {% with messages = get_flashed_messages() %}
+    {% for m in messages %}
+      <div class="mb-4 px-4 py-3 rounded-lg bg-claude-surface border border-claude-border
+                  text-sm text-claude-text whitespace-pre-line">{{ m }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  {# --- HATA --- #}
+  {% if job and job.status == 'error' %}
+  <div class="mb-6 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm
+              text-red-700">
+    <b>Başarısız.</b> <span class="font-mono text-xs">{{ job.error }}</span>
+  </div>
+  {% endif %}
+
+  {# --- BEKLEME (HTMX poll) --- #}
+  {% if job and job.status == 'running' %}
+  <div class="mb-6 px-4 py-6 rounded-xl border border-claude-border bg-claude-surface
+              text-center"
+       hx-get="/channels/agent/status/{{ job_id }}"
+       hx-trigger="every 3s"
+       hx-select="#agent-body" hx-target="#agent-body" hx-swap="outerHTML">
+    <p class="text-claude-text font-medium">
+      {% if job.kind == 'find' %}Niş aranıyor…{% else %}Plan hazırlanıyor…{% endif %}
+    </p>
+    <p class="text-sm text-claude-muted mt-1">
+      {% if job.kind == 'find' %}
+        Adaylar üretiliyor ve YouTube verisiyle ölçülüyor (~1-2 dk).
+      {% else %}
+        Dil paketi, ses seçimi, kanal kimliği ve örnek konular (~2-3 dk).
+      {% endif %}
+    </p>
+  </div>
+  {% endif %}
+
+<div id="agent-body">
+
+  {# --- PLAN EKRANI --- #}
+  {% if plan %}
+  <article class="rounded-xl border border-claude-border bg-white p-6 mb-6">
+    <div class="flex items-start justify-between gap-4 mb-5">
+      <div>
+        <h2 class="text-xl font-bold text-claude-text">{{ plan.name }}</h2>
+        <p class="text-xs text-claude-muted font-mono mt-0.5">{{ plan.slug }}</p>
+      </div>
+      <form method="post" action="/channels/agent/apply/{{ job_id }}"
+            onsubmit="return confirm('{{ plan.name }} kanalı kurulacak. Otomasyon KAPALI gelir — YouTube\'a yükleme yapmaz. Devam?')">
+        <button class="px-5 py-2.5 rounded-lg bg-claude-accent hover:opacity-90
+                       text-white text-sm font-semibold shadow-sm">Kur</button>
+      </form>
+    </div>
+
+    <dl class="space-y-4 text-sm">
+      <div>
+        <dt class="text-xs font-semibold text-claude-muted uppercase tracking-wide">Niş</dt>
+        <dd class="text-claude-text mt-1">{{ plan.niche }}</dd>
+        <dd class="mt-1">
+          {% if plan.evidence %}
+            <span class="px-2 py-0.5 rounded-md bg-claude-accent/10 text-claude-accent
+                         text-xs font-semibold">{{ plan.evidence }}</span>
+          {% else %}
+            {# Uydurma kanıt yazmayız — kullanıcı neye baktığını bilmeli. #}
+            <span class="px-2 py-0.5 rounded-md bg-claude-surface-alt text-claude-muted
+                         text-xs font-semibold">kanıt yok (YouTube ölçümü yapılmadı)</span>
+          {% endif %}
+        </dd>
+      </div>
+
+      <div>
+        <dt class="text-xs font-semibold text-claude-muted uppercase tracking-wide">
+          Ses · {{ plan.language }}</dt>
+        <dd class="text-claude-text mt-1 font-medium">{{ plan.voice.name }}</dd>
+        {# GEREKÇE ŞART: yanlış ses, kanal KURULMADAN görülmeli. #}
+        <dd class="text-claude-muted mt-0.5">{{ plan.voice.reason }}</dd>
+        <dd class="text-xs text-claude-muted font-mono mt-0.5">{{ plan.voice.voice_id }}</dd>
+      </div>
+
+      <div>
+        <dt class="text-xs font-semibold text-claude-muted uppercase tracking-wide">Kimlik</dt>
+        <dd class="flex items-center gap-2 mt-1">
+          <span class="px-2 py-0.5 rounded-md bg-claude-surface-alt text-xs
+                       font-semibold text-claude-text">{{ plan.dna.archetype }}</span>
+          <span class="w-5 h-5 rounded border border-claude-border"
+                style="background: {{ plan.dna.palette.primary }}"></span>
+          <span class="w-5 h-5 rounded border border-claude-border"
+                style="background: {{ plan.highlight_color }}"></span>
+          <span class="text-xs text-claude-muted">{{ plan.dna.fonts.headline }}</span>
+        </dd>
+      </div>
+
+      <div>
+        <dt class="text-xs font-semibold text-claude-muted uppercase tracking-wide">
+          Örnek konular</dt>
+        {% if plan.sample_topics %}
+        <dd class="mt-1 space-y-1.5">
+          {% for t in plan.sample_topics %}
+          <p class="text-claude-text leading-snug">• {{ t }}</p>
+          {% endfor %}
+        </dd>
+        {% else %}
+        <dd class="text-claude-muted mt-1">
+          Örnek konu üretilemedi — banka kurulumdan sonra kendini doldurur.
+        </dd>
+        {% endif %}
+      </div>
+    </dl>
+
+    <p class="text-xs text-claude-muted mt-5 pt-4 border-t border-claude-border">
+      Kanal <b>otomasyon KAPALI</b> ve <b>seri KAPALI</b> kurulur. İkisini de sonradan
+      açabilirsin.
+    </p>
+  </article>
+  {% endif %}
+
+  {# --- NİŞ ADAYLARI --- #}
+  {% if niches %}
+  <div class="mb-6">
+    <h2 class="text-lg font-semibold text-claude-text mb-1">Niş adayları</h2>
+    {% if job and not job.kanitli %}
+    <p class="text-xs text-claude-muted mb-3">
+      YouTube API anahtarı yok → adaylar <b>kanıtsız</b> (model önerisi). Kanıtlı niş
+      için Ayarlar'dan anahtar ekleyin.
+    </p>
+    {% endif %}
+    <div class="space-y-3">
+    {% for n in niches %}
+      <article class="rounded-xl border border-claude-border bg-white p-5">
+        <div class="flex items-start gap-4">
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2">
+              <h3 class="font-semibold text-claude-text">{{ n.nis }}</h3>
+              {% if n.kanit_puani %}
+              <span class="px-2 py-0.5 rounded-md bg-claude-accent/10 text-claude-accent
+                           text-xs font-semibold">kanıt {{ n.kanit_puani }}</span>
+              {% endif %}
+            </div>
+            <p class="text-sm text-claude-muted mt-1">{{ n.neden }}</p>
+            <p class="text-xs text-claude-muted mt-2 font-mono">{{ n.konu_tohumu }}</p>
+          </div>
+          <form method="post" action="/channels/agent/plan" class="flex-shrink-0">
+            <input type="hidden" name="niche" value="{{ n.konu_tohumu }}">
+            <input type="hidden" name="language" value="{{ job.language }}">
+            {# Niş bulucunun KANITI plana taşınır. #}
+            <input type="hidden" name="evidence" value="{{ n.neden }}">
+            <button class="px-4 py-2 rounded-lg bg-claude-accent hover:opacity-90
+                           text-white text-sm font-semibold whitespace-nowrap">
+              Bu nişle devam</button>
+          </form>
+        </div>
+      </article>
+    {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {# --- GİRİŞ FORMU --- #}
+  {% if not plan and not (job and job.status == 'running') %}
+  <div class="rounded-xl border border-claude-border bg-claude-surface p-6">
+    <div class="mb-4">
+      <label class="block text-sm font-semibold text-claude-text mb-1">
+        Ne hakkında kanal istiyorsun?</label>
+      <textarea name="niche" id="niche-input" rows="3" form="plan-form"
+                placeholder="Almanca bira bahçesi kültürü ve bira üretiminin şaşırtıcı gerçekleri"
+                class="w-full bg-white border border-claude-border rounded-lg px-3 py-2
+                       text-sm text-claude-text"></textarea>
+    </div>
+
+    <div class="flex flex-wrap items-end gap-3">
+      <div>
+        <label class="block text-xs font-semibold text-claude-muted mb-1">Dil</label>
+        <select name="language" form="plan-form"
+                class="bg-white border border-claude-border rounded-lg px-3 py-2 text-sm
+                       text-claude-text">
+          {% for kod, ad in languages %}
+          <option value="{{ kod }}">{{ ad }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <form method="post" action="/channels/agent/plan" id="plan-form">
+        <button class="px-5 py-2.5 rounded-lg bg-claude-accent hover:opacity-90
+                       text-white text-sm font-semibold shadow-sm">
+          Planı hazırla</button>
+      </form>
+
+      <form method="post" action="/channels/agent/find" id="find-form"
+            onsubmit="document.getElementById('find-q').value = document.getElementById('niche-input').value; document.getElementById('find-lang').value = document.querySelector('[form=plan-form][name=language]').value;">
+        <input type="hidden" name="query" id="find-q">
+        <input type="hidden" name="language" id="find-lang">
+        <button class="px-5 py-2.5 rounded-lg bg-white border border-claude-border
+                       text-sm font-semibold text-claude-text hover:bg-claude-surface-alt">
+          Bana niş bul</button>
+      </form>
+    </div>
+
+    <p class="text-xs text-claude-muted mt-4">
+      <b>Planı hazırla</b>: yazdığın nişi doğrudan kullanır.
+      <b>Bana niş bul</b>: yazdığın temada aday nişler üretir ve YouTube verisiyle
+      ölçüp sıralar; birini seçersin.
+    </p>
+  </div>
+  {% endif %}
+
+</div>{# /agent-body #}
+</div>
+{% endblock %}

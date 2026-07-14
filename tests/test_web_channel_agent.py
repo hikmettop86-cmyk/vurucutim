@@ -1,0 +1,189 @@
+"""Kanal kurma ajanı paneli.
+
+Kullanıcı bir cümle yazar, ajan planı gösterir, kullanıcı "Kur"a basar.
+Plan ekranı SES GEREKÇESİNİ göstermeli — yanlış ses kanal KURULMADAN görülsün.
+"""
+from short_bot.channel_agent import ChannelPlan
+from short_bot.db import init_db
+from short_bot.dna import DnaFonts, DnaPalette, DnaSpec, DnaTone
+from short_bot.voice_picker import VoiceChoice
+from short_bot.web import create_app
+
+
+def _dna():
+    return DnaSpec(
+        archetype="stat-hero",
+        palette=DnaPalette(primary="#0a2540", accent="#2de2e6",
+                           bg_gradient=["#0A2540", "#04121F"],
+                           body_bg=["#0A2540", "#04121F"]),
+        fonts=DnaFonts(), tone=DnaTone(voice="net", style="merak"),
+        persona_summary="anlatıcı")
+
+
+def _app(tmp_path):
+    cfg = tmp_path / "config"
+    (cfg / "channels").mkdir(parents=True, exist_ok=True)
+    (cfg / "settings.yaml").write_text(
+        "ffmpeg_path: ffmpeg\nclaude_cli_path: claude\nplaywright_browser: chromium\n"
+        "web: {host: 127.0.0.1, port: 5005}\nfuzzy_dedup_threshold: 0.85\n"
+        "log_level: INFO\nclaude_models: {dna: opus, default: haiku}\n",
+        encoding="utf-8")
+    db = tmp_path / "db.sqlite"
+    init_db(db)
+    app = create_app(config_dir=cfg, db_path=db, templates_dir=tmp_path / "t",
+                     music_root=tmp_path, cache_dir=tmp_path, lock_dir=tmp_path,
+                     logs_dir=tmp_path, output_root=tmp_path,
+                     secrets_path=tmp_path / "s.yaml", scheduler=False)
+    return app, cfg
+
+
+def _plan(**kw):
+    d = dict(language="de", niche="bira bahcesi kulturu",
+             evidence="8 outlier; en iyi 175x", name="Bierwissen", slug="bierwissen",
+             voice=VoiceChoice(voice_id="elevenlabs_v1", name="Daniel - Teacher",
+                               reason="açıklayıcı anlatıcı, bilgi formatına uyar"),
+             dna=_dna(), sample_topics=["Bier braucht neun Monate im Keller"])
+    d.update(kw)
+    return ChannelPlan(**d)
+
+
+def test_sayfa_acilir(tmp_path):
+    a, _ = _app(tmp_path)
+    body = a.test_client().get("/channels/agent").data.decode("utf-8")
+    assert "Kanal Kurma Ajanı" in body
+    assert "Deutsch" in body                  # dil seçici
+
+
+def test_KISA_nis_reddedilir(tmp_path):
+    a, _ = _app(tmp_path)
+    r = a.test_client().post("/channels/agent/plan",
+                             data={"niche": "bira", "language": "de"},
+                             follow_redirects=True)
+    assert "10 karakter" in r.data.decode("utf-8")
+
+
+def test_PLAN_ekrani_SES_GEREKCESINI_gosterir(tmp_path, monkeypatch):
+    """Yanlış ses, kanal KURULMADAN görülmeli."""
+    import short_bot.web.routes.channel_agent as CA
+    monkeypatch.setattr(CA, "build_plan", lambda *a, **kw: _plan())
+    monkeypatch.setattr(CA, "_start_thread", lambda fn: fn())
+
+    a, _ = _app(tmp_path)
+    r = a.test_client().post("/channels/agent/plan",
+                             data={"niche": "bira bahcesi kulturu", "language": "de"},
+                             follow_redirects=True)
+    body = r.data.decode("utf-8")
+    assert "Daniel - Teacher" in body
+    assert "açıklayıcı anlatıcı" in body, "ses GEREKÇESİ gösterilmiyor"
+    assert "Bierwissen" in body
+    assert "8 outlier" in body
+    assert "Bier braucht neun Monate" in body
+
+
+def test_KANIT_YOKSA_panel_KANIT_YOK_der(tmp_path, monkeypatch):
+    """Uydurma kanıt yazmayız; kullanıcı neye baktığını bilmeli."""
+    import short_bot.web.routes.channel_agent as CA
+    monkeypatch.setattr(CA, "build_plan", lambda *a, **kw: _plan(evidence=""))
+    monkeypatch.setattr(CA, "_start_thread", lambda fn: fn())
+    a, _ = _app(tmp_path)
+    r = a.test_client().post("/channels/agent/plan",
+                             data={"niche": "bira bahcesi kulturu", "language": "de"},
+                             follow_redirects=True)
+    assert "kanıt yok" in r.data.decode("utf-8").lower()
+
+
+def test_PLAN_PATLARSA_sebebi_gorunur(tmp_path, monkeypatch):
+    import short_bot.web.routes.channel_agent as CA
+
+    def _patla(*a, **kw):
+        raise RuntimeError("Almanca konusan ses bulunamadi")
+
+    monkeypatch.setattr(CA, "build_plan", _patla)
+    monkeypatch.setattr(CA, "_start_thread", lambda fn: fn())
+    a, _ = _app(tmp_path)
+    r = a.test_client().post("/channels/agent/plan",
+                             data={"niche": "bira bahcesi kulturu", "language": "de"},
+                             follow_redirects=True)
+    assert "Almanca konusan ses bulunamadi" in r.data.decode("utf-8")
+
+
+def test_KUR_kanali_olusturur(tmp_path, monkeypatch):
+    import short_bot.web.routes.channel_agent as CA
+    kuruldu = {}
+
+    monkeypatch.setattr(
+        CA, "apply_plan",
+        lambda plan, **kw: kuruldu.setdefault("slug", plan.slug) or plan.slug)
+
+    a, _ = _app(tmp_path)
+    with CA._LOCK:
+        CA._PLANS["job1"] = _plan()
+
+    r = a.test_client().post("/channels/agent/apply/job1", follow_redirects=False)
+    assert kuruldu["slug"] == "bierwissen"
+    assert r.status_code in (302, 303)
+    assert "/channels/bierwissen" in r.headers["Location"]
+
+
+def test_BILINMEYEN_is_404(tmp_path):
+    a, _ = _app(tmp_path)
+    assert a.test_client().post("/channels/agent/apply/yok").status_code == 404
+
+
+# --- NİŞ BULUCU ------------------------------------------------------------
+
+def test_NIS_BUL_adaylari_KANITLA_listeler(tmp_path, monkeypatch):
+    """Kullanıcı 'bana niş bul' derse: adaylar YouTube kanıtıyla ÖLÇÜLMÜŞ gelir."""
+    import short_bot.web.routes.channel_agent as CA
+    monkeypatch.setattr(CA, "_start_thread", lambda fn: fn())
+    monkeypatch.setattr(CA, "find_niches_ai", lambda *a, **kw: [
+        {"nis": "Bira kültürü", "neden": "Kanıt: 8 outlier; en iyi 175x",
+         "konu_tohumu": "bira bahcesi kulturu ve bira uretiminin gercekleri",
+         "kanit_puani": 210.0}])
+
+    a, _ = _app(tmp_path)
+    r = a.test_client().post("/channels/agent/find",
+                             data={"query": "almanya", "language": "de"},
+                             follow_redirects=True)
+    body = r.data.decode("utf-8")
+    assert "Bira kültürü" in body
+    assert "175x" in body
+    # Aday seçilince plan kurulacak: konu tohumu VE kanıt formda taşınmalı
+    assert "bira bahcesi kulturu" in body
+    assert 'name="evidence"' in body
+
+
+def test_ANAHTARSIZ_nis_bulucu_KANITSIZ_der(tmp_path, monkeypatch):
+    """YouTube anahtarı yoksa AI moduna düşülür — panel 'kanıtsız' der."""
+    import short_bot.web.routes.channel_agent as CA
+    monkeypatch.setattr(CA, "_start_thread", lambda fn: fn())
+    monkeypatch.setattr(CA, "find_niches_ai", lambda *a, **kw: [
+        {"nis": "X", "neden": "y", "konu_tohumu": "z konusu burada uzun"}])
+    a, _ = _app(tmp_path)
+    r = a.test_client().post("/channels/agent/find",
+                             data={"query": "almanya", "language": "de"},
+                             follow_redirects=True)
+    assert "kanıtsız" in r.data.decode("utf-8").lower()
+
+
+def test_NIS_BULUCU_PATLARSA_sebebi_soylenir(tmp_path, monkeypatch):
+    import short_bot.web.routes.channel_agent as CA
+    monkeypatch.setattr(CA, "_start_thread", lambda fn: fn())
+
+    def _patla(*a, **kw):
+        raise RuntimeError("YouTube API anahtari yok")
+
+    monkeypatch.setattr(CA, "find_niches_ai", _patla)
+    a, _ = _app(tmp_path)
+    r = a.test_client().post("/channels/agent/find",
+                             data={"query": "almanya", "language": "de"},
+                             follow_redirects=True)
+    assert "YouTube API anahtari yok" in r.data.decode("utf-8")
+
+
+def test_KISA_sorgu_reddedilir(tmp_path):
+    a, _ = _app(tmp_path)
+    r = a.test_client().post("/channels/agent/find",
+                             data={"query": "x", "language": "de"},
+                             follow_redirects=True)
+    assert "Ne hakkında" in r.data.decode("utf-8")
