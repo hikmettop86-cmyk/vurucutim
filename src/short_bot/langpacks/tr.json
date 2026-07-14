@@ -1,0 +1,68 @@
+{
+  "lang": "tr",
+  "cta_texts": [
+    "Her gün yeni — ABONE OL",
+    "Yarın devamı — ABONE OL",
+    "Seri sürüyor — ABONE OL",
+    "Devamı yarın — ABONE OL"
+  ],
+  "trade_cta": "#{no} yarın — ABONE OL",
+  "default_series_title": "İlginç Bilgiler",
+  "comment_styles": [
+    "İKİLİ SORU: videodaki iki şıkkı karşılaştıran, tek harfle (A/B) cevaplanabilecek bir soru sor. Örnek kalıp: 'Sence hangisi daha çılgın: A mı, B mi? Tek harf yaz.'",
+    "KİŞİSEL HATIRLAMA: 'Bunu kaç yaşında öğrendin?' gibi, izleyicinin kendi deneyimini tek kelimeyle yazabileceği bir soru sor.",
+    "DOĞRULAMA: 'Bunu duyunca tüylerin diken diken olan bir ben miyim?' gibi, onay ya da itiraz — ikisi de yorum getiren bir cümle kur.",
+    "EKSİĞİ BUL: 'Kasten bir detay atladım, bulabilir misin?' tarzı, izleyiciyi videoya geri döndüren bir soru sor. (Kasten YANLIŞ bilgi verme — otoriteyi asla takas etme.)"
+  ],
+  "connective_styles": [
+    "BEKLENTİYİ KIR: izleyicinin şu an aklından geçen açıklamanın YANLIŞ olduğunu ima et, doğrusunu daha söyleme.",
+    "ÖLÇEĞİ BÜYÜT: az önce verdiğin sayının/olgunun aslında küçük kaldığını, asıl büyüğün geldiğini sezdir.",
+    "GİZLİ AKTÖR: olayın ARKASINDA henüz adını anmadığın bir sebep olduğunu duyur.",
+    "GERİ SAYIM: bir eşiğe/ana yaklaşıldığını söyle — 've sonra' demeden kes.",
+    "ÇELİŞKİ AÇ: az önce söylediğinle çelişen bir gerçek olduğunu haber ver.",
+    "MALİYETİ İMA ET: bu yeteneğin/olgunun bir bedeli olduğunu söyle, bedeli sakla.",
+    "KİŞİSELLEŞTİR: bunun izleyicinin kendi bedeninde/hayatında da olduğunu ima et.",
+    "SON ANDA ÇEVİR: 'ama' ile başlayıp az önceki resmi tersine çeviren bir cümle kur."
+  ],
+  "series": {
+    "header": "Bu, '{title}' serisinin {no}. BÖLÜMÜ. Bir sonraki bölüm {next_no} numaralı olacak.",
+    "paying_promise": "BU BÖLÜM BİR SÖZÜ ÖDÜYOR. Önceki bölüm izleyiciye şunu vaat etti:\n  \"{promise}\"\nVideonun TEPESİ (peak_beat) tam olarak BU SÖZÜ ödemeli. İzleyici bu cevap için abone oldu; başka bir şey anlatırsan takas bozulur ve bir daha güvenmez.",
+    "announce_arc": "SERİYİ İLAN ET: bu, '{arc_title}' adlı {arc_total} BÖLÜMLÜK bir serinin İLK bölümü. Anlatımın bir yerinde (hook'ta değil, tepeden sonra) serinin {arc_total} bölüm olduğunu ve nereye gittiğini bir cümleyle söyle. İzleyici bir videoya değil, bir SERİYE abone olur.",
+    "finale": "BU, '{arc_title}' SERİSİNİN SON BÖLÜMÜ. Ark burada kapanıyor:\n  • 'open_loop' alanını BOŞ bırak — sıradaki bölüm YENİ bir konuyla gelecek.\n  • Ama seri BİTMİYOR: tepeden sonra, {next_no}. bölümün yarın geleceğini ve YENİ bir konu açacağını bir cümleyle söyle.",
+    "planned_loop": "AÇIK KAPI — PLANDA YAZILI, UYDURMA. Bir sonraki bölümün ({next_no}) konusu ŞUDUR:\n  \"{next_topic}\"\n  • 'open_loop' alanına BU KONUYU aynen yaz.\n  • AYNI konuyu TEPEDEN SONRAKİ BEAT'İN METNİNDE de, kendi sözcüklerinle an ve {next_no}. bölüme havale et. Kapanışta DEĞİL — abone isteği ekranda tam o anda beliriyor; söz daha söylenmemişse istek boşa düşer.\n    ✗ 'Ama hikâye burada bitmiyor.'   ← neyin geleceğini söylemiyor\n    ✓ 'Ama o ışık balığın kendi değil — onu üreten bakteriyi {next_no}. bölümde anlatıyorum.'",
+    "chain_loop": "AÇIK KAPI — ZORUNLU. Bu bölüm kendi tepesini TAM ÖDER, ama kapanmaz: tepenin AÇIĞA ÇIKARDIĞI yeni ve SPESİFİK bir konu bırakır; onun cevabı {next_no}. bölümdedir. Bu İKİ AYRI ÇIKTI ister:\n\n  1) 'open_loop' ALANI = BİR SONRAKİ BÖLÜMÜN KONUSU (konuşulmaz).\n     Bu metin {next_no}. bölümün üretim konusu olarak AYNEN kullanılacak.\n     Bölüm numarası / 'sonraki bölümde' / 'anlatacağım' GİRMEZ — sadece konu.\n     ✗ 'Bunun sırrını {next_no}. bölümde açıklıyoruz.'\n     ✓ 'Fener balığının ışığını üreten simbiyotik bakteri'\n\n  2) TEPEDEN SONRAKİ BEAT'İN METNİ = SÖYLENEN cliffhanger.\n     Aynı konuyu ORADA, KENDİ SÖZCÜKLERİYLE an ve {next_no}. bölüme havale et. Kapanışta DEĞİL — abone isteği ekranda tam o anda beliriyor; söz daha söylenmemişse istek boşa düşer.\n     ✗ 'Ama hikâye burada bitmiyor.'   ← neyin geleceğini söylemiyor\n     ✓ 'Ama o ışık balığın kendi değil — onu üreten bakteriyi {next_no}. bölümde anlatıyorum.'\n\n  İKİSİ AYNI KONUYU paylaşmalı (ortak sözcükler): alan konuyu ADLANDIRIR, beat onu SÖYLER.",
+    "teaser_fallback": "Bu bir '{title}' serisinin bir bölümü. Kapanışı, izleyiciyi bir sonraki bölüm için meraklandıracak bir AÇIK DÖNGÜ / teaser ile bitir ('bir sonrakinde daha da tuhafı var' tarzı)."
+  },
+  "overused": [
+    "ama asıl garip olan şu",
+    "ve burada iş çığırından çıkıyor",
+    "sebebi ise sandığın şey değil",
+    "bir de bunu duymadın",
+    "bir de şunu duyun",
+    "peki tüm bu",
+    "inanılmaz ama gerçek"
+  ],
+  "overused_patterns": [
+    {
+      "label": "… biliyor muydunuz? (cevaplanabilir evet/hayır sorusu — hook değil)",
+      "pattern": "\\bbiliyor mu(ydunuz|ydun|sun|sunuz)\\b"
+    },
+    {
+      "label": "… duymuş muydunuz? (aynı kalıp)",
+      "pattern": "\\bduymu[sş] mu(ydunuz|ydun)\\b"
+    },
+    {
+      "label": "Merhaba arkadaşlar / dostlar (kanal açılışı — ilk saniyeyi harcar)",
+      "pattern": "\\bmerhaba\\s+(arkada[sş]lar|dostlar|herkese)\\b"
+    },
+    {
+      "label": "Bugün sizlere … anlatacağım (vaat değil, gündem duyurusu)",
+      "pattern": "\\bbug[uü]n\\s+siz(lere|e)\\b"
+    },
+    {
+      "label": "Hazır mısınız? (içi boş kalıp)",
+      "pattern": "\\bhaz[ıi]r m[ıi](s[ıi]n|s[ıi]n[ıi]z)\\b"
+    }
+  ],
+  "meta_tail_pattern": "\\s*[—,;:-]*\\s*(\\d+\\s*\\.?\\s*b[öo]l[üu]m\\w*|(bir\\s+)?sonraki\\s+b[öo]l[üu]m\\w*|yar[ıi]n)[^.]*?(anlat|a[çc][ıi]kl|g[öo]ster|s[öo]yl|payla[şs])\\w*\\s*[.!?]?\\s*$"
+}

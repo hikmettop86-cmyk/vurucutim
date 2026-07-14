@@ -1,0 +1,68 @@
+{
+  "lang": "en",
+  "cta_texts": [
+    "New daily — SUBSCRIBE",
+    "More tomorrow — SUB",
+    "Series runs — SUBSCRIBE",
+    "Part 2 tomorrow — SUB"
+  ],
+  "trade_cta": "#{no} tomorrow — SUB",
+  "default_series_title": "Strange Facts",
+  "comment_styles": [
+    "BINARY QUESTION: ask a question comparing two things from the video, answerable with a single letter (A/B). Pattern: 'Which is crazier: A or B? Just type the letter.'",
+    "PERSONAL RECALL: ask something the viewer can answer in one word from their own experience ('How old were you when you learned this?').",
+    "VALIDATION: write a line that invites agreement OR objection — both produce comments ('Tell me I'm not the only one who got chills').",
+    "FIND THE GAP: 'I left out one detail on purpose — can you find it?' Send the viewer back into the video. (NEVER state false information — authority is the product.)"
+  ],
+  "connective_styles": [
+    "BREAK THE EXPECTATION: imply the explanation now forming in the viewer's head is WRONG. Don't reveal the right one yet.",
+    "SCALE UP: hint that the number or fact you just gave is small compared to what's coming.",
+    "HIDDEN ACTOR: announce there is a cause BEHIND this that you haven't named yet.",
+    "COUNTDOWN: say a threshold is approaching — then cut, without saying 'and then'.",
+    "OPEN A CONTRADICTION: signal that a fact contradicts what you just said.",
+    "IMPLY A COST: say this ability has a price. Withhold the price.",
+    "MAKE IT PERSONAL: imply this is happening in the viewer's own body or life.",
+    "TURN AT THE LAST MOMENT: start with 'but' and invert the picture you just painted."
+  ],
+  "series": {
+    "header": "This is EPISODE {no} of '{title}'. The next one will be number {next_no}.",
+    "paying_promise": "THIS EPISODE PAYS A PROMISE. The previous episode promised the viewer:\n  \"{promise}\"\nThe PEAK of the video (peak_beat) must pay exactly THIS promise. The viewer subscribed for this answer; tell them anything else and the trade is broken — they won't trust you again.",
+    "announce_arc": "ANNOUNCE THE SERIES: this is the FIRST episode of a {arc_total}-EPISODE series called '{arc_title}'. Somewhere in the narration (not in the hook — after the peak), say in one sentence that the series runs {arc_total} episodes and where it is going. Nobody subscribes to a video; people subscribe to a SERIES.",
+    "finale": "THIS IS THE LAST EPISODE OF '{arc_title}'. The arc closes here:\n  • Leave the 'open_loop' field EMPTY — the next episode arrives with a NEW topic.\n  • But the series is NOT over: after the peak, say in one sentence that episode {next_no} lands tomorrow and opens a NEW subject.",
+    "planned_loop": "OPEN DOOR — ALREADY WRITTEN, DO NOT INVENT. The topic of the next episode ({next_no}) is:\n  \"{next_topic}\"\n  • Put THIS TOPIC verbatim into the 'open_loop' field.\n  • Name the SAME subject IN THE BEAT AFTER THE PEAK too, in your own words, and hand it to episode {next_no}. NOT in the closing — the subscribe chip appears on screen exactly then; if the promise hasn't been spoken yet, the ask lands on nothing.\n    ✗ 'But the story doesn't end here.'   ← says nothing about what is coming\n    ✓ 'But that light isn't the fish's own — the bacterium that makes it is episode {next_no}.'",
+    "chain_loop": "OPEN DOOR — MANDATORY. This episode pays its own peak IN FULL, but does not close: it leaves a new and SPECIFIC subject that the peak itself exposed, and its answer is in episode {next_no}. This requires TWO SEPARATE OUTPUTS:\n\n  1) The 'open_loop' FIELD = THE NEXT EPISODE'S TOPIC (never spoken).\n     This text will be used VERBATIM as episode {next_no}'s production topic.\n     No episode number, no 'next time', no 'I'll explain' — the topic ONLY.\n     ✗ 'I'll reveal this secret in episode {next_no}.'\n     ✓ 'The symbiotic bacterium that produces the anglerfish's light'\n\n  2) THE BEAT AFTER THE PEAK = the SPOKEN cliffhanger.\n     Name the same subject THERE, in your own words, and hand it to episode {next_no}. NOT in the closing — the subscribe chip appears exactly then; an unspoken promise makes the ask land on nothing.\n     ✗ 'But the story doesn't end here.'   ← says nothing about what is coming\n     ✓ 'But that light isn't the fish's own — the bacterium that makes it is episode {next_no}.'\n\n  BOTH must share the same subject (overlapping words): the field NAMES it, the beat SPEAKS it.",
+    "teaser_fallback": "This is an episode of the '{title}' series. End the closing with an OPEN LOOP / teaser that makes the viewer curious about the next episode ('the next one is even stranger')."
+  },
+  "overused": [
+    "but here's the crazy part",
+    "and this is where it gets weird",
+    "the reason will shock you",
+    "you won't believe what happens next",
+    "wait for it",
+    "let that sink in",
+    "and that's not even the craziest part"
+  ],
+  "overused_patterns": [
+    {
+      "label": "… did you know? (an answerable yes/no question — not a hook)",
+      "pattern": "\\bdid you know\\b"
+    },
+    {
+      "label": "Have you ever wondered …? (same pattern)",
+      "pattern": "\\bhave you ever wondered\\b"
+    },
+    {
+      "label": "Hey guys / what's up everyone (channel intro — burns the first second)",
+      "pattern": "\\b(hey|hi|hello|what s up)\\s+(guys|everyone|folks|people)\\b"
+    },
+    {
+      "label": "Today I'm going to show you … (an agenda, not a promise)",
+      "pattern": "\\btoday (i m going to|i will|i ll|we re going to)\\b"
+    },
+    {
+      "label": "Are you ready? (empty filler)",
+      "pattern": "\\bare you ready\\b"
+    }
+  ],
+  "meta_tail_pattern": "\\s*[—,;:-]*\\s*((in|on)\\s+)?(episode\\s+\\d+|the\\s+next\\s+(episode|part|one)|tomorrow)[^.]*?(explain|show|reveal|tell|cover|break down)\\w*\\s*[.!?]?\\s*$"
+}
