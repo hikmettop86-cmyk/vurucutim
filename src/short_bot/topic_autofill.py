@@ -77,8 +77,9 @@ def autofill(eng, cfg, *, api_keys, llm_call, now: datetime | None = None,
     log.info(f"[banka] {cfg.slug}: {kalan} aktif konu kaldı (eşik {low_water}) "
              f"→ otomatik dolduruluyor")
     # Damga madencilikten ÖNCE düşer: deneme patlasa ya da sıfır konu eklese bile
-    # kota koruması işlesin.
-    kv_touch(eng, anahtar)
+    # kota koruması işlesin. Saati AÇIKÇA geçiyoruz — `now` enjekte edilmiş olabilir
+    # ve gerçek saati damgalamak iki saati karıştırır.
+    kv_touch(eng, anahtar, at=now)
     tmpl = getattr(getattr(cfg, "dna", None), "search_query_template", "") or ""
     try:
         res = refresh_topic_bank(

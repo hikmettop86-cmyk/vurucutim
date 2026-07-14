@@ -174,6 +174,26 @@ def test_SIFIR_konu_eklense_bile_kota_korumasi_isler(tmp_path, monkeypatch):
     assert len(calls) == 2
 
 
+def test_damga_ENJEKTE_EDILEN_saati_kullanir(tmp_path, monkeypatch):
+    """GERÇEK HATA: kv_touch GERÇEK saati damgalıyordu, oysa autofill'e sahte bir `now`
+    enjekte ediliyor. İki saat karışınca sonuç GÜNÜN SAATİNE bağlı oldu — test sabah
+    geçip akşam düştü (tam paket koşusunda böyle yakalandı).
+
+    Damga, çağıranın saatiyle aynı eksende olmalı."""
+    from short_bot.db import kv_updated_at
+    monkeypatch.setattr(MINER, "refresh_topic_bank",
+                        lambda *a, **kw: {"added": 0, "skipped_dup": 3})
+    eng = _eng(tmp_path)
+    _doldur(eng, 2)
+    autofill(eng, _Ch(), api_keys=["K"], llm_call=object(), now=NOW)
+
+    damga = kv_updated_at(eng, "bank_attempt:k")
+    if damga.tzinfo is None:
+        damga = damga.replace(tzinfo=UTC)
+    assert abs((damga - NOW).total_seconds()) < 2, (
+        f"damga enjekte edilen saatte değil: {damga} != {NOW}")
+
+
 def test_madencilik_PATLASA_da_kota_korumasi_isler(tmp_path, monkeypatch):
     """Damga madencilikten ÖNCE düşmeli — yoksa her patlama yeni deneme davet eder."""
     calls = []

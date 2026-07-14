@@ -491,47 +491,92 @@ def finish_run(
         ))
 
 
+def _kilit_serbest(lock_dir: Path, channel: str) -> bool:
+    """Kanalın üretim kilidi SAHİPSİZ mi? (True = onu tutan canlı süreç yok)"""
+    from filelock import FileLock, Timeout
+    try:
+        with FileLock(str(Path(lock_dir) / f"{channel}.lock"), timeout=0):
+            return True
+    except Timeout:
+        return False
+    except OSError:
+        # Kilit dosyası açılamadı — canlılık hakkında bir şey söyleyemeyiz.
+        return False
+
+
 def cleanup_zombie_runs(
     eng: Engine, lock_dir: Path | None = None, *, age_minutes: int = 60,
 ) -> int:
-    """Mark stale 'running' rows as failed and delete their lock files.
+    """Ölmüş 'running' satırlarını 'failed' işaretle ve sahipsiz kilitlerini sil.
 
-    A pipeline that died mid-run (process killed, OOM, panel restart) leaves
-    runs.status='running' and a stranded data/locks/<slug>.lock file. New
-    triggers then hit FileLock Timeout and the daemon thread swallows it.
-    Run this on web app startup to self-heal.
+    GERÇEK OLAY (2026-07-14): panel, bir üretim koşarken yeniden başlatıldı. Üretim
+    thread'i panelle birlikte öldü; runs satırı 'running' kaldı ve panel "Aşama 4/8"
+    gösterip durdu. Kullanıcı "takılmış olabilir" dedi — haklıydı.
 
-    Uses SQLite's datetime() function for tolerant timestamp parsing — the
-    runs.started_at column may contain either 'YYYY-MM-DD HH:MM:SS.ffffff'
-    (SQLAlchemy default) or ISO 8601 with 'T'/tz suffix from older inserts.
+    ESKİ ÖLÇÜT YANLIŞTI: yalnız YAŞA bakıyordu (>60 dk). Ölen koşu, panel yeniden
+    başladığında 9 DAKİKALIKTI → temizleyici ona dokunmadı → satır sonsuza dek
+    'running' kaldı (periyodik süpürücü de yok).
+
+    DOĞRU ÖLÇÜT CANLILIK:
+      • KİLİT SERBEST → sahibi ölü. Yaş fark etmez; bu fonksiyon açılışta koşuyor ve
+        önceki sürecin thread'i hayatta olamaz. Canlı bir üretim kilidini TUTAR.
+      • KİLİT TUTULUYOR ama koşu ``age_minutes``tan eski → süreç canlı ama üretim
+        asılı kalmış olabilir; yine temizle (eski davranış, ikincil güvenlik ağı).
+
+    lock_dir verilmezse canlılık ölçülemez → yalnız yaş kuralı işler (eski davranış).
     """
     from sqlalchemy import text
     with eng.begin() as conn:
-        stale = list(conn.execute(text(
-            "SELECT id, channel FROM runs "
-            "WHERE status = 'running' "
-            "AND datetime(started_at) < datetime('now', :delta)"
+        acik = list(conn.execute(text(
+            "SELECT id, channel, datetime(started_at) < datetime('now', :delta) "
+            "AS eski FROM runs WHERE status = 'running'"
         ), {"delta": f"-{age_minutes} minutes"}))
+
+        stale = []
+        for r in acik:
+            if lock_dir is not None and _kilit_serbest(Path(lock_dir), r.channel):
+                stale.append((r, "panel yeniden başlatıldı / süreç öldü "
+                                 "(üretim kilidi sahipsiz)"))
+            elif r.eski:
+                stale.append((r, f"zombi temizliği (>{age_minutes} dk asılı kaldı)"))
+
         if not stale:
             return 0
-        ids = [r.id for r in stale]
-        placeholders = ",".join(f":id{i}" for i in range(len(ids)))
-        params = {f"id{i}": v for i, v in enumerate(ids)}
-        params["err"] = (
-            f"zombie cleanup (stale >{age_minutes}min, process likely killed)"
-        )
-        conn.execute(text(
-            "UPDATE runs SET ended_at = datetime('now'), status = 'failed', "
-            f"error = :err WHERE id IN ({placeholders})"
-        ), params)
+        for r, sebep in stale:
+            conn.execute(text(
+                "UPDATE runs SET ended_at = datetime('now'), status = 'failed', "
+                "error = :err WHERE id = :id"
+            ), {"err": sebep, "id": r.id})
+
     if lock_dir is not None:
-        for r in stale:
-            lock_path = Path(lock_dir) / f"{r.channel}.lock"
+        for r, _ in stale:
             try:
-                lock_path.unlink(missing_ok=True)
+                (Path(lock_dir) / f"{r.channel}.lock").unlink(missing_ok=True)
             except OSError:
                 pass
     return len(stale)
+
+
+def reclaim_producing_slots(eng: Engine) -> int:
+    """'producing'de asılı kalan otomasyon slotlarını 'planned'a geri al.
+
+    ⚠ YALNIZ AÇILIŞTA ÇAĞIR. Panel koşarken çağırmak ÇİFTE ÜRETİM yapar: o an gerçekten
+    üretilen bir slot 'planned'a döner ve bir sonraki tick onu ikinci kez üretime verir.
+    Açılışta ise 'producing' olan her slot TANIMI GEREĞİ öksüzdür — onu üreten thread
+    bir önceki süreçteydi ve o süreç artık yok.
+
+    SESSİZ KAYIP (2026-07-14'te yaşandı): üretim thread'i panelle birlikte ölünce slot
+    'producing'de dondu ve otomasyon onu BİR DAHA ELE ALMADI (tick yalnız 'planned'
+    slotları üretime verir). Günün videosu yok oldu ve bunu hiçbir şey söylemedi.
+
+    ``attempts`` sayacına DOKUNULMAZ: sıfırlansaydı max_attempts sınırı çöker ve
+    sürekli patlayan bir slot sonsuza dek yeniden denenirdi.
+    """
+    with eng.begin() as conn:
+        return conn.execute(
+            publish_slots.update()
+            .where(publish_slots.c.status == "producing")
+            .values(status="planned")).rowcount
 
 
 def record_youtube_upload(
@@ -964,13 +1009,21 @@ def active_bank_topics(eng: Engine, channel: str, limit: int = 10) -> list[dict]
     return [_bank_row_dict(r) for r in rows]
 
 
-def kv_touch(eng: Engine, k: str, v: str = "") -> None:
-    """Anahtarı 'şimdi' ile damgala (varsa güncelle, yoksa oluştur)."""
+def kv_touch(eng: Engine, k: str, v: str = "", *, at: datetime | None = None) -> None:
+    """Anahtarı damgala (varsa güncelle, yoksa oluştur).
+
+    ``at`` ŞART OLABİLİR: çağıran enjekte edilmiş bir saatle çalışıyorsa (autofill'in
+    ``now`` parametresi gibi), burada gerçek saati damgalamak İKİ SAATİ KARIŞTIRIR ve
+    sonuç günün saatine göre değişir — testler sabahleyin geçip akşam düşer. Ölçüldü.
+    """
+    ts = (at or _utcnow())
+    if ts.tzinfo is not None:
+        ts = ts.astimezone(timezone.utc).replace(tzinfo=None)   # SQLite naive tutar
     with eng.begin() as conn:
         n = conn.execute(kv.update().where(kv.c.k == k)
-                         .values(v=v, updated_at=_utcnow())).rowcount
+                         .values(v=v, updated_at=ts)).rowcount
         if not n:
-            conn.execute(kv.insert().values(k=k, v=v))
+            conn.execute(kv.insert().values(k=k, v=v, updated_at=ts))
 
 
 def kv_updated_at(eng: Engine, k: str):
