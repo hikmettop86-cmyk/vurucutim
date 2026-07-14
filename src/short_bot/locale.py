@@ -66,3 +66,18 @@ def ui_labels_for(language: str) -> dict[str, str]:
 def language_name(language: str) -> str:
     """Return the human-readable language name (e.g. 'Türkçe' for 'tr'). Raises KeyError."""
     return LANGUAGE_NAMES[language]
+
+
+# Dilin alfabesindeki ASCII-DIŞI harfler. Aksan temizleyicisi
+# (text_normalize.strip_foreign_diacritics) bu tabloda OLMAYAN her aksanı söker.
+#
+# NEDEN OLGU TABLOSU, NEDEN DİL PAKETİNDE DEĞİL: alfabe bir olgudur, üslup değil.
+# Dil paketini Sonnet üretiyor; 'ß'i unutursa Almanca anlatım metni SESSİZCE bozulur
+# ("Weiß" → "Wei") ve bunu hiçbir hata bildirmez. Bu riski almanın karşılığı yok.
+ALPHABET_EXTRA: dict[str, str] = {
+    "tr": "ÇĞİıÖŞÜçğöşü",
+    "en": "",
+    "de": "ÄÖÜäöüß",
+    "es": "ÑñÁÉÍÓÚÜáéíóúü¿¡",
+    "fr": "ÀÂÆÇÉÈÊËÎÏÔŒÙÛÜŸàâæçéèêëîïôœùûüÿ",
+}
