@@ -66,6 +66,50 @@ class YoutubeChannelConfig(BaseModel):
     cron_preset: str | None = None
 
 
+class AutopilotConfig(BaseModel):
+    """Otomatik üretim + zamanlı yükleme (bkz. autopilot.py).
+
+    VARSAYILAN KAPALI ve bu KASITLI: açık gelen bir otomasyon, kullanıcının hiç
+    istemediği videoları hiç istemediği saatlerde yayınlar. Kapalıyken hiçbir davranış
+    değişmez — mevcut cron + anında yükleme aynen sürer (tam geriye uyum).
+    """
+    enabled: bool = False
+    daily_count: int = Field(default=3, ge=1, le=12)
+    active_hours: tuple[int, int] = (10, 22)
+    timezone: str = "Europe/Istanbul"
+    jitter_minutes: int = Field(default=15, ge=0, le=120)
+    jitter_step: int = Field(default=6, ge=1, le=60)
+    # Üretim ~15 dk sürüyor; 1 saat lead güvenli bir tampon bırakır. Panelden artırılır.
+    produce_lead_hours: int = Field(default=1, ge=1, le=12)
+    publish_mode: Literal["publish_at", "live_upload"] = "publish_at"
+    max_attempts: int = Field(default=3, ge=1, le=5)
+
+    @field_validator("timezone")
+    @classmethod
+    def _tz_gecerli(cls, v: str) -> str:
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+        try:
+            ZoneInfo(v)
+        except (ZoneInfoNotFoundError, ValueError, KeyError) as e:
+            raise ValueError(f"geçersiz saat dilimi: {v!r}") from e
+        return v
+
+    @model_validator(mode="after")
+    def _tutarli(self):
+        lo, hi = self.active_hours
+        if not (0 <= lo < hi <= 24):
+            raise ValueError("active_hours [başlangıç, bitiş] ve başlangıç < bitiş olmalı")
+        # SLOTLAR SIĞMALI. Sığmazsa MIN_SLOT_GAP_MIN koruması slotları üst üste iter,
+        # son slotlar aktif saatlerin dışına taşar ve jitter tamamen anlamsızlaşır.
+        # Bu sessiz bir bozulma olurdu — baştan reddet.
+        from short_bot.autopilot import MIN_SLOT_GAP_MIN
+        if (hi - lo) * 60 / self.daily_count < MIN_SLOT_GAP_MIN:
+            raise ValueError(
+                f"{self.daily_count} slot {hi - lo} saate sığmaz "
+                f"(slot başına en az {MIN_SLOT_GAP_MIN} dakika gerekir)")
+        return self
+
+
 class BgVideoConfig(BaseModel):
     enabled: bool = False
     scale: Literal[0.88, 0.80] = 0.88
@@ -250,6 +294,9 @@ class ChannelConfig:
     generator: GeneratorConfig | None = None
     auto_feed_ids: list[int] = field(default_factory=list)
     youtube: YoutubeChannelConfig | None = None
+    # AUTOPILOT: otomatik üretim + zamanlı yükleme (bkz. autopilot.py). None/kapalı
+    # iken hiçbir davranış değişmez.
+    autopilot: AutopilotConfig | None = None
     bg_video: BgVideoConfig | None = None
     trend_boost: TrendBoostConfig | None = None
     # Per-channel og:image blur radius (0 = crisp original). Up to v0.6.2 a
@@ -369,6 +416,10 @@ def load_channel(path: Path) -> ChannelConfig:
     yt_data = data.get("youtube")
     youtube = YoutubeChannelConfig.model_validate(yt_data) if yt_data else None
 
+    autopilot_data = data.get("autopilot")
+    autopilot = (AutopilotConfig.model_validate(autopilot_data)
+                 if autopilot_data else None)
+
     bg_video_data = data.get("bg_video")
     bg_video = BgVideoConfig.model_validate(bg_video_data) if bg_video_data else None
 
@@ -413,6 +464,7 @@ def load_channel(path: Path) -> ChannelConfig:
         generator=generator,
         auto_feed_ids=auto_feed_ids,
         youtube=youtube,
+        autopilot=autopilot,
         bg_video=bg_video,
         trend_boost=trend_boost,
         bg_image_blur=int(data.get("bg_image_blur", 0)),
@@ -477,6 +529,12 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
         }
         if cfg.youtube.cron_preset:
             data["youtube"]["cron_preset"] = cfg.youtube.cron_preset
+    # AUTOPILOT: blok VARSA yaz. Yoksa YAZMA — autopilot'u hiç kullanmayan bir kanala
+    # kaydet'e basınca blok eklemek, geriye uyumu sessizce kırardı.
+    if cfg.autopilot is not None:
+        ap = cfg.autopilot.model_dump()
+        ap["active_hours"] = list(ap["active_hours"])   # YAML tuple yazmasın
+        data["autopilot"] = ap
     if cfg.bg_video is not None and cfg.bg_video.enabled:
         data["bg_video"] = {
             "enabled": cfg.bg_video.enabled,

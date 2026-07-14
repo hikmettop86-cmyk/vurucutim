@@ -5,7 +5,7 @@ from pathlib import Path
 
 from sqlalchemy import (
     Column, DateTime, Float, ForeignKey, Index, Integer, MetaData, String,
-    Table, Text, create_engine, select,
+    Table, Text, UniqueConstraint, create_engine, select,
 )
 from sqlalchemy.engine import Engine
 
@@ -215,6 +215,35 @@ series_arcs = Table(
     Column("produced", Integer, default=0, nullable=False),   # kaç bölümü üretildi
     Column("created_at", DateTime, default=_utcnow, nullable=False),
     Column("approved_at", DateTime),
+)
+
+
+# AUTOPILOT SLOTLARI (bkz. autopilot.py). Sistemin TEK doğruluk kaynağı: "bugün ne
+# üretilecek, ne zaman yayınlanacak, hangisi patladı" sorularının cevabı burada.
+#
+# UNIQUE (channel, slot_local_date, slot_index) HAYATİ: planlayıcı hem gece cron'unda
+# HEM UYGULAMA AÇILIŞINDA koşuyor. Kısıt olmasa aynı gün iki kez planlanır → KOPYA SLOT
+# → aynı slot için iki video üretilir ve ikisi de yüklenir. Hiçbir hata vermez.
+publish_slots = Table(
+    "publish_slots", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("channel", String, nullable=False, index=True),
+    Column("slot_local_date", String, nullable=False),   # kanalın YEREL günü
+    Column("slot_index", Integer, nullable=False),
+    Column("slot_at_utc", DateTime, nullable=False),
+    Column("jitter_min", Integer, default=0, nullable=False),   # HAM sapma
+    # planned → producing → produced → scheduled → published
+    #                    ↘ failed        ↘ skipped
+    Column("status", String, default="planned", nullable=False),
+    Column("short_id", Integer, ForeignKey("shorts.id")),
+    Column("run_id", Integer, ForeignKey("runs.id")),
+    Column("attempts", Integer, default=0, nullable=False),
+    Column("produced_at", DateTime),
+    Column("uploaded_at", DateTime),
+    Column("error", Text),
+    Column("created_at", DateTime, default=_utcnow, nullable=False),
+    UniqueConstraint("channel", "slot_local_date", "slot_index",
+                     name="uq_publish_slot"),
 )
 
 
@@ -970,6 +999,121 @@ def episode_history(eng: Engine, channel: str, limit: int = 20) -> list[dict]:
     return [{"episode_no": r.episode_no, "arc_pos": r.arc_pos, "topic": r.topic,
              "open_loop": r.open_loop, "short_id": r.short_id,
              "created_at": r.created_at} for r in rows]
+
+
+# --- AUTOPILOT SLOTLARI ----------------------------------------------------
+
+def _slot_dict(row) -> dict:
+    return {"id": row.id, "channel": row.channel,
+            "slot_local_date": row.slot_local_date, "slot_index": row.slot_index,
+            "slot_at_utc": row.slot_at_utc, "jitter_min": row.jitter_min,
+            "status": row.status, "short_id": row.short_id, "run_id": row.run_id,
+            "attempts": row.attempts, "produced_at": row.produced_at,
+            "uploaded_at": row.uploaded_at, "error": row.error}
+
+
+def plan_slots(eng: Engine, channel: str, slot_local_date: str,
+               slots: list[dict]) -> int:
+    """Slotları yaz. VAR OLANI ASLA EZMEZ — eklenen slot sayısını döndürür.
+
+    Planlayıcı gece cron'unda VE uygulama açılışında koşuyor. Var olan bir slotu ezmek,
+    üretilmiş/yüklenmiş bir slotu 'planned'a döndürür → aynı video ikinci kez üretilir
+    ve ikinci kez yüklenir. Sessiz ve geri dönüşü olmayan bir bozulma.
+    """
+    eklenen = 0
+    with eng.begin() as conn:
+        mevcut = {r[0] for r in conn.execute(
+            select(publish_slots.c.slot_index)
+            .where(publish_slots.c.channel == channel)
+            .where(publish_slots.c.slot_local_date == slot_local_date)).all()}
+        for s in slots:
+            i = int(s["slot_index"])
+            if i in mevcut:
+                continue
+            conn.execute(publish_slots.insert().values(
+                channel=channel, slot_local_date=slot_local_date, slot_index=i,
+                slot_at_utc=s["slot_at_utc"],
+                jitter_min=int(s.get("jitter_min", 0)),
+                status="planned", attempts=0))
+            eklenen += 1
+    return eklenen
+
+
+def slots_for_date(eng: Engine, channel: str, slot_local_date: str) -> list[dict]:
+    with eng.connect() as conn:
+        rows = conn.execute(
+            select(publish_slots).where(publish_slots.c.channel == channel)
+            .where(publish_slots.c.slot_local_date == slot_local_date)
+            .order_by(publish_slots.c.slot_index)).all()
+    return [_slot_dict(r) for r in rows]
+
+
+def slots_in_range(eng: Engine, channel: str, d1: str, d2: str) -> list[dict]:
+    with eng.connect() as conn:
+        rows = conn.execute(
+            select(publish_slots).where(publish_slots.c.channel == channel)
+            .where(publish_slots.c.slot_local_date >= d1)
+            .where(publish_slots.c.slot_local_date <= d2)
+            .order_by(publish_slots.c.slot_local_date,
+                      publish_slots.c.slot_index)).all()
+    return [_slot_dict(r) for r in rows]
+
+
+def open_slots(eng: Engine, channel: str) -> list[dict]:
+    """Henüz SONUÇLANMAMIŞ slotlar — tick yalnız bunlarla ilgilenir."""
+    with eng.connect() as conn:
+        rows = conn.execute(
+            select(publish_slots).where(publish_slots.c.channel == channel)
+            .where(publish_slots.c.status.in_(
+                ("planned", "producing", "produced", "scheduled")))
+            .order_by(publish_slots.c.slot_at_utc)).all()
+    return [_slot_dict(r) for r in rows]
+
+
+def slot_set_status(eng: Engine, slot_id: int, status: str, *,
+                    short_id: int | None = None, run_id: int | None = None,
+                    error: str | None = None) -> None:
+    vals: dict = {"status": status}
+    if short_id is not None:
+        vals["short_id"] = int(short_id)
+    if run_id is not None:
+        vals["run_id"] = int(run_id)
+    if error is not None:
+        vals["error"] = str(error)[:1000]
+    if status == "produced":
+        vals["produced_at"] = _utcnow()
+    if status in ("scheduled", "published"):
+        vals["uploaded_at"] = _utcnow()
+    with eng.begin() as conn:
+        conn.execute(publish_slots.update()
+                     .where(publish_slots.c.id == int(slot_id)).values(**vals))
+
+
+def slot_bump_attempt(eng: Engine, slot_id: int) -> int:
+    """Deneme sayacını artır, YENİ değeri döndür."""
+    with eng.begin() as conn:
+        row = conn.execute(select(publish_slots.c.attempts)
+                           .where(publish_slots.c.id == int(slot_id))).first()
+        yeni = (int(row[0] or 0) + 1) if row else 1
+        conn.execute(publish_slots.update()
+                     .where(publish_slots.c.id == int(slot_id))
+                     .values(attempts=yeni))
+    return yeni
+
+
+def prev_day_jitters(eng: Engine, channel: str, date_local) -> dict[int, int]:
+    """Dünkü HAM sapmalar — rastgele yürüyüş buradan devam eder.
+
+    Okunamazsa yürüyüş her gün 0'dan başlar ve slotlar tabana yapışır: her gün aynı
+    dakika, yani tam da kaçınmaya çalıştığımız otomasyon parmak izi.
+    """
+    dun = (date_local - timedelta(days=1)).isoformat()
+    with eng.connect() as conn:
+        rows = conn.execute(
+            select(publish_slots.c.slot_index, publish_slots.c.jitter_min)
+            .where(publish_slots.c.channel == channel)
+            .where(publish_slots.c.slot_local_date == dun)).all()
+    return {int(r[0]): int(r[1]) for r in rows}
 
 
 # --- PLANLI ARK ------------------------------------------------------------

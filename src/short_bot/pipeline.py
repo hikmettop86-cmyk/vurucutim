@@ -275,8 +275,19 @@ def _maybe_auto_upload(*, eng, short_id: int, channel, picked_score: float | Non
                        model: str, cooldown_minutes: int = 5,
                        secrets_path: Path | None = None,
                        backend: str = "claude_cli",
-                       api_key: str | None = None) -> None:
-    """Post-render hook: if channel opts in, evaluate gates + run upload."""
+                       api_key: str | None = None,
+                       defer: bool = False) -> None:
+    """Post-render hook: if channel opts in, evaluate gates + run upload.
+
+    ``defer=True`` (AUTOPILOT): YÜKLEME BURADA YAPILMAZ.
+
+    Autopilot videoyu KENDİ yükleyecek — gizli + publishAt ile, planlanmış slot
+    saatine. Burada da yüklersek kanalda İKİ video olur: biri anında (public), biri
+    zamanlı. Hiçbir hata vermez; yalnız kanal bozulur ve bütün zamanlama çöker.
+    """
+    if defer:
+        log.info("[YT] auto-upload ERTELENDİ — autopilot slot saatine yükleyecek")
+        return
     if channel.youtube is None or not channel.youtube.auto_upload:
         return
     # Token refresh için proxy session hazır olsun (varsa)
@@ -317,9 +328,12 @@ def _maybe_auto_upload(*, eng, short_id: int, channel, picked_score: float | Non
 @dataclass
 class RunResult:
     run_id: int
-    status: str           # 'success' | 'failed' | 'no_candidates'
+    status: str           # 'success' | 'failed' | 'no_candidates' | 'cancelled'
     short_path: Path | None
     error: str | None
+    # AUTOPILOT: slot hangi videoya bağlanacak? Yükleme üretimden AYRI koştuğu için
+    # yolu değil KİMLİĞİ taşımak zorundayız (upload short_id ile çalışıyor).
+    short_id: int | None = None
 
 
 def _slugify(text: str, max_len: int = 60) -> str:
@@ -521,6 +535,9 @@ def run_pipeline(
     trigger: str = "cli",
     preselected_item=None,   # NewsItem | None — manuel feed seciminde dolu
     forced_topic: str | None = None,   # panelden secilen baslik (yeniden uret / konu bankasi)
+    # AUTOPILOT: yüklemeyi autopilot yapacak (gizli + publishAt, slot saatine).
+    # True iken pipeline HİÇBİR koşulda yüklemez — yoksa ÇİFTE YÜKLEME olur.
+    defer_upload: bool = False,
 ) -> RunResult:
     eng = init_db(db_path)
     log_path = logs_dir / f"{datetime.now(timezone.utc):%Y%m%d_%H%M%S}_{channel.slug}.log"
@@ -545,7 +562,7 @@ def run_pipeline(
                         item=preselected_item, channel=channel, eng=eng,
                         settings=settings, log=log, music_root=music_root,
                         templates_dir=templates_dir, cache_dir=cache_dir,
-                        run_id=run_id, score=None,
+                        run_id=run_id, score=None, defer_upload=defer_upload,
                     )
                     if res.status != "success":
                         finish_run(eng, run_id, status="no_candidates",
@@ -556,18 +573,20 @@ def run_pipeline(
                         channel=channel, run_id=run_id, log=log, eng=eng,
                         settings=settings, music_root=music_root,
                         templates_dir=templates_dir, cache_dir=cache_dir,
-                        forced_topic=forced_topic,
+                        forced_topic=forced_topic, defer_upload=defer_upload,
                     )
                 if channel.content_source == "feed":
                     return _run_feed(
                         channel=channel, run_id=run_id, log=log, eng=eng,
                         settings=settings, music_root=music_root,
                         templates_dir=templates_dir, cache_dir=cache_dir,
+                        defer_upload=defer_upload,
                     )
                 return _run_rss(
                     channel=channel, run_id=run_id, log=log, eng=eng,
                     settings=settings, music_root=music_root,
                     templates_dir=templates_dir, cache_dir=cache_dir,
+                    defer_upload=defer_upload,
                 )
         except Timeout:
             finish_run(eng, run_id, status="failed", short_id=None,
@@ -595,6 +614,7 @@ def _produce_from_item(
     *, item, channel, eng, settings, log,
     music_root, templates_dir, cache_dir, run_id: int,
     score: float | None = None,
+    defer_upload: bool = False,
 ) -> RunResult:
     """Tek bir NewsItem'dan video üretir. Manuel ve otomatik yol paylaşır.
 
@@ -759,14 +779,15 @@ def _produce_from_item(
         log=log, yt_creds_root=yt_creds_root,
         claude_path=score_call.claude_path, model=score_call.model,
         secrets_path=secrets_path, backend=score_call.backend,
-        api_key=score_call.api_key)
+        api_key=score_call.api_key, defer=defer_upload)
     log.info(f"=== success short_id={short_id} ===")
     return RunResult(run_id=run_id, status="success",
-                     short_path=out_path, error=None)
+                     short_path=out_path, error=None, short_id=short_id)
 
 
 def _run_rss(*, channel, run_id, log, eng, settings,
-             music_root, templates_dir, cache_dir) -> RunResult:
+             music_root, templates_dir, cache_dir,
+             defer_upload: bool = False) -> RunResult:
     """Existing 8-stage RSS pipeline body, extracted verbatim. Returns RunResult."""
     log.info("[1/8] fetch_rss")
     items = fetch_rss(channel.keywords, channel.rss_locale)
@@ -1156,9 +1177,11 @@ def _run_rss(*, channel, run_id, log, eng, settings,
         secrets_path=secrets_path,
         backend=score_call.backend,
         api_key=score_call.api_key,
+        defer=defer_upload,
     )
     log.info(f"=== success short_id={short_id} ===")
-    return RunResult(run_id=run_id, status="success", short_path=out_path, error=None)
+    return RunResult(run_id=run_id, status="success", short_path=out_path,
+                     error=None, short_id=short_id)
 
 
 def _safe_generate(gen_fn, *, log, attempt: int):
@@ -1181,7 +1204,8 @@ def _safe_generate(gen_fn, *, log, attempt: int):
 
 def _run_generator(*, channel, run_id, log, eng, settings,
                    music_root, templates_dir, cache_dir,
-                   forced_topic: str | None = None) -> RunResult:
+                   forced_topic: str | None = None,
+                   defer_upload: bool = False) -> RunResult:
     """6-phase generator pipeline."""
     log.info("[1/6] prepare (forbidden + topic distribution)")
     forbidden = recent_generated_texts(
@@ -1418,9 +1442,11 @@ def _run_generator(*, channel, run_id, log, eng, settings,
             yt_creds_root=yt_creds_root, claude_path=gen_call.claude_path,
             model=gen_call.model, secrets_path=secrets_path2,
             backend=gen_call.backend, api_key=gen_call.api_key,
+            defer=defer_upload,
         )
         log.info(f"=== success short_id={short_id} (reel) ===")
-        return RunResult(run_id=run_id, status="success", short_path=reel_out, error=None)
+        return RunResult(run_id=run_id, status="success", short_path=reel_out,
+                         error=None, short_id=short_id)
 
     # Phase 4: image
     log.info("[4/6] image search (Sonnet keywords)")
@@ -1532,14 +1558,16 @@ def _run_generator(*, channel, run_id, log, eng, settings,
         secrets_path=secrets_path,
         backend=gen_call.backend,
         api_key=gen_call.api_key,
+        defer=defer_upload,
     )
     log.info(f"=== success short_id={short_id} ===")
     return RunResult(run_id=run_id, status="success",
-                     short_path=out_path, error=None)
+                     short_path=out_path, error=None, short_id=short_id)
 
 
 def _run_feed(*, channel, run_id, log, eng, settings,
-              music_root, templates_dir, cache_dir) -> RunResult:
+              music_root, templates_dir, cache_dir,
+              defer_upload: bool = False) -> RunResult:
     """Otomatik feed pipeline: auto_feed_ids'ten çek → dedup → score →
     hibrit seçim (eşik üstü en yeni) → _produce_from_item."""
     log.info(f"[1/3] fetch feeds {channel.auto_feed_ids}")
@@ -1610,7 +1638,8 @@ def _run_feed(*, channel, run_id, log, eng, settings,
     res = _produce_from_item(
         item=chosen.item, channel=channel, eng=eng, settings=settings,
         log=log, music_root=music_root, templates_dir=templates_dir,
-        cache_dir=cache_dir, run_id=run_id, score=chosen.score)
+        cache_dir=cache_dir, run_id=run_id, score=chosen.score,
+        defer_upload=defer_upload)
     if res.status != "success":
         finish_run(eng, run_id, status="no_candidates", short_id=None,
                    error=res.error)
