@@ -74,3 +74,44 @@ def subcut_clip_index(subcuts, clips_per_seg: dict[int, int]) -> list[int]:
         out.append(k % n)
         seen[si] = k + 1
     return out
+
+
+def clip_offsets(clip_paths, subcuts, durations) -> list[float]:
+    """Her alt-kesim için klip-İÇİ başlangıç saniyesi.
+
+    Aynı klip birden çok alt-kesimde kullanılınca hepsi klibin AYNI yerinden
+    başlarsa izleyici donmuş bir kare görür. Bu yüzden bir klibin N kullanımı
+    klibin kullanılabilir süresine EŞİT ARALIKLA yayılır.
+
+    GERÇEK HATA (short 802, gartengeheimnisse): eski formül ``min(6.0, 1.5*k)``
+    idi ve k>=4'te DOYUYORDU. ``visual_loop`` kapanış klibini hook klibine
+    bağladığı için hook klibi 5+ kez kullanılıyor → kapanışın BÜTÜN alt-kesimleri
+    klibin aynı 6.0 saniyesinden başlıyordu. Ölçüldü: videonun son 11.4 saniyesi
+    (%33'ü) donmuş tek kare — 8 fps'te 90/90 ardışık kare farkı <= 2.
+
+    durations: {str(path): süre_s}. Süresi bilinmeyen klip 0.0 ofset alır
+    (kırpmaktansa klibin başından oynat — fail-open).
+    """
+    toplam: dict[str, int] = {}
+    for c in clip_paths:
+        toplam[str(c)] = toplam.get(str(c), 0) + 1
+    sayac: dict[str, int] = {}
+    out: list[float] = []
+    for i, c in enumerate(clip_paths):
+        anahtar = str(c)
+        k = sayac.get(anahtar, 0)
+        sayac[anahtar] = k + 1
+        n = toplam[anahtar]
+        dur = float(durations.get(anahtar) or 0.0)
+        # bu alt-kesim klipten kaç saniye TÜKETECEK
+        need = 0.0
+        if i < len(subcuts):
+            _si, a, b = subcuts[i]
+            need = max(0.0, float(b) - float(a))
+        # PAY: klibin sonuna dayanıp kare donmasın diye küçük bir emniyet
+        usable = dur - need - 0.2
+        if n <= 1 or usable <= 0.0:
+            out.append(0.0)
+            continue
+        out.append(round(usable * k / n, 2))
+    return out

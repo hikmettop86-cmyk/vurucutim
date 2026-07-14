@@ -32,7 +32,7 @@ from short_bot.reel_tempo import plan_zones, remap_words, retimed_duration_s
 from short_bot.reel_tempo import retime as _retime
 from short_bot.reel_narration import write_reel_narration as _write_narr
 from short_bot.reel_numbers import find_numbers
-from short_bot.reel_pacing import plan_subcuts, subcut_clip_index
+from short_bot.reel_pacing import clip_offsets, plan_subcuts, subcut_clip_index
 from short_bot.reel_render import render_reel_overlay_frames as _render
 from short_bot.reel_sfx import discover_sfx, pick_sfx_per_cut
 from short_bot.tts.ai33_client import health_check as _health
@@ -582,13 +582,17 @@ def produce_reel_video(
     clip_paths: list[Path] = [clips_by_seg[si][k]
                               for (si, _a, _b), k in zip(subcuts, clip_idx)]
     seg_spans = [(a, b) for (_si, a, b) in subcuts]
-    # Aynı klibin farklı alt-kesimi FARKLI saniyeden başlasın (klip-içi çeşitlilik)
-    clip_starts: list[float] = []
-    _seen_clip: dict[str, int] = {}
-    for c in clip_paths:
-        k = _seen_clip.get(str(c), 0)
-        clip_starts.append(min(6.0, 1.5 * k))
-        _seen_clip[str(c)] = k + 1
+    # Aynı klibin farklı alt-kesimi FARKLI saniyeden başlasın (klip-içi çeşitlilik).
+    # Ofsetler klibin GERÇEK süresine yayılır — eski formül min(6.0, 1.5*k) idi ve
+    # k>=4'te DOYUYORDU (bkz. reel_pacing.clip_offsets: short 802'de videonun son
+    # 11.4 saniyesi, %33'ü, donmuş tek kareydi).
+    _durs: dict[str, float] = {}
+    for c in set(map(str, clip_paths)):
+        try:
+            _durs[c] = d.probe_duration_s(Path(c), ffprobe_path="ffprobe")
+        except Exception as e:      # süre okunamadı → ofset 0 (klibin başı), üretim düşmesin
+            log.warning(f"  reel: klip süresi okunamadı, ofset 0 ({Path(c).name}): {e}")
+    clip_starts = clip_offsets(clip_paths, subcuts, _durs)
     cut_times = [a for (_si, a, _b) in subcuts[1:]]
     log.info(f"  reel: {len(subcuts)} alt-kesim ({profile.cut_pacing} tempo), "
              f"{len(set(map(str, clip_paths)))} farklı klip")
