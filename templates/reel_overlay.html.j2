@@ -155,7 +155,9 @@ html,body{width:1080px;height:1920px;overflow:hidden;background:transparent;
 <div id="flash"></div>
 </div>
 <script>
-const LEAD=0.08,CHUNK=3,DUR={{ duration_s }},LAST={{ last_seg }};
+const LEAD=0.08,CHUNK_MAX=3,DUR={{ duration_s }},LAST={{ last_seg }};
+// Öbek başına kelime sayısı SABİT DEĞİL: fitCap() sığana kadar 3→2→1 düşürür.
+let CHUNK=CHUNK_MAX;
 /* MANŞET VARSA hook segmentinde ALTYAZI DA AKAR: kartta artık cümle değil 3-6
    kelimelik manşet var, konuşulan hook cümlesini izleyicinin okuyabilmesi lazım.
    Manşet yoksa eski davranış: kartta tam hook cümlesi, altyazı kapalı. */
@@ -266,21 +268,50 @@ function _chunkLines(cap){
   for(const w of ws) w.classList.remove('vis');   // ölçüm izini temizle
   return enKotu;
 }
+// Kelimeleri öbeklere böl. Öbek segment sınırında da kırılır (cümle karışmasın).
+function _rechunk(n){
+  let ch=-1, ps=null, ic=0;
+  for(const w of W){
+    const sg=+w.dataset.seg;
+    if(sg!==ps||ic===n){ch++;ic=0;ps=sg;}
+    w.dataset.chunk=ch; ic++;
+  }
+}
+// Verilen öbek boyutuyla GEÇERLİ en büyük punto (taşma yok + <=2 satır). Sığmazsa 0.
+function _capFit(cap, base, floor){
+  for(let size=base; size>=floor; size-=2){
+    cap.style.fontSize=size+'px';
+    cap.classList.add('measure');          // taşma: tüm kelimeler görünürken en kötü durum
+    const tasma=lineOverflow(cap)>0;
+    cap.classList.remove('measure');
+    if(!tasma && _chunkLines(cap)<=MAX_CAP_LINES) return size;
+  }
+  return 0;
+}
+// SIĞDIRMA SIRASI: önce KELİME SAYISINI feda et, fontu değil.
+// Eski kod tersini yapıyordu — öbeği 3'te sabit tutup fontu küçültüyordu. Almanca
+// bileşik kelimelerde ("jahrzehntelang") bu çöküyor.
+// ÖLÇÜLDÜ (short 801, lower_left, Almanca): 3 kelime → font TABANA (48px) indi ve
+// YİNE 3 satır sardı; yani sığdırma başarısız oldu, üstelik 3. satır abone çipine
+// biniyor. 2 kelime → 82px, 2 satır. Punto %71 büyüyor.
+// 1 kelimeye inmek HİÇBİR ŞEY kazandırmıyor (yine 82px; sınırlayıcı kısıt "en uzun
+// TEK kelime bir satıra sığmalı" ve 2 kelimeli öbek zaten 2 satır kullanabiliyor)
+// — bağlamı bedavaya harcar. Bu yüzden taban 1 değil, "sığan en büyük öbek".
+// Türkçe regresyon yok: kelimeler kısa, 3 kelime %85 eşiğini geçiyor (74-78px).
 function fitCap(){
   const cap=document.querySelector('.cap'); if(!cap) return;
   cap.style.fontSize='';                       // idempotent: stil sayfasındaki puntoya dön
-  const base=parseFloat(getComputedStyle(cap).fontSize), floor=base*0.6;
-  let size=base;
-  for(;;){
-    // TAŞMA: tüm kelimeler görünürken en kötü durum (uzun tek kelime kadraja sığmalı)
-    cap.classList.add('measure');
-    const tasma=lineOverflow(cap)>0;
-    cap.classList.remove('measure');
-    // SARMA: öbek başına satır sayısı (gerçek gösterim hâli)
-    const satir=_chunkLines(cap);
-    if(size<=floor || (!tasma && satir<=MAX_CAP_LINES)) break;
-    size-=2; cap.style.fontSize=size+'px';
+  const base=parseFloat(getComputedStyle(cap).fontSize);
+  const floor=base*0.6, iyi=base*0.85;         // %85 altına düşmektense kelime bırak
+  let enIyi={n:1, px:0};
+  for(let n=CHUNK_MAX; n>=1; n--){
+    _rechunk(n);
+    const px=_capFit(cap, base, floor);
+    if(px>enIyi.px) enIyi={n, px};
+    if(px>=iyi) break;   // yeterince büyük punto → DUR, kalan kelimeleri koru
   }
+  CHUNK=enIyi.n; _rechunk(CHUNK);
+  cap.style.fontSize=(enIyi.px||floor)+'px';
 }
 window.__fit=function(){
   // Hook/close ekranın üst yarısında; altyazı bloğuna sarkmasın diye yükseklik sınırı.
@@ -294,8 +325,10 @@ window.__fit=function(){
 const FLASH=document.getElementById('flash'),MLAYER=document.getElementById('markers');
 const RGB=document.getElementById('rgbsplit'),LEAK=document.getElementById('lightleak'),GLITCH=document.getElementById('glitch');
 const CTA=document.getElementById('cta'),LIKE=document.getElementById('like');
-let ch=-1,ps=null,ic=0,mkSeg='';   // mkSeg: aktif belirtecin kimliği (t0:type)
-for(const w of W){const sg=+w.dataset.seg;if(sg!==ps||ic===CHUNK){ch++;ic=0;ps=sg;}w.dataset.chunk=ch;ic++;}
+let mkSeg='';   // mkSeg: aktif belirtecin kimliği (t0:type)
+// İlk öbekleme: __fit() çağrılmasa bile (test/önizleme) altyazı çalışsın.
+// fitCap() sığdırma sırasında bunu yeniden hesaplar.
+_rechunk(CHUNK);
 window.__seek=function(tms){
   const t=tms/1000,lead=t+LEAD;let seg=0,chk=-1;
   for(const w of W){if(lead>=+w.dataset.s){seg=+w.dataset.seg;chk=+w.dataset.chunk;}}
