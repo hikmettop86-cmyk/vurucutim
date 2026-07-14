@@ -26,7 +26,7 @@ from pydantic import BaseModel
 
 from short_bot.dna import DnaSpec, generate_dna
 from short_bot.lang_pack import load_pack
-from short_bot.locale import LANGUAGE_NAMES
+from short_bot.locale import LANGUAGE_NAMES, SUPPORTED_LANGUAGES
 from short_bot.topic_miner import refresh_topic_bank
 from short_bot.topic_propose import propose_topics, verify_topics
 from short_bot.voice_picker import VoiceChoice, pick_voice, voices_for
@@ -47,6 +47,9 @@ class ChannelPlan(BaseModel):
     niche: str                    # TEMİZLENMİŞ niş — generator.topic olacak
     intent: str = ""              # kullanıcının HAM cümlesi (planda gösterilir)
     evidence: str = ""            # YouTube ölçümü YOKSA BOŞ — uydurma kanıt yazmayız
+    # DİL ÇELİŞKİSİ: metin başka bir dil istiyor gibi görünüyor ama menü bunu diyor.
+    # Menü hüküm verir (açık kullanıcı girdisi); panel çelişkiyi UYARI olarak gösterir.
+    lang_conflict: str = ""       # kullanıcının metinde istediği dil kodu (varsa)
     name: str
     slug: str
     voice: VoiceChoice
@@ -61,25 +64,33 @@ class _Name(BaseModel):
 
 class _Niche(BaseModel):
     niche: str
+    wants_language: str = ""     # kullanıcının YAYIN DİLİ olarak istediği dil kodu
 
 
-def _normalize_niche(intent: str, language: str, llm) -> str:
-    """Kullanıcının İSTEĞİNİ temiz bir NİŞE çevir — hedef dilde.
+def _normalize_niche(intent: str, language: str, llm) -> tuple[str, str]:
+    """Kullanıcının İSTEĞİNİ temiz bir NİŞE çevir. ``(niş, istenen_dil_kodu)`` döner.
 
-    GERÇEK HATA (ilk canlı koşu): kullanıcı "Almanca bahçe ile ilgilenen insanların
-    bahçecilik üzerine merak uyandıran niş bir short kanal kurmak istiyorum" yazdı ve
-    bu cümle olduğu gibi ``generator.topic``e kaydedildi. Sonuç: YouTube arama sorgusu
-    "Almanca bahce ile" oldu (``_short_query`` ilk kelimeleri alıyor) — hiçbir şey
-    bulamaz, yani o kanalda kanıt madenciliği KALICI OLARAK ÖLÜ.
+    NEDEN NİŞ TEMİZLİĞİ (gerçek hata, ilk canlı koşu): kullanıcı "Almanca bahçe ile
+    ilgilenen insanların bahçecilik üzerine merak uyandıran niş bir short kanal kurmak
+    istiyorum" yazdı ve bu cümle olduğu gibi ``generator.topic``e kaydedilecekti. YouTube
+    arama sorgusu bundan türetiliyor (``_short_query`` ilk kelimeleri alıyor) →
+    "Almanca bahce ile" → hiçbir şey bulmaz → o kanalda kanıt madenciliği KALICI OLARAK
+    ÖLÜ. İnsan doğal olarak İSTEĞİNİ yazar, nişini değil.
 
-    İnsan doğal olarak İSTEĞİNİ yazar, nişini değil. Ajan çevirisini yapmalı.
+    NEDEN DİL TESPİTİ (ölçüldü): metinde "Almanca" yazıp açılır menüyü Türkçe bırakmak
+    kolay. O hâlde ses Türkçe seçilir, dil paketi Türkçe olur, konular Türkçe üretilir —
+    ama kullanıcı Almanca kanal istemiştir. Ortaya TUTARSIZ bir kanal çıkar.
 
-    HEDEF DİLDE: niş kanalın konusudur, kanal o dilde yayın yapar ve arama sorguları
-    ondan türetilir. Almanca kanalın nişi Almanca olmalı.
+    AMA OTOMATİK DÜZELTMEK YANLIŞ OLUR: "Alman tarihi hakkında TÜRKÇE kanal" da geçerli
+    bir istek; orada "Alman" kelimesi KONUYU anlatıyor, dili değil. Bu yüzden menü hüküm
+    verir, biz yalnız ÇELİŞKİYİ BİLDİRİRİZ (çağıran uyarır).
+
+    Niş HEDEF DİLDE yazılır (menüdeki dil): kanal o dilde yayın yapar ve arama sorguları
+    nişten türetilir.
     """
     intent = (intent or "").strip()
     if llm is None:
-        return intent
+        return intent, ""
     ad = LANGUAGE_NAMES.get(language, language)
     try:
         v = llm(f"""Kullanıcı bir YouTube Shorts kanalı kurmak istiyor. İSTEĞİNİ temiz
@@ -88,25 +99,39 @@ bir NİŞ cümlesine çevir.
 KULLANICININ YAZDIĞI:
 {intent}
 
-KURALLAR:
-- Çıktı {ad} DİLİNDE olmalı. (Kanal o dilde yayın yapacak ve YouTube arama sorguları
-  bu cümleden türetilecek — Türkçe bir cümle Almanca aramada hiçbir şey bulmaz.)
-- Bu bir KONU tarifi, bir İSTEK değil. "Kanal kurmak istiyorum", "olsun", "bana bul"
+KANALIN SEÇİLİ YAYIN DİLİ: {ad} ({language})
+
+1) "niche" — konu cümlesi:
+- {ad} DİLİNDE yaz. Metinde BAŞKA bir dil geçse bile ÇIKTI {ad} olacak; yayın dili
+  budur ve YouTube arama sorguları bu cümleden türetilecek.
+- Bu bir KONU tarifi, bir İSTEK değil. "kanal kurmak istiyorum", "bana bul", "olsun"
   gibi ifadeler ÇIKMALI.
 - İçeriğin NE HAKKINDA olduğunu söyle: hangi alan, hangi tür olgular.
 - 1 cümle, en fazla 120 karakter. Somut ol.
+    ✗ "Almanca bahçe ile ilgilenen insanların bahçecilik üzerine kanal kurmak istiyorum"
+    ✓ "Überraschende Fakten über Gartenpflanzen, Anbau, Boden und Pflanzenbiologie"
 
-  ✗ "Almanca bahçe ile ilgilenen insanların bahçecilik üzerine kanal kurmak istiyorum"
-  ✓ "Überraschende Fakten über Gartenpflanzen, Anbau, Boden und Pflanzenbiologie"
+2) "wants_language" — kullanıcı hangi dilde YAYIN yapmak istiyor?
+- Metinden anlaşılıyorsa dil KODUNU yaz: tr, en, de, es, fr.
+- DİKKAT — konu ile dili KARIŞTIRMA:
+    "Almanca bahçecilik kanalı"        → wants_language = "de"  (yayın dili Almanca)
+    "Alman tarihi hakkında kanal"      → wants_language = ""    (KONU Almanya, dil belli değil)
+    "İspanyol mutfağını anlatan kanal" → wants_language = ""    (KONU İspanya)
+- Metin dil hakkında bir şey söylemiyorsa BOŞ bırak.
 
-SADECE JSON: {{"niche": "<{ad} tek cümle>"}}""", _Niche)
+SADECE JSON: {{"niche": "<{ad} tek cümle>", "wants_language": "<kod ya da boş>"}}""",
+                _Niche)
         temiz = (v.niche or "").strip()[:200]
+        istenen = (v.wants_language or "").strip().lower()
+        if istenen not in SUPPORTED_LANGUAGES:
+            istenen = ""
         if len(temiz) >= 10:
-            log.info(f"[ajan] niş temizlendi: {intent[:50]!r} → {temiz!r}")
-            return temiz
+            log.info(f"[ajan] niş temizlendi: {intent[:50]!r} → {temiz!r}"
+                     + (f" | istenen dil: {istenen}" if istenen else ""))
+            return temiz, istenen
     except Exception as e:   # noqa: BLE001 — temizleme kanalı bozmaz
         log.warning(f"[ajan] niş temizlenemedi ({e}) → ham metin kullanılıyor")
-    return intent
+    return intent, ""
 
 
 def _slugify(name: str) -> str:
@@ -214,7 +239,12 @@ def build_plan(niche: str, *, language: str, channels_dir, ai33_key: str,
     _ensure_lang_pack(language, settings=settings, secrets=secrets)
 
     # 2) NİŞ TEMİZLİĞİ — insan İSTEĞİNİ yazar, nişini değil.
-    niche = _normalize_niche(intent, language, llm)
+    #    Ayrıca: metin başka bir yayın dili istiyor mu? (menü hüküm verir, biz uyarırız)
+    niche, istenen_dil = _normalize_niche(intent, language, llm)
+    cakisma = istenen_dil if (istenen_dil and istenen_dil != language) else ""
+    if cakisma:
+        log.warning(f"[ajan] DİL ÇELİŞKİSİ: metin '{cakisma}' istiyor ama menü "
+                    f"'{language}'. Menü hüküm veriyor — panel uyaracak.")
 
     # 3) SES — hedef dilde ses YOKSA burada dururuz (İngilizceye DÜŞMEYİZ).
     voices = voices_for(language, api_key=ai33_key)
@@ -237,8 +267,9 @@ def build_plan(niche: str, *, language: str, channels_dir, ai33_key: str,
     ornek = _sample_topics(niche, language, llm)
 
     return ChannelPlan(language=language, niche=niche, intent=intent,
-                       evidence=evidence, name=name, slug=slug, voice=voice,
-                       dna=dna, sample_topics=ornek)
+                       evidence=evidence, lang_conflict=cakisma,
+                       name=name, slug=slug, voice=voice, dna=dna,
+                       sample_topics=ornek)
 
 
 def apply_plan(plan: ChannelPlan, *, channels_dir, templates_dir, db_path,

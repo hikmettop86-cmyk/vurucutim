@@ -76,6 +76,7 @@ def _diller():
 @bp.get("/channels/agent")
 def page():
     return render_template("channel_agent.html.j2", languages=_diller(),
+                           lang_names=LANGUAGE_NAMES,
                            plan=None, niches=None, job=None, job_id=None)
 
 
@@ -88,6 +89,7 @@ def status(job_id):
         p = _PLANS.get(job_id)
         n = _NICHES.get(job_id)
     return render_template("channel_agent.html.j2", languages=_diller(),
+                           lang_names=LANGUAGE_NAMES,
                            plan=p, niches=n, job=job, job_id=job_id)
 
 

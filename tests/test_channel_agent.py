@@ -36,9 +36,10 @@ def _llm(**cevaplar):
     """Sahte Sonnet: şema adına göre farklı cevap döndürür."""
     def _f(prompt, schema, **kw):
         ad = schema.__name__
-        if ad == "_Niche":                     # niş temizliği
+        if ad == "_Niche":                     # niş temizliği + dil tespiti
             return schema.model_validate(cevaplar.get("niche", {
-                "niche": "Überraschende Fakten über Bier und Brauerei"}))
+                "niche": "Überraschende Fakten über Bier und Brauerei",
+                "wants_language": ""}))
         if ad == "_Pick":                      # voice_picker
             return schema.model_validate(cevaplar.get("voice", {
                 "voice_id": "elevenlabs_de1", "reason": "anlatıcı tonu"}))
@@ -110,7 +111,7 @@ def test_nis_TEMIZLENEMEZSE_ham_metin_kullanilir(_sahte, monkeypatch):
     """Temizleme kanalı bozmaz — LLM patlarsa ham metinle devam."""
     import short_bot.channel_agent as CA
     monkeypatch.setattr(CA, "_normalize_niche",
-                        lambda intent, lang, llm: intent)
+                        lambda intent, lang, llm: (intent, ""))
     p = build_plan("bahce ile ilgili kanal kurmak istiyorum", language="de",
                    channels_dir=_sahte, ai33_key="K", settings=_Settings(),
                    secrets={}, llm=_llm())
@@ -125,7 +126,8 @@ def test_nis_temizligi_HEDEF_DILI_ister():
 
     def _llm2(prompt, schema, **kw):
         gorulen["p"] = prompt
-        return schema.model_validate({"niche": "Fakten über Gärten"})
+        return schema.model_validate({"niche": "Fakten über Gärten",
+                                      "wants_language": ""})
 
     CA._normalize_niche("bahce kanali istiyorum", "de", _llm2)
     p = gorulen["p"]
@@ -296,3 +298,65 @@ def test_apply_CSS_override_yazar(_sahte, tmp_path):
     p = _plan(_sahte)
     slug = _apply(p, _sahte, tmp_path)
     assert (tmp_path / "t" / "css" / f"{slug}.css").exists()
+
+
+# --- DİL ÇELİŞKİSİ ---------------------------------------------------------
+# ÖLÇÜLDÜ: metinde "Almanca" yazıp açılır menüyü Türkçe bırakmak kolay. O hâlde ses
+# Türkçe seçilir, dil paketi Türkçe olur, konular Türkçe üretilir — ama kullanıcı
+# Almanca kanal istemiştir. Ortaya TUTARSIZ bir kanal çıkar.
+#
+# OTOMATİK DÜZELTMEK YANLIŞ OLUR: "Alman tarihi hakkında TÜRKÇE kanal" da geçerli bir
+# istek; orada "Alman" KONUYU anlatıyor, dili değil. Menü hüküm verir, biz UYARIRIZ.
+
+def test_DIL_CELISKISI_isaretlenir(_sahte):
+    """Metin Almanca istiyor, menü Türkçe → çelişki plana yazılır."""
+    p = build_plan("Almanca bahcecilik kanali istiyorum", language="tr",
+                   channels_dir=_sahte, ai33_key="K", settings=_Settings(),
+                   secrets={},
+                   llm=_llm(niche={"niche": "Bahçe bitkileri hakkında şaşırtıcı gerçekler",
+                                   "wants_language": "de"}))
+    assert p.lang_conflict == "de"
+    assert p.language == "tr", "menü hüküm vermeli — otomatik ÜSTÜNE YAZMAYIZ"
+
+
+def test_CELISKI_YOKSA_bos(_sahte):
+    p = build_plan("bira bahcesi kulturu", language="de", channels_dir=_sahte,
+                   ai33_key="K", settings=_Settings(), secrets={},
+                   llm=_llm(niche={"niche": "Fakten über Bier", "wants_language": "de"}))
+    assert p.lang_conflict == ""
+
+
+def test_KONU_bir_ulke_ise_CELISKI_SAYILMAZ(_sahte):
+    """'Alman tarihi hakkında Türkçe kanal' — 'Alman' KONUYU anlatıyor, dili değil.
+    Model wants_language'ı BOŞ döndürür, biz de uyarmayız."""
+    p = build_plan("Alman tarihi hakkinda kanal", language="tr", channels_dir=_sahte,
+                   ai33_key="K", settings=_Settings(), secrets={},
+                   llm=_llm(niche={"niche": "Alman tarihinin şok edici anları",
+                                   "wants_language": ""}))
+    assert p.lang_conflict == ""
+
+
+def test_DESTEKLENMEYEN_dil_kodu_YOKSAYILIR(_sahte):
+    """Model 'jp' gibi desteklenmeyen bir kod döndürürse çelişki sayılmaz."""
+    p = build_plan("Japonca kanal istiyorum burada", language="tr",
+                   channels_dir=_sahte, ai33_key="K", settings=_Settings(),
+                   secrets={},
+                   llm=_llm(niche={"niche": "Japon kültürü hakkında gerçekler",
+                                   "wants_language": "jp"}))
+    assert p.lang_conflict == ""
+
+
+def test_dil_tespiti_KONU_ile_DILI_ayirmayi_ISTER():
+    """Prompt bu ayrımı AÇIKÇA öğretmeli — yoksa 'Alman tarihi' yanlış işaretlenir."""
+    import short_bot.channel_agent as CA
+    gorulen = {}
+
+    def _llm2(prompt, schema, **kw):
+        gorulen["p"] = prompt
+        return schema.model_validate({"niche": "Fakten über Gärten",
+                                      "wants_language": ""})
+
+    CA._normalize_niche("bahce kanali istiyorum", "de", _llm2)
+    p = gorulen["p"]
+    assert "KARIŞTIRMA" in p
+    assert "Alman tarihi" in p          # birebir karşı-örnek prompt'ta

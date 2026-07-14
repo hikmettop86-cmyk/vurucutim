@@ -187,3 +187,44 @@ def test_KISA_sorgu_reddedilir(tmp_path):
                              data={"query": "x", "language": "de"},
                              follow_redirects=True)
     assert "Ne hakkında" in r.data.decode("utf-8")
+
+
+def test_DIL_CELISKISI_panelde_UYARIR(tmp_path, monkeypatch):
+    """Metinde 'Almanca' yazıp menüyü Türkçe bırakmak kolay — panel bunu SÖYLEMELİ.
+    Otomatik düzeltmiyoruz ('Alman tarihi hakkında TÜRKÇE kanal' da geçerli)."""
+    import short_bot.web.routes.channel_agent as CA
+    monkeypatch.setattr(CA, "build_plan",
+                        lambda *a, **kw: _plan(language="tr", lang_conflict="de"))
+    monkeypatch.setattr(CA, "_start_thread", lambda fn: fn())
+    a, _ = _app(tmp_path)
+    r = a.test_client().post("/channels/agent/plan",
+                             data={"niche": "Almanca bahcecilik kanali istiyorum",
+                                   "language": "tr"},
+                             follow_redirects=True)
+    body = r.data.decode("utf-8")
+    assert "Dil çelişkisi" in body
+    assert "Deutsch" in body and "Türkçe" in body
+    assert "Menü hüküm verir" in body
+
+
+def test_CELISKI_YOKSA_uyari_YOK(tmp_path, monkeypatch):
+    import short_bot.web.routes.channel_agent as CA
+    monkeypatch.setattr(CA, "build_plan", lambda *a, **kw: _plan())
+    monkeypatch.setattr(CA, "_start_thread", lambda fn: fn())
+    a, _ = _app(tmp_path)
+    r = a.test_client().post("/channels/agent/plan",
+                             data={"niche": "bira bahcesi kulturu", "language": "de"},
+                             follow_redirects=True)
+    assert "Dil çelişkisi" not in r.data.decode("utf-8")
+
+
+def test_plan_ekraninda_BASTAN_baslama_yolu_var(tmp_path, monkeypatch):
+    """Plan yanlışsa geri dönebilmelisin — 'Kur' tek çıkış olmamalı."""
+    import short_bot.web.routes.channel_agent as CA
+    monkeypatch.setattr(CA, "build_plan", lambda *a, **kw: _plan())
+    monkeypatch.setattr(CA, "_start_thread", lambda fn: fn())
+    a, _ = _app(tmp_path)
+    r = a.test_client().post("/channels/agent/plan",
+                             data={"niche": "bira bahcesi kulturu", "language": "de"},
+                             follow_redirects=True)
+    assert "Baştan" in r.data.decode("utf-8")

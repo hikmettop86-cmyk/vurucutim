@@ -51,6 +51,26 @@
 
 <div id="agent-body">
 
+  {# --- DİL ÇELİŞKİSİ --- #}
+  {# Metinde "Almanca" yazıp menüyü Türkçe bırakmak kolay. O hâlde ses Türkçe seçilir,
+     dil paketi Türkçe olur, konular Türkçe üretilir — ama sen Almanca kanal istemişsin.
+     Otomatik düzeltmiyoruz: "Alman tarihi hakkında TÜRKÇE kanal" da geçerli bir istek.
+     Menü hüküm verir; biz çelişkiyi SÖYLERİZ. #}
+  {% if plan and plan.lang_conflict %}
+  <div class="mb-6 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm
+              text-red-700">
+    <b>⚠ Dil çelişkisi.</b> Yazdığın metin
+    <b>{{ lang_names[plan.lang_conflict] }}</b> yayın istiyor gibi görünüyor, ama dil
+    menüsü <b>{{ lang_names[plan.language] }}</b> seçili.
+    <b>Menü hüküm verir</b>: bu kanal {{ lang_names[plan.language] }} kurulacak — sesi,
+    konuları ve ekran metni {{ lang_names[plan.language] }} olacak.
+    <br>
+    Yanlışsa aşağıdan <b>menüyü {{ lang_names[plan.lang_conflict] }} yapıp planı yeniden
+    hazırla</b>. (Konun {{ lang_names[plan.lang_conflict] }} hakkındaysa ama kanal
+    {{ lang_names[plan.language] }} olacaksa, her şey doğru — bu uyarıyı yok say.)
+  </div>
+  {% endif %}
+
   {# --- PLAN EKRANI --- #}
   {% if plan %}
   <article class="rounded-xl border border-claude-border bg-white p-6 mb-6">
@@ -59,11 +79,18 @@
         <h2 class="text-xl font-bold text-claude-text">{{ plan.name }}</h2>
         <p class="text-xs text-claude-muted font-mono mt-0.5">{{ plan.slug }}</p>
       </div>
-      <form method="post" action="/channels/agent/apply/{{ job_id }}"
-            onsubmit="return confirm('{{ plan.name }} kanalı kurulacak. Otomasyon KAPALI gelir — YouTube\'a yükleme yapmaz. Devam?')">
-        <button class="px-5 py-2.5 rounded-lg bg-claude-accent hover:opacity-90
-                       text-white text-sm font-semibold shadow-sm">Kur</button>
-      </form>
+      <div class="flex items-center gap-2 flex-shrink-0">
+        {# Plan yanlışsa geri dönebilmelisin — kurmak tek çıkış olmamalı. #}
+        <a href="/channels/agent"
+           class="px-4 py-2.5 rounded-lg bg-white border border-claude-border text-sm
+                  font-semibold text-claude-text hover:bg-claude-surface-alt">
+          Baştan</a>
+        <form method="post" action="/channels/agent/apply/{{ job_id }}"
+              onsubmit="return confirm('{{ plan.name }} kanalı {{ lang_names[plan.language] }} olarak kurulacak. Otomasyon KAPALI gelir — YouTube\'a yükleme yapmaz. Devam?')">
+          <button class="px-5 py-2.5 rounded-lg bg-claude-accent hover:opacity-90
+                         text-white text-sm font-semibold shadow-sm">Kur</button>
+        </form>
+      </div>
     </div>
 
     <dl class="space-y-4 text-sm">
