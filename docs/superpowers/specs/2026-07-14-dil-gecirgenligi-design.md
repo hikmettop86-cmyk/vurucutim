@@ -78,7 +78,28 @@ muhtemelen Almanca yazar, ama Türkçe örnekleri kopyalama ve dil sızıntısı
 ölçülmedi. `reel_phrases.CONNECTIVE_STYLES` ve `reel_subscribe.COMMENT_STYLES` de aynı
 durumda.
 
-### 6. `clean_open_loop` meta-dil temizleyicisi Türkçe — SESSİZ
+### 6. Aksan temizleyicisi anlatım metnini BOZUYOR — SESSİZ, ve en ağırı
+
+`text_normalize.strip_non_turkish_diacritics()` Türkçe alfabede olmayan her harfin
+aksanını söküyor. Türkçe için doğru: Sonnet ara sıra Türkçe çıktıya İspanyolca aksan
+sızdırıyor ("CANLÍ") ve bu onu temizliyor. Ama fonksiyon **dile duyarsız**:
+
+```
+'Täglich neu'  →  'Taglich neu'      ä silindi (ö/ü Türkçe alfabede, sağ kaldı)
+'español'      →  'espanol'          ñ silindi
+'café'         →  'cafe'             é silindi
+```
+
+Ve bu bir **pydantic `field_validator`** — `reel_models.py`, `narration.py`,
+`generator.py`, `reel_arc.py`, `models.py` içinde LLM çıktısının **her metin alanında**
+koşuyor. Yani Almanca kanalda LLM doğru yazıyor ("Täglich"), doğrulayıcı model
+sınırında sessizce bozuyor ("Taglich"). Sonuç: TTS yanlış telaffuz ediyor, altyazıda
+yanlış görünüyor, ekranda yanlış yazıyor. Hiçbir hata, hiçbir log.
+
+Bu, ilk beş bozukluğun hepsinden ağır: ötekiler çevre metni (çip, rozet, denetçi)
+bozuyordu; bu **ürünün kendisini** — konuşulan cümleyi — bozuyor.
+
+### 7. `clean_open_loop` meta-dil temizleyicisi Türkçe — SESSİZ
 
 `reel_series._META` regex'i "2. bölümde açıklıyoruz" gibi meta dili söküyor. Almanca
 karşılığı ("erkläre ich in Folge 2") elenmez ve bir sonraki bölümün **üretim konusu
@@ -117,8 +138,55 @@ Bağlantılar:
   çağırır. (Bugünkü import bir modülün özel fonksiyonuna uzanıyor — o bağ kopar.)
 - `tts/fidelity.py`: `_fold(text, lang="tr")` → `locale_fold`'a devreder;
   `normalize_tokens(text, lang="tr")`. Çağıranlar `channel.language` geçirir.
-- `reel_series.episode_badge(title, no, *, lang)` → `locale_upper`.
+- `reel_series.episode_badge(title, no, *, pack)` → `locale_upper`.
 - Jinja `tr_upper` filtresi kalır (panel Türkçe).
+
+#### Alfabe koruması — aksan temizleyicisi (bozukluk 6)
+
+`locale.py` bir olgu tablosu kazanır. **Bu veri dil paketine GİRMEZ:** alfabe bir
+olgudur, üslup değil. Sonnet "ß"i unutursa Almanca anlatım sessizce bozulur — bu
+riski almanın hiçbir karşılığı yok.
+
+```python
+# locale.py
+ALPHABET_EXTRA = {
+    "tr": "ÇĞİıÖŞÜçğöşü",
+    "en": "",
+    "de": "ÄÖÜäöüß",
+    "es": "ÑñÁÉÍÓÚÜáéíóúü¿¡",
+    "fr": "ÀÂÆÇÉÈÊËÎÏÔŒÙÛÜŸàâæçéèêëîïôœùûüÿ",
+}
+```
+
+`text_normalize.strip_foreign_diacritics(s)` bu tabloyu kullanır. Hedef dili
+**contextvar** taşır:
+
+```python
+_LANG: ContextVar[str] = ContextVar("lang", default="tr")
+
+@contextmanager
+def language(lang: str):
+    tok = _LANG.set(lang)
+    try:
+        yield
+    finally:
+        _LANG.reset(tok)
+```
+
+**Neden contextvar, neden parametre değil:** temizleyici bir pydantic
+`field_validator` ve validator'ın çağıranın dilini görmesinin yolu yok. Dili tüm
+model kurulum noktalarından (LLM parse + `fit_word_budget` gibi yeniden-kurma
+yolları + testler) elle geçirmek onlarca dokunuş demek ve **biri unutulursa sessizce
+Türkçe'ye düşer** — düzeltmeye çalıştığımız hatanın aynısı. Contextvar iş parçacığı
+başına yalıtık (her pipeline koşusu kendi thread'inde) ve `with language(...)` bloğu
+kapsamı açıkça sınırlar.
+
+`strip_non_turkish_diacritics` adı kalır ama `strip_foreign_diacritics`'e
+**takma ad** olur (mevcut 15 import noktası kırılmasın); varsayılan dil `"tr"`
+olduğu için Türkçe davranış birebir aynı.
+
+Dili kuran yerler (LLM çıktısının modele girdiği her sınır):
+`pipeline.run_pipeline` (kanalın dili), `reel_arc.plan_arc`, `reel_narration.write`.
 
 ### Katman 2 — `LangPack` veri modeli
 
@@ -267,6 +335,11 @@ ile önbelleklenir, panelden yeniden üretilince temizlenir.
 - `locale_fold("Ich", "de")` → `"ich"`, `\bich\b` eşleşir
 - `clean_open_loop("... erkläre ich in Folge 2.", pack=de)` → meta sökülür
 - CTA'ların hepsi ≤ 24 karakter
+- `with language("de"): ReelBeat(text="Täglich frisches Bier", ...)` → metin
+  **bozulmaz** (`ä` sağ kalır). Aynı model `with language("tr")` altında bugünkü
+  davranışı korur.
+- `with language("es"): ...("español")` → `ñ` sağ kalır;
+  `with language("tr"): ...("español")` → `espanol` (bugünkü davranış, korunur)
 
 **Doğrulama:**
 - 25 karakterlik CTA reddedilir; 24 kabul edilir (sınır testi)
