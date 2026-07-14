@@ -1,5 +1,6 @@
 """APScheduler wiring — registers cron jobs from channel YAMLs."""
 import logging
+import threading
 from pathlib import Path
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -227,6 +228,56 @@ def init_scheduler(app):
         replace_existing=True,
     )
 
+    def _topic_bank_autofill():
+        """4 saatte bir: bankası düşük kanalları DOLDUR (su seviyesi kontrolü).
+
+        Haftalık cron bankanın SAYISINA değil, son yenileme TARİHİNE bakıyordu — banka
+        Salı günü kurusa kullanıcı Pazartesiye kadar bekliyordu.
+
+        ÖLÇÜLDÜ: otomasyon günde ~2-3 konu tüketiyor, haftalık tazeleme ~6 ekliyor →
+        banka haftada 11-15 konu KURUYOR. 22 aktif konu ~9 günde bitiyor. Kuruduğunda
+        seri durur ve bağımsız videolar kanıtlanmış konu olmadan üretilir — SESSİZCE.
+        """
+        try:
+            import yaml
+
+            from short_bot.config import resolve_ai_call
+            from short_bot.topic_autofill import autofill
+            from short_bot.yt_outliers import resolve_youtube_api_keys
+
+            eng = init_db(app.config["SHORTBOT_DB_PATH"])
+            cfg_dir = app.config["SHORTBOT_CONFIG_DIR"]
+            settings = app.config["SHORTBOT_SETTINGS"]
+            try:
+                sp = app.config["SHORTBOT_SECRETS_PATH"]
+                secrets = (yaml.safe_load(sp.read_text(encoding="utf-8"))
+                           if sp.exists() else {}) or {}
+            except Exception:
+                secrets = {}
+            api_keys = resolve_youtube_api_keys(secrets)
+            if not api_keys:
+                return
+            try:
+                llm_call = resolve_ai_call(settings, secrets, "default")
+            except Exception:
+                llm_call = None
+
+            for cfg in list_channels(cfg_dir / "channels", enabled_only=True):
+                try:
+                    autofill(eng, cfg, api_keys=api_keys, llm_call=llm_call)
+                except Exception as e:  # noqa: BLE001 — bir kanal ötekileri durdurmasın
+                    _LOG.warning(f"[banka] {cfg.slug} otomatik doldurma: {e}")
+        except Exception as e:  # noqa: BLE001 — cron ÇÖKMEMELİ
+            _LOG.warning(f"[banka] otomatik doldurma işi başarısız: {e}")
+
+    scheduler.add_job(_topic_bank_autofill, "interval", hours=4,
+                      id="_topic_bank_autofill", replace_existing=True)
+    # AÇILIŞTA da bir kez — interval işi ilk kez 4 SAAT SONRA koşar. Bu bir masaüstü
+    # uygulaması: kullanıcı paneli 20 dakika açıp kapatırsa o iş hiç tetiklenmez ve
+    # banka sessizce kurur. Ayrı thread'te, çünkü madencilik ~1 dk sürüyor ve panelin
+    # açılışını bekletmemeli. needs_refill + kota damgası boşuna koşmayı zaten önlüyor.
+    threading.Thread(target=_topic_bank_autofill, daemon=True).start()
+
     # --- AUTOPILOT ---------------------------------------------------------
     def _autopilot_channels():
         cfg_dir = app.config["SHORTBOT_CONFIG_DIR"]
@@ -259,12 +310,27 @@ def init_scheduler(app):
             _LOG.warning(f"[autopilot] planlama işi başarısız: {e}")
 
     def _autopilot_tick():
-        from short_bot.autopilot_runner import tick
+        """Her 5 dakikada: ÖNCE PLANLA, sonra üret/yükle.
+
+        GERÇEK HATA: planlama YALNIZ açılışta ve gece 03:30'da koşuyordu. Kullanıcı
+        otomasyonu açtığında (ya da ayarları değiştirdiğinde) slotlar SABAH 03:30'A
+        KADAR yazılmıyordu — panel "birkaç dakika içinde planlanacak" diyordu ama bu
+        YALANDI. Planlama idempotent ve ucuz (birkaç DB okuması); tick'in başında
+        koşmasının hiçbir maliyeti yok.
+        """
+        from datetime import datetime as _dt
+        from zoneinfo import ZoneInfo
+
+        from short_bot.autopilot_runner import plan_channel, tick
         from short_bot.web.autopilot_deps import build_deps
         try:
             eng = init_db(app.config["SHORTBOT_DB_PATH"])
             for cfg in _autopilot_channels():
                 try:
+                    bugun = _dt.now(ZoneInfo(cfg.autopilot.timezone)).date()
+                    n = plan_channel(eng, cfg, today_local=bugun, days=2)
+                    if n:
+                        _LOG.info(f"[autopilot] {cfg.slug}: +{n} slot planlandı (tick)")
                     tick(eng, cfg, build_deps(app, cfg))
                 except Exception as e:  # noqa: BLE001
                     _LOG.warning(f"[autopilot] {cfg.slug} tick hatası: {e}")

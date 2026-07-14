@@ -40,10 +40,12 @@ def page(slug):
     durmalarının bir faydası yok: kullanıcı onlara yanlışlıkla basıp aynı videoyu
     ikinci kez üretebiliyordu.
     """
+    from short_bot.topic_autofill import LOW_WATER
     cfg = _load_cfg(slug)
     eng = init_db(current_app.config["SHORTBOT_DB_PATH"])
     rows = [r for r in all_bank_topics(eng, slug) if r["status"] == "active"]
-    return render_template("topic_bank.html.j2", slug=slug, channel=cfg, rows=rows)
+    return render_template("topic_bank.html.j2", slug=slug, channel=cfg, rows=rows,
+                           low_water=LOW_WATER)
 
 
 def _miner_kwargs(cfg) -> dict:

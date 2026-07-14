@@ -177,6 +177,18 @@ topic_bank = Table(
     Column("used_at", DateTime),
 )
 
+# Küçük anahtar-değer defteri. Şimdilik tek müşterisi: konu bankasının son DOLDURMA
+# DENEMESİ. Neden ayrı bir defter gerekti — topic_bank.created_at son EKLENEN konunun
+# tarihidir, son denemenin değil. Niş tükenip madencilik 0 konu eklediğinde o tarih
+# donar; kota koruması bir daha asla tetiklenmez ve 4 saatlik iş her seferinde ~400
+# birim yakar. Deneme kaydı, sonuç ne olursa olsun düşer.
+kv = Table(
+    "kv", metadata,
+    Column("k", String, primary_key=True),
+    Column("v", Text, default="", nullable=False),
+    Column("updated_at", DateTime, default=_utcnow, onupdate=_utcnow, nullable=False),
+)
+
 
 # SERİ BÖLÜMLERİ (bkz. reel_series). Konu planlamasını video düzeyinden ARK düzeyine
 # çıkaran kayıt: her bölüm bir KAPI açar (open_loop) ve o kapı, BİR SONRAKİ bölümün
@@ -950,6 +962,39 @@ def active_bank_topics(eng: Engine, channel: str, limit: int = 10) -> list[dict]
             .where(topic_bank.c.status == "active")
             .order_by(topic_bank.c.created_at.desc()).limit(limit)).all()
     return [_bank_row_dict(r) for r in rows]
+
+
+def kv_touch(eng: Engine, k: str, v: str = "") -> None:
+    """Anahtarı 'şimdi' ile damgala (varsa güncelle, yoksa oluştur)."""
+    with eng.begin() as conn:
+        n = conn.execute(kv.update().where(kv.c.k == k)
+                         .values(v=v, updated_at=_utcnow())).rowcount
+        if not n:
+            conn.execute(kv.insert().values(k=k, v=v))
+
+
+def kv_updated_at(eng: Engine, k: str):
+    """Anahtarın son damga zamanı ya da None (hiç yazılmadıysa)."""
+    with eng.connect() as conn:
+        row = conn.execute(
+            select(kv.c.updated_at).where(kv.c.k == k)).first()
+    return row[0] if row else None
+
+
+def active_bank_count(eng: Engine, channel: str) -> int:
+    """Kaç AKTİF konu kaldı? Bankanın su seviyesi.
+
+    Otomasyon günde ~2-3 konu tüketiyor (bağımsız videolar + arkın tohumu). Haftalık
+    tazeleme ~6 konu ekliyor. Yani banka HAFTADA ~11-15 KONU KURUYOR — ve kuruduğunda
+    seri durur, bağımsız videolar kanıtlanmış konu olmadan üretilir. Bu seviye
+    izlenmezse bozulma SESSİZ olur.
+    """
+    from sqlalchemy import func
+    with eng.connect() as conn:
+        return int(conn.execute(
+            select(func.count()).select_from(topic_bank)
+            .where(topic_bank.c.channel == channel)
+            .where(topic_bank.c.status == "active")).scalar() or 0)
 
 
 def all_bank_topics(eng: Engine, channel: str) -> list[dict]:

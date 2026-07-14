@@ -30,6 +30,29 @@ def _save(cfg, slug: str, ap: AutopilotConfig) -> None:
     save_channel(path, dataclasses.replace(cfg, autopilot=ap))
 
 
+def _plan_now(slug: str) -> int:
+    """Slotları HEMEN planla — bir sonraki tick'i (5 dk) bile bekletme.
+
+    GERÇEK HATA: planlama yalnız açılışta ve gece 03:30'da koşuyordu. Kullanıcı
+    otomasyonu açtığında slotlar SABAH 03:30'A KADAR yazılmıyordu; panel ise
+    "birkaç dakika içinde planlanacak" diyordu. Ayarı değiştiren kişi sonucunu
+    ANINDA görmeli, yoksa "çalışmıyor" der ve haklı olur.
+    """
+    from datetime import datetime as _dt
+
+    from short_bot.autopilot_runner import plan_channel
+    cfg = _load_cfg(slug)
+    ap = getattr(cfg, "autopilot", None)
+    if ap is None or not ap.enabled:
+        return 0
+    try:
+        eng = init_db(current_app.config["SHORTBOT_DB_PATH"])
+        bugun = _dt.now(ZoneInfo(ap.timezone)).date()
+        return plan_channel(eng, cfg, today_local=bugun, days=2)
+    except Exception:   # noqa: BLE001 — planlama tick'te de denenecek
+        return 0
+
+
 @bp.get("/channels/<slug>/autopilot")
 def page(slug):
     cfg = _load_cfg(slug)
@@ -92,6 +115,27 @@ def page(slug):
                         "planlanan saatte YAYINLANACAK. Devam edilsin mi?"),
         })
 
+    # KONU BANKASI SU SEVİYESİ. Otomasyon günde ~2-3 konu tüketiyor. Banka kuruyunca
+    # üretim DURMAZ ama SESSİZCE BOZULUR: seri durur (ark için tohum yok), bağımsız
+    # videolar kanıtlanmış konu olmadan üretilir. Bunu görmeden fark edemezsin.
+    if ap and ap.enabled and cfg.content_source == "generator":
+        from short_bot.db import active_bank_count
+        from short_bot.topic_autofill import LOW_WATER
+        kalan = active_bank_count(eng, slug)
+        gunluk = max(1, ap.daily_count - ap.series_per_day) + \
+            (1 if ap.series_per_day else 0)
+        if kalan < LOW_WATER:
+            uyarilar.append({
+                "text": f"KONU BANKASI AZALDI — {kalan} aktif konu kaldı "
+                        f"(günde ~{gunluk} tüketiliyor, yani ~{kalan // max(1, gunluk)} gün). "
+                        f"Sistem 4 saatte bir otomatik doldurmaya çalışıyor; yine de "
+                        f"azalıyorsa Konu Bankası'na REFERANS KANAL ekleyin.",
+                "action": f"/channels/{slug}/topic-bank/refresh",
+                "label": "Şimdi yenile",
+                "confirm": "Konu bankası şimdi yenilensin mi? (YouTube API kotası "
+                           "harcanır, ~1 dakika)",
+            })
+
     return render_template("autopilot.html.j2", slug=slug, channel=cfg,
                            enabled=bool(ap and ap.enabled), ap=ap,
                            today=bugun.isoformat(), tomorrow=yarin.isoformat(),
@@ -137,22 +181,25 @@ def settings(slug):
     # SLOT SAYISI/TÜRÜ DEĞİŞTİYSE gelecek slotlar yeniden planlanmalı. Var olan
     # planned slotlar eski ayara göre yazılmış — ezmek yerine SİLİP yeniden yazdırıyoruz
     # (üretilmiş/yüklenmiş slotlara DOKUNULMAZ).
-    from short_bot.db import delete_planned_slots, init_db as _init
-    n = delete_planned_slots(_init(current_app.config["SHORTBOT_DB_PATH"]), slug)
-    flash(f"Ayarlar kaydedildi. {n} planlı slot silindi — planlayıcı birkaç dakika "
-          f"içinde yeni ayarlarla yeniden yazacak.", "success")
+    from short_bot.db import delete_planned_slots
+    silinen = delete_planned_slots(init_db(current_app.config["SHORTBOT_DB_PATH"]),
+                                   slug)
+    # ve HEMEN yeniden planla — kullanıcı sonucu ANINDA görmeli.
+    yazilan = _plan_now(slug)
+    flash(f"Ayarlar kaydedildi. {silinen} planlı slot silindi, "
+          f"{yazilan} yeni slot yazıldı.", "success")
     return redirect(url_for("autopilot.page", slug=slug))
 
 
 @bp.post("/channels/<slug>/autopilot/enable")
 def enable(slug):
-    """Otomasyonu aç. Slotlar bir sonraki planlama turunda yazılır."""
+    """Otomasyonu aç ve slotları HEMEN planla."""
     cfg = _load_cfg(slug)
     ap = getattr(cfg, "autopilot", None) or AutopilotConfig()
     _save(cfg, slug, ap.model_copy(update={"enabled": True}))
-    flash("Otomasyon açıldı. Slotlar birkaç dakika içinde planlanacak. "
-          "Kanalın normal cron'u artık koşmayacak (çifte üretim olmasın diye).",
-          "success")
+    n = _plan_now(slug)
+    flash(f"Otomasyon açıldı — {n} slot planlandı. Kanalın normal cron'u artık "
+          f"koşmayacak (çifte üretim olmasın diye).", "success")
     return redirect(url_for("autopilot.page", slug=slug))
 
 
@@ -175,8 +222,11 @@ def enable_channel(slug):
     cfg = _load_cfg(slug)
     path = current_app.config["SHORTBOT_CONFIG_DIR"] / "channels" / f"{slug}.yaml"
     save_channel(path, dataclasses.replace(cfg, enabled=True))
-    flash("Kanal etkinleştirildi. Slotlar birkaç dakika içinde planlanacak ve "
-          "otomasyon çalışmaya başlayacak.", "success")
+    # Kanal kapalıyken planlama HİÇ koşmuyordu (plan_channel devre dışı kanalı atlar).
+    # Açılır açılmaz planla — yoksa kullanıcı sabah 03:30'a kadar boş sayfa görürdü.
+    n = _plan_now(slug)
+    flash(f"Kanal etkinleştirildi — {n} slot planlandı. Otomasyon çalışmaya başladı.",
+          "success")
     return redirect(url_for("autopilot.page", slug=slug))
 
 

@@ -45,3 +45,64 @@ def test_series_directive_uses_title():
 def test_series_off_empty_directive():
     ch = _Ch(series_enabled=False, cta_enabled=False, comment_question=False)
     assert build_subscribe_bits(ch, 1).series_directive == ""
+
+
+# --- SERİ MODU (EpisodePlan verilince) --------------------------------------
+
+def _ep(no=47, arc=1, gelen=""):
+    from short_bot.reel_series import EpisodePlan
+    return EpisodePlan(episode_no=no, arc_pos=arc, continue_from=gelen)
+
+
+def test_seride_cta_bir_TAKASA_donusur():
+    """'Her gün yeni — ABONE OL' bir RİCA; '#48 yarın — ABONE OL' bir TAKAS.
+
+    İkincisi somut bir şey vaat eder ve ne zaman geleceğini söyler.
+    """
+    ch = _Ch(cta_enabled=True, series_enabled=True, series_title="Bilinmeyen Tarih")
+    b = build_subscribe_bits(ch, 3, episode=_ep(47))
+    assert b.cta_text == "#48 yarın — ABONE OL"
+    assert b.cta_text not in CTA_TEXTS, "seride jenerik havuza düşmemeli"
+
+
+def test_seride_rozet_uretilir():
+    ch = _Ch(cta_enabled=True, series_enabled=True, series_title="Bilinmeyen Tarih")
+    assert build_subscribe_bits(ch, 3, episode=_ep(47)).badge == "BİLİNMEYEN TARİH #47"
+
+
+def test_seride_YORUM_SORUSU_kapanir():
+    """Belge §3.1: 'son 5 saniyede CTA yığılması — üç istek = sıfır istek.'
+
+    Seride izleyiciden istediğimiz TEK şey net: sonraki bölüm için abone olmak.
+    Yorum sorusu onunla dikkat için yarışır ve ikisi de kaybeder.
+    """
+    ch = _Ch(cta_enabled=True, comment_question=True, series_enabled=True,
+             series_title="X")
+    assert build_subscribe_bits(ch, 3, episode=_ep()).comment_line == ""
+    # Seri YOKKEN yorum sorusu yerinde durmalı
+    assert build_subscribe_bits(ch, 3).comment_line != ""
+
+
+def test_seride_yonerge_odenecek_sozu_tasir():
+    ch = _Ch(series_enabled=True, series_title="Bilinmeyen Tarih", cta_enabled=False)
+    d = build_subscribe_bits(ch, 1, episode=_ep(48, 2, "O ışığı üreten şey ne?")).series_directive
+    assert "O ışığı üreten şey ne?" in d
+    assert "48" in d and "49" in d
+
+
+def test_ozel_cta_takasi_da_ezer():
+    """Kullanıcı sözü son sözdür."""
+    ch = _Ch(cta_enabled=True, cta_text_custom="TAKİP ET →", series_enabled=True,
+             series_title="X")
+    assert build_subscribe_bits(ch, 1, episode=_ep(47)).cta_text == "TAKİP ET →"
+
+
+def test_bolum_plani_yoksa_ESKI_davranis():
+    """Geriye uyum: episode verilmezse seri açık olsa bile eski teaser yönergesi."""
+    ch = _Ch(cta_enabled=True, comment_question=True, series_enabled=True,
+             series_title="Doğanın Sırları")
+    b = build_subscribe_bits(ch, 1)
+    assert b.badge == ""
+    assert b.cta_text in CTA_TEXTS
+    assert b.comment_line != ""
+    assert "Doğanın Sırları" in b.series_directive
