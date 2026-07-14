@@ -16,23 +16,20 @@ Almanca "…erkläre ich in Folge 48" (fiil ÖNDE), İngilizce "…I'll explain 
 """
 from __future__ import annotations
 
-import json
 import logging
-import subprocess
 
-from short_bot.claude_cli import (AIBackendError, ClaudeCliError, _extract_json,
-                                  _invoke_raw)
+from short_bot.claude_cli import AIBackendError
 from short_bot.lang_pack import CTA_MAX_CHARS, LangPack, load_pack, validate_pack
+from short_bot.llm_sonnet import SONNET_OR, TIMEOUT_S, sonnet_json
 from short_bot.locale import LANGUAGE_NAMES, SUPPORTED_LANGUAGES
 
 log = logging.getLogger(__name__)
 
 _MAX_ATTEMPTS = 2
-_SONNET_CLI = "sonnet"                         # Claude CLI alias → Sonnet 5
-_SONNET_OR = "anthropic/claude-sonnet-5"       # OpenRouter düşme yolu (AYNI model)
-# Paket BÜYÜK: referans olarak tüm Türkçe paket gidiyor (~10 KB) ve çıktı da uzun
-# (yedi seri yönergesi + kalıplar). Ölçüldü: 240 sn YETMEDİ.
-_TIMEOUT_S = 600
+
+# Geriye uyum: testler ve eski çağıranlar bu adları import ediyor.
+_SONNET_OR = SONNET_OR
+_TIMEOUT_S = TIMEOUT_S
 
 
 def _prompt(lang: str, ref_json: str, hatalar: list[str]) -> str:
@@ -108,7 +105,6 @@ def generate_pack(lang: str, *, claude_path: str = "claude",
     if lang not in SUPPORTED_LANGUAGES:
         raise ValueError(f"desteklenmeyen dil: {lang!r}")
 
-    inv = invoke or _invoke_raw
     ref = load_pack("tr").model_dump_json(indent=2)
     hatalar: list[str] = []
     son: list[str] = ["(deneme yapılamadı)"]
@@ -116,23 +112,13 @@ def generate_pack(lang: str, *, claude_path: str = "claude",
     for deneme in range(1, _MAX_ATTEMPTS + 1):
         prompt = _prompt(lang, ref, hatalar)
         try:
-            raw = inv(prompt, backend="claude_cli", model=_SONNET_CLI,
-                      claude_path=claude_path, api_key=None, timeout_s=_TIMEOUT_S)
-        except (ClaudeCliError, FileNotFoundError, OSError,
-                subprocess.TimeoutExpired) as e:
-            # CLI yok / patladı / yanıt vermedi → OpenRouter'daki AYNI modele düş.
-            # TimeoutExpired'i de yakalamak ŞART: OSError değil, yakalanmazsa üretim
-            # düşme yolunu hiç denemeden ölür (ölçüldü — ilk gerçek koşuda tam bu oldu).
-            log.info(f"[langpack] Claude CLI kullanılamadı ({e}) → OpenRouter")
-            raw = inv(prompt, backend="openrouter",
-                      model=openrouter_model or _SONNET_OR,
-                      claude_path=claude_path, api_key=openrouter_key,
-                      timeout_s=_TIMEOUT_S)
-
-        try:
-            pack = LangPack.model_validate(json.loads(_extract_json(raw)))
-        except (ValueError, TypeError) as e:
-            # Şema/JSON hatası da bir doğrulama hatasıdır — modele geri bildir.
+            # CLI → OpenRouter düşmesi ve JSON/şema retry'ı sonnet_json'ın işi.
+            # Buradaki döngü PAKETE ÖZGÜ doğrulamayı (validate_pack) geri besliyor.
+            pack = sonnet_json(prompt, LangPack, claude_path=claude_path,
+                               openrouter_model=openrouter_model or SONNET_OR,
+                               openrouter_key=openrouter_key,
+                               timeout_s=TIMEOUT_S, retries=1, invoke=invoke)
+        except RuntimeError as e:
             hatalar = [f"JSON/şema hatası: {e}"]
             son = hatalar
             log.warning(f"[langpack] {lang}: deneme {deneme} şemaya uymadı: {e}")

@@ -172,6 +172,13 @@ topic_bank = Table(
     Column("views", Integer, default=0, nullable=False),
     Column("subs", Integer, default=0, nullable=False),
     Column("hook_pattern", String, default="", nullable=False),
+    # KONUNUN KAYNAĞI: kanıtlı mı, üretilmiş mi?
+    #   reference — referans kanalın kendi outlier'ı (format+kitle kanıtlı, en güçlü)
+    #   search    — arama outlier'ı (izlenme/abone oranıyla kanıtlı)
+    #   llm       — modelin üretimi, YouTube kanıtı YOK
+    # Kanıtsız bir konuyu kanıtlı sanmak sessiz bir yanılgıdır; kullanıcı hangisine
+    # baktığını bilmeli.
+    Column("source", String, default="search", nullable=False),
     Column("status", String, default="active", nullable=False),  # active|used|rejected
     Column("created_at", DateTime, default=_utcnow, nullable=False),
     Column("used_at", DateTime),
@@ -315,6 +322,9 @@ def _migrate_add_columns(eng: Engine) -> None:
         # sayılır — seriyi ilerletmezler. Güvenli varsayılan: yanlışlıkla seri
         # bölümü üretip arkı tüketmektense hiç üretmemek yeğdir.
         ("publish_slots", "kind", "TEXT DEFAULT 'standalone' NOT NULL"),
+        # KONUNUN KAYNAĞI. Mevcut kayıtların hepsi arama/referans outlier'larından
+        # geldi → 'search'. Yeni: 'llm' (modelin üretimi, YouTube kanıtı yok).
+        ("topic_bank", "source", "TEXT DEFAULT 'search' NOT NULL"),
     ]
     with eng.begin() as conn:
         for table, col, coltype in migrations:
@@ -988,6 +998,7 @@ def insert_bank_topics(eng: Engine, channel: str, rows: list[dict]) -> int:
                 source_title=str(r.get("source_title", ""))[:500],
                 views=int(r.get("views", 0) or 0), subs=int(r.get("subs", 0) or 0),
                 hook_pattern=str(r.get("hook_pattern", ""))[:200],
+                source=str(r.get("source") or "search")[:20],
             ))
     return len(rows)
 
@@ -996,6 +1007,8 @@ def _bank_row_dict(row) -> dict:
     return {"id": row.id, "topic": row.topic, "source_title": row.source_title,
             "views": row.views, "subs": row.subs,
             "hook_pattern": row.hook_pattern, "status": row.status,
+            # reference | search | llm — kanıtlı mı, üretilmiş mi?
+            "source": getattr(row, "source", "search") or "search",
             "created_at": row.created_at, "used_at": row.used_at}
 
 
