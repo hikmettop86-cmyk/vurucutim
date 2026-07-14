@@ -55,7 +55,12 @@ class _MinedTopics(BaseModel):
 # Gerçek üretim hatası (2026-07-12): "…tanıtan bir seri", "…ele alan bir skeç".
 _META_WORDS = ("video", "belgesel", "seri", "skeç", "inceleme", "anlatım",
                "sunum", "içerik", "tanıtan", "anlatan", "özetleyen",
-               "ele alan", "konu alan", "keşfeden bir", "yolculuğu")
+               "ele alan", "konu alan", "keşfeden bir", "yolculuğu",
+               # Gerçek kaçak: "anatomisi 3 boyutlu CANLANDIRMALARLA en küçük
+               # ayrıntısına kadar gösterilir" — bu bir İDDİA değil, kaynak videonun
+               # NASIL YAPILDIĞININ tarifi. Konu bankası iddia tutar, yapım notu değil.
+               "canlandırma", "animasyon", "3 boyutlu", "3d ", "görselleştir",
+               "gösterilir", "gösteren")
 
 
 def _drop_meta_topics(rows: list[dict]) -> list[dict]:
@@ -97,8 +102,32 @@ KURALLAR (ÇOK ÖNEMLİ):
   evrensel merak (uzay, insan vücudu, tarihin şok anları, gizemler) İYİ;
   fazla akademik/teknik konular (ör. "Mock Theta Fonksiyonu"), başka ülkeye
   özgü yerel içerik/mizah, tanınmayan kişiler → o kaydı ATLA.
+- SÖZDE-BİLİM YASAK (SERT ELEME): konu BİLİMSEL OLARAK DOĞRULANABİLİR olmalı.
+  Şunlar KESİNLİKLE ATLANIR — arama sonuçlarında bolca çıkarlar:
+    ✗ alternatif tıp / mucize şifa ("kulak mumu", "detoks", "mucizevi bitki")
+    ✗ mistik/dinî şifa iddiaları, enerji/aura/çakra
+    ✗ kanıtsız sağlık tavsiyesi ("şunu iç, kanser geçer")
+    ✗ komplo teorileri
+  GERÇEK HATA (ölçüldü): bir BİLİM kanalına "Mekke'nin adem elması, kadın sağlığı
+  için mistik bir şifa kaynağı" konusu girdi. Kanalın otoritesi ürünüdür; bir tek
+  sözde-bilim videosu onu yakar.
+  Test: bunu bir tıp/biyoloji ders kitabında bulabilir misin? Hayırsa ATLA.
+- İÇİ BOŞ GENELLEME YASAK: konu SPESİFİK ve ŞAŞIRTICI bir gerçek olmalı.
+  KÖTÜ: "Vücudumuzdaki her organ kusursuz bir uyum içinde çalışır"  ← hiçbir şey söylemiyor
+  İYİ:  "Karaciğerinin %70'ini kaybetsen bile 3 haftada kendini yeniden büyütür"
+  Test: izleyici bunu ZATEN biliyor mu? Biliyorsa ATLA.
+- GERÇEĞİ İÇER, VAAT ETME (ölçüldü, en sık kaçan hata): konu şaşırtıcı olguyu
+  KENDİSİ SÖYLEMELİ; "şaşırtıcıdır", "inanılmazdır", "ifade edilebilir" gibi
+  ifadelerle onu ERTELEMEMELİ.
+    KÖTÜ: "Vücuttaki kemik sayısı şaşırtıcı rakamlarla ifade edilebilir"   ← VAAT
+    KÖTÜ: "Rekor sahibi organların şaşırtıcı boyut karşılaştırmaları vardır" ← VAAT
+    İYİ:  "Bebekler 300 kemikle doğar; yetişkinlikte bu sayı 206'ya iner"    ← GERÇEK
+  Kaynak başlıktan somut bir sayı/olgu ÇIKARAMIYORSAN o kaydı ATLA — içi boş bir
+  vaat cümlesi uydurma.
 - Başlık nişe alakasız, anlamsız ya da hedef dile çevrilemeyecek kadar belirsizse
   o kaydı ATLA (çıktıya koyma).
+- ELEMEKTEN ÇEKİNME: aşağıda çok sayıda aday var ve çoğu uymayacak. Uymayanları
+  ATLAMAK doğru davranıştır; zorlama konu üretme.
 - views/subs değerlerini kaynaktan AYNEN kopyala.
 
 {lines}
@@ -112,13 +141,30 @@ class _SearchQueries(BaseModel):
     queries: list[str]
 
 
+# Kaç sorgu ÜRETİLİR (havuz çeşitliliği) ve kaçı ARANIR (kota).
+# Aynı 3 sorgu her yenilemede aynı videoları getiriyordu; 6 sorgudan 3'ünü DÖNÜŞÜMLÜ
+# kullanmak nişin farklı köşelerini tarar.
+_QUERY_POOL = 6
+_QUERY_USE = 3
+
+# Damıtmaya kaç KAT aday gönderilir. Damıtma formata uymayanları ELİYOR (film özeti,
+# kişisel hikâye, sözde-bilim, içi boş genelleme) ve verim ~%50 (ölçüldü: 12 aday →
+# 6 konu). Fazla aday tek LLM çağrısına sığar; çıktı yine ``count`` ile sınırlı.
+_DISTILL_OVERSAMPLE = 3
+
+
 def _search_queries(niche_query: str, language: str, llm_call,
-                    keywords=None) -> list[str]:
-    """Nişten 2-3 KISA YouTube arama sorgusu üret.
+                    keywords=None, rotate: int = 0) -> list[str]:
+    """Nişten KISA YouTube arama sorguları üret.
 
     Uzun/talimatlı niş cümlesi YouTube aramasında 0 sonuç veriyor (gerçek ölçüm:
     'Bilim ve keşif tarihindeki şok edici olayları' → boş; 'bilim tarihi ilginç'
-    → dolu). Öncelik: kanal keywords → LLM türetimi → ilk-3-kelime fallback."""
+    → dolu). Öncelik: kanal keywords → LLM türetimi → ilk-3-kelime fallback.
+
+    ``rotate``: her yenilemede FARKLI bir alt küme aransın diye kaydırma. Aynı
+    sorgular YouTube'dan aynı videoları getiriyor; bankada zaten olan videolar
+    elenince geriye çok az yeni konu kalıyordu (ölçüldü: 10 konudan 8'i mükerrer).
+    """
     kw = [str(k).strip() for k in (keywords or []) if str(k).strip()]
     if kw:
         return [" ".join(kw[:3])]
@@ -129,17 +175,33 @@ def _search_queries(niche_query: str, language: str, llm_call,
     lang = _LANG_NAMES.get(language, "Türkçe")
     try:
         v = run_json(
-            f'Şu YouTube Shorts nişi için 2-3 KISA arama sorgusu üret '
-            f'(her biri 2-3 yaygın {lang} kelime; talimat değil, arama terimi): '
-            f'"{short}"\nSADECE JSON: {{"queries": ["...", "..."]}}',
+            f'Şu YouTube Shorts nişi için {_QUERY_POOL} KISA arama sorgusu üret. '
+            f'Her biri 2-3 yaygın {lang} kelime; talimat değil ARAMA TERİMİ.\n'
+            f'ÖNEMLİ: sorgular nişin FARKLI KÖŞELERİNİ taramalı — birbirinin '
+            f'eşanlamlısı olmasın. Aynı şeyi soran sorgular YouTube\'dan aynı '
+            f'videoları getirir ve yeni konu bulunamaz.\n'
+            f'SÖZDE-BİLİM MIKNATISLARI YASAK: "doğal şifa", "mucize kür", "detoks", '
+            f'"bitkisel tedavi" gibi terimler YouTube\'da alternatif tıp içeriği '
+            f'getirir — bilim kanalına ÇÖP taşır. (Gerçek hata: "doğal şifa yolları" '
+            f'sorgusu bankaya mistik şifa konusu soktu.) Sorgular SOMUT BİLİMSEL '
+            f'olguları hedeflesin: organ, hücre, mekanizma, ölçülebilir olay.\n'
+            f'NİŞ: "{short}"\n'
+            f'SADECE JSON: {{"queries": ["...", "...", "..."]}}',
             _SearchQueries, claude_path=llm_call.claude_path, model=llm_call.model,
             backend=llm_call.backend, api_key=llm_call.api_key,
             retries=1, timeout_s=60)
-        out = [q.strip() for q in v.queries if (q or "").strip()][:3]
-        return out or fallback
+        out = [q.strip() for q in v.queries if (q or "").strip()][:_QUERY_POOL]
     except Exception as e:
         log.info(f"topic_miner: sorgu türetme atlandı ({e}) → fallback")
         return fallback
+    if not out:
+        return fallback
+    # DÖNÜŞÜMLÜ alt küme: her yenileme nişin farklı köşesine bakar.
+    n = min(_QUERY_USE, len(out))
+    secili = [out[(int(rotate) + i) % len(out)] for i in range(n)]
+    log.info(f"topic_miner: {len(out)} sorgu üretildi, {n} tanesi aranıyor "
+             f"(kaydırma {rotate}): {secili}")
+    return secili
 
 
 # Kademeli outlier eşikleri: sıkı geçmezse gevşet (hiç sonuç > mükemmel sonuç).
@@ -157,25 +219,49 @@ def _apply_tier(rows: list[dict], tier: dict) -> list[dict]:
             and r["ratio"] >= tier["min_ratio"]]
 
 
+def _drop_known(rows: list[dict], known: set[str]) -> list[dict]:
+    """Bankada ZATEN olan videoları ele.
+
+    BU ELEMENİN YERİ HAYATİ. Eskiden damıtmadan SONRA yapılıyordu: havuzdan en iyi 12
+    video seçiliyor, LLM 12'sini de damıtıyor, sonra bankada olanlar atılıyordu.
+    ÖLÇÜLDÜ (vucudun-gizli-onarim-gucu): damıtılan 10 konunun 8'i zaten bankadaki
+    videolardan geliyordu → yalnız 2 yeni konu. LLM bütçesinin ve — daha kötüsü —
+    12 damıtma SLOTUNUN %80'i çöpe gidiyordu.
+
+    Artık eleme havuzda, damıtmadan ÖNCE: 12 slotun 12'si de TAZE videoya gider.
+    """
+    if not known:
+        return rows
+    return [r for r in rows
+            if (r.get("source_title") or "").strip().lower() not in known]
+
+
 def mine_topics_via_api(niche_query: str, *, api_keys: list, language: str = "tr",
                         anchor: str = "", llm_call=None, count: int = 12,
                         keywords=None, reference_channels=None,
+                        exclude_sources=None, rotate: int = 0,
                         http_get=None) -> list[dict]:
     """YouTube Data API ile outlier madenciliği.
 
     Akış: (0) OPSİYONEL referans kanallar — kanalın KENDİ medyanına göre patlayan
     shorts'lar (format+kitle garantili, ~3 birim/kanal, tier filtresine girmez;
     yeterse arama hiç yapılmaz) → (1) kısa arama sorguları (keywords/LLM) →
-    outlier havuzu (+ EN çıpa, ~102 birim/arama) → kademeli filtre → LLM tek
-    çağrıyla {lang} konu fikrine damıtma. ``llm_call`` yoksa mekanik fallback:
-    başlık aynen topic olur (üretim durmaz).
+    outlier havuzu (+ EN çıpa, ~102 birim/arama) → BİLİNEN VİDEOLARI ELE →
+    kademeli filtre → LLM tek çağrıyla {lang} konu fikrine damıtma.
+    ``llm_call`` yoksa mekanik fallback: başlık aynen topic olur (üretim durmaz).
+
+    ``exclude_sources``: bankada zaten olan kaynak başlıkları. DAMITMADAN ÖNCE elenir
+    (bkz. _drop_known — bu elemenin yeri, yenilemenin kaç yeni konu bulduğunu belirler).
+    ``rotate``: sorgu kaydırması — her yenileme nişin farklı köşesine baksın.
     """
     from short_bot.yt_outliers import channel_outlier_shorts, search_outlier_shorts
+    known = {str(s).strip().lower() for s in (exclude_sources or []) if str(s).strip()}
+
     # 0) Referans kanallar — kanıt en güçlü kaynak, havuzun başına.
     ref_rows, seen_ids = [], set()
     for ref in (reference_channels or [])[:10]:
         try:
-            found = channel_outlier_shorts(ref, api_keys=api_keys, limit=count,
+            found = channel_outlier_shorts(ref, api_keys=api_keys, limit=count * 3,
                                            http_get=http_get)
         except Exception as e:
             log.info(f"topic_miner: referans kanal atlandı ({ref!r}): {e}")
@@ -183,14 +269,19 @@ def mine_topics_via_api(niche_query: str, *, api_keys: list, language: str = "tr
         for r in found:
             if r["video_id"] not in seen_ids:
                 seen_ids.add(r["video_id"]); ref_rows.append(r)
+    ref_ham = len(ref_rows)
+    ref_rows = _drop_known(ref_rows, known)
     ref_rows.sort(key=lambda r: r.get("ratio", 0), reverse=True)
     if len(ref_rows) >= count:
-        log.info(f"topic_miner: referans kanallar {len(ref_rows)} outlier verdi "
-                 f"→ arama atlanıyor (kota tasarrufu)")
-        rows = ref_rows[:count]
-        return _distill(rows, language, llm_call, count)
+        log.info(f"topic_miner: referans kanallar {ref_ham} outlier verdi, "
+                 f"{ref_ham - len(ref_rows)} bilinen elendi → {len(ref_rows)} taze "
+                 f"(arama atlanıyor, kota tasarrufu)")
+        return _distill(ref_rows[:count * _DISTILL_OVERSAMPLE],
+                        language, llm_call, count)
+
     # 1) Arama havuzu (HAM çek; kademeler yerelde — ekstra birim yakılmaz).
-    queries = _search_queries(niche_query, language, llm_call, keywords=keywords)
+    queries = _search_queries(niche_query, language, llm_call, keywords=keywords,
+                              rotate=rotate)
     if anchor and all(anchor.lower() != q.lower() for q in queries):
         queries.append(anchor)
     pool = []
@@ -209,6 +300,14 @@ def mine_topics_via_api(niche_query: str, *, api_keys: list, language: str = "tr
         for r in found:
             if r["video_id"] not in seen_ids:
                 seen_ids.add(r["video_id"]); pool.append(r)
+
+    # BİLİNEN VİDEOLARI ELE — DAMITMADAN ÖNCE. Bu satırın yeri, yenilemenin kaç yeni
+    # konu bulduğunu belirliyor (bkz. _drop_known).
+    havuz_ham = len(pool)
+    pool = _drop_known(pool, known)
+    log.info(f"topic_miner: havuz {havuz_ham} video → {havuz_ham - len(pool)} bilinen "
+             f"elendi → {len(pool)} taze")
+
     rows = []
     for tier in _FILTER_TIERS:
         rows = _apply_tier(pool, tier)
@@ -217,18 +316,33 @@ def mine_topics_via_api(niche_query: str, *, api_keys: list, language: str = "tr
         log.info("topic_miner: filtre kademesi gevşetiliyor (0 outlier)")
     rows.sort(key=lambda r: r.get("ratio", 0), reverse=True)
     # Referans satırları ÖNCE (format-kanıtlı), arama satırları tamamlar.
-    rows = (ref_rows + rows)[:count]
+    # ADAY SAYISI ÇIKTININ KATI: damıtma, formata uymayan videoları ELİYOR (film
+    # özeti, kişisel hikâye, sözde-bilim...) ve verim ~%50 çıkıyor (ölçüldü: 12 aday
+    # → 6 konu). 12 aday gönderip 12 konu beklemek, havuzda 148 taze video varken
+    # yarısını boşa harcamak demek. Fazla aday tek LLM çağrısına sığar; çıktı yine
+    # ``count`` ile sınırlı.
+    rows = (ref_rows + rows)[:count * _DISTILL_OVERSAMPLE]
     if not rows:
-        raise ValueError("YouTube API'de bu niş için outlier bulunamadı")
+        raise ValueError(
+            "YouTube API'de bu niş için TAZE outlier bulunamadı — havuzdaki her video "
+            "bankada zaten var. Reddedilmiş konuları temizleyin ya da referans kanal "
+            "ekleyin.")
+    log.info(f"topic_miner: {len(rows)} taze video damıtmaya gidiyor "
+             f"(en fazla {count} konu bekleniyor)")
     return _distill(rows, language, llm_call, count)
 
 
 def _distill(rows: list[dict], language: str, llm_call, count: int) -> list[dict]:
-    """Outlier satırlarını LLM ile hedef-dil konu iddialarına damıt (ya da mekanik)."""
+    """Outlier satırlarını LLM ile hedef-dil konu iddialarına damıt (ya da mekanik).
+
+    EN FAZLA ``count`` konu döner — sınır BURADA, çünkü sözü veren burası. Çağıran
+    artık ``count``tan FAZLA aday gönderiyor (damıtma uymayanları eliyor, bkz.
+    _DISTILL_OVERSAMPLE); mekanik kol da kırpmazsa cap sessizce delinirdi.
+    """
     if llm_call is None:
         return [{"topic": r["source_title"], "source_title": r["source_title"],
                  "views": r["views"], "subs": r["subs"], "hook_pattern": ""}
-                for r in rows]
+                for r in rows][:count]
     lang = _LANG_NAMES.get(language, "Türkçe")
     prompt = _distill_prompt(rows, lang)
     v = run_json(prompt, _MinedTopics,
@@ -267,21 +381,34 @@ def refresh_topic_bank(eng, channel_slug: str, niche_query: str, *,
     if not api_keys:
         raise RuntimeError("YouTube API anahtarı yok — Ayarlar → YouTube Data "
                            "API bölümünden anahtar ekleyin.")
+
+    bank = all_bank_topics(eng, channel_slug)
+    existing = [r["topic"] for r in bank]
+    # KAYNAK VİDEO ELEMESİ. Metin benzerliği yetmiyor: aynı videodan damıtılan iki konu
+    # FARKLI cümlelerle yazılıyor ("Sigara içtiğinizde her organ toksik hasar görür" /
+    # "Sigara içtiğinizde yıkıcı bir reaksiyon başlar") ve fuzzy oran eşiğin altında
+    # kalıyor — bankada aynı olgunun iki kaydı birikiyordu. Aynı video = aynı olgu.
+    #
+    # ELEME ARTIK MADENCİYE ÖNDEN VERİLİYOR (exclude_sources). Eskiden damıtmadan
+    # SONRA yapılıyordu: LLM bankada zaten olan videoları damıtıyor, sonra atıyorduk.
+    # ÖLÇÜLDÜ: damıtılan 10 konunun 8'i mükerrerdi → yalnız 2 yeni. Şimdi 12 damıtma
+    # slotunun 12'si de TAZE videoya gidiyor.
+    sources = {(r.get("source_title") or "").strip().lower()
+               for r in bank if (r.get("source_title") or "").strip()}
+
     mined = mine_topics_via_api(niche_query, api_keys=api_keys,
                                 language=language, anchor=anchor,
                                 llm_call=llm_call, http_get=http_get,
                                 keywords=keywords,
-                                reference_channels=reference_channels)
+                                reference_channels=reference_channels,
+                                exclude_sources=sources,
+                                # Her yenileme nişin FARKLI köşesine baksın: aynı
+                                # sorgular YouTube'dan aynı videoları getiriyor.
+                                rotate=len(bank))
     log.info(f"topic_miner: youtube_api → {len(mined)} konu")
-    bank = all_bank_topics(eng, channel_slug)
-    existing = [r["topic"] for r in bank]
-    # KAYNAK VİDEO ELEMESİ. Metin benzerliği yetmiyor: aynı videodan damıtılan iki
-    # konu FARKLI cümlelerle yazılıyor ("Sigara içtiğinizde her organ toksik hasar
-    # görür" / "Sigara içtiğinizde yıkıcı bir reaksiyon başlar") ve fuzzy oran
-    # eşiğin altında kalıyor — bankada aynı olgunun iki kaydı birikiyordu (gerçek
-    # durum: üç mükerrer çift). Aynı video = aynı olgu; bir tanesi yeter.
-    sources = {(r.get("source_title") or "").strip().lower()
-               for r in bank if (r.get("source_title") or "").strip()}
+
+    # Madenci taze videolarla döndü ama DAMITMA yine de mükerrer CÜMLE üretmiş
+    # olabilir (farklı video, aynı olgu). Son bir ağ.
     fresh, dup = [], 0
     for r in mined:
         src = (r.get("source_title") or "").strip().lower()
@@ -297,4 +424,6 @@ def refresh_topic_bank(eng, channel_slug: str, niche_query: str, *,
             sources.add(src)
         fresh.append(r)
     insert_bank_topics(eng, channel_slug, fresh)
+    log.info(f"topic_miner: {len(fresh)} yeni konu eklendi "
+             f"({dup} mükerrer elendi)")
     return {"added": len(fresh), "skipped_dup": dup}
