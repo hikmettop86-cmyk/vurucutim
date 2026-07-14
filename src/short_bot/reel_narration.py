@@ -320,17 +320,36 @@ def write_reel_narration(topic: str, *, channel, claude_path: str = "claude",
     if series_directive:
         prompt = prompt + f"\n\nSERİ: {series_directive}\n"
     if comment_line:
-        # comment_line artık KALIP CÜMLE değil, YÖNERGE: soruyu LLM videonun kendi
+        # comment_line KALIP CÜMLE değil, YÖNERGE: soruyu LLM videonun kendi
         # içeriğinden yazar. Jenerik ("Ne düşünüyorsun?") sorular cevapsız kalır;
         # iyi bir yorum sorusu videodaki SPESİFİK bir ana bağlı olmalıdır.
+        #
+        # GERÇEK HATA (short 801 ve 802, Almanca): bu metin "soruyu 'close' alanının
+        # SONUNA ekle" diyordu — ama 'comment' AYRI bir alan olarak çıkarıldığında
+        # burası güncellenmemişti. Prompt KENDİSİYLE ÇELİŞİYORDU (yukarıda "yorum
+        # sorusunu close'a KOYMA" yazıyor). Model ikisini de doldurdu:
+        #   close   = "So wurde Löwenzahn zum Kaffeeersatz. Was schmeckt besser:
+        #              Wurzel A oder Blüte B? Nur A oder B."
+        #   comment = "Was schmeckt wohl besser: Wurzel A oder Blüte B?"
+        # Sonuç: soru İKİ KEZ soruldu, ve dev kapanış KARTI (yalnız close'u basar)
+        # 7 satırlık bir metin duvarına dönüştü — videonun üçte biri boyunca ekranda.
+        #
+        # İKİNCİ HATA: yönergenin içindeki ÖRNEK KALIP'ın meta-talimatı senaryoya
+        # sızdı. Almanca kalıp "...Schreib nur den Buchstaben." diyor; model bunu
+        # "Nur A oder B." diye kırpıp KONUŞULAN metne yazdı — izleyici için anlamsız
+        # bir parça. Kalıp TÜR göstermek içindir, KOPYALANMAK için değil.
         prompt = prompt + (
-            f"\n\nYORUM SORUSU — 'close' alanının SONUNA, videonun İÇERİĞİNE bağlı "
-            f"KISA bir soru ekle. Türü şu olmalı:\n{comment_line}\n"
+            f"\n\nYORUM SORUSU — yalnızca 'comment' ALANINA yaz. 'close' alanına "
+            f"ASLA soru koyma: close LOOP CALLBACK'tir ve dev kapanış kartına basılır; "
+            f"soru oraya girerse ekranı metin duvarı kaplar ve soru İKİ KEZ sorulur.\n"
+            f"Soru videonun İÇERİĞİNE bağlı ve KISA olmalı. Türü şu olmalı:\n"
+            f"{comment_line}\n"
+            f"Yukarıdaki yönergedeki ÖRNEK KALIP yalnız TÜRÜ gösterir — onu KOPYALAMA. "
+            f"Kalıbın içindeki 'tek harf yaz' gibi TALİMAT parçaları izleyiciye "
+            f"söylenecek cümle DEĞİLDİR; senaryoya girerlerse anlamsız kalırlar.\n"
             f"Soru DÜŞÜK EFORLU olmalı (tek harf/tek kelimeyle cevaplanabilsin). "
             f"'Ne düşünüyorsun?' / 'Yorumlara yaz' gibi açık uçlu, jenerik "
-            f"kapanışlar YASAK — cevapsız kalırlar.\n"
-            f"Kapanışın LOOP CALLBACK görevi bozulmasın: önce hook'un sözcüklerini "
-            f"geri çağır, soruyu EN SONA koy.\n")
+            f"sorular YASAK — cevapsız kalırlar.\n")
     def _budgeted(p: str) -> ReelNarration:
         n = run_json(p, ReelNarration, claude_path=claude_path, model=model,
                      backend=backend, api_key=api_key, retries=3)

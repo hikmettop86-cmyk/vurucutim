@@ -99,3 +99,88 @@ def test_hook_and_close_get_own_visual_queries():
     n2 = ReelNarration(hook="Merak uyandiran soru", beats=beats,
                        close="Kapanis cumlesi burada", mood="neutral")
     assert n2.segment_queries()[0] is None and n2.segment_queries()[-1] is None
+
+
+# --- YORUM SORUSU close'a SIZMASIN ------------------------------------------
+# GERÇEK HATA (short 801 ve 802, gartengeheimnisse, Almanca): prompt kendisiyle
+# çelişiyordu — şema "yorum sorusunu close'a KOYMA, ayrı 'comment' alanı var"
+# derken enjekte edilen yönerge "soruyu close'un SONUNA ekle" diyordu ('comment'
+# ayrı alan olarak çıkarıldığında enjeksiyon metni güncellenmemişti).
+# Model ikisini de doldurdu → soru İKİ KEZ soruldu, ve dev kapanış KARTI (yalnız
+# close'u basar) 7 satırlık metin duvarına döndü: videonun ÜÇTE BİRİ boyunca ekranda.
+# Ayrıca yönergedeki örnek kalıbın META-TALİMATI ("Schreib nur den Buchstaben")
+# senaryoya "Nur A oder B." diye sızdı ve SESLİ okundu.
+
+def _beats():
+    from short_bot.reel_models import ReelBeat
+    return [ReelBeat(text="Die Pflanze ist nicht nur ein Unkraut.",
+                     visual_query="dandelion", keyword="A"),
+            ReelBeat(text="Ihre gelben Blueten schmecken ueberraschend suess.",
+                     visual_query="dandelion", keyword="B"),
+            ReelBeat(text="Geroestet diente die Wurzel als Kaffeeersatz.",
+                     visual_query="coffee", keyword="C")]
+
+
+# short 802'nin GERÇEK çıktısı
+HOOK_802 = "Jeder Teil vom Loewenzahn ist essbar, doch warum landete er in der Tasse?"
+CLOSE_802 = ("So wurde Loewenzahn zum Kaffeeersatz. "
+             "Was schmeckt besser: Wurzel A oder Bluete B? Nur A oder B.")
+COMMENT_802 = "Was schmeckt wohl besser: Wurzel A oder Bluete B?"
+
+
+def test_close_icindeki_soru_comment_e_tasinir():
+    from short_bot.reel_models import ReelNarration
+    n = ReelNarration(hook=HOOK_802, beats=_beats(), close=CLOSE_802,
+                      comment=COMMENT_802, mood="neutral")
+    assert "?" not in n.close, f"kapanış kartında hâlâ soru var: {n.close!r}"
+    assert n.close == "So wurde Loewenzahn zum Kaffeeersatz."
+
+
+def test_kalibin_talimat_parcasi_senaryoya_girmez():
+    """'Nur A oder B.' bir izleyici cümlesi değil, kalıbın meta-talimatı."""
+    from short_bot.reel_models import ReelNarration
+    n = ReelNarration(hook=HOOK_802, beats=_beats(), close=CLOSE_802,
+                      comment=COMMENT_802, mood="neutral")
+    konusulan = " ".join(n.segments())
+    assert "Nur A oder B" not in konusulan, "kalıp talimatı SESLİ okunuyor"
+
+
+def test_soru_iki_kez_sorulmaz():
+    from short_bot.reel_models import ReelNarration
+    n = ReelNarration(hook=HOOK_802, beats=_beats(), close=CLOSE_802,
+                      comment=COMMENT_802, mood="neutral")
+    assert n.segments()[-1].count("?") == 1, n.segments()[-1]
+
+
+def test_soru_kaybolmaz_comment_bossa_oraya_tasinir():
+    from short_bot.reel_models import ReelNarration
+    n = ReelNarration(hook=HOOK_802, beats=_beats(), close=CLOSE_802,
+                      comment="", mood="neutral")
+    assert n.comment == "Was schmeckt besser: Wurzel A oder Bluete B?"
+    assert "?" not in n.close
+    assert n.comment in n.segments()[-1], "soru SESLİ sorulmalı, yalnız karta girmemeli"
+
+
+def test_loop_callback_yok_edilmez():
+    """Model sırayı ters kurduysa (soru ÖNDE) close'a DOKUNMA — bozuk ama yıkmaktan iyi."""
+    from short_bot.reel_models import ReelNarration
+    ters = "Was schmeckt besser: Wurzel oder Bluete? So wurde Loewenzahn zum Kaffee."
+    n = ReelNarration(hook=HOOK_802, beats=_beats(), close=ters, mood="neutral")
+    assert n.close == ters
+
+
+def test_sorusuz_kapanis_bozulmaz():
+    """Regresyon: normal (sorusuz) kapanışa dokunulmamalı."""
+    from short_bot.reel_models import ReelNarration
+    temiz = "Ve iste bu yuzden, piramitleri koleler yapmadi."
+    n = ReelNarration(hook="Piramitleri koleler yapmadi.", beats=_beats(),
+                      close=temiz, mood="neutral")
+    assert n.close == temiz and n.comment == ""
+
+
+def test_comment_yalniz_soru_cumlesini_tutar():
+    from short_bot.reel_models import ReelNarration
+    n = ReelNarration(hook=HOOK_802, beats=_beats(), close="Kapanis cumlesi burada.",
+                      comment="Was ist besser: A oder B? Schreib nur den Buchstaben.",
+                      mood="neutral")
+    assert n.comment == "Was ist besser: A oder B?"

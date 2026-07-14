@@ -13,6 +13,13 @@ from short_bot.caption_align import align_to_asr
 from short_bot.text_normalize import strip_non_turkish_diacritics
 
 
+def _cumleler(s: str) -> list[str]:
+    """Cümlelere böl. Kısaltma/ondalık ayırt etmez — kapanış/yorum için yeter."""
+    import re
+    return [c.strip() for c in re.split(r"(?<=[.!?…])\s+", (s or "").strip())
+            if c.strip()]
+
+
 def _content_words(s: str) -> set[str]:
     """Anlam taşıyan sözcükler (ek/edat gürültüsü elenir).
 
@@ -91,6 +98,49 @@ class ReelNarration(BaseModel):
     # -1 = LLM söylemedi → ORTA beat varsayılır ("en iyi bilgiyi öne koyma" hatasına
     # düşmektense ortaya varsay).
     peak_beat: int = Field(default=-1)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _soru_close_a_girmesin(cls, data):
+        """Yorum sorusunu 'close' alanından SÖK, 'comment'e taşı.
+
+        GERÇEK HATA (short 801 ve 802, Almanca): prompt kendisiyle çelişiyordu —
+        şema "yorum sorusunu close'a KOYMA, ayrı alanı var" derken enjekte edilen
+        yönerge "soruyu close'un SONUNA ekle" diyordu. Model ikisini de doldurdu:
+          close   = "So wurde Löwenzahn zum Kaffeeersatz. Was schmeckt besser:
+                     Wurzel A oder Blüte B? Nur A oder B."
+          comment = "Was schmeckt wohl besser: Wurzel A oder Blüte B?"
+        Sonuç: soru İKİ KEZ soruldu ve dev kapanış KARTI (yalnız close'u basar)
+        7 satırlık metin duvarı oldu — videonun üçte biri boyunca ekranda kaldı.
+        Ayrıca yönergedeki örnek kalıbın META-TALİMATI ("Schreib nur den
+        Buchstaben") senaryoya "Nur A oder B." diye sızdı.
+
+        Prompt düzeltildi, ama prompt kuralı TEK BAŞINA YETMEZ (bu oturumda üç kez
+        kanıtlandı). Kural yapısal olduğu için kapı da deterministik:
+        close bir LOOP CALLBACK'tir → ilk SORU cümlesinde ve sonrasında ne varsa
+        close'a ait değildir. Kalıp talimatı da ("...Buchstaben") sorudan SONRA
+        geldiği için aynı kesmeyle gider.
+
+        Callback'i asla yok etme: sorudan ÖNCE hiçbir şey yoksa close'a dokunma
+        (modelin sırayı ters kurduğu hâl — bozuk ama yıkmaktan iyidir).
+        """
+        if not isinstance(data, dict):
+            return data
+        close = (data.get("close") or "").strip()
+        comment = (data.get("comment") or "").strip()
+        if close:
+            cumleler = _cumleler(close)
+            ilk_soru = next((i for i, c in enumerate(cumleler) if c.endswith("?")), -1)
+            if ilk_soru > 0:                       # sorudan ÖNCE callback var → kes
+                data["close"] = " ".join(cumleler[:ilk_soru])
+                if not comment:
+                    comment = cumleler[ilk_soru]   # soruyu çöpe atma, kendi alanına taşı
+        if comment:
+            # comment YALNIZ soru cümlesi olsun: kalıbın talimat parçası buraya da
+            # sızabilir ("Schreib nur den Buchstaben.").
+            sorular = [c for c in _cumleler(comment) if c.endswith("?")]
+            data["comment"] = sorular[0] if sorular else comment
+        return data
 
     @field_validator("hook", "close", "comment", mode="before")
     @classmethod
