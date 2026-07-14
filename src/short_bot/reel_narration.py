@@ -10,7 +10,8 @@ import logging
 from short_bot.claude_cli import run_json
 from short_bot.reel_models import ReelNarration
 from short_bot.lang_pack import load_pack
-from short_bot.reel_factcheck import check_narration, fact_feedback
+from short_bot.reel_factcheck import (check_narration, fact_feedback,
+                                      rewrite_cover_title)
 from short_bot.reel_phrases import find_overused, pick_styles
 
 log = logging.getLogger(__name__)
@@ -95,7 +96,10 @@ lead to second 13. Write an ARC instead:
 Yukarıda "TEPE = EN ŞOK EDİCİ bilgi" dedik. Bu, olguyu ŞİŞİRMEK demek DEĞİLDİR.
 Şok, KONUNUN KENDİSİNDE zaten var — senin işin onu doğru sırayla ortaya çıkarmak.
 
-- KONU TOHUMUNUN SÖYLEMEDİĞİNİ İDDİA ETME. Yükseltme YASAK:
+- GENİŞLETMEK SENİN İŞİN, ama YANLIŞ SÖYLEMEK DEĞİL. Konu tek cümlelik bir TOHUMDUR;
+  onu doğru bilgilerle açman BEKLENİR. Yasak olan, YANLIŞ olan şeyi söylemektir.
+
+- YÜKSELTME YASAK — olguyu, onu YANLIŞ yapacak kadar şişirme:
     "engelliyor" → "zehirliyor"        ✗
     "yavaşlatır" → "öldürür"           ✗
     "bağlantılı" → "sebep oluyor"      ✗
@@ -105,8 +109,8 @@ Yukarıda "TEPE = EN ŞOK EDİCİ bilgi" dedik. Bu, olguyu ŞİŞİRMEK demek DE
   diyordu; senaryo "bitkilerini yavaş yavaş ZEHİRLİYOR" yazdı ve ekrana
   "ZEHİRLENME TEHLİKESİ" bastı. Kafein bitkiyi zehirlemez. Video YANLIŞ oldu.
 
-- UYDURMA SAYI/MEKANİZMA YOK. Konuda olmayan bir rakam, tarih ya da süreç ekleme.
-  Bir ders kitabında bulunamayacak hiçbir şey yazma.
+- UYDURMA SAYI/OLAY/MEKANİZMA YOK. Emin olmadığın bir rakamı, tarihi ya da süreci
+  YAZMA — bir ders kitabında ya da yerleşik bilgide karşılığı olmalı.
 
 - Merak ve gerilim ANLATIM BİÇİMİNDEN gelir (sıralama, bekletme, mikro-döngü) —
   olguyu abartmaktan DEĞİL. Kanalın OTORİTESİ ürünüdür; bir tek yanlış iddia onu yakar.
@@ -130,8 +134,16 @@ OUTPUT a JSON object:
     manşet "DOĞAL GÜBRE OLARAK KAHVE TELVESİ" yazıyordu. Feed'de kaydıran biri onu
     bir ONAY sanar; içeri girince tam tersini duyar ve kandırıldığını hisseder.
   Manşet merak açabilir, soru sorabilir, cevabı saklayabilir — ama videonun
-  söylediğinin TERSİNİ İDDİA EDEMEZ. Bir yanılgıyı yıkıyorsan manşet de onu
-  yıkmalı ("Kahve telvesi tuzağı"), yanılgıyı TEKRARLAMAMALI.
+  söylediğinin TERSİNİ İDDİA EDEMEZ.
+  BİR EFSANEYİ YIKIYORSAN manşet o efsaneyi DOĞRUYMUŞ GİBİ İLAN EDEMEZ. Onu EFSANE
+  olarak adlandır ya da SORGULA:
+    GERÇEK HATA: konu "yapraklardaki su damlaları güneşte yakar EFSANESİ YANLIŞ" idi;
+    manşet "SU DAMLASI TEHLİKE BAHÇE" yazıldı — efsaneyi ONAYLADI, video tersini
+    söylüyordu.
+      ✗ "SU DAMLASI TEHLİKE BAHÇE"       ← efsaneyi doğru sayıyor
+      ✓ "MERCEK EFSANESİ"                ← efsaneyi efsane olarak adlandırıyor
+      ✓ "DAMLALAR GERÇEKTEN YAKAR MI?"   ← soruyor, cevabı saklıyor
+  Merak, efsaneyi ONAYLAMAKTAN değil SORGULAMAKTAN doğar.
 - "peak_beat": 0-based index of the beat that carries the BIGGEST shock/reveal.
   It must be in the MIDDLE of the beat list, not the first and not the last.
   Bu, beğeni tetiğinin ve abone isteğinin yerleşeceği andır: beğeni bir karar değil,
@@ -374,12 +386,39 @@ def write_reel_narration(topic: str, *, channel, claude_path: str = "claude",
             topic, cover_title=n.cover_title, text=n.full_text(),
             language=channel.language, claude_path=claude_path, model=model,
             backend=backend, api_key=api_key)
-        if hala:
-            # İKİNCİ DENEME DE GEÇMEDİ. Yanlış bir video yayınlamak, hiç video
-            # yayınlamamaktan KÖTÜDÜR — kanalın otoritesi ürünüdür.
+
+        # OLGU ile MANŞET ayrı ele alınır — tepki ORANTILI olmalı.
+        olgu = [i for i in hala if i.kind != "cover"]
+        manset = [i for i in hala if i.kind == "cover"]
+
+        if olgu:
+            # ANLATIMDA olgusal hata ısrar ediyor. Yanlış bir video yayınlamak, hiç
+            # video yayınlamamaktan KÖTÜDÜR — kanalın otoritesi ürünüdür.
             raise ValueError(
                 "senaryo olgu denetiminden geçemedi (2 deneme): "
-                + "; ".join(f'"{i.claim}" → {i.problem}' for i in hala))
+                + "; ".join(f'"{i.claim}" → {i.problem}' for i in olgu))
+
+        if manset:
+            # MANŞET TEK BİR ALAN. Anlatım sağlamken videoyu öldürmek ORANTISIZ.
+            # GERÇEK KOŞU: konu "su damlaları güneşte yakar EFSANESİ YANLIŞ" idi; model
+            # manşeti "SU DAMLASI TEHLİKE BAHÇE" yazdı (efsaneyi doğruymuş gibi ilan
+            # etti) ve 7 dakikalık üretim çöpe gitti. Manşeti HEDEFLİ yeniden üretiyoruz.
+            i = manset[0]
+            yeni = rewrite_cover_title(
+                topic, text=n.full_text(), bad_title=n.cover_title,
+                problem=i.problem, language=channel.language,
+                claude_path=claude_path, model=model, backend=backend,
+                api_key=api_key)
+            if yeni:
+                log.warning(f"  manşet videoyla çelişti ({i.problem}) → yenilendi: "
+                            f"{n.cover_title!r} → {yeni!r}")
+                n = n.model_copy(update={"cover_title": yeni})
+            else:
+                # Üretilemedi → manşeti BOŞALT. Kare sıfırda hook cümlesi görünür
+                # (reel_render'ın mevcut davranışı). Çelişen bir manşetten iyidir.
+                log.warning(f"  manşet çelişti ve yenilenemedi → BOŞALTILDI "
+                            f"({n.cover_title!r})")
+                n = n.model_copy(update={"cover_title": ""})
 
     # AÇIK KAPI DENETİMİ (yalnız seride). Abone çipi tepeden ~1.3sn sonra ekrana
     # geliyor; vaat o ana kadar SÖYLENMEMİŞSE istek, izleyicinin hiç duymadığı bir

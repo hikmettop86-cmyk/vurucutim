@@ -228,3 +228,165 @@ def test_IKINCI_denemede_de_gecmezse_URETIM_DURUR(monkeypatch):
 
     with pytest.raises(ValueError, match="olgu denetiminden geçemedi"):
         RN.write_reel_narration("kafein buyumeyi engeller", channel=_Ch(), seed=1)
+
+
+# --- ORANTILILIK: manşet videoyu ÖLDÜRMEZ ----------------------------------
+# GERÇEK OLAY: konu "yapraklardaki su damlaları güneşte yakar EFSANESİ YANLIŞ" idi.
+# Model manşeti "WASSER TROPFEN GEFAHR GARTEN" yazdı — efsaneyi DOĞRUYMUŞ gibi ilan
+# etti. Kapı haklıydı ama tepki ORANTISIZDI: 4 kelimelik bir manşet yüzünden 7
+# dakikalık üretim çöpe gitti.
+
+EFSANE_KONU = ("Der Garten-Mythos, Wassertropfen auf Blättern wirkten in der "
+               "Mittagssonne wie eine Lupe, ist falsch.")
+
+
+def test_MANSET_sorunu_URETIMI_OLDURMEZ(monkeypatch):
+    """Anlatım sağlamken manşet yüzünden videoyu öldürmek orantısız."""
+    import short_bot.reel_narration as RN
+    from short_bot.config import ReelConfig
+    from short_bot.reel_factcheck import Issue
+    from short_bot.reel_models import ReelBeat, ReelNarration
+
+    class _Ch:
+        language = "de"
+        reel = ReelConfig(enabled=True, voice_id="v")
+
+    nar = ReelNarration(
+        hook="Wassertropfen verbrennen keine Blaetter.",
+        cover_title="WASSER TROPFEN GEFAHR GARTEN",     # efsaneyi ONAYLIYOR
+        beats=[ReelBeat(text="Der Mythos haelt sich seit Jahrzehnten hartnaeckig.",
+                        visual_query="water drops leaf", keyword="MYTHOS"),
+               ReelBeat(text="Studien zeigen keinerlei Brandflecken auf Blaettern.",
+                        visual_query="sunlight leaf", keyword="STUDIE"),
+               ReelBeat(text="Die Tropfen verdunsten laengst vor jedem Schaden.",
+                        visual_query="evaporation leaf", keyword="VERDUNSTEN")],
+        peak_beat=1,
+        close="Giess ruhig mittags, deine Blaetter verbrennen nicht.",
+        hook_visual="water drops leaf", close_visual="watering garden",
+        mood="neutral")
+
+    monkeypatch.setattr(RN, "run_json", lambda *a, **kw: nar)
+    # Kapı ısrarla MANŞET sorunu bildiriyor (kind="cover"), olgu sorunu YOK.
+    monkeypatch.setattr(
+        RN, "check_narration",
+        lambda *a, **kw: [Issue(claim="WASSER TROPFEN GEFAHR GARTEN",
+                                problem="Manşet efsaneyi onaylıyor, video tersini diyor",
+                                kind="cover")])
+    monkeypatch.setattr(RN, "rewrite_cover_title", lambda *a, **kw: "DER LUPEN-MYTHOS")
+
+    out = RN.write_reel_narration(EFSANE_KONU, channel=_Ch(), seed=1)
+    assert out.cover_title == "DER LUPEN-MYTHOS", "manşet yenilenmedi"
+    assert out.full_text(), "video öldürüldü — orantısız"
+
+
+def test_MANSET_yenilenemezse_BOSALTILIR(monkeypatch):
+    """Çelişen bir manşetten, manşetsiz bir kare-sıfır iyidir."""
+    import short_bot.reel_narration as RN
+    from short_bot.config import ReelConfig
+    from short_bot.reel_factcheck import Issue
+    from short_bot.reel_models import ReelBeat, ReelNarration
+
+    class _Ch:
+        language = "de"
+        reel = ReelConfig(enabled=True, voice_id="v")
+
+    nar = ReelNarration(
+        hook="Wassertropfen verbrennen keine Blaetter.",
+        cover_title="WASSER TROPFEN GEFAHR GARTEN",
+        beats=[ReelBeat(text="Der Mythos haelt sich seit Jahrzehnten hartnaeckig.",
+                        visual_query="water drops leaf", keyword="MYTHOS"),
+               ReelBeat(text="Studien zeigen keinerlei Brandflecken auf Blaettern.",
+                        visual_query="sunlight leaf", keyword="STUDIE"),
+               ReelBeat(text="Die Tropfen verdunsten laengst vor jedem Schaden.",
+                        visual_query="evaporation leaf", keyword="VERDUNSTEN")],
+        peak_beat=1,
+        close="Giess ruhig mittags, deine Blaetter verbrennen nicht.",
+        hook_visual="water drops leaf", close_visual="watering garden",
+        mood="neutral")
+
+    monkeypatch.setattr(RN, "run_json", lambda *a, **kw: nar)
+    monkeypatch.setattr(
+        RN, "check_narration",
+        lambda *a, **kw: [Issue(claim="x", problem="çelişiyor", kind="cover")])
+    monkeypatch.setattr(RN, "rewrite_cover_title", lambda *a, **kw: "")
+
+    out = RN.write_reel_narration(EFSANE_KONU, channel=_Ch(), seed=1)
+    assert out.cover_title == ""
+    assert out.full_text(), "video öldürüldü"
+
+
+def test_OLGU_sorunu_ISRAR_EDERSE_URETIM_DURUR(monkeypatch):
+    """Anlatımdaki olgusal hata ciddi — orada durmak DOĞRU."""
+    import short_bot.reel_narration as RN
+    from short_bot.config import ReelConfig
+    from short_bot.reel_factcheck import Issue
+    from short_bot.reel_models import ReelBeat, ReelNarration
+
+    class _Ch:
+        language = "tr"
+        reel = ReelConfig(enabled=True, voice_id="v")
+
+    nar = ReelNarration(
+        hook="Kahve telvesini bitkine dokme sakin.",
+        cover_title="Kahve telvesi tuzagi",
+        beats=[ReelBeat(text="Kafein bitkiyi zehirliyor ve oldurur bunu hemen.",
+                        visual_query="coffee grounds", keyword="KAHVE"),
+               ReelBeat(text="Kokler baskilaniyor ve fide duruyor boylece.",
+                        visual_query="seedling soil", keyword="FIDE"),
+               ReelBeat(text="Once kompostla sonra topraga ver bunu.",
+                        visual_query="compost heap", keyword="KOMPOST")],
+        peak_beat=1,
+        close="Taze telve genc bitkiye gitmez asla bu yuzden.",
+        hook_visual="coffee grounds", close_visual="compost heap", mood="neutral")
+
+    monkeypatch.setattr(RN, "run_json", lambda *a, **kw: nar)
+    monkeypatch.setattr(
+        RN, "check_narration",
+        lambda *a, **kw: [Issue(claim="zehirliyor", problem="yanlış", kind="fact")])
+
+    with pytest.raises(ValueError, match="olgu denetiminden geçemedi"):
+        RN.write_reel_narration("kafein buyumeyi engeller", channel=_Ch(), seed=1)
+
+
+def test_manset_yeniden_uretimi_EFSANEYI_ogretir():
+    """Model bir efsaneyi nasıl manşete koyacağını bilmiyordu — öğretiyoruz."""
+    from short_bot.reel_factcheck import rewrite_cover_title
+    gorulen = {}
+
+    def _llm(prompt, schema):
+        gorulen["p"] = prompt
+        return schema.model_validate({"cover_title": "DER LUPEN-MYTHOS"})
+
+    out = rewrite_cover_title(
+        EFSANE_KONU, text="Die Tropfen verbrennen nichts.",
+        bad_title="WASSER TROPFEN GEFAHR GARTEN",
+        problem="efsaneyi onaylıyor", language="de", invoke=_llm)
+    assert out == "DER LUPEN-MYTHOS"
+    p = gorulen["p"]
+    assert "EFSANE" in p
+    assert "SORGULA" in p
+    assert "WASSER TROPFEN GEFAHR GARTEN" in p, "reddedilen manşet gösterilmedi"
+    assert "efsaneyi onaylıyor" in p, "red SEBEBİ gösterilmedi"
+
+
+def test_manset_yeniden_uretimi_PATLARSA_bos_doner():
+    from short_bot.reel_factcheck import rewrite_cover_title
+
+    def _patla(*a, **kw):
+        raise RuntimeError("model yok")
+
+    assert rewrite_cover_title(EFSANE_KONU, text="x", bad_title="y", problem="z",
+                               language="de", invoke=_patla) == ""
+
+
+def test_ANA_PROMPT_efsane_manset_kuralini_tasir():
+    from short_bot.config import ReelConfig
+    from short_bot.reel_narration import build_reel_prompt
+
+    class _Ch:
+        language = "tr"
+        reel = ReelConfig(enabled=True, voice_id="v")
+
+    p = build_reel_prompt("su damlalari yakar efsanesi yanlis", _Ch(), seed=1)
+    assert "EFSANEYİ YIKIYORSAN" in p
+    assert "SORGULAMAKTAN" in p
