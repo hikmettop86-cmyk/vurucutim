@@ -224,7 +224,12 @@ function lineOverflow(el){
   }
   return worst;   // >0 → taşıyor
 }
-function fitBox(el,{minScale=0.55,maxH=0}={}){
+// Bir metin bloğunun kaç satıra yayıldığı (scrollHeight / satır yüksekliği).
+function _blockLines(el){
+  const lh=parseFloat(getComputedStyle(el).lineHeight);
+  return lh>0 ? Math.round(el.scrollHeight/lh) : 1;
+}
+function fitBox(el,{minScale=0.55,maxH=0,maxLines=0}={}){
   if(!el) return;
   // Hook/close normalde display:none — GİZLİ ELEMANIN ÖLÇÜSÜ SIFIRDIR, ölçmek için
   // geçici olarak göster, sonra sınıflara geri bırak.
@@ -235,7 +240,12 @@ function fitBox(el,{minScale=0.55,maxH=0}={}){
   const floor=base*minScale;
   let size=base;
   // 2px'lik adımlar: gözle fark edilmez, en kötü ihtimalle ~23 tur.
-  while(size>floor && (lineOverflow(el)>0 || (maxH && el.scrollHeight>maxH))){
+  // maxLines: taşma/yükseklik SINIRLARINA EK bir kısıt. maxH tek başına yetmiyordu —
+  // 720px ~6 satıra izin verir, kapanış kartı 5-7 satırlık bir metin duvarı oluyordu
+  // (short 802/803). floor korunur: taban puntoya dayanınca satır sınırı AŞILABİLİR
+  // (okunabilirliği satır sayısına feda etme — altyazıdaki fitCap ile aynı ilke).
+  while(size>floor && (lineOverflow(el)>0 || (maxH && el.scrollHeight>maxH)
+        || (maxLines && _blockLines(el)>maxLines))){
     size-=2; el.style.fontSize=size+'px';
   }
   el.style.display=prev;
@@ -251,6 +261,10 @@ function fitBox(el,{minScale=0.55,maxH=0}={}){
 // 3 satır (82px×1.15×3 ≈ 283px) → üst kenar y≈1097. Abone çipi y 1080-1160'ta.
 // Yani üç satırlık altyazı ÇİPİN ÜSTÜNE BİNER. İki satır → üst kenar y≈1191, temiz.
 const MAX_CAP_LINES = 2;
+// Kapanış kartı (loop callback cümlesi) en fazla bu kadar satır. Ölçüldü: 4 satır
+// Almanca'da 84px (okunur), Türkçe kısa kapanışlara dokunmuyor; 3 fazla agresif
+// (70px), 5 neredeyse etkisiz.
+const CLOSE_MAX_LINES = 4;
 // Bir öbeğin kaç SATIRA yayıldığı: görünür kelimelerin farklı 'top' değerlerini say.
 // (Range.getClientRects burada işe yaramaz — aynı satırdaki her span ayrı rect verir.)
 function _chunkLines(cap){
@@ -317,7 +331,11 @@ window.__fit=function(){
   // Hook/close ekranın üst yarısında; altyazı bloğuna sarkmasın diye yükseklik sınırı.
   // maxH 720: hook/kapanış kartı top:300'den başlar → en fazla y=1020'ye iner,
   // yani abone çipinin (1080) üstünde kalır. 820 olsaydı çipe binerdi.
-  fitBox(HOOK,{maxH:720}); fitBox(CLOSE,{maxH:720}); fitCap();
+  // KAPANIŞ ayrıca maxLines=4: kapanış bir CÜMLE (loop callback), kelime atılamaz —
+  // ama 5-7 satırlık metin duvarı göz yoruyordu (short 802/803). 4 satır sınırı
+  // fontu makul küçültür (Almanca 104→84px), kısa metinler dokunulmadan kalır.
+  // Hook'a UYGULANMADI: hook kare-sıfır (küçük resim) ve büyük punto tercih eder.
+  fitBox(HOOK,{maxH:720}); fitBox(CLOSE,{maxH:720,maxLines:CLOSE_MAX_LINES}); fitCap();
   // Rozet tek satır (nowrap) — taşarsa overflow:hidden onu SESSİZCE keserdi ve
   // numarası uçan bir rozet işlevini kaybeder. Sığdırma puntoyu küçültür.
   if(BADGE) fitBox(BADGE,{minScale:0.7});

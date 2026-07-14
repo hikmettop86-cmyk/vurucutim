@@ -268,3 +268,67 @@ def test_kisa_kelimeli_dilde_obek_3_kalir(browser):
     _, sonra = _obek_olc(browser, KISA_BEAT, "lower_left", "tr")
     assert sonra["kelime"] == 3, "gereksiz yere öbek küçültülmüş"
     assert sonra["punto"] == TABAN_PUNTO, "gereksiz yere font küçültülmüş"
+
+
+# --- KAPANIŞ KARTI SATIR SINIRI ---------------------------------------------
+# GERÇEK SORUN (short 802/803, Almanca): kapanış kartı (.big#close) yalnız maxH:720
+# ile küçültülüyordu — o da ~6 satıra izin verir. Kapanış 5-7 satırlık bir METİN
+# DUVARI oluyordu. Kapanış bir CÜMLE (loop callback), kelime atılamaz; çözüm satır
+# sınırı (maxLines=4) + fontu makul küçültmek. ÖLÇÜLDÜ: 803 Almanca 104px/5s → 84px/4s;
+# Türkçe kısa kapanış 104px/4s dokunulmadı; en uzun metin taban puntoya (56px) dayanıp
+# 5 satırda durdu (okunabilirliği satır sayısına feda etmez).
+
+def _tl_close(close, hook="Kısa hook cümlesi"):
+    n = ReelNarration(
+        hook=hook,
+        beats=[ReelBeat(text="Birinci beat cümlesi burada.", visual_query="brain", keyword="A"),
+               ReelBeat(text="İkinci beat cümlesi burada.", visual_query="nerve", keyword="B"),
+               ReelBeat(text="Üçüncü beat cümlesi burada.", visual_query="pulse", keyword="C")],
+        close=close, mood="neutral")
+    return build_reel_timeline(n, [], duration_s=float(n.word_count()))
+
+
+_CLOSE_PROBE = """()=>{
+  const el=document.getElementById('close');
+  const d=el.style.display; el.style.display='block';
+  const lh=parseFloat(getComputedStyle(el).lineHeight);
+  const r={punto:parseFloat(getComputedStyle(el).fontSize),
+           satir:lh>0?Math.round(el.scrollHeight/lh):1};
+  el.style.display=d; return r;}"""
+
+CLOSE_MAX_LINES = 4
+CLOSE_BASE_PX = 104          # .big font-size
+CLOSE_FLOOR_PX = CLOSE_BASE_PX * 0.55
+
+UZUN_ALMANCA = ("Und genau deshalb ist der Loewenzahn kein Unkraut sondern eine "
+                "unterschaetzte kulinarische Kraftquelle.")
+KISA_KAPANIS = "Ve iste bu yuzden, piramitleri koleler yapmadi."
+
+
+def _close_olc(browser, close, lang):
+    pg = browser.new_page(viewport={"width": W, "height": H})
+    pg.set_content(build_reel_overlay_html(_tl_close(close), handle="@t", lang=lang),
+                   wait_until="networkidle", timeout=8000)
+    pg.evaluate("()=>document.fonts&&document.fonts.ready")
+    once = pg.evaluate(_CLOSE_PROBE)
+    pg.evaluate("()=>window.__fit()")
+    sonra = pg.evaluate(_CLOSE_PROBE)
+    pg.close()
+    return once, sonra
+
+
+def test_uzun_kapanis_satir_sinirina_sigdirilir(browser):
+    once, sonra = _close_olc(browser, UZUN_ALMANCA, "de")
+    assert once["satir"] > CLOSE_MAX_LINES, "zaten sınırın altındaysa gerekçe çürür"
+    # ya satır sınırına indi, YA DA taban puntoya dayandı (okunabilirlik korunur)
+    assert sonra["satir"] <= CLOSE_MAX_LINES or sonra["punto"] <= CLOSE_FLOOR_PX + 1, (
+        f"kapanış {sonra['satir']} satır / {sonra['punto']}px — ne sığdı ne tabana dayandı")
+    assert sonra["punto"] < once["punto"], "sığdırma hiç devreye girmedi"
+
+
+def test_kisa_kapanis_kucultulmez(browser):
+    """Regresyon: 4 satıra sığan kapanış küçültülmemeli."""
+    once, sonra = _close_olc(browser, KISA_KAPANIS, "tr")
+    if once["satir"] <= CLOSE_MAX_LINES:
+        assert sonra["punto"] == once["punto"], "gereksiz yere küçültülmüş"
+        assert sonra["satir"] == once["satir"]
