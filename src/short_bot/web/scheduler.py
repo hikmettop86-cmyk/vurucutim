@@ -12,6 +12,20 @@ from short_bot.dna_cache import cleanup_expired_dna_cache
 _LOG = logging.getLogger(__name__)
 
 
+def channel_cron_enabled(cfg) -> bool:
+    """Kanalın schedule_cron'u kaydedilmeli mi?
+
+    AUTOPILOT AÇIKSA HAYIR. Autopilot kendi slot'larından üretiyor; cron da koşarsa
+    günde 3 yerine 6 video çıkar. Bu çifte üretim HİÇBİR HATA VERMEZ — yalnız kotayı
+    ve kredileri yakar, üstelik slot'suz videolar pipeline tarafından ANINDA (public)
+    yüklenip autopilot'un zamanlamasını bozar.
+    """
+    if not getattr(cfg, "schedule_cron", ""):
+        return False
+    ap = getattr(cfg, "autopilot", None)
+    return not (ap is not None and ap.enabled)
+
+
 def init_scheduler(app):
     # job_defaults:
     # - misfire_grace_time=3600: Eger VurucuTim restart oldu (update vb.) ve fire
@@ -47,7 +61,8 @@ def init_scheduler(app):
             if job.id != "_reload_jobs":
                 scheduler.remove_job(job.id)
         for cfg in list_channels(cfg_dir / "channels", enabled_only=True):
-            if not cfg.schedule_cron:
+            # AUTOPILOT AÇIKSA CRON KAYDEDİLMEZ — bkz. channel_cron_enabled.
+            if not channel_cron_enabled(cfg):
                 continue
             try:
                 trigger = CronTrigger.from_crontab(cfg.schedule_cron)
@@ -211,6 +226,57 @@ def init_scheduler(app):
         id="_topic_bank_refresh",
         replace_existing=True,
     )
+
+    # --- AUTOPILOT ---------------------------------------------------------
+    def _autopilot_channels():
+        cfg_dir = app.config["SHORTBOT_CONFIG_DIR"]
+        for cfg in list_channels(cfg_dir / "channels", enabled_only=True):
+            ap = getattr(cfg, "autopilot", None)
+            if ap is not None and ap.enabled:
+                yield cfg
+
+    def _autopilot_plan():
+        """Bugünün + yarının slotlarını yaz. İDEMPOTENT.
+
+        Hem gece cron'unda hem UYGULAMA AÇILIŞINDA koşar: uygulama kapalıysa gece
+        cron'u kaçar ve o gün TAMAMEN boş geçerdi.
+        """
+        from datetime import datetime as _dt
+        from zoneinfo import ZoneInfo
+
+        from short_bot.autopilot_runner import plan_channel
+        try:
+            eng = init_db(app.config["SHORTBOT_DB_PATH"])
+            for cfg in _autopilot_channels():
+                try:
+                    bugun = _dt.now(ZoneInfo(cfg.autopilot.timezone)).date()
+                    n = plan_channel(eng, cfg, today_local=bugun, days=2)
+                    if n:
+                        _LOG.info(f"[autopilot] {cfg.slug}: +{n} slot planlandı")
+                except Exception as e:  # noqa: BLE001 — bir kanal ötekileri durdurmasın
+                    _LOG.warning(f"[autopilot] {cfg.slug} planlama hatası: {e}")
+        except Exception as e:  # noqa: BLE001 — cron ÇÖKMEMELİ
+            _LOG.warning(f"[autopilot] planlama işi başarısız: {e}")
+
+    def _autopilot_tick():
+        from short_bot.autopilot_runner import tick
+        from short_bot.web.autopilot_deps import build_deps
+        try:
+            eng = init_db(app.config["SHORTBOT_DB_PATH"])
+            for cfg in _autopilot_channels():
+                try:
+                    tick(eng, cfg, build_deps(app, cfg))
+                except Exception as e:  # noqa: BLE001
+                    _LOG.warning(f"[autopilot] {cfg.slug} tick hatası: {e}")
+        except Exception as e:  # noqa: BLE001 — cron ÇÖKMEMELİ
+            _LOG.warning(f"[autopilot] tick işi başarısız: {e}")
+
+    scheduler.add_job(_autopilot_plan, trigger=CronTrigger(hour=3, minute=30),
+                      id="_autopilot_plan", replace_existing=True)
+    scheduler.add_job(_autopilot_tick, "interval", minutes=5,
+                      id="_autopilot_tick", replace_existing=True)
+    # AÇILIŞTA da planla: gece cron'u kaçmış olabilir (uygulama kapalıydı).
+    _autopilot_plan()
     # Trend cache refresh on the interval from settings.trends.refresh_minutes.
     # Default 60min keeps the cache well under the 90min freshness window
     # used by the pipeline (so inline refresh on stale cache is rare).

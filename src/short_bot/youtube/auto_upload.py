@@ -87,10 +87,18 @@ def run_auto_upload(*, eng, short_id: int, channel, credentials,
                     model: str = "sonnet",
                     secrets_path: Path | None = None,
                     backend: str = "claude_cli",
-                    api_key: str | None = None) -> AutoUploadResult:
+                    api_key: str | None = None,
+                    publish_at: str | None = None) -> AutoUploadResult:
     """Build metadata via Sonnet (best-effort) + upload + record DB row.
 
     secrets_path: data/secrets.yaml path. If None, no proxy lookup is attempted.
+
+    ``publish_at`` (RFC3339, ör. "2026-07-14T13:04:00Z") — AUTOPILOT: verilirse video
+    GİZLİ yüklenir ve YouTube tam o anda yayınlar.
+    DİKKAT: publishAt YALNIZ privacyStatus=private iken geçerlidir; public bir videoda
+    SESSİZCE yok sayılır ve video anında yayınlanır (bkz. uploader.build_status — orası
+    privacy'yi private'a zorluyor). Bu parametreyi buradan uploader'a geçirmezsek
+    zamanlama hiç uygulanmaz ve slot saati anlamsız kalır.
 
     Behavior:
       - If channel has a configured proxy: route token refresh + upload through it.
@@ -151,7 +159,8 @@ def run_auto_upload(*, eng, short_id: int, channel, credentials,
         category_id=yt.category_id, language=channel.language,
         generated=generated,
     )
-    status = build_status(privacy_status=yt.privacy_status, ai_content=yt.ai_content)
+    status = build_status(privacy_status=yt.privacy_status, ai_content=yt.ai_content,
+                          publish_at=publish_at)
 
     try:
         video_id = upload_video(
