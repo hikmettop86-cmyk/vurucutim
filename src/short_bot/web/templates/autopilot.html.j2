@@ -44,6 +44,15 @@
     {% endfor %}
   {% endwith %}
 
+  {# SESSİZ BOZULMA UYARILARI: otomasyon "açık" görünür ama hiçbir şey olmaz.
+     Nedenini söylemezsek kullanıcı günlerce bekler. #}
+  {% for u in warnings %}
+    <div class="mb-4 px-4 py-3 rounded-lg bg-red-50 border border-red-200
+                text-sm text-red-700 flex items-start gap-2">
+      <span class="font-bold flex-shrink-0">⚠</span><span>{{ u }}</span>
+    </div>
+  {% endfor %}
+
   {% if not enabled %}
     <div class="rounded-xl border border-dashed border-claude-border bg-claude-surface
                 px-6 py-10 text-center">

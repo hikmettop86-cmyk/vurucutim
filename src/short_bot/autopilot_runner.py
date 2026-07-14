@@ -52,6 +52,20 @@ def _as_utc(dt: datetime) -> datetime:
     return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
+def upload_enabled(cfg) -> bool:
+    """Autopilot YÜKLEYEBİLİR mi?
+
+    KULLANICININ AYARI SON SÖZ. ``youtube.auto_upload = false`` demek "otomatik
+    yükleme istemiyorum" demektir. Autopilot bunu es geçip yüklerse, kullanıcının
+    açıkça reddettiği bir şeyi yapmış oluruz — kanalına izinsiz video koymak.
+
+    Kapalıysa autopilot yalnız ÜRETİR; slot 'produced'ta kalır ve kullanıcı elle
+    yükler. Panel bunu açıkça söyler.
+    """
+    yt = getattr(cfg, "youtube", None)
+    return yt is not None and bool(getattr(yt, "auto_upload", False))
+
+
 def plan_channel(eng, cfg, *, today_local: _date, days: int = 2) -> int:
     """Bugünden itibaren ``days`` günün slotlarını yaz. İDEMPOTENT.
 
@@ -166,6 +180,10 @@ def tick(eng, cfg, deps: AutopilotDeps) -> dict:
 # bir sonraki tick'i (5 dk) beklemek slot anını kaçırma riskini büyütür.
 
 def _yukle(eng, cfg, ap, now, sayac, deps: AutopilotDeps) -> None:
+    # KULLANICININ AYARI SON SÖZ: auto_upload kapalıysa autopilot YÜKLEMEZ.
+    # Slot 'produced'ta kalır — video hazır, kullanıcı elle yükler.
+    if not upload_enabled(cfg):
+        return
     for s in open_slots(eng, cfg.slug):
         if s["status"] != "produced" or not s["short_id"]:
             continue

@@ -60,10 +60,26 @@ def page(slug):
         "scheduled": sum(1 for x in bugunku if x["status"] == "scheduled"),
         "failed": sum(1 for x in bugunku if x["status"] in ("failed", "skipped")),
     }
+
+    # SESSİZ BOZULMA UYARILARI. İkisi de gerçek: otomasyon "açık" görünür ama hiçbir
+    # şey olmaz, ve kullanıcı nedenini asla öğrenemez. Otomasyon kendini AÇIKLAMALI.
+    from short_bot.autopilot_runner import upload_enabled
+    uyarilar = []
+    if ap and ap.enabled and not getattr(cfg, "enabled", True):
+        uyarilar.append(
+            "Kanal DEVRE DIŞI — hiçbir slot planlanmayacak ve hiçbir video "
+            "üretilmeyecek. Kanalı Ayarlar'dan etkinleştir.")
+    if ap and ap.enabled and not upload_enabled(cfg):
+        uyarilar.append(
+            "YouTube otomatik yükleme KAPALI — videolar üretilecek ama "
+            "yüklenmeyecek (slot 'üretildi'de kalır, elle yüklersin). "
+            "Otomatik yükleme istiyorsan Ayarlar → YouTube'dan aç.")
+
     return render_template("autopilot.html.j2", slug=slug, channel=cfg,
                            enabled=bool(ap and ap.enabled), ap=ap,
                            today=bugun.isoformat(), tomorrow=yarin.isoformat(),
-                           days=gunler, summary=ozet, tz=str(tz))
+                           days=gunler, summary=ozet, tz=str(tz),
+                           warnings=uyarilar)
 
 
 @bp.post("/channels/<slug>/autopilot/enable")
