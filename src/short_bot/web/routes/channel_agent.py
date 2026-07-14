@@ -3,8 +3,10 @@
 İKİ AŞAMA (kasıtlı): plan HAZIRLANIR ve GÖSTERİLİR, kullanıcı "Kur"a basar. Ajan
 yanlış ses seçtiyse ya da niş kaydıysa, kanal KURULMADAN görülür.
 
-Plan hazırlamak ~2-3 dk sürüyor (dil paketi + ses + DNA + örnek konular) → daemon
-thread + HTMX poll. Desen niche_finder'ın iş kuyruğundan alındı (reel_new.py).
+Plan hazırlamak ~6-8 DAKİKA sürüyor (ölçüldü): beş ayrı LLM çağrısı var ve Claude CLI
+her çağrıda yeni bir süreç açıyor. Daemon thread + HTMX poll, ve panel HANGİ ADIMDA
+olduğunu gösterir — "hazırlanıyor…" deyip susan bir panel, kullanıcıya takılıp
+takılmadığını söylemez. Desen niche_finder'ın iş kuyruğundan alındı (reel_new.py).
 """
 from __future__ import annotations
 
@@ -15,7 +17,7 @@ import uuid
 from flask import (Blueprint, abort, current_app, flash, redirect,
                    render_template, request, url_for)
 
-from short_bot.channel_agent import apply_plan, build_plan
+from short_bot.channel_agent import PLAN_STEPS, apply_plan, build_plan
 from short_bot.locale import LANGUAGE_NAMES, SUPPORTED_LANGUAGES
 from short_bot.web.niche_finder import find_niches_ai, find_niches_data
 
@@ -77,6 +79,7 @@ def _diller():
 def page():
     return render_template("channel_agent.html.j2", languages=_diller(),
                            lang_names=LANGUAGE_NAMES,
+                           plan_steps=PLAN_STEPS,
                            plan=None, niches=None, job=None, job_id=None)
 
 
@@ -90,6 +93,7 @@ def status(job_id):
         n = _NICHES.get(job_id)
     return render_template("channel_agent.html.j2", languages=_diller(),
                            lang_names=LANGUAGE_NAMES,
+                           plan_steps=PLAN_STEPS,
                            plan=p, niches=n, job=job, job_id=job_id)
 
 
@@ -167,13 +171,20 @@ def plan():
     llm = _sonnet()
 
     job_id = uuid.uuid4().hex[:12]
-    _set_job(job_id, status="running", error="", kind="plan", language=language)
+    _set_job(job_id, status="running", error="", kind="plan", language=language,
+             step=0, step_name=PLAN_STEPS[0], step_total=len(PLAN_STEPS))
 
     def _job():
+        # İLERLEME ŞART: plan beş ayrı LLM çağrısı yapıyor ve ~6-8 DAKİKA sürüyor
+        # (ölçüldü). "Hazırlanıyor…" deyip susan bir panel, kullanıcıya takılıp
+        # takılmadığını söylemez — görünmeyen bir iş, takılmış bir iştir.
+        def _on_step(i, ad):
+            _set_job(job_id, step=i, step_name=ad)
+
         try:
             p = build_plan(niche, language=language, channels_dir=channels_dir,
                            ai33_key=ai33_key, settings=settings, secrets=secrets,
-                           llm=llm, evidence=evidence)
+                           llm=llm, evidence=evidence, on_step=_on_step)
             with _LOCK:
                 _PLANS[job_id] = p
             _set_job(job_id, status="done")
@@ -208,4 +219,8 @@ def apply(job_id):
         _JOBS.pop(job_id, None)
     flash(f"'{p.name}' kuruldu. Konu bankası tohumlandı. Otomasyon KAPALI — açmak "
           f"istersen Otomasyon sayfasından.", "success")
-    return redirect(f"/channels/{slug}")
+    # KANALIN KENDİ SAYFASI: /channels/<slug> diye bir rota YOK (kanallar /channels'da
+    # listeleniyor, düzenleme /channels/<slug>/edit-reel'de). Oraya yönlendirmek 404
+    # veriyordu — kanal kuruluyordu ama kullanıcı hata sayfası görüyordu. Sihirbaz
+    # (reel_new) da buraya gidiyor.
+    return redirect(url_for("reel_edit.edit_reel", slug=slug))

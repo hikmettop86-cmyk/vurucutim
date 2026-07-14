@@ -9,7 +9,7 @@ import tempfile
 from pathlib import Path
 
 from short_bot.reel_framing import SUBJECT_BIAS, ken_burns, ken_burns_vf
-from short_bot.reel_grade import grade_vf, luma_delta, measure_luma
+from short_bot.reel_grade import grade_vf, luma_delta, measure_levels
 from short_bot.reel_punch import punch_vf
 
 W, H = 1080, 1920
@@ -192,8 +192,11 @@ def assemble_reel(
             if color_grade:
                 key = str(clip)
                 if key not in luma_cache:
-                    luma_cache[key] = measure_luma(Path(clip), ffmpeg_path)
-                g = grade_vf(luma_delta(luma_cache[key]))
+                    # TEPE de ölçülür: ortalama tek başına "siyah zeminde parlayan
+                    # mikroplar" ile "kötü pozlanmış klip"i ayırt edemez.
+                    luma_cache[key] = measure_levels(Path(clip), ffmpeg_path)
+                lum, pk = luma_cache[key]
+                g = grade_vf(luma_delta(lum, pk))
             _normalize_segment(Path(clip), span, sf, fps=fps,
                                ffmpeg=ffmpeg_path, zoom=zoom,
                                start_s=(starts[i] if i < len(starts) else 0.0),

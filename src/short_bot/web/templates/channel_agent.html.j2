@@ -30,22 +30,55 @@
   {% endif %}
 
   {# --- BEKLEME (HTMX poll) --- #}
+  {# Plan BEŞ ayrı LLM çağrısı yapıyor ve ~6-8 DAKİKA sürüyor (ölçüldü). "Hazırlanıyor…"
+     deyip susan bir panel, kullanıcıya takılıp takılmadığını söylemez. Hangi adımda
+     olduğunu GÖSTERİYORUZ ve süreyi DÜRÜST veriyoruz. #}
   {% if job and job.status == 'running' %}
-  <div class="mb-6 px-4 py-6 rounded-xl border border-claude-border bg-claude-surface
-              text-center"
+  <div class="mb-6 px-5 py-6 rounded-xl border border-claude-border bg-claude-surface"
        hx-get="/channels/agent/status/{{ job_id }}"
        hx-trigger="every 3s"
        hx-select="#agent-body" hx-target="#agent-body" hx-swap="outerHTML">
-    <p class="text-claude-text font-medium">
-      {% if job.kind == 'find' %}Niş aranıyor…{% else %}Plan hazırlanıyor…{% endif %}
+
+    {% if job.kind == 'find' %}
+    <p class="text-claude-text font-medium text-center">Niş aranıyor…</p>
+    <p class="text-sm text-claude-muted mt-1 text-center">
+      Adaylar üretiliyor ve YouTube verisiyle ölçülüyor (~1-2 dk).
     </p>
-    <p class="text-sm text-claude-muted mt-1">
-      {% if job.kind == 'find' %}
-        Adaylar üretiliyor ve YouTube verisiyle ölçülüyor (~1-2 dk).
-      {% else %}
-        Dil paketi, ses seçimi, kanal kimliği ve örnek konular (~2-3 dk).
-      {% endif %}
+
+    {% else %}
+    <div class="flex items-baseline justify-between mb-3">
+      <p class="text-claude-text font-medium">Plan hazırlanıyor…</p>
+      <p class="text-xs text-claude-muted">
+        adım {{ (job.step or 0) + 1 }}/{{ job.step_total or 6 }} · toplam ~6-8 dk
+      </p>
+    </div>
+
+    {# Her adım ayrı bir LLM çağrısı; hangisinde olduğunu görürsün. #}
+    <ol class="space-y-1.5">
+      {% for ad in plan_steps %}
+      {% set i = loop.index0 %}
+      {% set simdiki = job.step or 0 %}
+      <li class="flex items-center gap-2 text-sm">
+        {% if i < simdiki %}
+          <span class="text-claude-success">✓</span>
+          <span class="text-claude-muted line-through">{{ ad }}</span>
+        {% elif i == simdiki %}
+          <span class="w-1.5 h-1.5 rounded-full bg-claude-accent animate-pulse"></span>
+          <span class="text-claude-text font-medium">{{ ad }}</span>
+          <span class="text-xs text-claude-muted">çalışıyor…</span>
+        {% else %}
+          <span class="w-1.5 h-1.5 rounded-full bg-claude-border"></span>
+          <span class="text-claude-subtle">{{ ad }}</span>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+
+    <p class="text-xs text-claude-muted mt-4 pt-3 border-t border-claude-border">
+      Her adım ayrı bir model çağrısı. Sayfayı kapatabilirsin — iş arka planda sürer,
+      ama plan bellekte tutulduğu için geri döndüğünde bu bağlantıyı açman gerekir.
     </p>
+    {% endif %}
   </div>
   {% endif %}
 

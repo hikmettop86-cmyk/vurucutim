@@ -219,9 +219,18 @@ def _sample_topics(niche: str, language: str, llm) -> list[str]:
         return []
 
 
+# Planın adımları. Panelde ilerleme olarak gösterilir.
+#
+# NEDEN GEREKLİ (ölçüldü): plan BEŞ ayrı LLM çağrısı yapıyor ve Claude CLI her
+# çağrıda yeni bir süreç açıyor. Gerçek koşu ~6-8 DAKİKA sürüyor. Panel "hazırlanıyor…"
+# deyip susunca kullanıcı haklı olarak "takıldı mı?" diye soruyor — ve cevabı
+# bilmenin tek yolu log'a bakmak oluyordu. Görünmeyen bir iş, takılmış bir iştir.
+PLAN_STEPS = ("Dil paketi", "Niş", "Ses", "Kanal adı", "Kimlik", "Örnek konular")
+
+
 def build_plan(niche: str, *, language: str, channels_dir, ai33_key: str,
                settings, secrets: dict, llm=None, dna_call=None,
-               evidence: str = "") -> ChannelPlan:
+               evidence: str = "", on_step=None) -> ChannelPlan:
     """Kanal planı kur. HİÇBİR DOSYA YAZMAZ (dil paketi hariç — modül docstring'i).
 
     ``niche``: kullanıcının HAM cümlesi olabilir ("… kanal kurmak istiyorum"). Önce
@@ -229,17 +238,28 @@ def build_plan(niche: str, *, language: str, channels_dir, ai33_key: str,
     çöp olur ve o kanalda kanıt madenciliği kalıcı olarak ölür.
 
     ``evidence``: niş bulucunun YouTube ölçümü. YOKSA BOŞ KALIR — uydurma kanıt yazmayız.
+    ``on_step``: ``(index, ad) -> None`` — panel ilerlemeyi göstersin diye.
     """
     intent = (niche or "").strip()
     if len(intent) < 10:
         raise ValueError("niş en az 10 karakter olmalı — ne hakkında kanal "
                          "istediğini yaz")
 
+    def _adim(i: int) -> None:
+        log.info(f"[ajan] adım {i + 1}/{len(PLAN_STEPS)}: {PLAN_STEPS[i]}")
+        if on_step is not None:
+            try:
+                on_step(i, PLAN_STEPS[i])
+            except Exception:   # noqa: BLE001 — ilerleme bildirimi planı bozmasın
+                pass
+
     # 1) DİL PAKETİ — olmadan hedef dilde hiçbir şey doğru çalışmaz.
+    _adim(0)
     _ensure_lang_pack(language, settings=settings, secrets=secrets)
 
     # 2) NİŞ TEMİZLİĞİ — insan İSTEĞİNİ yazar, nişini değil.
     #    Ayrıca: metin başka bir yayın dili istiyor mu? (menü hüküm verir, biz uyarırız)
+    _adim(1)
     niche, istenen_dil = _normalize_niche(intent, language, llm)
     cakisma = istenen_dil if (istenen_dil and istenen_dil != language) else ""
     if cakisma:
@@ -247,14 +267,17 @@ def build_plan(niche: str, *, language: str, channels_dir, ai33_key: str,
                     f"'{language}'. Menü hüküm veriyor — panel uyaracak.")
 
     # 3) SES — hedef dilde ses YOKSA burada dururuz (İngilizceye DÜŞMEYİZ).
+    _adim(2)
     voices = voices_for(language, api_key=ai33_key)
     voice = pick_voice(language, niche, voices=voices, llm=llm)
 
     # 4) İSİM + SLUG
+    _adim(3)
     name = _pick_name(niche, language, llm)
     slug = _unique_slug(_slugify(name), channels_dir)
 
     # 5) KİMLİK (DNA) — kimlik olmadan kanal kurulmaz.
+    _adim(4)
     if dna_call is None:
         from short_bot.config import resolve_ai_call
         dna_call = resolve_ai_call(settings, secrets or {}, "dna")
@@ -264,6 +287,7 @@ def build_plan(niche: str, *, language: str, channels_dir, ai33_key: str,
                        backend=dna_call.backend, api_key=dna_call.api_key)
 
     # 6) ÖRNEK KONULAR — gerçekten üretilir ve doğrulama kapısından geçer.
+    _adim(5)
     ornek = _sample_topics(niche, language, llm)
 
     return ChannelPlan(language=language, niche=niche, intent=intent,

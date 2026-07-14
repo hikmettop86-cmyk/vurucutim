@@ -10,6 +10,7 @@ import logging
 from short_bot.claude_cli import run_json
 from short_bot.reel_models import ReelNarration
 from short_bot.lang_pack import load_pack
+from short_bot.reel_factcheck import check_narration, fact_feedback
 from short_bot.reel_phrases import find_overused, pick_styles
 
 log = logging.getLogger(__name__)
@@ -90,6 +91,26 @@ lead to second 13. Write an ARC instead:
   kullanman YASAK (kullanılırsa metin reddedilir):
 {banned_block}
 
+=== OLGUSAL SADAKAT (TEPE KURALINDAN DAHA ÖNCELİKLİ) ===
+Yukarıda "TEPE = EN ŞOK EDİCİ bilgi" dedik. Bu, olguyu ŞİŞİRMEK demek DEĞİLDİR.
+Şok, KONUNUN KENDİSİNDE zaten var — senin işin onu doğru sırayla ortaya çıkarmak.
+
+- KONU TOHUMUNUN SÖYLEMEDİĞİNİ İDDİA ETME. Yükseltme YASAK:
+    "engelliyor" → "zehirliyor"        ✗
+    "yavaşlatır" → "öldürür"           ✗
+    "bağlantılı" → "sebep oluyor"      ✗
+    "nadiren"    → "asla"              ✗
+    "bazı"       → "bütün"             ✗
+  GERÇEK HATA (bu sistemde yaşandı): konu "kafein bitkinin büyümesini ENGELLER"
+  diyordu; senaryo "bitkilerini yavaş yavaş ZEHİRLİYOR" yazdı ve ekrana
+  "ZEHİRLENME TEHLİKESİ" bastı. Kafein bitkiyi zehirlemez. Video YANLIŞ oldu.
+
+- UYDURMA SAYI/MEKANİZMA YOK. Konuda olmayan bir rakam, tarih ya da süreç ekleme.
+  Bir ders kitabında bulunamayacak hiçbir şey yazma.
+
+- Merak ve gerilim ANLATIM BİÇİMİNDEN gelir (sıralama, bekletme, mikro-döngü) —
+  olguyu abartmaktan DEĞİL. Kanalın OTORİTESİ ürünüdür; bir tek yanlış iddia onu yakar.
+
 OUTPUT a JSON object:
 - "hook": FIRST spoken sentence in {lang}. A curiosity question or surprising claim,
   under 2 seconds. Never start with a date.
@@ -104,6 +125,13 @@ OUTPUT a JSON object:
     KÖTÜ: "Kanguru yavruları hakkında bilgiler"   ← başlık değil, etiket
     İYİ:  "Bebek kanguru bir embriyo"             ← merak açar
   Cevabı VERME (merak kapanır), soruyu KUR. Nokta/emoji yok.
+  MANŞET VİDEONUN SONUCUNU YALANLAYAMAZ.
+    GERÇEK HATA: video "taze kahve telvesi genç bitkilere ZARAR VERİR" diyordu, ama
+    manşet "DOĞAL GÜBRE OLARAK KAHVE TELVESİ" yazıyordu. Feed'de kaydıran biri onu
+    bir ONAY sanar; içeri girince tam tersini duyar ve kandırıldığını hisseder.
+  Manşet merak açabilir, soru sorabilir, cevabı saklayabilir — ama videonun
+  söylediğinin TERSİNİ İDDİA EDEMEZ. Bir yanılgıyı yıkıyorsan manşet de onu
+  yıkmalı ("Kahve telvesi tuzağı"), yanılgıyı TEKRARLAMAMALI.
 - "peak_beat": 0-based index of the beat that carries the BIGGEST shock/reveal.
   It must be in the MIDDLE of the beat list, not the first and not the last.
   Bu, beğeni tetiğinin ve abone isteğinin yerleşeceği andır: beğeni bir karar değil,
@@ -323,6 +351,35 @@ def write_reel_narration(topic: str, *, channel, claude_path: str = "claude",
         if still:
             log.warning(f"  kalıp ikinci denemede de geçti ({', '.join(still)}) → "
                         f"mevcut metin kullanılıyor")
+
+    # OLGU DENETİMİ. Konu bankasında doğrulama kapısı VAR (topic_propose.verify_topics)
+    # ve konuları doğru buluyor — ama ANLATIM doğru bir konuyu yanlış bir videoya
+    # çevirebiliyor.
+    #
+    # GERÇEK HATA (Almanca kanal, short 795): konu "kafein büyümeyi ENGELLER" diyordu,
+    # senaryo "bitkilerini ZEHİRLİYOR" yazdı ve ekrana "ZEHİRLENME TEHLİKESİ" bastı.
+    # Kafein bitkiyi zehirlemez. Prompt'ta olgusal sadakat kuralı YOKTU — üstelik
+    # "TEPE = EN ŞOK EDİCİ bilgi" diyerek abartmayı fiilen teşvik ediyordu.
+    #
+    # Kuralı prompt'a ekledik, ama prompt'a güvenmenin YETMEDİĞİNİ ölçtük. Kapı şart.
+    sorunlar = check_narration(
+        topic, cover_title=n.cover_title, text=n.full_text(),
+        language=channel.language, claude_path=claude_path, model=model,
+        backend=backend, api_key=api_key)
+    if sorunlar:
+        log.warning(f"  senaryo konuyu abarttı/çarpıttı "
+                    f"({'; '.join(i.problem for i in sorunlar)}) → yeniden yazılıyor")
+        n = _budgeted(prompt + fact_feedback(sorunlar))
+        hala = check_narration(
+            topic, cover_title=n.cover_title, text=n.full_text(),
+            language=channel.language, claude_path=claude_path, model=model,
+            backend=backend, api_key=api_key)
+        if hala:
+            # İKİNCİ DENEME DE GEÇMEDİ. Yanlış bir video yayınlamak, hiç video
+            # yayınlamamaktan KÖTÜDÜR — kanalın otoritesi ürünüdür.
+            raise ValueError(
+                "senaryo olgu denetiminden geçemedi (2 deneme): "
+                + "; ".join(f'"{i.claim}" → {i.problem}' for i in hala))
 
     # AÇIK KAPI DENETİMİ (yalnız seride). Abone çipi tepeden ~1.3sn sonra ekrana
     # geliyor; vaat o ana kadar SÖYLENMEMİŞSE istek, izleyicinin hiç duymadığı bir

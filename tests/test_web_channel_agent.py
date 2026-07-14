@@ -122,7 +122,8 @@ def test_KUR_kanali_olusturur(tmp_path, monkeypatch):
     r = a.test_client().post("/channels/agent/apply/job1", follow_redirects=False)
     assert kuruldu["slug"] == "bierwissen"
     assert r.status_code in (302, 303)
-    assert "/channels/bierwissen" in r.headers["Location"]
+    # /channels/<slug> diye bir rota YOK — oraya yönlendirmek 404 veriyordu.
+    assert "/channels/bierwissen/edit-reel" in r.headers["Location"]
 
 
 def test_BILINMEYEN_is_404(tmp_path):
@@ -228,3 +229,60 @@ def test_plan_ekraninda_BASTAN_baslama_yolu_var(tmp_path, monkeypatch):
                              data={"niche": "bira bahcesi kulturu", "language": "de"},
                              follow_redirects=True)
     assert "Baştan" in r.data.decode("utf-8")
+
+
+def test_BEKLERKEN_hangi_ADIMDA_oldugunu_gosterir(tmp_path, monkeypatch):
+    """8 dakika 'hazırlanıyor…' yazıp susmak, kullanıcıya takıldı mı söylemez."""
+    import short_bot.web.routes.channel_agent as CA
+    from short_bot.channel_agent import PLAN_STEPS
+
+    # İşi thread'e ATMA: 'running' durumunda kalsın ki bekleme ekranını görelim.
+    monkeypatch.setattr(CA, "_start_thread", lambda fn: None)
+    a, _ = _app(tmp_path)
+    c = a.test_client()
+    r = c.post("/channels/agent/plan",
+               data={"niche": "bira bahcesi kulturu", "language": "de"},
+               follow_redirects=True)
+    body = r.data.decode("utf-8")
+    for ad in PLAN_STEPS:
+        assert ad in body, f"adım gösterilmiyor: {ad}"
+    assert "adım 1/6" in body
+    assert "6-8 dk" in body, "süre DÜRÜST verilmiyor (eskiden '2-3 dk' yazıyordu)"
+
+
+def test_KUR_sonrasi_yonlendirme_404_VERMEZ(tmp_path, monkeypatch):
+    """GERÇEK HATA: 'Kur' kanalı kuruyordu ama /channels/<slug>'a yönlendiriyordu —
+    öyle bir rota YOK. Kullanıcı 404 görüyordu, kanal ise kurulmuştu.
+
+    Bu testi sahte apply_plan ile yazmak yetmez (redirect'i takip etmeyince 404 kaçar).
+    Yönlendirmeyi GERÇEKTEN takip ediyoruz."""
+    import short_bot.web.routes.channel_agent as CA
+    from short_bot.config import GeneratorConfig, ReelConfig, save_channel
+    from short_bot.config import ChannelConfig
+
+    a, cfg = _app(tmp_path)
+
+    def _fake_apply(plan, **kw):
+        # Gerçek kurulumun yaptığı TEK şey burada önemli: kanal YAML'ı var olmalı,
+        # yoksa edit-reel sayfası kanalı bulamaz.
+        save_channel(cfg / "channels" / f"{plan.slug}.yaml", ChannelConfig(
+            slug=plan.slug, name=plan.name, keywords=[], rss_locale="hl=de&gl=DE&ceid=DE:de",
+            schedule_cron="0 10 * * *", duration_s=40, min_score=7.0,
+            max_candidates_per_run=3, template="stat-hero",
+            colors={"primary": "#000000", "accent": "#ffffff",
+                    "bg_gradient": ["#000000", "#111111"]},
+            handle=f"@{plan.slug}", output_dir=f"output/{plan.slug}", enabled=True,
+            cta_enabled=False, cta_text="", cta_icons=[], cta_duration_s=0,
+            cta_show_handle=False, language=plan.language, dna=plan.dna,
+            script_model=None, content_source="generator",
+            generator=GeneratorConfig(topic=plan.niche),
+            reel=ReelConfig(enabled=True, voice_id=plan.voice.voice_id)))
+        return plan.slug
+
+    monkeypatch.setattr(CA, "apply_plan", _fake_apply)
+    with CA._LOCK:
+        CA._PLANS["job2"] = _plan()
+
+    r = a.test_client().post("/channels/agent/apply/job2", follow_redirects=True)
+    assert r.status_code == 200, "kurulumdan sonra 404 — yönlendirme yanlış adrese"
+    assert "Bierwissen" in r.data.decode("utf-8")

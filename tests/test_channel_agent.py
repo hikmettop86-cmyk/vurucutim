@@ -360,3 +360,35 @@ def test_dil_tespiti_KONU_ile_DILI_ayirmayi_ISTER():
     p = gorulen["p"]
     assert "KARIŞTIRMA" in p
     assert "Alman tarihi" in p          # birebir karşı-örnek prompt'ta
+
+
+# --- İLERLEME BİLDİRİMİ ----------------------------------------------------
+# ÖLÇÜLDÜ: plan BEŞ ayrı LLM çağrısı yapıyor ve ~6-8 DAKİKA sürüyor. Panel
+# "hazırlanıyor…" deyip susunca kullanıcı haklı olarak "takıldı mı?" diye sordu — ve
+# cevabı bilmenin tek yolu log'a bakmaktı. Görünmeyen bir iş, takılmış bir iştir.
+
+def test_HER_ADIM_bildirilir(_sahte):
+    from short_bot.channel_agent import PLAN_STEPS
+    adimlar = []
+    build_plan("bira bahcesi kulturu", language="de", channels_dir=_sahte,
+               ai33_key="K", settings=_Settings(), secrets={}, llm=_llm(),
+               on_step=lambda i, ad: adimlar.append((i, ad)))
+    assert [a[0] for a in adimlar] == list(range(len(PLAN_STEPS)))
+    assert [a[1] for a in adimlar] == list(PLAN_STEPS)
+
+
+def test_ADIM_bildirimi_PATLASA_da_plan_kurulur(_sahte):
+    """İlerleme bildirimi kozmetik — planı ÖLDÜRMEMELİ."""
+    def _patla(i, ad):
+        raise RuntimeError("panel öldü")
+
+    p = build_plan("bira bahcesi kulturu", language="de", channels_dir=_sahte,
+                   ai33_key="K", settings=_Settings(), secrets={}, llm=_llm(),
+                   on_step=_patla)
+    assert p.slug
+
+
+def test_on_step_VERILMEZSE_calisir(_sahte):
+    p = build_plan("bira bahcesi kulturu", language="de", channels_dir=_sahte,
+                   ai33_key="K", settings=_Settings(), secrets={}, llm=_llm())
+    assert p.slug
