@@ -36,6 +36,9 @@ def _llm(**cevaplar):
     """Sahte Sonnet: şema adına göre farklı cevap döndürür."""
     def _f(prompt, schema, **kw):
         ad = schema.__name__
+        if ad == "_Niche":                     # niş temizliği
+            return schema.model_validate(cevaplar.get("niche", {
+                "niche": "Überraschende Fakten über Bier und Brauerei"}))
         if ad == "_Pick":                      # voice_picker
             return schema.model_validate(cevaplar.get("voice", {
                 "voice_id": "elevenlabs_de1", "reason": "anlatıcı tonu"}))
@@ -70,6 +73,66 @@ def _sahte(monkeypatch, tmp_path):
     return kanallar
 
 
+# --- NİŞ TEMİZLİĞİ ---------------------------------------------------------
+# GERÇEK HATA (ilk canlı koşu): kullanıcı "Almanca bahçe ile ilgilenen insanların
+# bahçecilik üzerine merak uyandıran niş bir short kanal kurmak istiyorum" yazdı ve bu
+# cümle olduğu gibi generator.topic'e kaydedildi. YouTube arama sorgusu
+# "Almanca bahce ile" oldu — hiçbir şey bulamaz. O kanalda kanıt madenciliği KALICI
+# OLARAK ÖLÜ. İnsan doğal olarak İSTEĞİNİ yazar, nişini değil.
+
+def test_HAM_ISTEK_temiz_NISE_cevrilir(_sahte):
+    ham = ("Almanca bahce ile ilgilenen insanlarin bahcecilik uzerine merak "
+           "uyandiran nis bir short kanal kurmak istiyorum")
+    p = build_plan(ham, language="de", channels_dir=_sahte, ai33_key="K",
+                   settings=_Settings(), secrets={},
+                   llm=_llm(niche={"niche": "Überraschende Fakten über Gartenpflanzen"}))
+    assert p.niche == "Überraschende Fakten über Gartenpflanzen"
+    assert "kurmak istiyorum" not in p.niche, "ham istek nişe sızdı"
+    # HAM CÜMLE de saklanır — kullanıcı ne yazdığını planda görsün.
+    assert p.intent == ham
+
+
+def test_TEMIZ_NIS_generator_topic_olur(_sahte, tmp_path):
+    """Kanal YAML'ına TEMİZ niş yazılmalı — YouTube sorgusu ondan türetiliyor."""
+    from short_bot.config import load_channel
+    p = build_plan("bahce ile ilgili kanal kurmak istiyorum", language="de",
+                   channels_dir=_sahte, ai33_key="K", settings=_Settings(),
+                   secrets={},
+                   llm=_llm(niche={"niche": "Überraschende Fakten über Gartenpflanzen"}))
+    slug = apply_plan(p, channels_dir=_sahte, templates_dir=tmp_path / "t",
+                      db_path=tmp_path / "db.sqlite", settings=_Settings(),
+                      secrets={}, llm=_llm())
+    cfg = load_channel(_sahte / f"{slug}.yaml")
+    assert cfg.generator.topic == "Überraschende Fakten über Gartenpflanzen"
+
+
+def test_nis_TEMIZLENEMEZSE_ham_metin_kullanilir(_sahte, monkeypatch):
+    """Temizleme kanalı bozmaz — LLM patlarsa ham metinle devam."""
+    import short_bot.channel_agent as CA
+    monkeypatch.setattr(CA, "_normalize_niche",
+                        lambda intent, lang, llm: intent)
+    p = build_plan("bahce ile ilgili kanal kurmak istiyorum", language="de",
+                   channels_dir=_sahte, ai33_key="K", settings=_Settings(),
+                   secrets={}, llm=_llm())
+    assert p.niche == "bahce ile ilgili kanal kurmak istiyorum"
+
+
+def test_nis_temizligi_HEDEF_DILI_ister():
+    """Niş HEDEF DİLDE olmalı: arama sorguları ondan türetiliyor, Türkçe bir cümle
+    Almanca aramada hiçbir şey bulmaz."""
+    import short_bot.channel_agent as CA
+    gorulen = {}
+
+    def _llm2(prompt, schema, **kw):
+        gorulen["p"] = prompt
+        return schema.model_validate({"niche": "Fakten über Gärten"})
+
+    CA._normalize_niche("bahce kanali istiyorum", "de", _llm2)
+    p = gorulen["p"]
+    assert "Deutsch" in p
+    assert "arama sorguları" in p          # NEDEN hedef dil, prompt'ta yazıyor
+
+
 # --- build_plan: HİÇBİR ŞEY YAZMAZ -----------------------------------------
 
 def test_plan_TUM_ALANLARI_doldurur(_sahte):
@@ -78,6 +141,7 @@ def test_plan_TUM_ALANLARI_doldurur(_sahte):
                    secrets={}, llm=_llm(), evidence="8 outlier; en iyi 175x")
     assert isinstance(p, ChannelPlan)
     assert p.language == "de"
+    assert p.niche == "Überraschende Fakten über Bier und Brauerei"
     assert p.name == "Bierwissen"
     assert p.slug == "bierwissen"
     assert p.voice.voice_id == "elevenlabs_de1"
@@ -174,7 +238,8 @@ def test_apply_KANAL_YAMLINI_yazar(_sahte, tmp_path):
     cfg = load_channel(_sahte / f"{slug}.yaml")
     assert cfg.language == "de"
     assert cfg.reel.voice_id == "elevenlabs_de1"
-    assert cfg.generator.topic == "bira bahcesi kulturu"
+    # NİŞ TEMİZLENMİŞ hâliyle yazılır (ham istek değil).
+    assert cfg.generator.topic == "Überraschende Fakten über Bier und Brauerei"
     assert cfg.template == "stat-hero"
     assert cfg.enabled is True
 
@@ -208,7 +273,8 @@ def test_apply_KONU_BANKASINI_tohumlar(_sahte, tmp_path, monkeypatch):
     p = _plan(_sahte)
     _apply(p, _sahte, tmp_path)
     assert cagri["slug"] == p.slug
-    assert cagri["niche"] == "bira bahcesi kulturu"
+    assert cagri["niche"] == "Überraschende Fakten über Bier und Brauerei", \
+        "banka HAM istekle değil TEMİZ nişle tohumlanmalı"
     assert cagri["llm"] is not None, "banka SONNET ile tohumlanmalı"
 
 

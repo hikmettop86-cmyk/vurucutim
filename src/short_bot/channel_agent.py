@@ -44,7 +44,8 @@ _SLUG_MAP = str.maketrans({"ı": "i", "İ": "I", "ş": "s", "Ş": "S", "ğ": "g"
 
 class ChannelPlan(BaseModel):
     language: str
-    niche: str                    # generator.topic olacak
+    niche: str                    # TEMİZLENMİŞ niş — generator.topic olacak
+    intent: str = ""              # kullanıcının HAM cümlesi (planda gösterilir)
     evidence: str = ""            # YouTube ölçümü YOKSA BOŞ — uydurma kanıt yazmayız
     name: str
     slug: str
@@ -56,6 +57,56 @@ class ChannelPlan(BaseModel):
 
 class _Name(BaseModel):
     name: str
+
+
+class _Niche(BaseModel):
+    niche: str
+
+
+def _normalize_niche(intent: str, language: str, llm) -> str:
+    """Kullanıcının İSTEĞİNİ temiz bir NİŞE çevir — hedef dilde.
+
+    GERÇEK HATA (ilk canlı koşu): kullanıcı "Almanca bahçe ile ilgilenen insanların
+    bahçecilik üzerine merak uyandıran niş bir short kanal kurmak istiyorum" yazdı ve
+    bu cümle olduğu gibi ``generator.topic``e kaydedildi. Sonuç: YouTube arama sorgusu
+    "Almanca bahce ile" oldu (``_short_query`` ilk kelimeleri alıyor) — hiçbir şey
+    bulamaz, yani o kanalda kanıt madenciliği KALICI OLARAK ÖLÜ.
+
+    İnsan doğal olarak İSTEĞİNİ yazar, nişini değil. Ajan çevirisini yapmalı.
+
+    HEDEF DİLDE: niş kanalın konusudur, kanal o dilde yayın yapar ve arama sorguları
+    ondan türetilir. Almanca kanalın nişi Almanca olmalı.
+    """
+    intent = (intent or "").strip()
+    if llm is None:
+        return intent
+    ad = LANGUAGE_NAMES.get(language, language)
+    try:
+        v = llm(f"""Kullanıcı bir YouTube Shorts kanalı kurmak istiyor. İSTEĞİNİ temiz
+bir NİŞ cümlesine çevir.
+
+KULLANICININ YAZDIĞI:
+{intent}
+
+KURALLAR:
+- Çıktı {ad} DİLİNDE olmalı. (Kanal o dilde yayın yapacak ve YouTube arama sorguları
+  bu cümleden türetilecek — Türkçe bir cümle Almanca aramada hiçbir şey bulmaz.)
+- Bu bir KONU tarifi, bir İSTEK değil. "Kanal kurmak istiyorum", "olsun", "bana bul"
+  gibi ifadeler ÇIKMALI.
+- İçeriğin NE HAKKINDA olduğunu söyle: hangi alan, hangi tür olgular.
+- 1 cümle, en fazla 120 karakter. Somut ol.
+
+  ✗ "Almanca bahçe ile ilgilenen insanların bahçecilik üzerine kanal kurmak istiyorum"
+  ✓ "Überraschende Fakten über Gartenpflanzen, Anbau, Boden und Pflanzenbiologie"
+
+SADECE JSON: {{"niche": "<{ad} tek cümle>"}}""", _Niche)
+        temiz = (v.niche or "").strip()[:200]
+        if len(temiz) >= 10:
+            log.info(f"[ajan] niş temizlendi: {intent[:50]!r} → {temiz!r}")
+            return temiz
+    except Exception as e:   # noqa: BLE001 — temizleme kanalı bozmaz
+        log.warning(f"[ajan] niş temizlenemedi ({e}) → ham metin kullanılıyor")
+    return intent
 
 
 def _slugify(name: str) -> str:
@@ -148,25 +199,32 @@ def build_plan(niche: str, *, language: str, channels_dir, ai33_key: str,
                evidence: str = "") -> ChannelPlan:
     """Kanal planı kur. HİÇBİR DOSYA YAZMAZ (dil paketi hariç — modül docstring'i).
 
+    ``niche``: kullanıcının HAM cümlesi olabilir ("… kanal kurmak istiyorum"). Önce
+    temiz bir nişe çevrilir (bkz. _normalize_niche) — aksi hâlde YouTube arama sorgusu
+    çöp olur ve o kanalda kanıt madenciliği kalıcı olarak ölür.
+
     ``evidence``: niş bulucunun YouTube ölçümü. YOKSA BOŞ KALIR — uydurma kanıt yazmayız.
     """
-    niche = (niche or "").strip()
-    if len(niche) < 10:
+    intent = (niche or "").strip()
+    if len(intent) < 10:
         raise ValueError("niş en az 10 karakter olmalı — ne hakkında kanal "
                          "istediğini yaz")
 
     # 1) DİL PAKETİ — olmadan hedef dilde hiçbir şey doğru çalışmaz.
     _ensure_lang_pack(language, settings=settings, secrets=secrets)
 
-    # 2) SES — hedef dilde ses YOKSA burada dururuz (İngilizceye DÜŞMEYİZ).
+    # 2) NİŞ TEMİZLİĞİ — insan İSTEĞİNİ yazar, nişini değil.
+    niche = _normalize_niche(intent, language, llm)
+
+    # 3) SES — hedef dilde ses YOKSA burada dururuz (İngilizceye DÜŞMEYİZ).
     voices = voices_for(language, api_key=ai33_key)
     voice = pick_voice(language, niche, voices=voices, llm=llm)
 
-    # 3) İSİM + SLUG
+    # 4) İSİM + SLUG
     name = _pick_name(niche, language, llm)
     slug = _unique_slug(_slugify(name), channels_dir)
 
-    # 4) KİMLİK (DNA) — kimlik olmadan kanal kurulmaz.
+    # 5) KİMLİK (DNA) — kimlik olmadan kanal kurulmaz.
     if dna_call is None:
         from short_bot.config import resolve_ai_call
         dna_call = resolve_ai_call(settings, secrets or {}, "dna")
@@ -175,12 +233,12 @@ def build_plan(niche: str, *, language: str, channels_dir, ai33_key: str,
                        claude_path=dna_call.claude_path, model=dna_call.model,
                        backend=dna_call.backend, api_key=dna_call.api_key)
 
-    # 5) ÖRNEK KONULAR — gerçekten üretilir ve doğrulama kapısından geçer.
+    # 6) ÖRNEK KONULAR — gerçekten üretilir ve doğrulama kapısından geçer.
     ornek = _sample_topics(niche, language, llm)
 
-    return ChannelPlan(language=language, niche=niche, evidence=evidence,
-                       name=name, slug=slug, voice=voice, dna=dna,
-                       sample_topics=ornek)
+    return ChannelPlan(language=language, niche=niche, intent=intent,
+                       evidence=evidence, name=name, slug=slug, voice=voice,
+                       dna=dna, sample_topics=ornek)
 
 
 def apply_plan(plan: ChannelPlan, *, channels_dir, templates_dir, db_path,
