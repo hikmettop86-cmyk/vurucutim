@@ -343,6 +343,32 @@ def _slugify(text: str, max_len: int = 60) -> str:
     return text[:max_len] or "haber"
 
 
+# Aynı gün + aynı başlık = AYNI DOSYA ADI. İkinci üretim birincinin üzerine YAZAR.
+# GERÇEK KAYIP: short 801 ve 802 aynı konuyu (Löwenzahn) aynı gün ürettiği için
+# ikisi de 2026-07-14_jeder-teil-des-lowenzahns-....mp4 yolunu aldı. 802 yazınca
+# 801'in videosu SESSİZCE yok oldu; veritabanında iki kayıt AYNI dosyayı gösteriyordu.
+# Sessiz veri kaybı — kullanıcı ancak eski videoyu açmaya çalışınca fark eder.
+MAX_OUTPUT_SUFFIX = 99
+
+
+def unique_output_path(out_dir: Path, stem: str, suffix: str = ".mp4") -> Path:
+    """Var olan bir dosyanın ÜZERİNE YAZMAYAN yol: ``stem.mp4`` dolu ise ``stem-2.mp4``…
+
+    Yol ÜRETİM BAŞINDA bir kez seçilir; koşum içindeki yeniden denemeler (senaryo
+    3 deneme vb.) aynı yolu paylaşır — istenen davranış bu.
+    """
+    aday = out_dir / f"{stem}{suffix}"
+    if not aday.exists():
+        return aday
+    for n in range(2, MAX_OUTPUT_SUFFIX + 1):
+        aday = out_dir / f"{stem}-{n}{suffix}"
+        if not aday.exists():
+            return aday
+    # 99 sürüm — burada bir şey ters gitmiş demektir; üzerine yazmaktansa PATLA.
+    raise RuntimeError(
+        f"çıktı adı üretilemedi: {out_dir / stem}{suffix} ve -2..-{MAX_OUTPUT_SUFFIX} dolu")
+
+
 def _build_cta_sfx(channel) -> list:
     """Build SFX overlay schedule for the CTA window. Returns empty if SFX missing."""
     from short_bot.composer import SfxOverlay
@@ -768,7 +794,8 @@ def _produce_from_item(
         out_dir = Path(channel.output_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
         slug = _slugify(item.title)
-        out_path = out_dir / f"{datetime.now(timezone.utc):%Y-%m-%d}_{slug}.mp4"
+        out_path = unique_output_path(
+            out_dir, f"{datetime.now(timezone.utc):%Y-%m-%d}_{slug}")
         sfx_overlays = _build_cta_sfx(channel)
         bg_video_path = _resolve_pexels_bg(
             channel=channel, cache_dir=cache_dir,
@@ -1138,7 +1165,8 @@ def _run_rss(*, channel, run_id, log, eng, settings,
         out_dir = Path(channel.output_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
         slug = _slugify(picked.item.title)
-        out_path = out_dir / f"{datetime.now(timezone.utc):%Y-%m-%d}_{slug}.mp4"
+        out_path = unique_output_path(
+            out_dir, f"{datetime.now(timezone.utc):%Y-%m-%d}_{slug}")
 
         sfx_overlays = _build_cta_sfx(channel)
         bg_video_path = _resolve_pexels_bg(
@@ -1415,7 +1443,9 @@ def _run_generator(*, channel, run_id, log, eng, settings,
     reel_call = resolve_ai_call(settings, secrets, "vision")
     if getattr(channel, "reel", None) is not None and channel.reel.enabled:
         out_dir = Path(channel.output_dir); out_dir.mkdir(parents=True, exist_ok=True)
-        reel_out = out_dir / f"{datetime.now(timezone.utc):%Y-%m-%d}_{_slugify(chosen_result.text)}.mp4"
+        reel_out = unique_output_path(
+            out_dir,
+            f"{datetime.now(timezone.utc):%Y-%m-%d}_{_slugify(chosen_result.text)}")
         hook_pats = []
         try:
             from short_bot.db import bank_hook_patterns
@@ -1549,7 +1579,8 @@ def _run_generator(*, channel, run_id, log, eng, settings,
         out_dir = Path(channel.output_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
         slug = _slugify(chosen_result.text)
-        out_path = out_dir / f"{datetime.now(timezone.utc):%Y-%m-%d}_{slug}.mp4"
+        out_path = unique_output_path(
+            out_dir, f"{datetime.now(timezone.utc):%Y-%m-%d}_{slug}")
         sfx_overlays = _build_cta_sfx(channel)
 
         bg_video_path = _resolve_pexels_bg(

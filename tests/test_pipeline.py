@@ -506,3 +506,43 @@ def test_run_sub_loggers_covers_all_short_bot_modules():
     actual = set(_RUN_SUB_LOGGERS)
     missing = expected - actual
     assert not missing, f"Missing module(s) in _RUN_SUB_LOGGERS: {missing}"
+
+
+# --- ÇIKTI DOSYASI ÜZERİNE YAZILMASIN ---------------------------------------
+# GERÇEK KAYIP (short 801 → 802): aynı konu (Löwenzahn) aynı gün iki kez üretilince
+# ikisi de "2026-07-14_jeder-teil-des-lowenzahns-....mp4" yolunu aldı. İkinci üretim
+# birincinin videosunun ÜZERİNE YAZDI; veritabanında iki kayıt AYNI dosyayı gösterir
+# oldu ve 801'in videosu SESSİZCE yok oldu.
+
+def test_ayni_ad_ustune_yazmaz(tmp_path):
+    from short_bot.pipeline import unique_output_path
+    ilk = unique_output_path(tmp_path, "2026-07-14_lowenzahn")
+    assert ilk.name == "2026-07-14_lowenzahn.mp4"
+    ilk.write_bytes(b"birinci video")
+
+    ikinci = unique_output_path(tmp_path, "2026-07-14_lowenzahn")
+    assert ikinci != ilk, "ikinci üretim birincinin üzerine yazıyor"
+    assert ikinci.name == "2026-07-14_lowenzahn-2.mp4"
+    ikinci.write_bytes(b"ikinci video")
+
+    assert ilk.read_bytes() == b"birinci video", "birinci video KAYBOLDU"
+
+    ucuncu = unique_output_path(tmp_path, "2026-07-14_lowenzahn")
+    assert ucuncu.name == "2026-07-14_lowenzahn-3.mp4"
+
+
+def test_farkli_adlar_etkilenmez(tmp_path):
+    from short_bot.pipeline import unique_output_path
+    (tmp_path / "2026-07-14_kedi.mp4").write_bytes(b"x")
+    assert unique_output_path(tmp_path, "2026-07-14_kopek").name == "2026-07-14_kopek.mp4"
+
+
+def test_tukenirse_patlar_ustune_yazmaz(tmp_path):
+    """Sessizce üzerine yazmaktansa hata ver."""
+    import pytest
+    from short_bot.pipeline import MAX_OUTPUT_SUFFIX, unique_output_path
+    (tmp_path / "d.mp4").write_bytes(b"x")
+    for n in range(2, MAX_OUTPUT_SUFFIX + 1):
+        (tmp_path / f"d-{n}.mp4").write_bytes(b"x")
+    with pytest.raises(RuntimeError, match="çıktı adı üretilemedi"):
+        unique_output_path(tmp_path, "d")
