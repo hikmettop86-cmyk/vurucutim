@@ -43,35 +43,51 @@
 
     <div class="text-xs text-claude-muted mb-4 truncate">🎙 ses: <span class="font-mono">{{ c.reel.voice_id or '—' }}</span></div>
 
-    {# Aksiyonlar #}
-    <div class="flex items-center gap-2 pt-3 border-t border-claude-border">
-      <button hx-post="/channels/{{ c.slug }}/toggle"
-              hx-target="#channel-card-{{ c.slug }}" hx-swap="outerHTML"
-              class="flex-1 px-2 py-1 rounded text-xs
-                     {% if c.enabled %}bg-claude-success text-white hover:opacity-90{% else %}bg-claude-surface-alt text-claude-muted hover:text-claude-text{% endif %}">
-        {{ '● Açık' if c.enabled else '○ Kapalı' }}
-      </button>
-      <button hx-post="/shorts/run-now" hx-vals='{"slug": "{{ c.slug }}"}'
-              hx-on::after-request="if (event.detail.successful) window.location.href='/activity?channel={{ c.slug }}'"
-              class="px-2 py-1 text-claude-accent hover:bg-claude-accent-soft rounded text-xs" title="Şimdi reel üret">▶</button>
-      <a href="/channels/{{ c.slug }}/edit-reel" class="px-2 py-1 text-claude-text hover:bg-claude-surface-alt rounded text-xs">Düzenle</a>
-      {% if c.content_source == 'generator' %}
-      <a href="/channels/{{ c.slug }}/topic-bank" class="px-2 py-1 text-claude-text hover:bg-claude-surface-alt rounded text-xs" title="Kanıtlanmış konu bankası">🎯 Konu</a>
-      {% endif %}
-      {# SERİ — HER reel kanalında görünür, seri modu KAPALI olsa bile.
-         GERÇEK HATA: düğmeyi yalnız series_enabled iken gösteriyordum → kısır döngü.
-         Seriyi açmak için sayfaya gitmen gerekiyordu, sayfaya gitmek için de serinin
-         açık olması. Kapalı hâli sayfanın kendisi anlatıyor ve tek tıkla açtırıyor. #}
-      {% if c.reel %}
-      <a href="/channels/{{ c.slug }}/series"
-         class="px-2 py-1 rounded text-xs {% if c.reel.series_enabled %}text-claude-accent hover:bg-claude-accent-soft{% else %}text-claude-muted hover:bg-claude-surface-alt{% endif %}"
-         title="{% if c.reel.series_enabled %}Seri: bölümler + sıradaki konu{% else %}Seri modu kapalı — açmak için tıkla{% endif %}">📚 Seri</a>
-      {# OTOMASYON: slotlar görünür olmalı — otomasyon açıkken cron KAPANDIĞI için
-         kullanıcının "neden üretmiyor?" diye sorabileceği tek yer burası. #}
-      <a href="/channels/{{ c.slug }}/autopilot"
-         class="px-2 py-1 rounded text-xs {% if c.autopilot and c.autopilot.enabled %}text-claude-accent hover:bg-claude-accent-soft{% else %}text-claude-muted hover:bg-claude-surface-alt{% endif %}"
-         title="{% if c.autopilot and c.autopilot.enabled %}Otomasyon açık — bugünün slotları{% else %}Otomasyon kapalı — açmak için tıkla{% endif %}">⚙️ Otomasyon</a>
-      {% endif %}
+    {# AKSİYONLAR — İKİ SATIR.
+       Tek satırda altı düğme dar karta (~290px) SIĞMIYORDU: "Kapalı" iki satıra
+       bölünüyor, "Otomasyon" kartın kenarından taşıyordu. Üst satır EYLEM (aç/kapat,
+       üret, düzenle), alt satır GEZİNME (konu, seri, otomasyon) — alt satır ızgara,
+       yani öğe sayısı değişse de hizalama bozulmaz. #}
+    <div class="pt-3 border-t border-claude-border space-y-2">
+      <div class="flex items-center gap-2">
+        <button hx-post="/channels/{{ c.slug }}/toggle"
+                hx-target="#channel-card-{{ c.slug }}" hx-swap="outerHTML"
+                class="flex-1 px-2 py-1.5 rounded text-xs font-medium whitespace-nowrap
+                       {% if c.enabled %}bg-claude-success text-white hover:opacity-90{% else %}bg-claude-surface-alt text-claude-muted hover:text-claude-text{% endif %}">
+          {{ '● Açık' if c.enabled else '○ Kapalı' }}
+        </button>
+        <button hx-post="/shorts/run-now" hx-vals='{"slug": "{{ c.slug }}"}'
+                hx-on::after-request="if (event.detail.successful) window.location.href='/activity?channel={{ c.slug }}'"
+                class="px-2.5 py-1.5 text-claude-accent hover:bg-claude-accent-soft rounded text-xs"
+                title="Şimdi reel üret">▶</button>
+        <a href="/channels/{{ c.slug }}/edit-reel"
+           class="px-2.5 py-1.5 text-claude-text hover:bg-claude-surface-alt rounded text-xs whitespace-nowrap">Düzenle</a>
+      </div>
+
+      <div class="grid grid-cols-3 gap-1">
+        {% if c.content_source == 'generator' %}
+        <a href="/channels/{{ c.slug }}/topic-bank"
+           class="flex items-center justify-center gap-1 px-1 py-1.5 rounded text-[11px]
+                  text-claude-muted hover:text-claude-text hover:bg-claude-surface-alt"
+           title="Kanıtlanmış konu bankası"><span>🎯</span><span>Konu</span></a>
+        {% else %}<span></span>{% endif %}
+
+        {# SERİ ve OTOMASYON — seri/otomasyon KAPALI olsa bile görünür.
+           GERÇEK HATA: düğmeyi yalnız açıkken gösteriyordum → kısır döngü (açmak için
+           sayfaya gitmen gerekiyor, sayfaya gitmek için açık olması). Kapalı hâlleri
+           sayfanın kendisi anlatıyor ve tek tıkla açtırıyor. #}
+        <a href="/channels/{{ c.slug }}/series"
+           class="flex items-center justify-center gap-1 px-1 py-1.5 rounded text-[11px]
+                  {% if c.reel.series_enabled %}text-claude-accent hover:bg-claude-accent-soft{% else %}text-claude-muted hover:text-claude-text hover:bg-claude-surface-alt{% endif %}"
+           title="{% if c.reel.series_enabled %}Seri: bölümler + sıradaki konu{% else %}Seri modu kapalı — açmak için tıkla{% endif %}"><span>📚</span><span>Seri</span></a>
+
+        {# Otomasyon açıkken kanalın cron'u KAPANIYOR — kullanıcının "neden üretmiyor?"
+           diye sorabileceği tek yer burası. Bağlantı hep görünür olmalı. #}
+        <a href="/channels/{{ c.slug }}/autopilot"
+           class="flex items-center justify-center gap-1 px-1 py-1.5 rounded text-[11px]
+                  {% if c.autopilot and c.autopilot.enabled %}text-claude-accent hover:bg-claude-accent-soft{% else %}text-claude-muted hover:text-claude-text hover:bg-claude-surface-alt{% endif %}"
+           title="{% if c.autopilot and c.autopilot.enabled %}Otomasyon açık — bugünün slotları{% else %}Otomasyon kapalı — açmak için tıkla{% endif %}"><span>⚙️</span><span>Otomasyon</span></a>
+      </div>
     </div>
   </div>
 </div>
