@@ -44,12 +44,22 @@
     {% endfor %}
   {% endwith %}
 
-  {# SESSİZ BOZULMA UYARILARI: otomasyon "açık" görünür ama hiçbir şey olmaz.
-     Nedenini söylemezsek kullanıcı günlerce bekler. #}
+  {# SESSİZ BOZULMA UYARILARI + ÇÖZÜM DÜĞMESİ.
+     Otomasyon "açık" görünür ama hiçbir şey olmaz. Nedenini SÖYLEMEK yetmez —
+     "Ayarlar'dan etkinleştir" demek kullanıcıyı başka sayfaya yollamaktır.
+     Sorunu gösteren sayfa, çözümü de sunmalı. Düğme neyin BAŞLAYACAĞINI da söyler. #}
   {% for u in warnings %}
     <div class="mb-4 px-4 py-3 rounded-lg bg-red-50 border border-red-200
-                text-sm text-red-700 flex items-start gap-2">
-      <span class="font-bold flex-shrink-0">⚠</span><span>{{ u }}</span>
+                flex items-start justify-between gap-4">
+      <div class="flex items-start gap-2 text-sm text-red-700 min-w-0">
+        <span class="font-bold flex-shrink-0">⚠</span><span>{{ u.text }}</span>
+      </div>
+      <form method="post" action="{{ u.action }}" class="flex-shrink-0"
+            onsubmit="return confirm({{ u.confirm | tojson }})">
+        <button class="px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs
+                       font-semibold hover:opacity-90 whitespace-nowrap">
+          {{ u.label }}</button>
+      </form>
     </div>
   {% endfor %}
 
@@ -123,9 +133,15 @@
       {% endfor %}
       </div>
     {% else %}
+      {# Kanal devre dışıyken "planlayıcı birkaç dakika içinde yazacak" demek YALAN:
+         asla yazmayacak. Boş durum, üstteki uyarıyla ÇELİŞMEMELİ. #}
       <div class="rounded-xl border border-dashed border-claude-border
                   bg-claude-surface px-4 py-6 text-center text-sm text-claude-muted mb-6">
-        Slot yok — planlayıcı birkaç dakika içinde yazacak.
+        {% if not channel.enabled %}
+          Kanal devre dışı — slot planlanmıyor.
+        {% else %}
+          Slot yok — planlayıcı birkaç dakika içinde yazacak.
+        {% endif %}
       </div>
     {% endif %}
     {% endfor %}

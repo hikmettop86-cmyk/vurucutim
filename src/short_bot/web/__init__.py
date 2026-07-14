@@ -91,6 +91,12 @@ def create_app(
 
     db.init_app(app)
 
+    # JSON'da Türkçe karakterleri KAÇIRMA. Varsayılan ensure_ascii=True, "yayınlanacak"
+    # ifadesini "yayınlanacak" yapıyor. Tarayıcı çözüyor ama HTML kaynağı okunmaz
+    # hâle geliyor (|tojson ile yazılan onay metinleri, JSON yanıtları). UTF-8 zaten
+    # her yerde; kaçırmanın hiçbir faydası yok.
+    app.json.ensure_ascii = False
+
     # Register Jinja2 filters
     from short_bot.web.cron_describe import cron_human
     app.jinja_env.filters["cron_human"] = cron_human

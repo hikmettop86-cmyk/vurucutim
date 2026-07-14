@@ -61,19 +61,36 @@ def page(slug):
         "failed": sum(1 for x in bugunku if x["status"] in ("failed", "skipped")),
     }
 
-    # SESSİZ BOZULMA UYARILARI. İkisi de gerçek: otomasyon "açık" görünür ama hiçbir
-    # şey olmaz, ve kullanıcı nedenini asla öğrenemez. Otomasyon kendini AÇIKLAMALI.
+    # SESSİZ BOZULMA UYARILARI — ve ÇÖZÜM DÜĞMELERİ.
+    #
+    # İkisi de gerçek: otomasyon "açık" görünür ama hiçbir şey olmaz, ve kullanıcı
+    # nedenini asla öğrenemez. Ama SÖYLEMEK yetmez: "Ayarlar'dan etkinleştir" demek
+    # kullanıcıyı başka bir sayfaya yollamaktır. Sorunu GÖRDÜĞÜ yerde çözebilmeli.
     from short_bot.autopilot_runner import upload_enabled
     uyarilar = []
     if ap and ap.enabled and not getattr(cfg, "enabled", True):
-        uyarilar.append(
-            "Kanal DEVRE DIŞI — hiçbir slot planlanmayacak ve hiçbir video "
-            "üretilmeyecek. Kanalı Ayarlar'dan etkinleştir.")
+        uyarilar.append({
+            "text": "Kanal DEVRE DIŞI — hiçbir slot planlanmayacak ve hiçbir video "
+                    "üretilmeyecek.",
+            "action": f"/channels/{slug}/autopilot/enable-channel",
+            "label": "Kanalı etkinleştir",
+            # ÜRETİM VE YÜKLEME GERÇEKTEN BAŞLAR — kullanıcı ne olacağını bilmeli.
+            "confirm": (f"Kanal etkinleşecek ve otomasyon çalışmaya başlayacak: "
+                        f"günde {ap.daily_count} video üretilecek"
+                        + (", YouTube'a yüklenecek ve yayınlanacak."
+                           if upload_enabled(cfg) else " (yükleme kapalı).")
+                        + " ai33 kredisi, LLM çağrısı ve YouTube kotası harcanacak. "
+                          "Devam edilsin mi?"),
+        })
     if ap and ap.enabled and not upload_enabled(cfg):
-        uyarilar.append(
-            "YouTube otomatik yükleme KAPALI — videolar üretilecek ama "
-            "yüklenmeyecek (slot 'üretildi'de kalır, elle yüklersin). "
-            "Otomatik yükleme istiyorsan Ayarlar → YouTube'dan aç.")
+        uyarilar.append({
+            "text": "YouTube otomatik yükleme KAPALI — videolar üretilecek ama "
+                    "yüklenmeyecek (slot 'üretildi'de kalır, elle yüklersin).",
+            "action": f"/channels/{slug}/autopilot/enable-upload",
+            "label": "Otomatik yüklemeyi aç",
+            "confirm": ("Üretilen videolar YouTube'a otomatik yüklenecek ve "
+                        "planlanan saatte YAYINLANACAK. Devam edilsin mi?"),
+        })
 
     return render_template("autopilot.html.j2", slug=slug, channel=cfg,
                            enabled=bool(ap and ap.enabled), ap=ap,
@@ -100,4 +117,37 @@ def disable(slug):
     ap = getattr(cfg, "autopilot", None) or AutopilotConfig()
     _save(cfg, slug, ap.model_copy(update={"enabled": False}))
     flash("Otomasyon kapatıldı. Kanalın normal cron'u yeniden devreye girdi.", "info")
+    return redirect(url_for("autopilot.page", slug=slug))
+
+
+@bp.post("/channels/<slug>/autopilot/enable-channel")
+def enable_channel(slug):
+    """Kanalı etkinleştir — otomasyon sayfasından, sorunu gördüğün yerden.
+
+    Eskiden uyarı "Ayarlar'dan etkinleştir" diyordu: kullanıcıyı başka bir sayfaya
+    yolluyordu. Sorunu gösteren sayfa, çözümü de sunmalı.
+    """
+    cfg = _load_cfg(slug)
+    path = current_app.config["SHORTBOT_CONFIG_DIR"] / "channels" / f"{slug}.yaml"
+    save_channel(path, dataclasses.replace(cfg, enabled=True))
+    flash("Kanal etkinleştirildi. Slotlar birkaç dakika içinde planlanacak ve "
+          "otomasyon çalışmaya başlayacak.", "success")
+    return redirect(url_for("autopilot.page", slug=slug))
+
+
+@bp.post("/channels/<slug>/autopilot/enable-upload")
+def enable_upload(slug):
+    """YouTube otomatik yüklemeyi aç.
+
+    KULLANICININ AYARI SON SÖZ: autopilot bu bayrağı es geçemez (bkz.
+    autopilot_runner.upload_enabled). Açmak da yalnız kullanıcının işidir.
+    """
+    from short_bot.config import YoutubeChannelConfig
+    cfg = _load_cfg(slug)
+    yt = getattr(cfg, "youtube", None) or YoutubeChannelConfig()
+    path = current_app.config["SHORTBOT_CONFIG_DIR"] / "channels" / f"{slug}.yaml"
+    save_channel(path, dataclasses.replace(
+        cfg, youtube=yt.model_copy(update={"auto_upload": True})))
+    flash("YouTube otomatik yükleme açıldı. Üretilen videolar planlanan saatte "
+          "yayınlanacak.", "success")
     return redirect(url_for("autopilot.page", slug=slug))
