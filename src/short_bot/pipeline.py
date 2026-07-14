@@ -522,7 +522,25 @@ def current_app_secrets_path() -> Path:
     return Path("data") / "secrets.yaml"
 
 
-def run_pipeline(
+def run_pipeline(**kw) -> RunResult:
+    """Üretim hattı — kanalın DİLİ kurulmuş hâlde koşar.
+
+    Bu ince sarmalayıcının tek işi ``language(channel.language)`` bağlamını açmak.
+    Gerekli, çünkü aksan temizleyicisi (text_normalize.strip_foreign_diacritics) bir
+    pydantic ``field_validator``'dan çağrılıyor ve validator'ın kanalın dilini görmesinin
+    başka yolu yok. Kurulmazsa Almanca "Täglich" → "Taglich" olur; TTS yanlış okur,
+    altyazı yanlış görünür ve BUNU HİÇBİR HATA BİLDİRMEZ.
+
+    Gövde ``_run_pipeline_inner``'da; imza ve tüm yorumlar orada. (Parametrelerin hepsi
+    anahtar-kelimeli olduğu için ``**kw`` ile aktarmak güvenli ve gövdeyi yeniden
+    girintilemekten doğacak riski sıfırlıyor.)
+    """
+    from short_bot.text_normalize import language
+    with language(kw["channel"].language):
+        return _run_pipeline_inner(**kw)
+
+
+def _run_pipeline_inner(
     *,
     channel: ChannelConfig,
     settings: Settings,
