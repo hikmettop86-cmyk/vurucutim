@@ -83,6 +83,15 @@ class AutopilotConfig(BaseModel):
     produce_lead_hours: int = Field(default=1, ge=1, le=12)
     publish_mode: Literal["publish_at", "live_upload"] = "publish_at"
     max_attempts: int = Field(default=3, ge=1, le=5)
+    # GÜNDE KAÇ SERİ BÖLÜMÜ. Varsayılan 1 ve bu KRİTİK:
+    #
+    # Seri bölümü izleyiciye "#2 YARIN" diye söz veriyor (abone çipi). Günde 3 bölüm
+    # üretilirse 3 bölümlük ark BİR GÜNDE biter ve #2 aynı gün yayınlanır — söz YALAN
+    # olur, abone takası çöker ve Faz 3'ün bütün mekanizması anlamsızlaşır.
+    #
+    # Kalan slotlar bankadan BAĞIMSIZ konu üretir (seri ilerlemez, ark tüketilmez).
+    # 0 = hiç seri bölümü üretme (otomasyon seriyi ilerletmez).
+    series_per_day: int = Field(default=1, ge=0, le=3)
 
     @field_validator("timezone")
     @classmethod
@@ -107,6 +116,10 @@ class AutopilotConfig(BaseModel):
             raise ValueError(
                 f"{self.daily_count} slot {hi - lo} saate sığmaz "
                 f"(slot başına en az {MIN_SLOT_GAP_MIN} dakika gerekir)")
+        if self.series_per_day > self.daily_count:
+            raise ValueError(
+                f"günde {self.series_per_day} seri bölümü isteniyor ama toplam "
+                f"{self.daily_count} slot var")
         return self
 
 

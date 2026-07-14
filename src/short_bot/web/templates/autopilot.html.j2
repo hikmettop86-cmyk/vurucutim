@@ -105,6 +105,93 @@
       {% endfor %}
     </div>
 
+    {# ── AYARLAR — BURADA, otomasyonu izlediğin yerde ─────────────────────
+       Kullanıcı şikâyeti: "günde kaç video yükleneceği ayarı arayüzde yok". #}
+    <details class="mb-6 rounded-xl border border-claude-border bg-white"
+             {% if not days.get(today) %}open{% endif %}>
+      <summary class="px-5 py-3 text-sm font-semibold text-claude-text cursor-pointer
+                      select-none">Ayarlar</summary>
+      <form method="post" action="/channels/{{ slug }}/autopilot/settings"
+            class="px-5 pb-5 grid grid-cols-2 gap-4">
+        <label class="block">
+          <span class="text-xs text-claude-muted uppercase tracking-wide">Günde kaç video</span>
+          <input type="number" name="daily_count" min="1" max="12"
+                 value="{{ ap.daily_count }}"
+                 class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+        </label>
+
+        <label class="block">
+          <span class="text-xs text-claude-muted uppercase tracking-wide">Bunun kaçı SERİ bölümü</span>
+          <input type="number" name="series_per_day" min="0" max="3"
+                 value="{{ ap.series_per_day }}"
+                 class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+          <small class="text-claude-muted">
+            <b>1 bırak.</b> Seri bölümü izleyiciye "<b>#2 yarın</b>" diye söz veriyor.
+            Günde 3 bölüm üretirsen 3 bölümlük ark <b>bir günde biter</b> ve #2 aynı gün
+            yayınlanır — söz yalan olur, abone takası çöker.
+            Kalan slotlar konu bankasından bağımsız video üretir (seriyi ilerletmez).
+          </small>
+        </label>
+
+        <label class="block">
+          <span class="text-xs text-claude-muted uppercase tracking-wide">Aktif saatler</span>
+          <div class="mt-1 flex items-center gap-2">
+            <input type="number" name="active_lo" min="0" max="23"
+                   value="{{ ap.active_hours[0] }}"
+                   class="w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+            <span class="text-claude-muted">–</span>
+            <input type="number" name="active_hi" min="1" max="24"
+                   value="{{ ap.active_hours[1] }}"
+                   class="w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+          </div>
+          <small class="text-claude-muted">{{ tz }} · slotlar bu aralığa yayılır</small>
+        </label>
+
+        <label class="block">
+          <span class="text-xs text-claude-muted uppercase tracking-wide">Yayından kaç saat önce üret</span>
+          <input type="number" name="produce_lead_hours" min="1" max="12"
+                 value="{{ ap.produce_lead_hours }}"
+                 class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+          <small class="text-claude-muted">Üretim ~15 dk sürüyor; tampon bırakır.</small>
+        </label>
+
+        <label class="block">
+          <span class="text-xs text-claude-muted uppercase tracking-wide">Saat sapması (dakika)</span>
+          <input type="number" name="jitter_minutes" min="0" max="120"
+                 value="{{ ap.jitter_minutes }}"
+                 class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+          <small class="text-claude-muted">
+            Yayın saati tabandan en fazla bu kadar gezinir (13:00 → 13:10 → 13:04).
+            0 = her gün aynı dakika (otomasyon parmak izi).
+          </small>
+        </label>
+
+        <label class="block">
+          <span class="text-xs text-claude-muted uppercase tracking-wide">Yayın modu</span>
+          <select name="publish_mode"
+                  class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+            <option value="publish_at" {% if ap.publish_mode == 'publish_at' %}selected{% endif %}>
+              YouTube zamanlar (publishAt)</option>
+            <option value="live_upload" {% if ap.publish_mode == 'live_upload' %}selected{% endif %}>
+              Uygulama slot anında yükler</option>
+          </select>
+          <small class="text-claude-muted">
+            <b>publishAt:</b> video gizli yüklenir, YouTube tam slot anında yayınlar —
+            uygulama o saatte açık olmak zorunda değil.
+          </small>
+        </label>
+
+        <div class="col-span-2 flex items-center gap-3">
+          <button class="px-4 py-2 rounded-lg bg-claude-accent text-white text-sm
+                         font-semibold hover:opacity-90">Kaydet</button>
+          <span class="text-xs text-claude-muted">
+            Üretilmemiş slotlar silinip yeni ayarlarla yeniden planlanır.
+            Üretilmiş/yüklenmiş slotlara dokunulmaz.
+          </span>
+        </div>
+      </form>
+    </details>
+
     {% for gun, baslik in [(today, 'Bugün'), (tomorrow, 'Yarın')] %}
     <h2 class="text-sm font-semibold text-claude-muted uppercase tracking-wide mb-3">
       {{ baslik }} <span class="normal-case font-normal">({{ gun }})</span></h2>
@@ -116,6 +203,17 @@
           <div class="w-20 font-mono text-lg font-bold text-claude-text flex-shrink-0">
             {{ s.local_time.strftime('%H:%M') if s.local_time else '—' }}</div>
           <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-0.5">
+              {# SLOT TÜRÜ: seri bölümü mü, bankadan bağımsız konu mu? Günde en fazla
+                 1 seri bölümü — yoksa "#2 yarın" sözü aynı gün bozulur. #}
+              {% if s.kind == 'series' %}
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-purple-100
+                             text-purple-800 font-semibold">📚 SERİ BÖLÜMÜ</span>
+              {% else %}
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-claude-surface-alt
+                             text-claude-muted">🎯 bağımsız konu</span>
+              {% endif %}
+            </div>
             <div class="text-sm">{{ durum(s.status) }}</div>
             {% if s.error %}
             <p class="text-xs text-red-500 mt-1">{{ s.error }}</p>

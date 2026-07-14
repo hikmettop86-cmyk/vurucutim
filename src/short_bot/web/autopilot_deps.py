@@ -42,10 +42,13 @@ def _creds(app, cfg):
 
 
 def build_deps(app, cfg) -> AutopilotDeps:
-    def _produce(channel):
+    def _produce(channel, series: bool = True):
         # defer_upload=True ŞART: yüklemeyi AUTOPILOT yapacak (slot saatine, gizli +
         # publishAt). Pipeline da yüklerse kanalda İKİ video olur — biri anında public,
         # biri zamanlı — ve bütün zamanlama çöker. Hiçbir hata vermez.
+        #
+        # standalone=not series: bağımsız slot seriyi İLERLETMEZ (ark tüketilmez).
+        # Günde en fazla 1 bölüm — yoksa "#2 yarın" sözü aynı gün bozulur.
         return run_pipeline(
             channel=channel, settings=app.config["SHORTBOT_SETTINGS"],
             db_path=app.config["SHORTBOT_DB_PATH"],
@@ -54,7 +57,7 @@ def build_deps(app, cfg) -> AutopilotDeps:
             cache_dir=app.config["SHORTBOT_CACHE_DIR"],
             lock_dir=app.config["SHORTBOT_LOCK_DIR"],
             logs_dir=app.config["SHORTBOT_LOGS_DIR"],
-            trigger="autopilot", defer_upload=True)
+            trigger="autopilot", defer_upload=True, standalone=not series)
 
     def _upload(short_id, channel, publish_at=None):
         from short_bot.db import init_db

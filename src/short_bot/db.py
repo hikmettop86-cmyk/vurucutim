@@ -232,6 +232,13 @@ publish_slots = Table(
     Column("slot_index", Integer, nullable=False),
     Column("slot_at_utc", DateTime, nullable=False),
     Column("jitter_min", Integer, default=0, nullable=False),   # HAM sapma
+    # SLOT TÜRÜ: series | standalone
+    #
+    # Seri bölümü izleyiciye "#2 YARIN" diye söz veriyor. Günde 3 bölüm üretilirse
+    # 3 bölümlük ark BİR GÜNDE biter ve #2 aynı gün yayınlanır — söz YALAN olur.
+    # Bu yüzden günde EN FAZLA series_per_day (varsayılan 1) slot seri bölümüdür;
+    # kalanlar bankadan bağımsız konu üretir ve ARK TÜKETMEZ.
+    Column("kind", String, default="standalone", nullable=False),
     # planned → producing → produced → scheduled → published
     #                    ↘ failed        ↘ skipped
     Column("status", String, default="planned", nullable=False),
@@ -292,6 +299,10 @@ def _migrate_add_columns(eng: Engine) -> None:
         # (table, column, type)
         ("processed_items", "embedding_json", "TEXT"),
         ("processed_items", "produced_title_embedding_json", "TEXT"),
+        # SLOT TÜRÜ (bkz. publish_slots): önce planlanmış slotlar 'standalone'
+        # sayılır — seriyi ilerletmezler. Güvenli varsayılan: yanlışlıkla seri
+        # bölümü üretip arkı tüketmektense hiç üretmemek yeğdir.
+        ("publish_slots", "kind", "TEXT DEFAULT 'standalone' NOT NULL"),
     ]
     with eng.begin() as conn:
         for table, col, coltype in migrations:
@@ -1007,7 +1018,8 @@ def _slot_dict(row) -> dict:
     return {"id": row.id, "channel": row.channel,
             "slot_local_date": row.slot_local_date, "slot_index": row.slot_index,
             "slot_at_utc": row.slot_at_utc, "jitter_min": row.jitter_min,
-            "status": row.status, "short_id": row.short_id, "run_id": row.run_id,
+            "kind": row.kind, "status": row.status,
+            "short_id": row.short_id, "run_id": row.run_id,
             "attempts": row.attempts, "produced_at": row.produced_at,
             "uploaded_at": row.uploaded_at, "error": row.error}
 
@@ -1034,6 +1046,7 @@ def plan_slots(eng: Engine, channel: str, slot_local_date: str,
                 channel=channel, slot_local_date=slot_local_date, slot_index=i,
                 slot_at_utc=s["slot_at_utc"],
                 jitter_min=int(s.get("jitter_min", 0)),
+                kind=str(s.get("kind", "standalone")),
                 status="planned", attempts=0))
             eklenen += 1
     return eklenen
@@ -1099,6 +1112,20 @@ def slot_bump_attempt(eng: Engine, slot_id: int) -> int:
                      .where(publish_slots.c.id == int(slot_id))
                      .values(attempts=yeni))
     return yeni
+
+
+def delete_planned_slots(eng: Engine, channel: str) -> int:
+    """Henüz ÜRETİLMEMİŞ slotları sil (ayar değişince yeniden planlansınlar).
+
+    YALNIZ 'planned'. Üretilmiş/yüklenmiş/yayınlanmış slotlara DOKUNULMAZ — onlar
+    gerçekleşmiş olayların kaydı; silmek geçmişi yeniden yazmak olurdu (ve
+    series_episodes'taki bölüm kaydı öksüz kalırdı).
+    """
+    with eng.begin() as conn:
+        r = conn.execute(publish_slots.delete()
+                         .where(publish_slots.c.channel == channel)
+                         .where(publish_slots.c.status == "planned"))
+        return int(r.rowcount or 0)
 
 
 def prev_day_jitters(eng: Engine, channel: str, date_local) -> dict[int, int]:

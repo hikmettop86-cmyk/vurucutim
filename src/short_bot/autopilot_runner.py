@@ -22,7 +22,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Callable
 from zoneinfo import ZoneInfo
 
-from short_bot.autopilot import LIVE_GRACE_MIN, is_stale, plan_day, slot_is_due
+from short_bot.autopilot import (KIND_SERIES, LIVE_GRACE_MIN, is_stale, plan_day,
+                                 slot_is_due)
 from short_bot.db import (open_slots, plan_slots, prev_day_jitters,
                           slot_bump_attempt, slot_set_status)
 
@@ -31,7 +32,7 @@ log = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class AutopilotDeps:
-    produce: Callable           # (cfg) -> RunResult
+    produce: Callable           # (cfg, series: bool) -> RunResult
     upload_scheduled: Callable  # (short_id, cfg, publish_at: str) -> url
     upload_live: Callable       # (short_id, cfg) -> url
     ensure_arc: Callable        # (cfg) -> None  (ark bitmişse yenisini planla+onayla)
@@ -76,14 +77,24 @@ def plan_channel(eng, cfg, *, today_local: _date, days: int = 2) -> int:
     if ap is None or not ap.enabled or not getattr(cfg, "enabled", True):
         return 0
     tz = ZoneInfo(ap.timezone)
+
+    # GÜNDE KAÇ SERİ BÖLÜMÜ. Seri kapalıysa HİÇ — kalan slotlar bankadan bağımsız
+    # konu üretir. Seri bölümü "#2 YARIN" diye söz veriyor; günde 3 bölüm üretilirse
+    # ark bir günde biter ve söz aynı gün bozulur.
+    reel = getattr(cfg, "reel", None)
+    seri_slot = (min(int(getattr(ap, "series_per_day", 1)), ap.daily_count)
+                 if (reel is not None and reel.enabled and reel.series_enabled)
+                 else 0)
+
     toplam = 0
     for k in range(max(1, days)):
         gun = today_local + timedelta(days=k)
         slots = plan_day(cfg.slug, gun, cfg=ap,
-                         prev_jitters=prev_day_jitters(eng, cfg.slug, gun), tz=tz)
+                         prev_jitters=prev_day_jitters(eng, cfg.slug, gun), tz=tz,
+                         series_slots=seri_slot)
         toplam += plan_slots(eng, cfg.slug, gun.isoformat(), [
             {"slot_index": s.slot_index, "slot_at_utc": s.slot_at_utc,
-             "jitter_min": s.jitter_min} for s in slots])
+             "jitter_min": s.jitter_min, "kind": s.kind} for s in slots])
     return toplam
 
 
@@ -133,22 +144,25 @@ def tick(eng, cfg, deps: AutopilotDeps) -> dict:
     if not due:
         return sayac
     s = due[0]
+    seri = s.get("kind") == KIND_SERIES
 
-    # ARK — ÜRETİMDEN ÖNCE. Ark bitmişse yeni ark planlanıp oto-onaylanmalı; yoksa bu
-    # bölüm bankadan TEK KONU olarak çıkar ve seri delinir.
-    try:
-        deps.ensure_arc(cfg)
-    except Exception as e:   # noqa: BLE001 — ark üretimi DURDURMAMALI
-        log.warning(f"[autopilot] {cfg.slug} ark sağlanamadı ({e})")
+    # ARK — YALNIZ SERİ SLOTUNDA ve ÜRETİMDEN ÖNCE. Bağımsız slotta ark sağlamak
+    # boşuna LLM çağrısı yakar (o video seriyi ilerletmeyecek).
+    if seri:
+        try:
+            deps.ensure_arc(cfg)
+        except Exception as e:   # noqa: BLE001 — ark üretimi DURDURMAMALI
+            log.warning(f"[autopilot] {cfg.slug} ark sağlanamadı ({e})")
 
     slot_set_status(eng, s["id"], "producing")
     n = slot_bump_attempt(eng, s["id"])
-    log.info(f"[autopilot] {cfg.slug} slot {s['slot_index']} üretiliyor "
+    log.info(f"[autopilot] {cfg.slug} slot {s['slot_index']} "
+             f"({'SERİ BÖLÜMÜ' if seri else 'bağımsız konu'}) üretiliyor "
              f"(deneme {n}/{ap.max_attempts})")
 
     res, hata = None, "üretim başarısız"
     try:
-        res = deps.produce(cfg)
+        res = deps.produce(cfg, seri)
     except Exception as e:   # noqa: BLE001
         hata = str(e)
     else:

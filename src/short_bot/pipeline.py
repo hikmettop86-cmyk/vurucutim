@@ -538,6 +538,14 @@ def run_pipeline(
     # AUTOPILOT: yüklemeyi autopilot yapacak (gizli + publishAt, slot saatine).
     # True iken pipeline HİÇBİR koşulda yüklemez — yoksa ÇİFTE YÜKLEME olur.
     defer_upload: bool = False,
+    # BAĞIMSIZ VİDEO: seri kapalıymış gibi üret. Seri açık olsa bile bölüm
+    # planlanmaz, ark tüketilmez, bölüm kaydedilmez.
+    #
+    # NEDEN: seri bölümü izleyiciye "#2 YARIN" diye söz veriyor. Günde 3 bölüm
+    # üretilirse 3 bölümlük ark BİR GÜNDE biter ve #2 aynı gün yayınlanır — söz
+    # YALAN olur ve abone takası çöker. Günde EN FAZLA 1 bölüm; kalan slotlar
+    # bankadan bağımsız konu üretir (bkz. autopilot.KIND_STANDALONE).
+    standalone: bool = False,
 ) -> RunResult:
     eng = init_db(db_path)
     log_path = logs_dir / f"{datetime.now(timezone.utc):%Y%m%d_%H%M%S}_{channel.slug}.log"
@@ -574,6 +582,7 @@ def run_pipeline(
                         settings=settings, music_root=music_root,
                         templates_dir=templates_dir, cache_dir=cache_dir,
                         forced_topic=forced_topic, defer_upload=defer_upload,
+                        standalone=standalone,
                     )
                 if channel.content_source == "feed":
                     return _run_feed(
@@ -1205,7 +1214,8 @@ def _safe_generate(gen_fn, *, log, attempt: int):
 def _run_generator(*, channel, run_id, log, eng, settings,
                    music_root, templates_dir, cache_dir,
                    forced_topic: str | None = None,
-                   defer_upload: bool = False) -> RunResult:
+                   defer_upload: bool = False,
+                   standalone: bool = False) -> RunResult:
     """6-phase generator pipeline."""
     log.info("[1/6] prepare (forbidden + topic distribution)")
     forbidden = recent_generated_texts(
@@ -1248,7 +1258,12 @@ def _run_generator(*, channel, run_id, log, eng, settings,
     episode = None
     arc_id = None
     reel_cfg = getattr(channel, "reel", None)
-    if reel_cfg is not None and reel_cfg.enabled and reel_cfg.series_enabled:
+    if standalone and reel_cfg is not None and reel_cfg.series_enabled:
+        # BAĞIMSIZ SLOT: seri açık ama bu video seriyi İLERLETMEZ. Bölüm planlanmaz,
+        # ark tüketilmez, bölüm kaydedilmez. Konu bankadan gelir.
+        # (Günde en fazla 1 bölüm — yoksa "#2 yarın" sözü aynı gün bozulur.)
+        log.info("  seri: BAĞIMSIZ slot → bölüm üretilmiyor, ark tüketilmiyor")
+    elif reel_cfg is not None and reel_cfg.enabled and reel_cfg.series_enabled:
         from short_bot.db import active_arc, last_episode
         from short_bot.reel_series import clean_open_loop, plan_episode
         try:

@@ -31,11 +31,19 @@ MIN_SLOT_GAP_MIN = 30
 LIVE_GRACE_MIN = 15
 
 
+# Slot türleri.
+#   series     → seri bölümü (numaralı, açık kapı, takas CTA'sı, ark tüketir)
+#   standalone → bankadan bağımsız konu (seriyi İLERLETMEZ, ark tüketmez)
+KIND_SERIES = "series"
+KIND_STANDALONE = "standalone"
+
+
 @dataclass(frozen=True, order=True)
 class Slot:
     slot_index: int
     slot_at_utc: datetime
     jitter_min: int          # HAM sapma — ertesi günün yürüyüşü buradan devam eder
+    kind: str = KIND_STANDALONE
 
 
 def base_minutes(active_hours: tuple[int, int], daily_count: int) -> list[int]:
@@ -67,10 +75,15 @@ def next_jitter(prev: int, *, channel: str, slot_index: int, date_str: str,
 
 
 def plan_day(channel: str, date_local: _date, *, cfg, prev_jitters: dict[int, int],
-             tz) -> list[Slot]:
+             tz, series_slots: int = 0) -> list[Slot]:
     """O günün slotları.
 
     ``prev_jitters``: {slot_index: dünkü HAM sapma}. Yoksa 0'dan başlar.
+    ``series_slots``: kaç slot SERİ BÖLÜMÜ olacak (İLK slotlardan başlayarak).
+
+    SERİ HER ZAMAN AYNI SLOTTA (0'dan başlayarak) ve bu kasıtlı: izleyici "yeni bölüm
+    öğlen gelir" diye bir alışkanlık kurabilsin. Rastgele bir slota koymak, serinin
+    tek gerçek avantajını — beklenebilirliği — harcar.
 
     İKİ KORUMA (aksi hâlde sessizce bozulur):
       1. Slot aktif saatlerin DIŞINA çıkamaz.
@@ -97,7 +110,8 @@ def plan_day(channel: str, date_local: _date, *, cfg, prev_jitters: dict[int, in
             + timedelta(minutes=dk)
         out.append(Slot(slot_index=i,
                         slot_at_utc=yerel.astimezone(timezone.utc),
-                        jitter_min=ham))
+                        jitter_min=ham,
+                        kind=(KIND_SERIES if i < series_slots else KIND_STANDALONE)))
     return out
 
 

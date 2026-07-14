@@ -99,6 +99,51 @@ def page(slug):
                            warnings=uyarilar)
 
 
+@bp.post("/channels/<slug>/autopilot/settings")
+def settings(slug):
+    """Otomasyon ayarları — BURADA, otomasyon sayfasında.
+
+    Kullanıcı şikâyeti: "günde kaç video yükleneceği ayarı arayüzde yok". Ayarı
+    Ayarlar sayfasına gömmek, otomasyonu izlediğin yerden ayırmak demekti.
+    """
+    from flask import request
+    cfg = _load_cfg(slug)
+    ap = getattr(cfg, "autopilot", None) or AutopilotConfig()
+
+    def _int(name, fb):
+        try:
+            return int(request.form.get(name, fb))
+        except (TypeError, ValueError):
+            return fb
+
+    lo = _int("active_lo", ap.active_hours[0])
+    hi = _int("active_hi", ap.active_hours[1])
+    guncel = {
+        "daily_count": _int("daily_count", ap.daily_count),
+        "series_per_day": _int("series_per_day", ap.series_per_day),
+        "active_hours": (lo, hi),
+        "produce_lead_hours": _int("produce_lead_hours", ap.produce_lead_hours),
+        "jitter_minutes": _int("jitter_minutes", ap.jitter_minutes),
+        "publish_mode": request.form.get("publish_mode", ap.publish_mode),
+    }
+    try:
+        yeni = ap.model_copy(update=guncel)
+        AutopilotConfig.model_validate(yeni.model_dump())   # doğrulamayı ZORLA
+    except Exception as e:   # noqa: BLE001 — pydantic ValidationError vb.
+        flash(f"Ayarlar geçersiz: {e}", "error")
+        return redirect(url_for("autopilot.page", slug=slug))
+
+    _save(cfg, slug, yeni)
+    # SLOT SAYISI/TÜRÜ DEĞİŞTİYSE gelecek slotlar yeniden planlanmalı. Var olan
+    # planned slotlar eski ayara göre yazılmış — ezmek yerine SİLİP yeniden yazdırıyoruz
+    # (üretilmiş/yüklenmiş slotlara DOKUNULMAZ).
+    from short_bot.db import delete_planned_slots, init_db as _init
+    n = delete_planned_slots(_init(current_app.config["SHORTBOT_DB_PATH"]), slug)
+    flash(f"Ayarlar kaydedildi. {n} planlı slot silindi — planlayıcı birkaç dakika "
+          f"içinde yeni ayarlarla yeniden yazacak.", "success")
+    return redirect(url_for("autopilot.page", slug=slug))
+
+
 @bp.post("/channels/<slug>/autopilot/enable")
 def enable(slug):
     """Otomasyonu aç. Slotlar bir sonraki planlama turunda yazılır."""
