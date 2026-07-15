@@ -72,7 +72,12 @@ def topic_guidance(persona: Persona | None) -> str:
         "ahtapotun komşusuna çamur fırlatması, capuchin'in adalet duygusu, sincabın "
         "sahte çukur kazması, kanganın boks yapması. KAÇIN: hüzünlü/nötr/duygusal "
         "olgular (fil hafızası, göç mesafeleri, nesli tükenme) — bunlar komik "
-        "anlatıma DİRENÇLİDİR. Her konu, hayvanın bir 'karakterini' ortaya koymalı.")
+        "anlatıma DİRENÇLİDİR. Her konu, hayvanın bir 'karakterini' ortaya koymalı.\n"
+        "TÜR ADI GENEL OLSUN: 'Adélie pengueni' / 'kea papağanı' gibi SPESİFİK "
+        "alt-tür yerine GENEL adı kullan ('penguen', 'papağan'). Stok görüntü "
+        "spesifik alt-türü bulamayıp yanlış tür getiriyor (Adélie konusu → sarı-kaşlı "
+        "rockhopper görüntüsü) ve izleyici 'anlatılan bu değil' diye kopuyor. "
+        "Mizahta önemli olan hayvanın KARAKTERİ, alt-türü değil.")
 
 
 def director_guidance(persona: Persona | None) -> str:
