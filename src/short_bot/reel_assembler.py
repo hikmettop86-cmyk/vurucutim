@@ -197,14 +197,12 @@ def assemble_reel(
                     luma_cache[key] = measure_levels(Path(clip), ffmpeg_path)
                 lum, pk = luma_cache[key]
                 g = grade_vf(luma_delta(lum, pk))
-            # KAPANIŞ GARANTİLİ CANLILIK: son 2 alt-kesim (ozan imzası/close) uzun
-            # sürer ve az-hareketli footage'la DONUK kalıyordu (short 822). Footage
-            # motion'ından BAĞIMSIZ güçlü Ken Burns → kapanış her zaman canlı.
-            son_bolge = i >= len(clip_paths) - 2 and len(clip_paths) > 3
-            if hook_punch and i == 0:
+            # HAREKET yapay zoom'dan (Ken Burns) DEĞİL, footage'ın kendisinden gelmeli.
+            # zoom kapalıysa (mizah kanalları) hiç Ken Burns yok — canlılığı
+            # measure_motion garantiler (statik footage reddedilir). Ken Burns yavaş
+            # zoom/pan klişesi; DiscoverNow gibi kanallar gerçek hareketli b-roll kullanır.
+            if (hook_punch and i == 0) or not zoom:
                 mv = None
-            elif son_bolge:
-                mv = {"name": "close_push", "z_start": 1.0, "z_end": 1.28, "pan": 0.08}
             else:
                 mv = ken_burns(seed=seed, index=i)
             _normalize_segment(Path(clip), span, sf, fps=fps,

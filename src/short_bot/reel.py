@@ -847,7 +847,11 @@ def produce_reel_video(
         # Kesme efektleri ritmi zamanlayıcıyla veriyordu; bu, ritmi İÇERİĞE bağlayan
         # tek hamle — insan kurgucunun yaptığı, otomasyonun yapmadığı şey.
         punch_at=punches,
-        zoom=("zoom" in profile.transitions),
+        # MİZAH kanallarında yapay zoom YOK: Ken Burns/zoompan klişesi, izleyici
+        # yapay bulur. Canlılık gerçek hareketli footage'tan (measure_motion) gelir.
+        # Diğer kanallarda mevcut davranış (profile'a göre).
+        zoom=(("zoom" in profile.transitions)
+              and not getattr(reel, "persona", "")),
         subject_xs=subject_xs,
         color_grade=getattr(reel, "color_grade", True),
         seed=seed,
