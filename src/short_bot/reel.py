@@ -32,6 +32,7 @@ from short_bot.reel_tempo import plan_zones, remap_words, retimed_duration_s
 from short_bot.reel_tempo import retime as _retime
 from short_bot.reel_narration import write_reel_narration as _write_narr
 from short_bot.reel_numbers import find_numbers
+from short_bot.reel_grade import MOTION_MIN, measure_motion
 from short_bot.reel_pacing import clip_offsets, plan_subcuts, subcut_clip_index
 from short_bot.reel_render import render_reel_overlay_frames as _render
 from short_bot.reel_sfx import discover_sfx, pick_sfx_per_cut
@@ -547,7 +548,14 @@ def produce_reel_video(
         want = (1 if is_close and getattr(reel, "visual_loop", True)
                 else min(MAX_CLIPS_PER_SEG, max(1, cuts_in_seg.get(si, 1))))
         got: list[Path] = []
-        for _k in range(want):
+        # STATİK KLİP REDDİ (short 818): hareketsiz footage uzun segmentte DONUK
+        # kuyruk yapar (kapanış 14sn statik klip → 9sn freeze; Ken Burns kurtarmıyor).
+        # Statik klibi reddet, hareketli iste. Ama fail-open: hiç hareketli yoksa en
+        # az bir klip lazım (video > hata) → statik yedek tutulur.
+        statik_yedek: Path | None = None
+        deneme = 0
+        while len(got) < want and deneme < want + 4:
+            deneme += 1
             clip, gated = _match_with_fallback(
                 d, query, topic_q=_topic_q, api_key=pexels_api_key,
                 cache_dir=clips_cache, verify=reel.verify_footage,
@@ -563,12 +571,20 @@ def produce_reel_video(
                 hook=(si == 0))
             if clip is None or clip in got:
                 break        # yeni klip gelmedi → mevcutlarla yetin (fail-open)
+            used_clips.add(str(clip))   # denenen klip TEKRAR gelmesin (statik dahil)
+            if measure_motion(clip, ffmpeg_path) < MOTION_MIN:
+                if statik_yedek is None:
+                    statik_yedek = clip   # hareketli çıkmazsa fail-open yedeği
+                continue                  # statik → sıradaki adayı dene
             if clip in reuse_pool:
                 reuse_idx += 1          # tekrar kullanıldı → sıradakine geç
             elif gated:
                 reuse_pool.append(clip)  # yalnız doğrulanmış klip çıpa olabilir
             got.append(clip)
-            used_clips.add(str(clip))
+        if not got and statik_yedek is not None:
+            got.append(statik_yedek)     # fail-open: hareketli yok → statik kabul
+            log.warning(f"  seg{si}: hareketli footage bulunamadı → statik kabul "
+                        f"(donuk kuyruk riski)")
         if not got:
             raise RuntimeError(f"reel: '{query}' için footage bulunamadı (segment {si}).")
         log.info(f"  reel[süre] footage seg{si} ('{query[:30]}'): {len(got)} klip, "

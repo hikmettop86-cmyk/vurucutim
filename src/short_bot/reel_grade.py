@@ -47,6 +47,44 @@ PEAK_FLOOR = 0.70            # tepe bunun ÜSTÜNDEYSE karanlık KASITLIDIR → 
 MAX_RESCUE_DELTA = 0.30      # kurtarma sınırı (normalin 2.5 katı)
 
 
+def measure_motion(clip, ffmpeg_path: str = "ffmpeg", *, samples: int = 16) -> float:
+    """Klibin ortalama ardışık-kare hareketi, 0-1. DÜŞÜK = STATİK (donuk kuyruk riski).
+
+    GERÇEK HATA (short 818): footage seçimi neredeyse hareketsiz bir klip kabul etti;
+    kapanış segmenti (14sn) o statik klibi loop'ladı → son 9sn DONUK. Ken Burns bile
+    kurtarmadı (ölçüldü %96 freeze). Kaynak klip hareketliyse sorun yok.
+
+    Okunamazsa 1.0 (hareketli varsay — fail-open: iyi klibi asla eleme)."""
+    import tempfile
+    try:
+        from PIL import Image, ImageChops, ImageStat
+    except Exception:   # noqa: BLE001 — PIL yoksa eleme yapma
+        return 1.0
+    try:
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            subprocess.run(
+                [ffmpeg_path, "-v", "error", "-i", str(clip),
+                 "-vf", "fps=4,scale=64:64,format=gray",
+                 "-frames:v", str(samples), str(td / "m%03d.png")],
+                capture_output=True, text=True, timeout=30)
+            kareler = sorted(td.glob("*.png"))
+            if len(kareler) < 2:
+                return 1.0
+            imgs = [Image.open(k).convert("L") for k in kareler]
+            farklar = [ImageStat.Stat(ImageChops.difference(a, b)).mean[0]
+                       for a, b in zip(imgs, imgs[1:])]
+            return (sum(farklar) / len(farklar)) / 255.0
+    except Exception as e:  # noqa: BLE001 — ölçüm hatası üretimi düşürmesin
+        log.info(f"grade: hareket ölçülemedi ({clip}): {e}")
+        return 1.0
+
+
+# Bu eşiğin altı STATİK sayılır (footage reddedilir). Ölçüldü: statik klip ~0.003,
+# hareketli klip ~0.02-0.08 (bkz. measure_motion docstring, short 818).
+MOTION_MIN = 0.008
+
+
 def measure_levels(clip, ffmpeg_path: str = "ffmpeg") -> tuple[float, float]:
     """Klibin (ortalama, tepe) parlaklığı, 0-1. Okunamazsa (hedef, hedef) — fail-open:
     ölçemediğimiz klibe düzeltme UYGULAMAYIZ, bozmaktansa dokunma.
