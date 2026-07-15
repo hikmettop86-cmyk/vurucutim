@@ -219,6 +219,31 @@ def _match_with_fallback(d, query, *, topic_q, api_key, cache_dir, verify,
     return None, False
 
 
+def _footage_driven_clip_count(target_duration_s) -> int:
+    """Görüntü-öncelikli modda kaç klip indirileceği. Klip başına ~11sn (bir beat).
+    En az 3, en çok 6 (memory: N≈beat 3-6). 45-60sn → 5; 25-45 → 3."""
+    lo, hi = target_duration_s
+    return max(3, min(6, round((lo + hi) / 2 / 11)))
+
+
+def _footage_driven_seg_clip(clips: list, si: int, n_segs: int):
+    """beat=klip eşlemesi (görüntü-öncelikli): segment si → önden indirilmiş klip.
+
+      seg 0 (hook)          → clips[0]
+      seg 1+i (beat i)      → clips[i]  (i len(clips) aşarsa son klibe kelepçelenir)
+      seg n_segs-1 (close)  → clips[-1]
+
+    LLM'in yazdığı beat sayısı klip sayısından SAPSA bile her segment bir klip alır
+    (build_footage_driven_prompt N beat ister ama garanti değil)."""
+    last = len(clips) - 1
+    if si == 0:
+        return clips[0]
+    if n_segs > 1 and si == n_segs - 1:
+        return clips[last]
+    beat_i = si - 1                       # seg 1 = beat 0
+    return clips[min(beat_i, last)]
+
+
 def _rotate_sources(footage_deps, si: int):
     """Hızlı API sağlayıcılarını (Pexels/Pixabay) segment bazında DÖNDÜR — her segment
     farklı sağlayıcıdan BAŞLASIN (çeşitlilik). Storyblocks (yavaş, Playwright) her
