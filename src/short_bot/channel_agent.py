@@ -56,6 +56,19 @@ class ChannelPlan(BaseModel):
     dna: DnaSpec
     highlight_color: str = DEFAULT_HIGHLIGHT
     sample_topics: list[str] = []
+    persona: str = ""             # "" = kişiliksiz, "vahsi_mizah" = mizah tonu
+
+
+# Mizah niyeti tespiti — kanal kurma ajanı bir mizah personası seçebilsin.
+# Anahtar-kelime tabanlı (LLM'e ek çağrı YOK — YAGNI): niyet metninde bunlar geçerse
+# mizah. Yalnız hayvan/doğa mizahı desteklenir (vahsi_mizah); genişleme sonraya.
+_MIZAH_ISARETLERI = ("komik", "mizah", "espri", "eğlenceli", "eglenceli",
+                     "güldür", "guldur", "dalga", "çılgın", "cilgin", "çatlak")
+
+
+def detect_persona(intent: str) -> str:
+    dusuk = (intent or "").casefold()
+    return "vahsi_mizah" if any(k in dusuk for k in _MIZAH_ISARETLERI) else ""
 
 
 class _Name(BaseModel):
@@ -290,10 +303,14 @@ def build_plan(niche: str, *, language: str, channels_dir, ai33_key: str,
     _adim(5)
     ornek = _sample_topics(niche, language, llm)
 
+    # MİZAH NİYETİ: kullanıcının HAM cümlesinde ("komik karga kanalı") ya da
+    # temizlenmiş nişte mizah işareti varsa vahsi_mizah personası seçilir.
+    plan_persona = detect_persona(intent) or detect_persona(niche)
+
     return ChannelPlan(language=language, niche=niche, intent=intent,
                        evidence=evidence, lang_conflict=cakisma,
                        name=name, slug=slug, voice=voice, dna=dna,
-                       sample_topics=ornek)
+                       sample_topics=ornek, persona=plan_persona)
 
 
 def apply_plan(plan: ChannelPlan, *, channels_dir, templates_dir, db_path,
@@ -322,6 +339,7 @@ def apply_plan(plan: ChannelPlan, *, channels_dir, templates_dir, db_path,
         cta_enabled=True,
         comment_question=True,
         series_enabled=False,      # kullanıcı açar
+        persona=plan.persona,      # mizah niyeti algılandıysa "vahsi_mizah"
     )
 
     cfg = ChannelConfig(
