@@ -608,3 +608,37 @@ def write_footage_driven_narration(topic: str, clip_descriptions: list[str],
         close_visual=(clip_queries[-1] if clip_queries else n.close_visual),
         cover_title=n.cover_title, comment=n.comment,
         open_loop=n.open_loop, peak_beat=n.peak_beat)
+
+
+def footage_search_queries(topic: str, *, n: int, channel,
+                           claude_path: str = "claude", model: str = "default",
+                           backend: str = "claude_cli",
+                           api_key: str | None = None) -> list[str]:
+    """Görüntü-öncelikli mod: konudan N basit İNGİLİZCE footage arama sorgusu türet.
+
+    Senaryo HENÜZ yokken footage aranacağı için sorgu doğrudan konudan gelir. Konu
+    Türkçe olabilir; Pexels/Pixabay İngilizce ister. Sorgular tür/özne adı + HAREKET
+    varyantı ('chimpanzee', 'chimpanzee fighting') — footage HAREKETLİ gelsin (donuk
+    kuyruk riskini konu düzeyinde keser)."""
+    from short_bot.reel_models import FootageQueries
+    src_lang = _language_name(channel.language)
+    prompt = f"""Topic (written in {src_lang}): {topic}
+
+Give exactly {n} simple ENGLISH stock-footage search queries for this topic, so we
+can download clips BEFORE writing the script.
+
+RULES:
+- Each query is 1-3 words: the concrete SUBJECT (species/object name) + optionally an
+  ACTION word (running, fighting, hunting, swimming, chasing) so the footage MOVES.
+- Query 0 is the bare subject name (e.g. "chimpanzee"). The rest add a motion word or
+  a SECOND subject that the topic actually implies.
+- ENGLISH only, no {src_lang} words, no punctuation. Real searchable nouns/verbs that
+  exist on Pexels/Pixabay.
+Output JSON: {{"queries": [...]}} with exactly {n} strings."""
+    result = run_json(prompt, FootageQueries, claude_path=claude_path, model=model,
+                      backend=backend, api_key=api_key, retries=2)
+    qs = [q.strip() for q in result.queries if q and q.strip()]
+    if not qs:
+        raise ValueError(
+            f"footage_search_queries: '{topic}' için sorgu üretilemedi (boş liste)")
+    return qs

@@ -74,6 +74,12 @@ COVER_TITLE_MAX_WORDS = 6
 OPEN_LOOP_MAX_CHARS = 140
 
 
+class FootageQueries(BaseModel):
+    """Görüntü-öncelikli mod: konudan türetilmiş İngilizce footage arama sorguları
+    (tür/özne adı + hareket varyantı). Senaryo yokken footage aramak için kullanılır."""
+    queries: list[str]
+
+
 class ReelNarration(BaseModel):
     hook: str = Field(min_length=5, max_length=140)
     beats: list[ReelBeat] = Field(min_length=3, max_length=6)
