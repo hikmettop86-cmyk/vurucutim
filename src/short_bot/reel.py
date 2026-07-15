@@ -508,14 +508,40 @@ def produce_reel_video(
     log.info("  reel: ai33 preflight healthy")
     _phase("preflight")
 
+    # GÖRÜNTÜ-ÖNCELİKLİ MOD (flag; varsayılan KAPALI = SIFIR REGRESYON). Açıkken
+    # footage ÖNCE indirilir + vision ile tarif edilir; senaryo o tariflere UYAR
+    # (vision-ses uyumu matematiksel garanti). Kapalıyken bu blok ATLANIR ve akış
+    # bugünküyle BİREBİR aynıdır (write_reel_narration + footage döngüsü).
+    footage_driven = bool(getattr(reel, "footage_driven", False))
+    fd_clips: list = []
+    fd_descs: list = []
+    fd_queries: list = []
+    if footage_driven:
+        log.info("  reel: GÖRÜNTÜ-ÖNCELİKLİ mod açık — footage önce, senaryo sonra")
+        fd_clips, fd_descs, fd_queries = _prepare_footage_driven(
+            topic=topic, channel=channel, reel=reel, d=d, work_dir=work_dir,
+            pexels_api_key=pexels_api_key, pixabay_api_key=pixabay_api_key,
+            footage_priority=footage_priority, storyblocks_session=storyblocks_session,
+            vision_call=vision_call, ffmpeg_path=ffmpeg_path,
+            llm_claude_path=llm_claude_path, llm_model=llm_model,
+            llm_backend=llm_backend, llm_api_key=llm_api_key)
+        _phase("footage-önce(indir+tarif)")
+
     # 2) Senaryo
-    narration = d.write_reel_narration(topic, channel=channel,
-                                       claude_path=llm_claude_path, model=llm_model,
-                                       backend=llm_backend, api_key=llm_api_key,
-                                       hook_angle=profile.hook_angle,
-                                       series_directive=bits.series_directive,
-                                       comment_line=bits.comment_line,
-                                       hook_patterns=hook_patterns, seed=seed)
+    if footage_driven:
+        # Senaryo ELDEKİ footage tariflerine göre yazılır (beat=klip garanti).
+        narration = d.write_footage_driven_narration(
+            topic, fd_descs, fd_queries, channel=channel,
+            claude_path=llm_claude_path, model=llm_model,
+            backend=llm_backend, api_key=llm_api_key)
+    else:
+        narration = d.write_reel_narration(topic, channel=channel,
+                                           claude_path=llm_claude_path, model=llm_model,
+                                           backend=llm_backend, api_key=llm_api_key,
+                                           hook_angle=profile.hook_angle,
+                                           series_directive=bits.series_directive,
+                                           comment_line=bits.comment_line,
+                                           hook_patterns=hook_patterns, seed=seed)
     log.info(f"  reel: {narration.word_count()} kelime, {len(narration.beats)} beat")
     # Manşet KONUŞULMAZ (senaryo logunda görünmez) ama feed'in küçük resmi ODUR —
     # videonun izlenip izlenmeyeceğine orada karar veriliyor. Loglanmazsa sonradan
@@ -757,6 +783,14 @@ def produce_reel_video(
     # koşuda 67 vision çağrısının çoğu aynı martı/pelikan/kelebek döngüsüydü;
     # bütçe onlara gidince YENİ adaylara hiç sıra gelmiyordu.
     seen_verdicts: dict = {}
+    # GÖRÜNTÜ-ÖNCELİKLİ: klipler ZATEN indirildi (senaryo öncesi). Her segmente
+    # hazır klibi ata (beat=klip) ve segment döngüsünü ATLA (order boşaltılır).
+    # Mevcut senaryo-önce döngüsü BİREBİR korunur — yalnızca boş order ile çalışmaz.
+    if footage_driven:
+        for si in range(n_segs):
+            clips_by_seg[si] = [_footage_driven_seg_clip(fd_clips, si, n_segs)]
+        log.info(f"  reel[görüntü-önce]: {n_segs} segment ↔ {len(fd_clips)} klip eşlendi")
+        order = []
     for si in order:
         query = timeline.seg_queries[si]
         if query is None:
@@ -825,8 +859,8 @@ def produce_reel_video(
     # seçilmiş klipleri TOPLUCA görüp yanlış TÜRÜ (great hornbill yerine turaco)
     # render'dan ÖNCE yakala + o klibi YENİDEN SEÇ. Klip-başına vision kapısı
     # 'hornbill'i geçiriyor ama tür-içi tutarlılığı görmüyordu (biri diğerini kilitlemez).
-    if (getattr(reel, "verify_footage", True) and vision_call is not None
-            and len(clips_by_seg) >= 2):
+    if (not footage_driven and getattr(reel, "verify_footage", True)
+            and vision_call is not None and len(clips_by_seg) >= 2):
         try:
             _repair_footage_types(
                 clips_by_seg, topic=topic, seg_queries=timeline.seg_queries, d=d,
@@ -838,7 +872,7 @@ def produce_reel_video(
             log.warning(f"  render-öncesi tür doğrulaması atlandı ({e})")
     # GÖRSEL LOOP: kapanış klibi = hook klibi → video başa sarınca sahne zıplamaz.
     # (tür-onarımından SONRA: kapanış her zaman hook'un DOĞRULANMIŞ klibini alsın.)
-    if _kapanis_loop and n_segs > 1 and 0 in clips_by_seg:
+    if not footage_driven and _kapanis_loop and n_segs > 1 and 0 in clips_by_seg:
         clips_by_seg[n_segs - 1] = [clips_by_seg[0][0]]
     _phase("footage+vision")
 

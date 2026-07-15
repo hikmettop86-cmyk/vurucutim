@@ -100,3 +100,80 @@ def test_prepare_hic_footage_yoksa_hata(tmp_path, monkeypatch):
             footage_priority=["pexels"], storyblocks_session=None,
             vision_call=object(), ffmpeg_path="ffmpeg", llm_claude_path="claude",
             llm_model="default", llm_backend="claude_cli", llm_api_key=None)
+
+
+from short_bot.reel import produce_reel_video
+from short_bot.reel_models import ReelBeat, ReelNarration
+from short_bot.config import ReelConfig
+
+
+def _fd_narr():
+    return ReelNarration(
+        hook="Hop bakalım!", cover_title="ŞEMPANZE",
+        beats=[ReelBeat(text="Şempanze sağ kroşeyi patlatıyor.",
+                        visual_query="chimpanzee", keyword="KROŞE"),
+               ReelBeat(text="Rakip köşeye kaçıyor.",
+                        visual_query="chimpanzee fighting", keyword="KAÇIŞ"),
+               ReelBeat(text="Zafer şempanzenin.",
+                        visual_query="chimpanzee running", keyword="ZAFER")],
+        close="Hop işte böyle biter.", mood="upbeat")
+
+
+class _FDChannel:
+    slug = "mahalle"; language = "tr"; handle = "@mahalle"; dna = None
+    colors = {"primary": "#0ea5e9", "accent": "#facc15",
+              "bg_gradient": ["#0f172a", "#020617"]}
+    reel = ReelConfig(enabled=True, voice_id="v1", target_duration_s=(45, 60),
+                      persona="vahsi_mizah", footage_driven=True)
+
+
+def _fd_deps(calls, tmp_path):
+    def fake_match(q, **kw):
+        excl = kw.get("exclude") or set()
+        for i in range(20):
+            p = Path(kw["cache_dir"]); p.mkdir(parents=True, exist_ok=True)
+            f = p / f"c{i}.mp4"
+            if str(f) not in excl:
+                f.write_bytes(b"mp4")
+                return f
+        return None
+
+    return ReelDeps(
+        write_reel_narration=lambda *a, **kw: calls.append("SENARYO-ONCE"),  # ÇAĞRILMAMALI
+        write_footage_driven_narration=lambda *a, **kw: (
+            calls.append("gorunti-once-narr"), _fd_narr())[1],
+        footage_search_queries=lambda topic, **k: (
+            calls.append("sorgu"), ["chimpanzee", "chimpanzee fighting"])[1],
+        health_check=lambda **kw: "healthy",
+        synthesize=lambda text, **kw: (Path(kw["out_path"]).write_bytes(b"mp3"),
+                                       Path(kw["out_path"]))[1],
+        probe_duration_s=lambda p, **kw: 30.0,
+        trailing_silence_s=lambda p, **kw: 0.0,
+        transcribe_words=lambda p, **kw: [],
+        retime=lambda src, out, zones, **kw: (Path(out).write_bytes(b"m"), Path(out))[1],
+        insert_pause=lambda src, out, **kw: (Path(out).write_bytes(b"m"), Path(out))[1],
+        match_beat_clip=fake_match,
+        render_reel_overlay_frames=lambda tl, out, **kw: 900,
+        assemble_reel=lambda **kw: (calls.append(("assemble", kw)), kw["out_path"])[1])
+
+
+def test_footage_driven_gorunti_once_senaryo_yazar(tmp_path, monkeypatch):
+    import short_bot.reel as R
+    monkeypatch.setattr(R, "_describe_clip", lambda c, **k: f"a chimpanzee {c.name}")
+    calls = []
+    out = produce_reel_video(
+        topic="şempanze kavgası", channel=_FDChannel(),
+        templates_dir=Path("templates"), work_dir=tmp_path,
+        out_path=tmp_path / "out.mp4", music_path=tmp_path / "m.mp3",
+        ai33_api_key="k", pexels_api_key="pk", ffmpeg_path="ffmpeg",
+        vision_call=object(), deps=_fd_deps(calls, tmp_path))
+    assert out == tmp_path / "out.mp4"
+    # Görüntü-önce senaryo çağrıldı, senaryo-önce ÇAĞRILMADI
+    assert "gorunti-once-narr" in calls
+    assert "SENARYO-ONCE" not in calls
+    assert "sorgu" in calls
+    # Montaja giden klipler önden indirilenlerden (cN.mp4)
+    _, kw = next(c for c in calls if isinstance(c, tuple) and c[0] == "assemble")
+    assert kw["clip_paths"], "montaja klip gitmedi"
+    assert all(Path(p).name.startswith("c") for p in kw["clip_paths"])
+    assert len(kw["clip_paths"]) == len(kw["seg_spans"])
