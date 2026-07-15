@@ -524,6 +524,14 @@ def produce_reel_video(
     MAX_CLIPS_PER_SEG = 3 if getattr(reel, "fast_cuts", True) else 1
     clips_by_seg: dict[int, list[Path]] = {}
     pos_by_seg: dict[int, SubjectPos] = {}
+    # KAPANIŞ visual_loop yalnız KISA kapanışlarda güvenli. Uzun kapanışta (ozan
+    # imzası + close) tek hook klibi loop edilince DONUK kuyruk oluyor (short 821:
+    # 12sn kapanış → 12sn freeze). Uzunsa visual_loop atlanır, kapanış KENDİ
+    # hareketli kliplerini kullanır (loop hissini süreye feda et — donuk kabul edilemez).
+    KAPANIS_LOOP_MAX_S = 5.0
+    _kap_span = (timeline.seg_spans[-1][1] - timeline.seg_spans[-1][0]
+                 if len(timeline.seg_spans) > 1 else 0.0)
+    _kapanis_loop = getattr(reel, "visual_loop", True) and _kap_span <= KAPANIS_LOOP_MAX_S
     # VİDEO GENELİNDE kullanılmış klipler. Eskiden bu küme her segmentin başında
     # sıfırlanıyordu; sorgular birbirine benzediği için arama HER segmentte aynı
     # "en iyi" klibi döndürüyordu → 6 klipli havuzdan 3 klip çıkıyor, video
@@ -545,7 +553,7 @@ def produce_reel_video(
         _seg_t0 = _time.perf_counter()
         # Kapanış görsel-loop'ta hook'un klibini alacak → ona klip aramaya gerek yok.
         is_close = si == n_segs - 1 and n_segs > 1
-        want = (1 if is_close and getattr(reel, "visual_loop", True)
+        want = (1 if is_close and _kapanis_loop
                 else min(MAX_CLIPS_PER_SEG, max(1, cuts_in_seg.get(si, 1))))
         got: list[Path] = []
         # STATİK KLİP REDDİ (short 818): hareketsiz footage uzun segmentte DONUK
@@ -591,7 +599,7 @@ def produce_reel_video(
                  f"{_time.perf_counter() - _seg_t0:.1f}s")
         clips_by_seg[si] = got
     # GÖRSEL LOOP: kapanış klibi = hook klibi → video başa sarınca sahne zıplamaz.
-    if getattr(reel, "visual_loop", True) and n_segs > 1 and 0 in clips_by_seg:
+    if _kapanis_loop and n_segs > 1 and 0 in clips_by_seg:
         clips_by_seg[n_segs - 1] = [clips_by_seg[0][0]]
     _phase("footage+vision")
 
