@@ -256,6 +256,10 @@ class ReelConfig(BaseModel):
     # bölümde aynı çalar — imza ancak tekrarlanınca imza olur.
     sting_enabled: bool = True
     sting_volume: float = 0.35
+    # PERSONA: reel anlatım tonu. "" = kişiliksiz (bugünkü "ilginç bilgiler" tonu).
+    # "vahsi_mizah" = hayvanı mahalle-karakterine büründüren komik anlatım.
+    # Boş varsayılan KRİTİK: mevcut tüm kanallar bugünkü prompt'u alır → sıfır regresyon.
+    persona: str = ""
 
     @field_validator("target_duration_s", mode="before")
     @classmethod
@@ -614,6 +618,7 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
             "cta_enabled": cfg.reel.cta_enabled,
             "comment_question": cfg.reel.comment_question,
             "cta_text_custom": cfg.reel.cta_text_custom,
+            "persona": cfg.reel.persona,
         }
     if cfg.dna is not None:
         # mode='json' → tuple becomes list, ready for YAML round-trip
