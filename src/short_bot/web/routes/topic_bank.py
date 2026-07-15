@@ -95,12 +95,15 @@ def _miner_kwargs(cfg) -> dict:
     except Exception:   # noqa: BLE001
         llm_call = None
     tmpl = getattr(getattr(cfg, "dna", None), "search_query_template", "") or ""
+    from short_bot.persona import channel_topic_guidance
     return {"api_keys": resolve_youtube_api_keys(secrets),
             "anchor": derive_footage_anchor(tmpl),
             "llm_call": llm_call,
             "llm": _sonnet(),
             "keywords": list(getattr(cfg, "keywords", None) or []),
-            "reference_channels": list(getattr(cfg, "reference_channels", None) or [])}
+            "reference_channels": list(getattr(cfg, "reference_channels", None) or []),
+            "extra_guidance": channel_topic_guidance(
+                getattr(getattr(cfg, "reel", None), "persona", ""), cfg.language)}
 
 
 @bp.post("/channels/<slug>/topic-bank/refresh")

@@ -83,12 +83,15 @@ def autofill(eng, cfg, *, api_keys, llm_call=None, llm=None,
     kv_touch(eng, anahtar, at=now)
     tmpl = getattr(getattr(cfg, "dna", None), "search_query_template", "") or ""
     try:
+        from short_bot.persona import channel_topic_guidance
         res = refresh_topic_bank(
             eng, cfg.slug, cfg.generator.topic, language=cfg.language,
             api_keys=api_keys, anchor=derive_footage_anchor(tmpl),
             llm_call=llm_call, llm=llm, http_get=http_get,
             keywords=list(cfg.keywords or []),
-            reference_channels=list(cfg.reference_channels or []))
+            reference_channels=list(cfg.reference_channels or []),
+            extra_guidance=channel_topic_guidance(
+                getattr(cfg.reel, "persona", ""), cfg.language))
     except Exception as e:   # noqa: BLE001 — üretimi DURDURMAMALI
         log.warning(f"[banka] {cfg.slug}: otomatik doldurma başarısız ({e}) — "
                     f"banka {kalan} konuda kaldı. 'Yenile'ye elle basın.")

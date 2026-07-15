@@ -222,8 +222,11 @@ def _sample_topics(niche: str, language: str, llm) -> list[str]:
     Patlarsa boş liste — plan YİNE kurulur, banka kurulumdan sonra dolar.
     """
     try:
-        onerilen = propose_topics(niche, language=language, evidence=[], existing=[],
-                                  count=SAMPLE_TOPIC_COUNT, llm=llm)
+        from short_bot.persona import channel_topic_guidance
+        onerilen = propose_topics(
+            niche, language=language, evidence=[], existing=[],
+            count=SAMPLE_TOPIC_COUNT, llm=llm,
+            extra_guidance=channel_topic_guidance(detect_persona(niche), language))
         yargilar = verify_topics([t.topic for t in onerilen], language=language,
                                  llm=llm)
         return [t.topic for t, y in zip(onerilen, yargilar) if y.solid]
@@ -371,9 +374,12 @@ def apply_plan(plan: ChannelPlan, *, channels_dir, templates_dir, db_path,
     try:
         from short_bot.yt_outliers import resolve_youtube_api_keys
         eng = init_db(db_path)
+        from short_bot.persona import channel_topic_guidance
         res = refresh_topic_bank(eng, plan.slug, plan.niche, language=plan.language,
                                  api_keys=resolve_youtube_api_keys(secrets or {}),
-                                 llm=llm)
+                                 llm=llm,
+                                 extra_guidance=channel_topic_guidance(
+                                     plan.persona, plan.language))
         log.info(f"[ajan] {plan.slug}: banka tohumlandı (+{res['added']} konu)")
     except Exception as e:   # noqa: BLE001 — kanal VAR; banka 4 saatte bir dolar
         log.warning(f"[ajan] {plan.slug}: banka tohumlanamadı ({e}) — kanal yine "

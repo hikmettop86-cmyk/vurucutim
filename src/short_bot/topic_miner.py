@@ -235,7 +235,8 @@ def mine_evidence(niche_query: str, *, api_keys: list, language: str = "tr",
 def refresh_topic_bank(eng, channel_slug: str, niche_query: str, *,
                        language: str = "tr", api_keys: list | None = None,
                        anchor: str = "", llm_call=None, llm=None, http_get=None,
-                       keywords=None, reference_channels=None, **_compat) -> dict:
+                       keywords=None, reference_channels=None,
+                       extra_guidance: str = "", **_compat) -> dict:
     """kanıt → öneri → doğrulama → dedup → insert.
 
     ``{"added": N, "skipped_dup": M, "rejected": R}``
@@ -279,7 +280,8 @@ def refresh_topic_bank(eng, channel_slug: str, niche_query: str, *,
 
     # 2) ÖNERİ — kanıt İLHAM, zorunluluk değil.
     onerilen = propose_topics(niche_query, language=language, evidence=kanit,
-                              existing=existing, count=12, llm=llm)
+                              existing=existing, count=12, llm=llm,
+                              extra_guidance=extra_guidance)
 
     # 3) DOĞRULAMA KAPISI — prompt'a güvenmek YETMİYOR (ölçüldü).
     yargilar = verify_topics([t.topic for t in onerilen], language=language, llm=llm)

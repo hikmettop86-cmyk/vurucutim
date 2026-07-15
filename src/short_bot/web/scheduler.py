@@ -207,6 +207,7 @@ def init_scheduler(app):
                             continue
                     tmpl = getattr(getattr(cfg, "dna", None),
                                    "search_query_template", "") or ""
+                    from short_bot.persona import channel_topic_guidance
                     res = refresh_topic_bank(eng, cfg.slug, cfg.generator.topic,
                                              language=cfg.language,
                                              api_keys=api_keys,
@@ -214,7 +215,10 @@ def init_scheduler(app):
                                              llm_call=llm_call,
                                              keywords=list(cfg.keywords or []),
                                              reference_channels=list(
-                                                 cfg.reference_channels or []))
+                                                 cfg.reference_channels or []),
+                                             extra_guidance=channel_topic_guidance(
+                                                 getattr(cfg.reel, "persona", ""),
+                                                 cfg.language))
                     _LOG.info(f"[topic-bank] haftalık {cfg.slug}: +{res['added']}")
                 except Exception as e:  # noqa: BLE001
                     _LOG.warning(f"[topic-bank] haftalık {cfg.slug}: {e}")

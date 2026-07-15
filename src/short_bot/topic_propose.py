@@ -84,17 +84,18 @@ KAYNAKTAN AYNEN kopyala. Kendi bildiğin bir olguyu yazdıysan bu üç alanı BO
 
 
 def _prompt(niche: str, lang: str, evidence: list[dict], existing: list[str],
-            count: int) -> str:
+            count: int, extra_guidance: str = "") -> str:
     mevcut = "\n".join(f"- {t}" for t in existing if (t or "").strip())
     mevcut_blok = (f"\nBUNLAR ZATEN BANKADA — TEKRAR ETME, benzerini de yazma:\n"
                    f"{mevcut}\n" if mevcut else "")
+    ek_blok = f"\n{extra_guidance}\n" if (extra_guidance or "").strip() else ""
     return f"""Bir YouTube Shorts kanalı için {count} KONU üret.
 
 NİŞ: {niche}
 HEDEF FORMAT: 40 saniyelik faceless "ilginç bilgi" shorts — stok görüntü +
 seslendirme. İzleyici 40 saniyede "vay be, bunu bilmiyordum" demeli.
 DİL: {lang}
-{_evidence_block(evidence)}{mevcut_blok}
+{ek_blok}{_evidence_block(evidence)}{mevcut_blok}
 KURALLAR (ÇOK ÖNEMLİ — hepsi GERÇEK HATALARDAN öğrenildi):
 
 - Konu bir İDDİA ya da ŞAŞIRTICI GERÇEK cümlesidir; videoyu TARİF ETMEZ.
@@ -146,11 +147,14 @@ def _is_meta(topic: str) -> bool:
 
 
 def propose_topics(niche: str, *, language: str, evidence: list[dict],
-                   existing: list[str], count: int, llm) -> list[ProposedTopic]:
+                   existing: list[str], count: int, llm,
+                   extra_guidance: str = "") -> list[ProposedTopic]:
     """Nişten konu öner. ``evidence`` boşsa saf üretim (banka asla kurumaz).
 
     ``llm``: (prompt, schema) → schema örneği döndüren çağrılabilir. None ise
     RuntimeError — MEKANİK FALLBACK YOK (bkz. modül docstring'i).
+    ``extra_guidance``: opsiyonel niş-üstü yönerge (örn. mizah kanalı için
+    "karakterli/kabadayı hayvanları tercih et" — bkz. persona.topic_guidance).
     """
     if llm is None:
         raise RuntimeError(
@@ -162,7 +166,7 @@ def propose_topics(niche: str, *, language: str, evidence: list[dict],
     ref_titles = {(e.get("source_title") or "").strip().lower()
                   for e in evidence if e.get("ref")}
 
-    v = llm(_prompt(niche, lang, evidence, existing, count), _Proposed)
+    v = llm(_prompt(niche, lang, evidence, existing, count, extra_guidance), _Proposed)
 
     out: list[ProposedTopic] = []
     for t in v.topics:

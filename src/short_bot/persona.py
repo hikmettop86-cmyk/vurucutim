@@ -32,6 +32,41 @@ def load_persona(slug: str, *, language: str) -> Persona | None:
                    humor_check=bool(data.get("humor_check", True)))
 
 
+def topic_guidance(persona: Persona | None) -> str:
+    """Konu üretimine verilecek niş-üstü yönerge (propose_topics.extra_guidance).
+
+    Mizah kanalı için konu SEÇİMİ mizahı hedeflemeli: DiscoverNow'un en çok tutan
+    videoları hep KARAKTERLİ/KABADAYI hayvanlar (bal porsuğu, kangal, leopar). Konu
+    üretimi persona-agnostik olduğu için hüzünlü/nötr davranışlar da geliyordu
+    (fil hafızası, göç). Bu yönerge üretimi karakterli davranışlara çeker.
+    """
+    if persona is None or persona.slug != "vahsi_mizah":
+        return ""
+    return (
+        "MİZAH KANALI — KONU SEÇİMİ ÖNEMLİ: Bu kanal hayvanları bir MAHALLE "
+        "KARAKTERİNE büründürüp komik anlatıyor. O yüzden KARAKTERLİ, KABADAYI, "
+        "TUHAF, KURNAZ ya da KOMİK davranışlı hayvan/olayları TERCİH ET — korkusuzluk, "
+        "kavga, blöf, kıskançlık, kurnazlık, hiyerarşi, tuhaf çiftleşme/yavru bakımı "
+        "gibi 'mahalle tipi' davranışlar. Örnek uygun: bal porsuğunun cesareti, "
+        "ahtapotun komşusuna çamur fırlatması, capuchin'in adalet duygusu, sincabın "
+        "sahte çukur kazması, kanganın boks yapması. KAÇIN: hüzünlü/nötr/duygusal "
+        "olgular (fil hafızası, göç mesafeleri, nesli tükenme) — bunlar komik "
+        "anlatıma DİRENÇLİDİR. Her konu, hayvanın bir 'karakterini' ortaya koymalı.")
+
+
+def channel_topic_guidance(persona_slug: str, language: str) -> str:
+    """Kanal persona slug'ından konu üretim rehberi. Güvenli sarmalayıcı:
+    boş slug ya da yanlış dil → "" (konu üretimi bozulmaz, sadece mizah-agnostik olur).
+    refresh_topic_bank'in tüm çağıranları bunu ``extra_guidance`` olarak geçirir."""
+    if not (persona_slug or "").strip():
+        return ""
+    try:
+        p = load_persona(persona_slug, language=language)
+    except RuntimeError:
+        return ""
+    return topic_guidance(p)
+
+
 def persona_block(persona: Persona) -> str:
     kurallar = "\n".join(f"{i+1}. {r}" for i, r in enumerate(persona.rules))
     return (
