@@ -54,6 +54,32 @@ def topic_guidance(persona: Persona | None) -> str:
         "anlatıma DİRENÇLİDİR. Her konu, hayvanın bir 'karakterini' ortaya koymalı.")
 
 
+def director_guidance(persona: Persona | None) -> str:
+    """Kurgucuya (reel_director) verilecek yönerge. Mizah videosu EĞLENCELİ
+    kurgulanmalı — kurgucu persona-agnostik olduğu için mizah anlatımına 'dark/tense'
+    mood + gerilim müziği seçebiliyordu (ölçüldü: short 813, mood=dark/glitch/tense).
+    """
+    if persona is None or persona.slug != "vahsi_mizah":
+        return ""
+    return (
+        "BU BİR MİZAH VİDEOSU (hayvan mahalle karakterine bürünmüş, komik anlatım). "
+        "Kurgu EĞLENCELİ ve TEMPOLU olmalı: mood 'upbeat' seç (mizahta 'dark'/'tense' "
+        "YANLIŞTIR — ciddi/gerilim tonu komediyi öldürür). Müzik neşeli/enerjik olsun. "
+        "SFX'ler canlı ve vurucu — komik anları (blöf, kavga, twist) 'impact'/canlı "
+        "kategoriyle noktala. Amaç: izleyici gülümserken izlesin, gerilmesin.")
+
+
+def channel_director_guidance(persona_slug: str, language: str) -> str:
+    """Kanal persona slug'ından kurgu rehberi (güvenli sarmalayıcı, bkz. topic sürümü)."""
+    if not (persona_slug or "").strip():
+        return ""
+    try:
+        p = load_persona(persona_slug, language=language)
+    except RuntimeError:
+        return ""
+    return director_guidance(p)
+
+
 def channel_topic_guidance(persona_slug: str, language: str) -> str:
     """Kanal persona slug'ından konu üretim rehberi. Güvenli sarmalayıcı:
     boş slug ya da yanlış dil → "" (konu üretimi bozulmaz, sadece mizah-agnostik olur).

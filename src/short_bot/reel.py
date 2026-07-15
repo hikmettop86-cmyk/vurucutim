@@ -348,9 +348,12 @@ def produce_reel_video(
         # Kesim sayısı ancak tempo seçildikten sonra netleşir; prompt için kaba
         # tahmin yeter (sfx_plan döngüsel kullanılır, uzunluk kritik değil).
         est_cuts = max(4, len(narration.beats) * 3)
+        from short_bot.persona import channel_director_guidance
         edit_plan = plan_edit(narration, topic=topic, n_cuts=est_cuts,
                               library_index=load_library_index(assets_root),
-                              llm_call=_LC())
+                              llm_call=_LC(),
+                              persona_hint=channel_director_guidance(
+                                  getattr(reel, "persona", ""), channel.language))
         if edit_plan is not None:
             profile = build_variation_profile(channel, seed, edit_plan=edit_plan)
         _phase("kurgucu(LLM)")

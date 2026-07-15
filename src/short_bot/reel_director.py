@@ -69,12 +69,13 @@ class EditPlan(BaseModel):
 
 
 def _prompt(narration, topic: str, n_cuts: int, sfx_cats: list[str],
-            music_moods: list[str]) -> str:
+            music_moods: list[str], persona_hint: str = "") -> str:
     beats = "\n".join(f"  - {getattr(b, 'text', '')}" for b in narration.beats)
+    hint_blok = f"\n{persona_hint}\n" if (persona_hint or "").strip() else ""
     return f"""Sen bir YouTube Shorts VİDEO KURGUCUSUSUN. Aşağıdaki videonun
 kurgusunu belirle. Kararların İÇERİKLE UYUMLU olsun — hüzünlü bir konuya neşeli
 ses, sakin bir konuya hızlı kesim koyma.
-
+{hint_blok}
 KONU: {topic}
 HOOK: {narration.hook}
 BEAT'LER:
@@ -118,10 +119,12 @@ def validate_plan(plan: EditPlan, *, library_index: dict, n_cuts: int) -> EditPl
 
 
 def plan_edit(narration, *, topic: str, n_cuts: int, library_index: dict,
-              llm_call) -> "EditPlan | None":
+              llm_call, persona_hint: str = "") -> "EditPlan | None":
     """Anlatımı okuyup kurgu planı üret. Kütüphane boş / LLM hatası → None.
 
     None dönünce çağıran TAMAMEN eski seed-hash varyasyonuna düşer (fail-open).
+    ``persona_hint``: mizah kanalı için "upbeat/eğlenceli kurgu" yönergesi
+    (bkz. persona.director_guidance).
     """
     sfx_cats = sorted((library_index or {}).get("sfx", {}))
     music_moods = _music_moods(library_index)
@@ -129,7 +132,8 @@ def plan_edit(narration, *, topic: str, n_cuts: int, library_index: dict,
         log.info("kurgucu: kütüphane boş → seed-hash varyasyonu")
         return None
     try:
-        raw = run_json(_prompt(narration, topic, n_cuts, sfx_cats, music_moods),
+        raw = run_json(_prompt(narration, topic, n_cuts, sfx_cats, music_moods,
+                               persona_hint),
                        EditPlan, claude_path=llm_call.claude_path,
                        model=llm_call.model, backend=llm_call.backend,
                        api_key=llm_call.api_key, retries=1, timeout_s=60)
