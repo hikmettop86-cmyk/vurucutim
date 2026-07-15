@@ -81,8 +81,9 @@ def measure_motion(clip, ffmpeg_path: str = "ffmpeg", *, samples: int = 16) -> f
 
 
 # Bu eşiğin altı STATİK sayılır (footage reddedilir). Ölçüldü: statik klip ~0.003,
-# hareketli klip ~0.02-0.08 (bkz. measure_motion docstring, short 818).
-MOTION_MIN = 0.008
+# az-hareketli ~0.005-0.012 (uzun kapanışta donuk görünür), hareketli 0.02-0.13.
+# 0.008 → 0.013: az-hareketli klipler kapanışta 6sn donuk kuyruk yapıyordu (short 822).
+MOTION_MIN = 0.013
 
 
 def measure_levels(clip, ffmpeg_path: str = "ffmpeg") -> tuple[float, float]:

@@ -197,6 +197,16 @@ def assemble_reel(
                     luma_cache[key] = measure_levels(Path(clip), ffmpeg_path)
                 lum, pk = luma_cache[key]
                 g = grade_vf(luma_delta(lum, pk))
+            # KAPANIŞ GARANTİLİ CANLILIK: son 2 alt-kesim (ozan imzası/close) uzun
+            # sürer ve az-hareketli footage'la DONUK kalıyordu (short 822). Footage
+            # motion'ından BAĞIMSIZ güçlü Ken Burns → kapanış her zaman canlı.
+            son_bolge = i >= len(clip_paths) - 2 and len(clip_paths) > 3
+            if hook_punch and i == 0:
+                mv = None
+            elif son_bolge:
+                mv = {"name": "close_push", "z_start": 1.0, "z_end": 1.28, "pan": 0.08}
+            else:
+                mv = ken_burns(seed=seed, index=i)
             _normalize_segment(Path(clip), span, sf, fps=fps,
                                ffmpeg=ffmpeg_path, zoom=zoom,
                                start_s=(starts[i] if i < len(starts) else 0.0),
@@ -204,9 +214,7 @@ def assemble_reel(
                                subject_x=(subject_xs[i]
                                           if subject_xs and i < len(subject_xs)
                                           else None),
-                               move=(None if (hook_punch and i == 0)
-                                     else ken_burns(seed=seed, index=i)),
-                               grade=g)
+                               move=mv, grade=g)
             seg_files.append(sf)
         lst = td / "concat.txt"
         lst.write_text("".join(f"file '{f.as_posix()}'\n" for f in seg_files),
