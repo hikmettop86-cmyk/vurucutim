@@ -142,6 +142,15 @@ def save_reel(slug):
             # forma bağlıyoruz ki kullanıcı ayarı kaydetmekle ayarı KAYBETMESİN.
             tempo_zones=request.form.get("reel_tempo_zones") == "on",
             interrupts=request.form.get("reel_interrupts") == "on",
+            footage_driven=request.form.get("reel_footage_driven") == "on",
+            # Persona ailesi bu formda YOK ama görüntü-önce kanalları persona
+            # kanallarıdır; korunmazsa reel ayarı kaydı personayı SİLER (aynı desen:
+            # channel_edit.py). old değerini taşı.
+            persona=(old.persona if old else ""),
+            mascot_name=(old.mascot_name if old else ""),
+            mascot_animal=(old.mascot_animal if old else ""),
+            mascot_trait=(old.mascot_trait if old else ""),
+            footage_anchor=(old.footage_anchor if old else ""),
         )
     except Exception as e:  # pydantic ValidationError vb.
         flash(f"Reel ayarları geçersiz: {e}", "error")

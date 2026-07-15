@@ -207,3 +207,51 @@ def test_post_edit_on_reel_channel_redirects_to_edit_reel(tmp_path):
     r = c.post("/channels/reel-kanal/edit", data={"schedule_cron": "0 5 * * *"})
     assert r.status_code == 302
     assert "/channels/reel-kanal/edit-reel" in r.headers["Location"]
+
+
+def test_edit_reel_post_footage_driven_yazilir_ve_okunur(tmp_path):
+    c, cfg_dir = _client(tmp_path)
+    _make_reel_channel(c, cfg_dir)
+    from short_bot.config import load_channel
+    p = cfg_dir / "channels" / "reel-kanal.yaml"
+    # checkbox işaretli → True
+    c.post("/channels/reel-kanal/edit-reel", data={
+        "reel_enabled": "on", "reel_voice_id": "V1",
+        "reel_footage_driven": "on",
+        "generator_topic": "gorunti once mod icin bir konu tohumu"})
+    assert load_channel(p).reel.footage_driven is True
+    # GET checkbox'ı render etmeli
+    body = c.get("/channels/reel-kanal/edit-reel").data.decode("utf-8")
+    assert 'name="reel_footage_driven"' in body
+    # checkbox işaretsiz → False
+    c.post("/channels/reel-kanal/edit-reel", data={
+        "reel_enabled": "on", "reel_voice_id": "V1",
+        "generator_topic": "gorunti once mod icin bir konu tohumu"})
+    assert load_channel(p).reel.footage_driven is False
+
+
+def test_channel_edit_footage_driven_korunur(tmp_path):
+    # channel_edit reel ayarını kaydederken footage_driven'i SİLMEMELİ (reset tuzağı).
+    c, cfg_dir = _client(tmp_path)
+    _make_reel_channel(c, cfg_dir)
+    from short_bot.config import load_channel, save_channel
+    p = cfg_dir / "channels" / "reel-kanal.yaml"
+    cfg = load_channel(p)
+    # NOT: reel.enabled=True olan kanallarda channel_edit.py'nin /edit POST'u
+    # DAHA EN BAŞTA /edit-reel'e yönlenir (savunma derinliği, ~line 170) —
+    # config'e hiç dokunmadan. O yüzden bu haliyle POST edilirse test hiçbir
+    # şey doğrulamadan (vacuously) geçer. reel_form_present kod yolunu
+    # GERÇEKTEN tetiklemek için "reel bloğu var ama şu an kapalı" durumunu
+    # simüle ediyoruz (ör. daha önce durdurulmuş, şimdi panelden yeniden
+    # açılan bir reel kanalı) — bu, footage_driven korumasının test etmek
+    # istediği gerçek kod yoluna denk düşüyor.
+    cfg.reel.enabled = False
+    cfg.reel.footage_driven = True
+    save_channel(p, cfg)
+    # channel_edit üzerinden bir kaydetme (reel_form_present tetikler)
+    c.post("/channels/reel-kanal/edit", data={
+        "name": "Reel Kanal", "language": "tr", "handle": "@reel",
+        "schedule_cron": "0 9 * * *", "enabled": "1",
+        "reel_enabled": "on", "reel_voice_id": "V1",
+        "reel_target_min": "45", "reel_target_max": "60"})
+    assert load_channel(p).reel.footage_driven is True   # KORUNDU
