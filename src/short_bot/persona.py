@@ -32,6 +32,27 @@ def load_persona(slug: str, *, language: str) -> Persona | None:
                    humor_check=bool(data.get("humor_check", True)))
 
 
+def mascot_block(name: str, animal: str, trait: str) -> str:
+    """Senaryo prompt'una eklenecek MASKOT (tekrar eden ana karakter) bloğu.
+
+    Üçü de doluysa maskot aktif; biri boşsa "" (maskot yok, her video bağımsız).
+    Maskot persona'dan AYRI: persona TON (mahalle ağzı), maskot KARAKTER (Deli Kâzım).
+    """
+    if not all((name or "").strip() and (x or "").strip() for x in (name, animal, trait)):
+        return ""
+    return (
+        f"=== ANA KARAKTER (MASKOT — KANALIN YÜZÜ) ===\n"
+        f"Bu kanalın SABİT baş karakteri: {name} ({animal}). Kişilik: {trait}.\n"
+        f"Her videoda AYNI isim, AYNI kişilik — izleyici {name}'ı tanısın ve ona "
+        f"bağlansın (bir videoya değil, KARAKTERE abone olsun).\n"
+        f"KONU {animal.upper()} İLE İLGİLİYSE: {name}'ı doğrudan merkeze al, onun bir "
+        f"macerası/özelliği gibi anlat.\n"
+        f"KONU BAŞKA BİR HAYVANSA: {name} onu kendi mahalle-abisi gözünden YORUMLAR/"
+        f"KIYASLAR — o hayvanın yanına gitmez (coğrafi tutarlılık). Örnek: 'bu penguen "
+        f"çakıl çalıyormuş; bizim {name} görse taşı da alırdı sahibini de'.\n"
+        f"Manşet ve ozan imzası {name}'ın ismini taşıyabilir ('Aşık {name} der ki...').\n")
+
+
 def topic_guidance(persona: Persona | None) -> str:
     """Konu üretimine verilecek niş-üstü yönerge (propose_topics.extra_guidance).
 

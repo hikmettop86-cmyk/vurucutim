@@ -323,6 +323,13 @@ def write_reel_narration(topic: str, *, channel, claude_path: str = "claude",
     persona = load_persona(getattr(reel, "persona", ""), language=channel.language)
     if persona:
         prompt = prompt + "\n\n" + persona_block(persona)
+        # MASKOT: tekrar eden ana karakter (persona TON verir, maskot KARAKTER).
+        from short_bot.persona import mascot_block
+        mblok = mascot_block(getattr(reel, "mascot_name", ""),
+                             getattr(reel, "mascot_animal", ""),
+                             getattr(reel, "mascot_trait", ""))
+        if mblok:
+            prompt = prompt + "\n\n" + mblok
     if hook_angle:
         prompt = prompt + f"\n\nAÇILIŞ AÇISI: {hook_angle}\n"
     if series_directive:

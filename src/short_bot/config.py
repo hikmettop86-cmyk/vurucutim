@@ -260,6 +260,13 @@ class ReelConfig(BaseModel):
     # "vahsi_mizah" = hayvanı mahalle-karakterine büründüren komik anlatım.
     # Boş varsayılan KRİTİK: mevcut tüm kanallar bugünkü prompt'u alır → sıfır regresyon.
     persona: str = ""
+    # MASKOT: kanalın tekrar eden ANA KARAKTERİ (DiscoverNow'un "Porsuk Dumrul"u).
+    # Boşsa maskot yok (her video bağımsız). Doluysa persona senaryoyu bu karakter
+    # etrafında kurar — izleyici bir videoya değil KARAKTERE bağlanır (retention).
+    # Üçü birlikte anlamlı: hepsi doluysa maskot aktif.
+    mascot_name: str = ""      # "Deli Kâzım"
+    mascot_animal: str = ""    # "bal porsuğu"
+    mascot_trait: str = ""     # "Geri Vitesi Olmayan Deli — çılgın, korkusuz, geri vites yok"
 
     @field_validator("target_duration_s", mode="before")
     @classmethod
@@ -619,6 +626,9 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
             "comment_question": cfg.reel.comment_question,
             "cta_text_custom": cfg.reel.cta_text_custom,
             "persona": cfg.reel.persona,
+            "mascot_name": cfg.reel.mascot_name,
+            "mascot_animal": cfg.reel.mascot_animal,
+            "mascot_trait": cfg.reel.mascot_trait,
         }
     if cfg.dna is not None:
         # mode='json' → tuple becomes list, ready for YAML round-trip

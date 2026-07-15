@@ -424,6 +424,10 @@ def save(slug):
             # kaydında mizah personası SESSİZCE siliniyordu (gerçek hata: kullanıcı
             # panelden ses seçti, persona="" oldu, kanal düz belgesele döndü).
             persona=(old.persona if old else ""),
+            # MASKOT alanları da formda YOK — persona ile aynı gerekçe, koru.
+            mascot_name=(old.mascot_name if old else ""),
+            mascot_animal=(old.mascot_animal if old else ""),
+            mascot_trait=(old.mascot_trait if old else ""),
         )
     else:
         new_reel = cfg.reel
