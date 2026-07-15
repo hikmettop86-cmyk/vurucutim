@@ -34,3 +34,6 @@ def _olgu_denetimi_kapali(monkeypatch):
     """
     import short_bot.reel_narration as RN
     monkeypatch.setattr(RN, "check_narration", lambda *a, **kw: [], raising=False)
+    # Mizah kapısı da GERÇEK LLM çağırıyor — persona'lı üretim testleri onu kaçırmasın.
+    # (test_reel_narration_persona.py kendi monkeypatch'iyle bunu EZER.)
+    monkeypatch.setattr(RN, "check_humor", lambda *a, **kw: [], raising=False)

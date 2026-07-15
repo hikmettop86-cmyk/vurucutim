@@ -12,6 +12,8 @@ from short_bot.reel_models import ReelNarration
 from short_bot.lang_pack import load_pack
 from short_bot.reel_factcheck import (check_narration, fact_feedback,
                                       rewrite_cover_title)
+from short_bot.reel_humor_check import check_humor, humor_feedback
+from short_bot.persona import load_persona, persona_block
 from short_bot.reel_phrases import find_overused, pick_styles
 
 log = logging.getLogger(__name__)
@@ -315,6 +317,12 @@ def write_reel_narration(topic: str, *, channel, claude_path: str = "claude",
         raise ValueError("write_reel_narration: channel.reel tanımlı değil")
     lo_w, hi_w = reel_word_budget(reel.target_duration_s)
     prompt = build_reel_prompt(topic, channel, hook_patterns=hook_patterns, seed=seed)
+    # PERSONA: reel motoru normalde tona duyarsız ("ilginç bilgiler"). Kanalın bir
+    # personası varsa (örn. "vahsi_mizah") prompt'a ton bloğu (few-shot + kurallar)
+    # eklenir. Persona None ise prompt bugünkü gibi kalır → sıfır regresyon.
+    persona = load_persona(getattr(reel, "persona", ""), language=channel.language)
+    if persona:
+        prompt = prompt + "\n\n" + persona_block(persona)
     if hook_angle:
         prompt = prompt + f"\n\nAÇILIŞ AÇISI: {hook_angle}\n"
     if series_directive:
@@ -438,6 +446,26 @@ def write_reel_narration(topic: str, *, channel, claude_path: str = "claude",
                 log.warning(f"  manşet çelişti ve yenilenemedi → BOŞALTILDI "
                             f"({n.cover_title!r})")
                 n = n.model_copy(update={"cover_title": ""})
+
+    # MİZAH KAPISI — yalnız persona'lı (mizah) üretimlerde. Olgu kapısı gibi:
+    # üretilen senaryo GERÇEKTEN komik mi, referanslar GERÇEK mi, biyoloji DOĞRU mu.
+    # Bu oturumun kanıtlanmış dersi: güçlü prompt yetmez, kapı şart. Olgu kapısı da
+    # açık kaldı — mizah, yanlış bilgiye izin vermez (iki kapı da geçilir).
+    if persona and persona.humor_check:
+        mizah = check_humor(topic, text=n.full_text(), language=channel.language,
+                            claude_path=claude_path, model=model, backend=backend,
+                            api_key=api_key)
+        if mizah:
+            log.warning(f"  senaryo mizah denetiminden kaldı "
+                        f"({'; '.join(i.problem for i in mizah)}) → yeniden yazılıyor")
+            n = _budgeted(prompt + humor_feedback(mizah))
+            hala = check_humor(topic, text=n.full_text(), language=channel.language,
+                               claude_path=claude_path, model=model, backend=backend,
+                               api_key=api_key)
+            if hala:
+                raise ValueError(
+                    "senaryo mizah denetiminden geçemedi (2 deneme): "
+                    + "; ".join(f"[{i.kind}] {i.problem}" for i in hala))
 
     # AÇIK KAPI DENETİMİ (yalnız seride). Abone çipi tepeden ~1.3sn sonra ekrana
     # geliyor; vaat o ana kadar SÖYLENMEMİŞSE istek, izleyicinin hiç duymadığı bir
