@@ -346,6 +346,82 @@ def _repair_footage_types(clips_by_seg: dict, *, topic: str, seg_queries, d,
         clips_by_seg[si] = yeni
 
 
+def _prepare_footage_driven(*, topic: str, channel, reel, d, work_dir: Path,
+                            pexels_api_key: str, pixabay_api_key: str,
+                            footage_priority, storyblocks_session,
+                            vision_call, ffmpeg_path: str,
+                            llm_claude_path: str, llm_model: str,
+                            llm_backend: str, llm_api_key: str | None):
+    """Görüntü-öncelikli hazırlık: konu → EN sorgu → N AYRIK klip indir → vision ile
+    tarif et. Döner (clips, descriptions, queries) — üçü index-hizalı (beat=klip
+    garantisinin temeli). Vision kapısı (tür doğru + net) hâlâ uygulanır; ama senaryo
+    SONRA yazıldığı için tür-onarım/ikincil-özne/aksiyon-query GEREKSİZLEŞİR."""
+    n_clips = _footage_driven_clip_count(reel.target_duration_s)
+    queries = d.footage_search_queries(
+        topic, n=n_clips, channel=channel, claude_path=llm_claude_path,
+        model=llm_model, backend=llm_backend, api_key=llm_api_key)
+    log.info(f"  reel[görüntü-önce]: {n_clips} klip hedefi, sorgular={queries}")
+
+    sources = build_footage_sources(
+        footage_priority or ["pexels"], pexels_key=pexels_api_key,
+        pixabay_key=pixabay_api_key, storyblocks_session=storyblocks_session)
+    footage_deps = FootageDeps(sources=sources)
+    from short_bot.reel_relevance import build_topic_pool, derive_footage_anchor
+    anchor = (getattr(reel, "footage_anchor", "") or "").strip()
+    if not anchor:
+        tmpl = getattr(getattr(channel, "dna", None), "search_query_template", "") or ""
+        anchor = derive_footage_anchor(tmpl)
+    topic_pool = build_topic_pool(queries, anchor=anchor)
+    topic_q = (topic.split(",")[0].strip()[:40] or "nature")
+    context = topic.strip()[:200]
+    clips_cache = work_dir / "clips"
+
+    # N AYRIK klip: sorguları döndürerek indir; exclude ile tekrar önlenir. Bir tam
+    # tur boyunca (misses == len(queries)) yeni klip gelmezse havuz tükenmiştir → dur.
+    clips: list[Path] = []
+    used_queries: list[str] = []
+    used: set[str] = set()
+    seen: dict = {}
+    misses = 0
+    idx = 0
+    max_attempts = n_clips * 4
+    while len(clips) < n_clips and idx < max_attempts and misses < len(queries):
+        query = queries[idx % len(queries)]
+        idx += 1
+        clip, _gated = _match_with_fallback(
+            d, query, topic_q=topic_q, api_key=pexels_api_key, cache_dir=clips_cache,
+            verify=getattr(reel, "verify_footage", True), vision_call=vision_call,
+            footage_deps=_rotate_sources(footage_deps, len(clips)),
+            topic_pool=topic_pool, anchor=anchor, ffmpeg_path=ffmpeg_path,
+            exclude=used, context=context, seen=seen)
+        if clip is None or str(clip) in used:
+            misses += 1
+            continue
+        misses = 0
+        used.add(str(clip))
+        clips.append(clip)
+        used_queries.append(query)
+    if not clips:
+        raise RuntimeError(
+            f"reel: görüntü-önce — '{topic}' için hiç footage bulunamadı")
+    if len(clips) < n_clips:
+        log.warning(f"  reel[görüntü-önce]: {len(clips)}/{n_clips} klip bulundu "
+                    f"(havuz kıt) → mevcutlarla devam")
+
+    # PARALEL tarif (LOCATE_WORKERS): her klip bağımsız bir vision çağrısı.
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=LOCATE_WORKERS) as ex:
+        descs = list(ex.map(
+            lambda c: _describe_clip(c, vision_call=vision_call,
+                                     ffmpeg_path=ffmpeg_path),
+            clips))
+    if not any(descs):
+        log.warning("  reel[görüntü-önce]: vision tarifleri BOŞ (vision kapalı?) → "
+                    "senaryo footage'a körlemesine yazılacak (uyum garantisi zayıflar)")
+    log.info(f"  reel[görüntü-önce]: {len(clips)} klip tarif edildi")
+    return clips, descs, used_queries
+
+
 def produce_reel_video(
     *, topic: str, channel, templates_dir: Path, work_dir: Path,
     out_path: Path, music_path: Path | None, ai33_api_key: str,

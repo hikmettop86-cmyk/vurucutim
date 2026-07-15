@@ -39,3 +39,64 @@ def test_beat_klip_kelepce_beat_fazlaysa():
     got = [_footage_driven_seg_clip(clips, si, n_segs) for si in range(n_segs)]
     assert got == [Path("c0.mp4"), Path("c0.mp4"), Path("c1.mp4"),
                    Path("c1.mp4"), Path("c1.mp4"), Path("c1.mp4")]
+
+
+import short_bot.reel as REEL
+from short_bot.reel import ReelDeps, _prepare_footage_driven
+
+
+def _fd_channel():
+    from types import SimpleNamespace
+    reel = SimpleNamespace(target_duration_s=(45, 60), persona="vahsi_mizah",
+                           verify_footage=True, footage_anchor="chimpanzee jungle")
+    return SimpleNamespace(reel=reel, language="tr", dna=None)
+
+
+def test_prepare_indirir_ve_tarif_eder(tmp_path, monkeypatch):
+    # match_beat_clip her çağrıda FARKLI klip döndürür (exclude ile ayrık).
+    sayac = {"n": 0}
+
+    def fake_match(q, **kw):
+        excl = kw.get("exclude") or set()
+        for i in range(10):
+            p = tmp_path / f"clip{i}.mp4"
+            if str(p) not in excl:
+                p.write_bytes(b"mp4")
+                sayac["n"] += 1
+                return p
+        return None
+
+    d = ReelDeps(
+        footage_search_queries=lambda topic, **k: ["chimpanzee", "chimpanzee fighting"],
+        match_beat_clip=fake_match)
+    # vision tarifini deterministik yap
+    monkeypatch.setattr(REEL, "_describe_clip",
+                        lambda c, **k: f"a chimpanzee ({c.name})")
+
+    clips, descs, queries = _prepare_footage_driven(
+        topic="şempanze", channel=_fd_channel(), reel=_fd_channel().reel, d=d,
+        work_dir=tmp_path, pexels_api_key="k", pixabay_api_key="",
+        footage_priority=["pexels"], storyblocks_session=None,
+        vision_call=object(), ffmpeg_path="ffmpeg",
+        llm_claude_path="claude", llm_model="default",
+        llm_backend="claude_cli", llm_api_key=None)
+
+    assert len(clips) == 5                       # (45,60) → 5 klip
+    assert len(descs) == 5 and len(queries) == 5 # üçü index-hizalı
+    assert len(set(map(str, clips))) == 5        # hepsi AYRIK (exclude çalıştı)
+    assert all("chimpanzee" in dsc for dsc in descs)
+
+
+def test_prepare_hic_footage_yoksa_hata(tmp_path, monkeypatch):
+    d = ReelDeps(
+        footage_search_queries=lambda topic, **k: ["nonexistent"],
+        match_beat_clip=lambda q, **kw: None)
+    monkeypatch.setattr(REEL, "_describe_clip", lambda c, **k: "")
+    import pytest
+    with pytest.raises(RuntimeError, match="footage bulunamadı"):
+        _prepare_footage_driven(
+            topic="x", channel=_fd_channel(), reel=_fd_channel().reel, d=d,
+            work_dir=tmp_path, pexels_api_key="k", pixabay_api_key="",
+            footage_priority=["pexels"], storyblocks_session=None,
+            vision_call=object(), ffmpeg_path="ffmpeg", llm_claude_path="claude",
+            llm_model="default", llm_backend="claude_cli", llm_api_key=None)
