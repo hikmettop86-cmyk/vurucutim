@@ -31,6 +31,8 @@ from short_bot.reel_interrupt import (impact_cut_indices, select_interrupts,
 from short_bot.reel_tempo import plan_zones, remap_words, retimed_duration_s
 from short_bot.reel_tempo import retime as _retime
 from short_bot.reel_narration import write_reel_narration as _write_narr
+from short_bot.reel_narration import write_footage_driven_narration as _write_fd_narr
+from short_bot.reel_narration import footage_search_queries as _fd_queries
 from short_bot.reel_numbers import find_numbers
 from short_bot.reel_grade import MOTION_MIN, measure_motion
 from short_bot.reel_pacing import clip_offsets, plan_subcuts, subcut_clip_index
@@ -97,6 +99,9 @@ TAIL_KEEP_S = 0.4
 @dataclass(frozen=True)
 class ReelDeps:
     write_reel_narration: Callable = _write_narr
+    # GÖRÜNTÜ-ÖNCELİKLİ MOD (yalnız reel.footage_driven=True iken kullanılır)
+    write_footage_driven_narration: Callable = _write_fd_narr
+    footage_search_queries: Callable = _fd_queries
     health_check: Callable = _health
     synthesize: Callable = _synth
     probe_duration_s: Callable = _probe
