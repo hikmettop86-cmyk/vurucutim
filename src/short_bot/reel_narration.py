@@ -531,3 +531,80 @@ def _ensure_open_loop(n: ReelNarration, prompt: str, *, claude_path, model, back
     log.warning("  seri: açık kapı İKİNCİ denemede de kurulamadı → bu bölümün abone "
                 "takası çalışmayacak (çip, söylenmemiş bir vaadin üstüne düşecek)")
     return n2 if n2.open_loop else n
+
+
+# ===========================================================================
+# GÖRÜNTÜ-ÖNCELİKLİ MOD (kullanıcı fikri): senaryoyu ELDEKİ GERÇEK FOOTAGE'a göre
+# yaz. Senaryo-önce (yukarısı) footage'ı senaryoya uydurmaya çalışır → tekrar/
+# yanlış-tür/senkron savaşı. Burada footage ÖNCE seçilir, vision ile tarif edilir,
+# senaryo o tariflere UYAR → vision-ses uyumu MATEMATİKSEL OLARAK garanti.
+# ===========================================================================
+
+def build_footage_driven_prompt(topic: str, clip_descriptions: list[str], *,
+                                channel) -> str:
+    lo_s, hi_s = channel.reel.target_duration_s
+    lang = _language_name(channel.language)
+    n = len(clip_descriptions)
+    listing = "\n".join(f"  GÖRÜNTÜ {i}: {d}" for i, d in enumerate(clip_descriptions))
+    return f"""You are writing a {lo_s}-{hi_s}s vertical humor short — with a DIFFERENT
+method: the script is written to MATCH THE REAL FOOTAGE we already have in hand.
+
+TOPIC: {topic}
+
+WE ALREADY HAVE THESE {n} CLIPS, IN THIS ORDER (they WILL appear on screen):
+{listing}
+
+RULES:
+- Write EXACTLY {n} beats. Beat i narrates CLIP i (same order). hook is over clip 0,
+  close is over the last clip.
+- Narrate WHAT IS ACTUALLY ON SCREEN. NEVER invent a thing the clip does not show
+  (a hidden object, a fight outcome, a second animal that isn't there). If a clip is
+  ordinary (the animal just stands or walks), YOU make it funny with the framing and
+  street-talk — but the on-screen SUBJECT stays exactly what the clip shows. This is
+  the whole point: the viewer sees precisely what you are saying.
+- Narration in {lang}.
+- Leave every beat's "visual_query" as "" (empty) — the real footage query is bound
+  by the code afterward.
+- Output a ReelNarration JSON: hook, cover_title, beats[text, visual_query, keyword],
+  close, comment, mood, peak_beat (peak_beat in the MIDDLE, not first/last).
+"""
+
+
+def write_footage_driven_narration(topic: str, clip_descriptions: list[str],
+                                   clip_queries: list[str], *, channel,
+                                   claude_path: str = "claude", model: str = "default",
+                                   backend: str = "claude_cli",
+                                   api_key: str | None = None) -> ReelNarration:
+    """Eldeki footage tariflerinden senaryo (görüntü-öncelikli). Beat sayısı = tarif
+    sayısı; visual_query'ler GERÇEK footage sorgularına SABİTLENİR → beat-footage
+    eşlemesi garanti, vision-ses uyumu bozulamaz. Persona (mizah) korunur."""
+    reel = getattr(channel, "reel", None)
+    if reel is None:
+        raise ValueError("write_footage_driven_narration: channel.reel yok")
+    if not clip_descriptions:
+        raise ValueError("write_footage_driven_narration: footage tarifi yok")
+    prompt = build_footage_driven_prompt(topic, clip_descriptions, channel=channel)
+    persona = load_persona(getattr(reel, "persona", ""), language=channel.language)
+    if persona:
+        prompt += "\n\n" + persona_block(persona)
+        from short_bot.persona import mascot_block
+        mblok = mascot_block(getattr(reel, "mascot_name", ""),
+                             getattr(reel, "mascot_animal", ""),
+                             getattr(reel, "mascot_trait", ""))
+        if mblok:
+            prompt += "\n\n" + mblok
+    n = run_json(prompt, ReelNarration, claude_path=claude_path, model=model,
+                 backend=backend, api_key=api_key, retries=3)
+    # visual_query'leri GERÇEK footage sorgularına sabitle (LLM'in ürettiğini yok say).
+    from short_bot.reel_models import ReelBeat
+    beats = []
+    for i, b in enumerate(n.beats):
+        q = (clip_queries[i] if i < len(clip_queries)
+             else (clip_queries[-1] if clip_queries else "")) or b.visual_query or topic
+        beats.append(ReelBeat(text=b.text, visual_query=q, keyword=b.keyword))
+    return ReelNarration(
+        hook=n.hook, beats=beats, close=n.close, mood=n.mood,
+        hook_visual=(clip_queries[0] if clip_queries else n.hook_visual),
+        close_visual=(clip_queries[-1] if clip_queries else n.close_visual),
+        cover_title=n.cover_title, comment=n.comment,
+        open_loop=n.open_loop, peak_beat=n.peak_beat)
