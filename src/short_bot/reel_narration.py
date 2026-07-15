@@ -71,6 +71,11 @@ every beat.
 
 TOPIC SEED: {topic}
 
+KONU SADAKATİ (ZORUNLU): Senaryodaki HAYVAN/ÖZNE, konu tohumundaki hayvanla AYNI
+olmalı. Konu "şebek" diyorsa senaryo çakal/babun'a KAYMAZ; konu "Adélie pengueni"
+diyorsa başka penguene geçmez. Benzer bir hayvana savrulmak uydurma bilgiye yol
+açar (ölçüldü: şebek konusu → çakal senaryosu → biyoloji denetiminden kaldı).
+
 === YAPI: LİSTE DEĞİL, ARK (EN ÖNEMLİ KURAL) ===
 A list of facts LEAKS viewers. Every fact that fully resolves is an EXIT RAMP:
 the viewer got the information, curiosity CLOSED, and second 12 has no reason to
@@ -476,10 +481,20 @@ def write_reel_narration(topic: str, *, channel, claude_path: str = "claude",
             hala = check_humor(topic, text=n.full_text(), language=channel.language,
                                claude_path=claude_path, model=model, backend=backend,
                                api_key=api_key)
-            if hala:
+            # ORANTILILIK (ölçüldü: run 928 çakal örneği ÜRETİMİ DÜŞÜRDÜ). Olgu
+            # kapısındaki dersin mizah versiyonu: her sorun eşit değil.
+            #   biology/reference → CİDDİ: yanlış bilgi kanalın otoritesini yer,
+            #     ısrar ederse üretim durur.
+            #   humor → ÖZNEL: "yeterince komik değil" için 7 dakikalık üretimi
+            #     çöpe atmak ORANTISIZ — en iyi sürümü kullan, uyar, DEVAM et.
+            ciddi = [i for i in hala if i.kind in ("biology", "reference")]
+            if ciddi:
                 raise ValueError(
                     "senaryo mizah denetiminden geçemedi (2 deneme): "
-                    + "; ".join(f"[{i.kind}] {i.problem}" for i in hala))
+                    + "; ".join(f"[{i.kind}] {i.problem}" for i in ciddi))
+            if hala:  # yalnız humor — video YAŞASIN
+                log.warning(f"  mizah zayıf ama biyoloji/referans temiz → video "
+                            f"kabul ({'; '.join(i.problem for i in hala)})")
 
     # AÇIK KAPI DENETİMİ (yalnız seride). Abone çipi tepeden ~1.3sn sonra ekrana
     # geliyor; vaat o ana kadar SÖYLENMEMİŞSE istek, izleyicinin hiç duymadığı bir

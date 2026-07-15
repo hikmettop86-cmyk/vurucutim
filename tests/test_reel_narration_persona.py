@@ -63,8 +63,10 @@ def test_mizah_kapisi_zayif_senaryoyu_reddeder(monkeypatch):
     from short_bot.reel_humor_check import HumorIssue
     monkeypatch.setattr(RN, "run_json", lambda p, s, **k: _sahte_narration())
     monkeypatch.setattr(RN, "check_narration", lambda *a, **k: [])
+    # CİDDİ hata (biology/reference) ısrar ederse üretim durur. (humor-only artık
+    # fail-open — bkz. test_mizah_kapisi_humor_only_uretimi_dusurmez.)
     monkeypatch.setattr(RN, "check_humor",
-                        lambda *a, **k: [HumorIssue(problem="zorlama", kind="humor")],
+                        lambda *a, **k: [HumorIssue(problem="uydurma", kind="biology")],
                         raising=False)
     with pytest.raises(ValueError, match="mizah denetiminden geçemedi"):
         RN.write_reel_narration("karga", channel=_kanal("vahsi_mizah"))
@@ -116,3 +118,39 @@ def test_personasiz_olgu_kapisi_calisir(monkeypatch):
     monkeypatch.setattr(RN, "check_narration", sayan_olgu)
     RN.write_reel_narration("bal porsuğu", channel=_kanal(""))
     assert cagrildi["olgu"] == 1        # personasız olgu kapısı çalışır
+
+
+def test_mizah_kapisi_humor_only_uretimi_dusurmez(monkeypatch):
+    """Sadece 'humor' sorunu (öznel) üretimi ÖLDÜRMEZ — video yaşar (run 928 dersi)."""
+    import short_bot.reel_narration as RN
+    from short_bot.reel_humor_check import HumorIssue
+    monkeypatch.setattr(RN, "run_json", lambda p, s, **k: _sahte_narration())
+    monkeypatch.setattr(RN, "check_narration", lambda *a, **k: [])
+    monkeypatch.setattr(RN, "check_humor",
+                        lambda *a, **k: [HumorIssue(problem="düz", kind="humor")],
+                        raising=False)
+    # ValueError FIRLAMAMALI — humor-only, video kabul
+    n = RN.write_reel_narration("karga", channel=_kanal("vahsi_mizah"))
+    assert n is not None
+
+
+def test_mizah_kapisi_biyoloji_hatasi_uretimi_dusurur(monkeypatch):
+    """biology/reference ISRAR ederse üretim durur (kanal otoritesi)."""
+    import short_bot.reel_narration as RN
+    from short_bot.reel_humor_check import HumorIssue
+    import pytest
+    monkeypatch.setattr(RN, "run_json", lambda p, s, **k: _sahte_narration())
+    monkeypatch.setattr(RN, "check_narration", lambda *a, **k: [])
+    monkeypatch.setattr(RN, "check_humor",
+                        lambda *a, **k: [HumorIssue(problem="çakal uydurma", kind="biology")],
+                        raising=False)
+    with pytest.raises(ValueError, match="mizah denetiminden geçemedi"):
+        RN.write_reel_narration("şebek", channel=_kanal("vahsi_mizah"))
+
+
+def test_konu_sadakati_promptta():
+    from short_bot.config import ChannelConfig, ReelConfig
+    from short_bot.reel_narration import build_reel_prompt
+    ch = _kanal("")
+    p = build_reel_prompt("Bir şebek yavru korur", ch, seed=0)
+    assert "KONU SADAKATİ" in p
