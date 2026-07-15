@@ -1,0 +1,34 @@
+ffmpeg_path: ffmpeg
+claude_cli_path: claude
+playwright_browser: chromium
+web:
+  host: 127.0.0.1
+  port: 5005
+fuzzy_dedup_threshold: 0.85
+log_level: INFO
+claude_models:
+  dna: opus
+  default: sonnet
+  script: opus
+  vision: default
+ai_backend: openrouter
+openrouter_models:
+  dna: anthropic/claude-opus-4.8
+  default: google/gemini-3.1-flash-lite
+  script: anthropic/claude-sonnet-5
+  vision: google/gemini-2.5-flash-lite
+trends:
+  enabled: true
+  refresh_minutes: 60
+  default_sources:
+  - google_daily
+  - youtube
+  cache_max_age_minutes: 90.0
+whisper:
+  quality: auto
+  device: auto
+footage:
+  priority:
+  - pexels
+  - pixabay
+  - storyblocks

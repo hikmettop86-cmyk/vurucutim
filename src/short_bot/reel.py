@@ -214,6 +214,24 @@ def _match_with_fallback(d, query, *, topic_q, api_key, cache_dir, verify,
     return None, False
 
 
+def _rotate_sources(footage_deps, si: int):
+    """Hızlı API sağlayıcılarını (Pexels/Pixabay) segment bazında DÖNDÜR — her segment
+    farklı sağlayıcıdan BAŞLASIN (çeşitlilik). Storyblocks (yavaş, Playwright) her
+    zaman SON çare kalır.
+
+    KULLANICI: 'neden tek sağlayıcıya bakıyor?'. Sistem ilk klibi bulunca duruyordu;
+    Pexels havuzu kıtsa (ör. şempanze) aynı klipler TEKRAR ediyordu. Round-robin,
+    farklı segmentleri farklı hızlı-API'den beslediği için etkin havuzu genişletir."""
+    srcs = list(getattr(footage_deps, "sources", None) or [])
+    fast = [s for s in srcs if getattr(s, "name", "") != "storyblocks"]
+    slow = [s for s in srcs if getattr(s, "name", "") == "storyblocks"]
+    if len(fast) < 2:
+        return footage_deps            # döndürecek bir şey yok
+    r = si % len(fast)
+    rotated = fast[r:] + fast[:r] + slow
+    return FootageDeps(sources=rotated, verify_footage=footage_deps.verify_footage)
+
+
 def _describe_clip(clip, *, vision_call, ffmpeg_path: str) -> str:
     """Klipten bir kare çıkarıp vision ile İngilizce tarif eder (tür-tutarlılık için)."""
     import subprocess
@@ -663,7 +681,10 @@ def produce_reel_video(
             clip, gated = _match_with_fallback(
                 d, query, topic_q=_topic_q, api_key=pexels_api_key,
                 cache_dir=clips_cache, verify=reel.verify_footage,
-                vision_call=vision_call, footage_deps=footage_deps,
+                vision_call=vision_call,
+                # Round-robin: her segment farklı hızlı-API'den başlasın (çeşitlilik,
+                # tekrar azalır); Storyblocks son çare.
+                footage_deps=_rotate_sources(footage_deps, si),
                 topic_pool=topic_pool, anchor=anchor, ffmpeg_path=ffmpeg_path,
                 budget={"gate": 0, "dl": 0},
                 reuse_clips=reuse_pool, reuse_idx=reuse_idx,
