@@ -64,5 +64,18 @@
       "pattern": "\\bhaz[ıi]r m[ıi](s[ıi]n|s[ıi]n[ıi]z)\\b"
     }
   ],
-  "meta_tail_pattern": "\\s*[—,;:-]*\\s*(\\d+\\s*\\.?\\s*b[öo]l[üu]m\\w*|(bir\\s+)?sonraki\\s+b[öo]l[üu]m\\w*|yar[ıi]n)[^.]*?(anlat|a[çc][ıi]kl|g[öo]ster|s[öo]yl|payla[şs])\\w*\\s*[.!?]?\\s*$"
+  "meta_tail_pattern": "\\s*[—,;:-]*\\s*(\\d+\\s*\\.?\\s*b[öo]l[üu]m\\w*|(bir\\s+)?sonraki\\s+b[öo]l[üu]m\\w*|yar[ıi]n)[^.]*?(anlat|a[çc][ıi]kl|g[öo]ster|s[öo]yl|payla[şs])\\w*\\s*[.!?]?\\s*$",
+  "personas": {
+    "vahsi_mizah": {
+      "few_shot": "Bugün Zavana'nın bıçkın delikanlısı, ruhsatlı delisinin mahremine giriyoruz. Porsuk Dumrul. Bu kıprağın aşk hayatı mı hacı? Adamın kalbi Bihter'in Behlül'e olan kini gibi taş kesilmiş. Bizim porsuk öyle 'akşam mesaj attım görüldü attı ama dönmedi' diye trip atmaz. O direkt Abdülhey modunda. Bal porsuğu dediğin ormanların yalnız kurdudur. Ne Kızılcık Şerbeti'ndeki gibi aile konseyi ne de 'kayınço yine borç istedi' diye dert yanar. Çiftleşme dönemi gelince bir selamünaleyküm der, işini görür. Sonra çat arazi. Bizim Dumrul'da aşk, Aşk-ı Memnu'daki gibi yasak değil, direkt yasak elmadaki gibi entrikasızdır. Peki ya yenge hanım? Yaprak Dökümü'ndeki Hayriye Hanım gibi 'aman tadımız kaçmasın Ali Rıza Bey' demez. Yavruyu doğurur, kreşmiş özel dersmiş anlamaz, direkt Survivor elemelerine sokar. Aile WhatsApp grubu yok, 'Cumanız mübarek olsun' diyen halalar yok. Sadece doğa, kavga ve hayatta kalma.",
+      "rules": [
+        "HAYVANI KARAKTERE BÜRÜNDÜR: ona bir isim/lakap ver ('Porsuk Dumrul', 'ormanların yalnız kurdu') ve bir mahalle tipine benzet.",
+        "GERÇEK Türk dizisi / pop-kültür referansları kullan (Aşk-ı Memnu, Yaprak Dökümü, Kızılcık Şerbeti, Kurtlar Vadisi, Çukur, Survivor gibi). Davranışı bu dizilere benzet. UYDURMA dizi/karakter YASAK.",
+        "MODERN SOSYAL MEDYA DİLİ: 'mesaj attı görüldü', 'konum atmak', 'aile WhatsApp grubu', 'trip atmak' gibi güncel deyimlerle anakronizm yarat.",
+        "GERÇEK BİLGİYİ KOMİK ÇERÇEVEYE SOK: hayvanın GERÇEK biyolojisi (avlanma, çiftleşme, yavru bakımı) komik bir hikâyeye dönüşsün. Bilgi DOĞRU, sunum çatlak olsun. Yanlış bilgi vermek YASAK.",
+        "ARGO/AĞIZ: anlatıcı mahalleden biri gibi konuşsun ('hacı', 'çat arazi', 'işini görür').",
+        "Sonda kısa bir halk ozanı / aşık edebiyatı parodisiyle kapat (kapanış hook'u geri çağırsın)."
+      ]
+    }
+  }
 }

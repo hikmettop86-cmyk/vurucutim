@@ -76,6 +76,10 @@ class LangPack(BaseModel):
     overused: list[str]
     overused_patterns: list[OverusedPattern]
     meta_tail_pattern: str
+    # PERSONA METİNLERİ (opsiyonel): slug → {"few_shot": str, "rules": list[str]}.
+    # Dile ÖZEL: Türk dizisi referansları yalnız tr paketinde olur. Başka dilde bu
+    # personayı istemek persona.load_persona'da RuntimeError verir (sessiz düşme yok).
+    personas: dict = Field(default_factory=dict)
 
 
 def _placeholders(tmpl: str) -> set[str]:
@@ -150,6 +154,13 @@ def validate_pack(pack: LangPack) -> list[str]:
             h.append(f"series.{alan}: zorunlu yer tutucu eksik: {{{eksik}}}")
         for fazla in sorted(var - izinli):
             h.append(f"series.{alan}: bilinmeyen yer tutucu: {{{fazla}}}")
+
+    # --- personalar (opsiyonel; varsa few_shot ve rules dolu olmalı)
+    for slug, p in (pack.personas or {}).items():
+        if not isinstance(p, dict) or not (p.get("few_shot") or "").strip():
+            h.append(f"persona '{slug}': few_shot boş olamaz")
+        if not (isinstance(p, dict) and p.get("rules")):
+            h.append(f"persona '{slug}': rules boş olamaz")
 
     return h
 
