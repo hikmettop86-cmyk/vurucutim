@@ -62,6 +62,22 @@ def _cmd_run(args) -> int:
     settings = load_settings(config_dir / "settings.yaml")
     channel = load_channel(config_dir / "channels" / f"{args.channel}.yaml")
 
+    # CLI üretiminde reel/footage sub-logger loglarını KONSOLA bas. Panelde bunlar
+    # run-log DOSYASINA gidiyor (thread-filtreli FileHandler); CLI'da run_context
+    # ayarlanmadığı için filtre onları hem dosyadan hem konsoldan kesiyordu →
+    # 'reel[süre]', 'render-öncesi tür kontrolü' gibi teşhis logları KAYBOLUYORDU.
+    import logging as _lg
+
+    from short_bot.pipeline import _RUN_SUB_LOGGERS
+    _h = _lg.StreamHandler()
+    _h.setFormatter(_lg.Formatter("[%(levelname)s] %(message)s"))
+    for _n in _RUN_SUB_LOGGERS:
+        _sub = _lg.getLogger(_n)
+        _sub.setLevel(_lg.INFO)
+        if not any(getattr(x, "_shortbot_cli", False) for x in _sub.handlers):
+            _h._shortbot_cli = True
+            _sub.addHandler(_h)
+
     data_dir = Path(args.data_dir)
     db_path = data_dir / "short_bot.sqlite"
 

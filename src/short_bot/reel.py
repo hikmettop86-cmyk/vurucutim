@@ -254,8 +254,13 @@ def _repair_footage_types(clips_by_seg: dict, *, topic: str, seg_queries, d,
                 uniq.append(c)
     if len(uniq) < 2:
         return
-    descs = [_describe_clip(c, vision_call=vision_call, ffmpeg_path=ffmpeg_path)
-             for c in uniq]
+    # PARALEL tarif (ucuzlatma): 25 klibi seri tarif etmek ~75sn ekliyordu;
+    # LOCATE_WORKERS'la paralel → ~1/5 süre. Her tarif bağımsız (klip → vision).
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=LOCATE_WORKERS) as _ex:
+        descs = list(_ex.map(
+            lambda c: _describe_clip(c, vision_call=vision_call, ffmpeg_path=ffmpeg_path),
+            uniq))
 
     def _inv(prompt, schema):
         return run_json(prompt, schema, claude_path=vision_call.claude_path,
