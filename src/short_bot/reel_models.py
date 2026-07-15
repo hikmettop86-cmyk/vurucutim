@@ -30,7 +30,10 @@ def _content_words(s: str) -> set[str]:
 
 
 class ReelBeat(BaseModel):
-    text: str = Field(min_length=8, max_length=300)
+    # 300→500: sahne modu + 90-140sn uzunluk daha zengin beat'ler üretiyor (benzetme +
+    # diyalog). Uzun beat sorun değil — fast_cuts onu alt-kesimlere böler (footage
+    # değişir, donuk kuyruk olmaz) ve karaoke altyazı zaten kelime kelime akar.
+    text: str = Field(min_length=8, max_length=500)
     visual_query: str = Field(min_length=2, max_length=120)
     keyword: str = Field(default="", max_length=40)
 
