@@ -33,23 +33,20 @@ def _prompt(topic: str, text: str, lang: str) -> str:
 SENARYO:
 {text}
 
-Şu üç ölçütü kontrol et ve YALNIZ GERÇEK sorunları bildir:
+Bu bir MİZAH videosu — ABARTI onun DOĞASIDIR. Şu iki ölçüte bak, YALNIZ gerçek
+sorunları bildir:
 1. KOMİK mi? Bir BÜTÜN olarak eğlenceli mi, yoksa düz belgesel mi? (Her cümle şaka
    olmak zorunda DEĞİL — genel tat komikse sorun yok. Gerçekten sıkıcı/zorlama ise
    "humor" sorunu.)
-2. REFERANSLAR GERÇEK mi? Uydurma/var olmayan dizi/karakter/olay varsa "reference" sorunu.
+2. REFERANSLAR GERÇEK mi? UYDURMA/var olmayan DİZİ/KARAKTER varsa "reference" sorunu.
    (Gerçek ve tema-uyumlu referanslar SORUN DEĞİL.)
-3. BİYOLOJİ DOĞRU mu? Hayvan hakkında NET yanlış bilgi (yanlış ölçü, yanlış sınıf,
-   uydurma yetenek) varsa "biology" sorunu. NET yanlışı işaretle — sayılar/ölçüler
-   özellikle dikkat.
 
-ÖNEMLİ İSTİSNALAR (bunları SORUN SAYMA):
-- Mizahi HİPERBOL olgu hatası DEĞİLDİR: 'özgüven kıtaya sığmıyor', 'Afrika'nın vergi
-  memuru', 'kobra zehri ona ayran aşısı' gibi abartılar mizahtır, yanlış bilgi değil.
-- 'Aşık [Hayvan] der ki: ...' kapanışı bu kanalın İMZASIDIR (marka), klişe/tekrar SAYMA.
-- Karakterleştirme ('mahalle delisi', 'ağır abi') üsluptur, olgu iddiası değil.
+BİYOLOJİYE KARIŞMA: mizahi abartı ('%73 isabet', 'manyetik pusula', 'şanzımanı sökmüş',
+'kobra zehri ayran aşısı'), karakterleştirme ('mahalle delisi'), ve ozan imzası
+('Aşık ... der ki') SORUN DEĞİLDİR — bunlar mizahın kendisidir. İzleyici abartıyı
+komik bulur, ansiklopedi izlemiyor. Rakam/yetenek abartısını YANLIŞ BİLGİ SAYMA.
 
-Sorun yoksa boş liste döndür. SADECE şu JSON: {{"issues": [{{"problem": "...", "kind": "humor|reference|biology"}}]}}"""
+Sorun yoksa boş liste döndür. SADECE şu JSON: {{"issues": [{{"problem": "...", "kind": "humor|reference"}}]}}"""
 
 
 def check_humor(topic: str, *, text: str, language: str, claude_path: str = "claude",

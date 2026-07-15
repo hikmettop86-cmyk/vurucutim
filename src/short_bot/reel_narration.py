@@ -475,26 +475,20 @@ def write_reel_narration(topic: str, *, channel, claude_path: str = "claude",
                             claude_path=claude_path, model=model, backend=backend,
                             api_key=api_key)
         if mizah:
-            log.warning(f"  senaryo mizah denetiminden kaldı "
-                        f"({'; '.join(i.problem for i in mizah)}) → yeniden yazılıyor")
+            # MİZAH KAPISI DÜŞÜRMEZ, İYİLEŞTİRİR. Mizah abartıdır; "yeterince komik
+            # değil" ya da bir referans için 7 dakikalık üretimi çöpe atmak yanlış
+            # (kullanıcı için video çıkmaması en kötüsü). Bir kez iyileştir, hâlâ
+            # sorun varsa videoyu KABUL ET + uyar. Biyoloji artık kapıda YOK — mizahi
+            # abartı serbest (kullanıcı: "mizah abartıda böyle kural olmamalı").
+            log.info(f"  mizah gözlemi ({'; '.join(i.problem for i in mizah)}) "
+                     f"→ bir kez iyileştiriliyor")
             n = _budgeted(prompt + humor_feedback(mizah))
             hala = check_humor(topic, text=n.full_text(), language=channel.language,
                                claude_path=claude_path, model=model, backend=backend,
                                api_key=api_key)
-            # ORANTILILIK (ölçüldü: run 928 çakal örneği ÜRETİMİ DÜŞÜRDÜ). Olgu
-            # kapısındaki dersin mizah versiyonu: her sorun eşit değil.
-            #   biology/reference → CİDDİ: yanlış bilgi kanalın otoritesini yer,
-            #     ısrar ederse üretim durur.
-            #   humor → ÖZNEL: "yeterince komik değil" için 7 dakikalık üretimi
-            #     çöpe atmak ORANTISIZ — en iyi sürümü kullan, uyar, DEVAM et.
-            ciddi = [i for i in hala if i.kind in ("biology", "reference")]
-            if ciddi:
-                raise ValueError(
-                    "senaryo mizah denetiminden geçemedi (2 deneme): "
-                    + "; ".join(f"[{i.kind}] {i.problem}" for i in ciddi))
-            if hala:  # yalnız humor — video YAŞASIN
-                log.warning(f"  mizah zayıf ama biyoloji/referans temiz → video "
-                            f"kabul ({'; '.join(i.problem for i in hala)})")
+            if hala:
+                log.warning(f"  mizah gözlemi sürüyor → video YİNE DE kabul "
+                            f"({'; '.join(i.problem for i in hala)})")
 
     # AÇIK KAPI DENETİMİ (yalnız seride). Abone çipi tepeden ~1.3sn sonra ekrana
     # geliyor; vaat o ana kadar SÖYLENMEMİŞSE istek, izleyicinin hiç duymadığı bir

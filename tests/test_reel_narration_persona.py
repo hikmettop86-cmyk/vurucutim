@@ -58,18 +58,20 @@ def test_personasiz_prompt_degismez(monkeypatch):
     assert "ANLATIM PERSONASI" not in yakalanan["prompt"]   # sıfır regresyon
 
 
-def test_mizah_kapisi_zayif_senaryoyu_reddeder(monkeypatch):
+def test_mizah_kapisi_biyoloji_3_deneme_sonrasi_video_yasar(monkeypatch):
+    """Biyoloji hatası ısrar etse bile 3 denemeden sonra video ÖLDÜRÜLMEZ (fail-open).
+    Kullanıcı için video çıkmaması en kötüsü; kanal düz-belgesel değil MİZAH (izleyici
+    abartıyı komik bulur) ve kare kare denetleniyor. (run 928 çakal / tilki manyetik
+    örnekleri üretimi düşürüyordu — kullanıcı bildirdi.)"""
     import short_bot.reel_narration as RN
     from short_bot.reel_humor_check import HumorIssue
     monkeypatch.setattr(RN, "run_json", lambda p, s, **k: _sahte_narration())
     monkeypatch.setattr(RN, "check_narration", lambda *a, **k: [])
-    # CİDDİ hata (biology/reference) ısrar ederse üretim durur. (humor-only artık
-    # fail-open — bkz. test_mizah_kapisi_humor_only_uretimi_dusurmez.)
     monkeypatch.setattr(RN, "check_humor",
                         lambda *a, **k: [HumorIssue(problem="uydurma", kind="biology")],
                         raising=False)
-    with pytest.raises(ValueError, match="mizah denetiminden geçemedi"):
-        RN.write_reel_narration("karga", channel=_kanal("vahsi_mizah"))
+    n = RN.write_reel_narration("karga", channel=_kanal("vahsi_mizah"))
+    assert n is not None       # ValueError FIRLAMAZ — fail-open + güçlü uyarı
 
 
 def test_mizah_kapisi_personasiz_calismaz(monkeypatch):
@@ -134,18 +136,19 @@ def test_mizah_kapisi_humor_only_uretimi_dusurmez(monkeypatch):
     assert n is not None
 
 
-def test_mizah_kapisi_biyoloji_hatasi_uretimi_dusurur(monkeypatch):
-    """biology/reference ISRAR ederse üretim durur (kanal otoritesi)."""
+def test_mizah_kapisi_ASLA_dusurmez(monkeypatch):
+    """Mizah kapısı 'gözlemci'dir, 'bekçi' değil: hiçbir sorun (humor/reference)
+    üretimi DÜŞÜRMEZ — bir kez iyileştirir, hâlâ varsa video kabul + uyarır.
+    (Kullanıcı: mizah abartıdır, katı kural olmamalı; video çıkmaması en kötüsü.)"""
     import short_bot.reel_narration as RN
     from short_bot.reel_humor_check import HumorIssue
-    import pytest
     monkeypatch.setattr(RN, "run_json", lambda p, s, **k: _sahte_narration())
     monkeypatch.setattr(RN, "check_narration", lambda *a, **k: [])
     monkeypatch.setattr(RN, "check_humor",
-                        lambda *a, **k: [HumorIssue(problem="çakal uydurma", kind="biology")],
+                        lambda *a, **k: [HumorIssue(problem="zayıf", kind="reference")],
                         raising=False)
-    with pytest.raises(ValueError, match="mizah denetiminden geçemedi"):
-        RN.write_reel_narration("şebek", channel=_kanal("vahsi_mizah"))
+    n = RN.write_reel_narration("şebek", channel=_kanal("vahsi_mizah"))
+    assert n is not None       # ValueError FIRLAMAZ — kapı düşürmez
 
 
 def test_konu_sadakati_promptta():
