@@ -145,7 +145,13 @@ def run_json(
 
         try:
             payload = _extract_json(raw)
-            data = json.loads(payload)
+            try:
+                data = json.loads(payload)
+            except json.JSONDecodeError:
+                # LLM bazen JSON'dan SONRA açıklama/ikinci-obje ekliyor ("Extra data:
+                # line N" — ölçüldü, mizah senaryosu 3/3 denemede böyle patladı).
+                # İlk TAM JSON objesini kurtar; sonrasını yok say.
+                data, _ = json.JSONDecoder().raw_decode(payload.lstrip())
             return schema.model_validate(data)
         except (ValueError, json.JSONDecodeError, ValidationError) as e:
             last_error = e
