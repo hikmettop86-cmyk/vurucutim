@@ -765,15 +765,26 @@
         "primary": "#002C5F",
         "accent": "#FFED00",
         "primary_light": "#1B4A8A",
-        "bg_gradient": ["#0a1430", "#04081a"]
+        "bg_gradient": [
+          "#0a1430",
+          "#04081a"
+        ]
       },
-      "body_bg": ["#FFED00", "#002C5F"],
+      "body_bg": [
+        "#FFED00",
+        "#002C5F"
+      ],
       "text_main": "#ffffff",
       "text_muted": "#FFED00",
       "font_headline": "Anton",
       "font_body": "Inter"
     },
-    "pexels_queries": ["stadium crowd", "ultras tifosi", "soccer fans", "football fans celebration"]
+    "pexels_queries": [
+      "stadium crowd",
+      "ultras tifosi",
+      "soccer fans",
+      "football fans celebration"
+    ]
   },
   {
     "slug": "narrator",
@@ -784,14 +795,53 @@
         "primary": "#0ea5e9",
         "accent": "#facc15",
         "primary_light": "#38bdf8",
-        "bg_gradient": ["#0f172a", "#020617"]
+        "bg_gradient": [
+          "#0f172a",
+          "#020617"
+        ]
       },
-      "body_bg": ["#0f172a", "#020617"],
+      "body_bg": [
+        "#0f172a",
+        "#020617"
+      ],
       "text_main": "#f8fafc",
       "text_muted": "#94a3b8",
       "font_headline": "Inter",
       "font_body": "Inter"
     },
-    "pexels_queries": ["city night", "abstract technology", "documentary footage"]
+    "pexels_queries": [
+      "city night",
+      "abstract technology",
+      "documentary footage"
+    ]
+  },
+  {
+    "slug": "vahsi-mizah",
+    "label": "Vahşi Mizah",
+    "subtitle": "Belgesel-üstü komik anlatım · sıcak palet",
+    "defaults": {
+      "colors": {
+        "primary": "#e8551d",
+        "accent": "#ffd400",
+        "primary_light": "#ff7a45",
+        "bg_gradient": [
+          "#1a1410",
+          "#2b1d12"
+        ]
+      },
+      "body_bg": [
+        "#faf3e6",
+        "#f0e6d2"
+      ],
+      "text_main": "#1a1410",
+      "text_muted": "#6b5a48",
+      "font_headline": "Anton",
+      "font_body": "Inter"
+    },
+    "pexels_queries": [
+      "wildlife closeup",
+      "wild animal nature",
+      "documentary animal"
+    ]
   }
 ]
