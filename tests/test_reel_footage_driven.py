@@ -177,3 +177,36 @@ def test_footage_driven_gorunti_once_senaryo_yazar(tmp_path, monkeypatch):
     assert kw["clip_paths"], "montaja klip gitmedi"
     assert all(Path(p).name.startswith("c") for p in kw["clip_paths"])
     assert len(kw["clip_paths"]) == len(kw["seg_spans"])
+
+
+def test_prepare_az_klip_uce_kelepcelenir(tmp_path, monkeypatch):
+    # Havuz yalnız 2 AYRIK klip veriyor. ReelNarration min 3 beat ister; klipler 3'e
+    # döngüsel tamamlanmazsa write_footage_driven_narration'ın "EXACTLY n beats" istemi
+    # doğrulamaya takılıp üretimi ÇÖKERTİRDİ (fail-open sözü tutmazdı). Tekrarlı ama
+    # üretilen video, video yokluğundan yeğdir.
+    havuz = [tmp_path / "a.mp4", tmp_path / "b.mp4"]
+    for p in havuz:
+        p.write_bytes(b"mp4")
+
+    def fake_match(q, **kw):
+        excl = kw.get("exclude") or set()
+        for p in havuz:
+            if str(p) not in excl:
+                return p
+        return None                       # havuz 2'de tükendi
+
+    d = ReelDeps(
+        footage_search_queries=lambda topic, **k: ["chimpanzee", "chimpanzee fighting"],
+        match_beat_clip=fake_match)
+    monkeypatch.setattr(REEL, "_describe_clip", lambda c, **k: f"desc {c.name}")
+
+    clips, descs, queries = _prepare_footage_driven(
+        topic="şempanze", channel=_fd_channel(), reel=_fd_channel().reel, d=d,
+        work_dir=tmp_path, pexels_api_key="k", pixabay_api_key="",
+        footage_priority=["pexels"], storyblocks_session=None,
+        vision_call=object(), ffmpeg_path="ffmpeg", llm_claude_path="claude",
+        llm_model="default", llm_backend="claude_cli", llm_api_key=None)
+
+    assert len(clips) >= 3                            # min 3 beat için 3'e tamamlandı
+    assert len(descs) == len(clips) == len(queries)  # üçü hâlâ index-hizalı
+    assert len(set(map(str, clips))) == 2            # yalnız 2 ayrık (tekrarla dolduruldu)
