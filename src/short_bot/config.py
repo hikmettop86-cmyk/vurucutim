@@ -267,6 +267,10 @@ class ReelConfig(BaseModel):
     mascot_name: str = ""      # "Deli Kâzım"
     mascot_animal: str = ""    # "bal porsuğu"
     mascot_trait: str = ""     # "Geri Vitesi Olmayan Deli — çılgın, korkusuz, geri vites yok"
+    # GÖRÜNTÜ-ÖNCELİKLİ MOD: True ise footage ÖNCE indirilir + vision ile tarif
+    # edilir, senaryo o GERÇEK tariflere göre yazılır (vision-ses uyumu garanti).
+    # False (varsayılan) = bugünkü senaryo-önce akış — SIFIR REGRESYON.
+    footage_driven: bool = False
 
     @field_validator("target_duration_s", mode="before")
     @classmethod
@@ -631,6 +635,7 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
             "mascot_name": cfg.reel.mascot_name,
             "mascot_animal": cfg.reel.mascot_animal,
             "mascot_trait": cfg.reel.mascot_trait,
+            "footage_driven": cfg.reel.footage_driven,
         }
     if cfg.dna is not None:
         # mode='json' → tuple becomes list, ready for YAML round-trip

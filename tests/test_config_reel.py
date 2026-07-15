@@ -76,3 +76,21 @@ def test_save_channel_omits_reel_when_none(tmp_path):
     out = tmp_path / "out.yaml"
     save_channel(out, cfg)
     assert "reel" not in yaml.safe_load(out.read_text(encoding="utf-8"))
+
+
+def test_footage_driven_defaults_false(tmp_path):
+    # SIFIR REGRESYON: bloğu olan mevcut tüm kanallar senaryo-önce kalmalı.
+    cfg = load_channel(_write(tmp_path, {"reel": {
+        "enabled": True, "voice_id": "v1", "target_duration_s": [45, 60]}}))
+    assert cfg.reel.footage_driven is False
+
+
+def test_footage_driven_parses_and_round_trips(tmp_path):
+    cfg = load_channel(_write(tmp_path, {"reel": {
+        "enabled": True, "voice_id": "v1", "target_duration_s": [45, 60],
+        "footage_driven": True}}))
+    assert cfg.reel.footage_driven is True
+    # save → load round-trip (to_channel_data alanı yazmalı)
+    p2 = tmp_path / "rt.yaml"
+    save_channel(p2, cfg)
+    assert load_channel(p2).reel.footage_driven is True
