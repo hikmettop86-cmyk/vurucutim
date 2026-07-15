@@ -3,7 +3,30 @@ from pathlib import Path
 
 import pytest
 
-from short_bot.pexels import load_secrets, resolve_pexels_api_key
+from short_bot.pexels import _pick_best_mp4, load_secrets, resolve_pexels_api_key
+
+
+def _f(link, w, h):
+    return {"file_type": "video/mp4", "link": link, "width": w, "height": h}
+
+
+def test_pick_best_mp4_1080_yerine_4k_secmez():
+    # Final video 1080x1920; 4K indirmek 4x veri israfı (footage darboğazı buydu).
+    files = [_f("uhd", 2160, 3840), _f("fhd", 1080, 1920),
+             _f("hd", 720, 1280), _f("sd", 360, 640)]
+    assert _pick_best_mp4(files) == "fhd"
+
+
+def test_pick_best_mp4_yatay_1080_secer():
+    assert _pick_best_mp4([_f("l4k", 3840, 2160), _f("l1080", 1920, 1080)]) == "l1080"
+
+
+def test_pick_best_mp4_hicbiri_1080_degilse_en_iyisi():
+    assert _pick_best_mp4([_f("hd", 720, 1280), _f("sd", 360, 640)]) == "hd"
+
+
+def test_pick_best_mp4_bos_liste_none():
+    assert _pick_best_mp4([]) is None
 
 
 def test_load_secrets_returns_empty_dict_when_file_missing(tmp_path):

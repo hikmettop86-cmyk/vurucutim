@@ -84,15 +84,32 @@ class PexelsCandidate(BaseModel):
 
 
 def _pick_best_mp4(video_files: list[dict]) -> str | None:
-    """From a Pexels video's file list, return the highest-resolution mp4 link."""
+    """From a Pexels video's file list, return the mp4 that best fits a 1080x1920
+    final — NOT the highest resolution.
+
+    ÖLÇÜLDÜ (darboğaz): 'en yüksek çözünürlük' 4K (2160p) klip indiriyordu — 53sn'lik
+    bir klip 333 MB. Bir videoda ~23 klip → ~7GB indirme → footage aşaması 33 DAKİKA.
+    Final video 1080x1920; 4K kaynağın fazla pikseli crop'ta ZATEN çöpe gidiyor.
+    Kısa kenarı >=1080 olan EN KÜÇÜK klibi seçmek indirmeyi ~4x hızlandırır, kaliteyi
+    DÜŞÜRMEZ (upscale yok, gereksiz downscale yok). Hiçbiri 1080'e yetmezse en iyisini al.
+    """
     mp4s = [
         f for f in video_files
         if f.get("file_type") == "video/mp4" and f.get("link")
     ]
     if not mp4s:
         return None
-    mp4s.sort(key=lambda f: (f.get("width", 0) * f.get("height", 0)), reverse=True)
-    return mp4s[0]["link"]
+
+    def _short_edge(f: dict) -> int:
+        return min(int(f.get("width", 0) or 0), int(f.get("height", 0) or 0))
+
+    def _area(f: dict) -> int:
+        return int(f.get("width", 0) or 0) * int(f.get("height", 0) or 0)
+
+    yeterli = [f for f in mp4s if _short_edge(f) >= 1080]
+    if yeterli:
+        return min(yeterli, key=_area)["link"]   # 1080p'yi seç, 4K'yı DEĞİL
+    return max(mp4s, key=_area)["link"]           # hiçbiri yetmezse en yüksek
 
 
 def search_videos(
