@@ -47,4 +47,7 @@ def persona_block(persona: Persona) -> str:
         "ÇIKTI DİSİPLİNİ (JSON BOZULMASIN): Senaryo metinlerinde (hook, beat, close, "
         "comment) ASLA çift tırnak (\") kullanma — diyalog/alıntı için TEK tırnak (') "
         "kullan. Örnek: karga 'kırmızı tişörtlü cimrinin teki geçti' der. Yanıt "
-        "SADECE geçerli JSON olsun, markdown kod bloğu ekleme.\n")
+        "SADECE geçerli JSON olsun, markdown kod bloğu ekleme.\n\n"
+        "KAPANIŞ (close) EN FAZLA 120 KARAKTER: ozan imzasını buna göre KISA yaz "
+        "(2 mısra). Uzarsa üretim düşer. Yorum sorusunu close'a KOYMA — 'comment' "
+        "alanına yaz.\n")
