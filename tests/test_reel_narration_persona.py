@@ -41,7 +41,7 @@ def test_persona_promptu_enjekte_edilir(monkeypatch):
     monkeypatch.setattr(RN, "check_humor", lambda *a, **k: [], raising=False)
     RN.write_reel_narration("karga", channel=_kanal("vahsi_mizah"))
     assert "ANLATIM PERSONASI" in yakalanan["prompt"]
-    assert "Porsuk Dumrul" in yakalanan["prompt"]
+    assert "istihbarat teşkilatı" in yakalanan["prompt"]  # few-shot metni
 
 
 def test_personasiz_prompt_degismez(monkeypatch):
@@ -83,3 +83,36 @@ def test_mizah_kapisi_personasiz_calismaz(monkeypatch):
     monkeypatch.setattr(RN, "check_humor", sayan, raising=False)
     RN.write_reel_narration("karga", channel=_kanal(""))   # persona yok
     assert cagrildi["n"] == 0       # mizah kapısı personasız çağrılmamalı
+
+
+def test_mizah_olgu_kapisini_atlar(monkeypatch):
+    """Persona varken olgu kapısı (check_narration) ÇAĞRILMAZ — mizahi abartıyı
+    yanlış-bilgi sanıp gereksiz yeniden yazım tetikliyordu (run 907). Biyoloji
+    doğruluğunu mizah kapısı denetler."""
+    import short_bot.reel_narration as RN
+    monkeypatch.setattr(RN, "run_json", lambda p, s, **k: _sahte_narration())
+    cagrildi = {"olgu": 0}
+
+    def sayan_olgu(*a, **k):
+        cagrildi["olgu"] += 1
+        return []
+
+    monkeypatch.setattr(RN, "check_narration", sayan_olgu)
+    monkeypatch.setattr(RN, "check_humor", lambda *a, **k: [], raising=False)
+    RN.write_reel_narration("bal porsuğu", channel=_kanal("vahsi_mizah"))
+    assert cagrildi["olgu"] == 0        # persona'da olgu kapısı atlanmalı
+
+
+def test_personasiz_olgu_kapisi_calisir(monkeypatch):
+    """Regresyon: persona YOKken olgu kapısı normal çalışır."""
+    import short_bot.reel_narration as RN
+    monkeypatch.setattr(RN, "run_json", lambda p, s, **k: _sahte_narration())
+    cagrildi = {"olgu": 0}
+
+    def sayan_olgu(*a, **k):
+        cagrildi["olgu"] += 1
+        return []
+
+    monkeypatch.setattr(RN, "check_narration", sayan_olgu)
+    RN.write_reel_narration("bal porsuğu", channel=_kanal(""))
+    assert cagrildi["olgu"] == 1        # personasız olgu kapısı çalışır

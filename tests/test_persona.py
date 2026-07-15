@@ -12,7 +12,7 @@ def test_vahsi_mizah_yuklenir():
     p = load_persona("vahsi_mizah", language="tr")
     assert p is not None
     assert p.slug == "vahsi_mizah"
-    assert "Porsuk Dumrul" in p.few_shot
+    assert "Aşık Kargayi" in p.few_shot   # ozan imzası — marka öğesi
     assert len(p.rules) >= 5
     assert p.humor_check is True
 
@@ -34,6 +34,6 @@ def test_persona_block_few_shot_ve_kurallari_icerir():
     from short_bot.persona import load_persona, persona_block
     p = load_persona("vahsi_mizah", language="tr")
     blok = persona_block(p)
-    assert "Porsuk Dumrul" in blok
-    assert "KARAKTERE BÜRÜNDÜR" in blok
+    assert "Aşık Kargayi" in blok            # few-shot örneği
+    assert "BÜRÜNDÜR" in blok                # kurallar
     assert "GERÇEK" in blok

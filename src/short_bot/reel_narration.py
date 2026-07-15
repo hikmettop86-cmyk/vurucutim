@@ -401,7 +401,14 @@ def write_reel_narration(topic: str, *, channel, claude_path: str = "claude",
     # "TEPE = EN ŞOK EDİCİ bilgi" diyerek abartmayı fiilen teşvik ediyordu.
     #
     # Kuralı prompt'a ekledik, ama prompt'a güvenmenin YETMEDİĞİNİ ölçtük. Kapı şart.
-    sorunlar = check_narration(
+    #
+    # MİZAH İSTİSNASI (ölçüldü: bal porsuğu üretimi, run 907): mizah personası abartıyı
+    # DOĞAL kullanır ("Afrika'nın vergi memuru", "özgüven kıtaya sığmıyor", "kobra
+    # zehri ona ayran aşısı"). Olgu kapısı bu mizahi hiperbolü "yanlış bilgi" sanıp
+    # gereksiz yeniden yazım tetikliyor ve close kayboluyordu. Mizahta biyoloji
+    # doğruluğunu MİZAH KAPISI denetler ("biyoloji DOĞRU mu"). O yüzden persona varsa
+    # olgu kapısı ATLANIR — iki kapı çatışmasın, mizah kapısı yeter.
+    sorunlar = [] if persona else check_narration(
         topic, cover_title=n.cover_title, text=n.full_text(),
         language=channel.language, claude_path=claude_path, model=model,
         backend=backend, api_key=api_key)

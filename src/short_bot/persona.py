@@ -35,8 +35,16 @@ def load_persona(slug: str, *, language: str) -> Persona | None:
 def persona_block(persona: Persona) -> str:
     kurallar = "\n".join(f"{i+1}. {r}" for i, r in enumerate(persona.rules))
     return (
-        "=== ANLATIM PERSONASI (TON) ===\n"
-        "Bu videoyu aşağıdaki KOMİK personada yaz. Yapı (hook→tırmanış→tepe→callback) "
-        "AYNI kalır; DEĞİŞEN şey TON.\n\n"
-        f"TARZIN TAM ÖRNEĞİ:\n---\n{persona.few_shot}\n---\n\n"
-        f"KURALLAR (hepsini uygula):\n{kurallar}\n")
+        "=== ANLATIM PERSONASI (TON — EN ÖNEMLİ KATMAN) ===\n"
+        "Bu videoyu aşağıdaki KOMİK personada yaz. İçerik yapısı (hook→tırmanış→tepe→"
+        "callback) AYNI kalır; DEĞİŞEN şey TONDUR. Sıkıcı belgesel anlatıcısı DEĞİL —\n"
+        "izleyiciyle mahallede çay içer gibi, racon keserek, kahkaha attırarak konuş.\n"
+        "Bilgi GERÇEK, anlatım MAHALLE AĞZI.\n\n"
+        f"TARZIN TAM ÖRNEĞİ (aynen bunun tadında yaz):\n---\n{persona.few_shot}\n---\n\n"
+        f"KURALLAR (hepsi ZORUNLU):\n{kurallar}\n\n"
+        "MİZAH SIKIŞTIRILAMAZ: kelimeleri kısıp esprisiz özet çıkarma. Nefes alanı "
+        "olan, kurulup boşalan şakalar yaz. Her beat bir sahne/espri taşısın.\n\n"
+        "ÇIKTI DİSİPLİNİ (JSON BOZULMASIN): Senaryo metinlerinde (hook, beat, close, "
+        "comment) ASLA çift tırnak (\") kullanma — diyalog/alıntı için TEK tırnak (') "
+        "kullan. Örnek: karga 'kırmızı tişörtlü cimrinin teki geçti' der. Yanıt "
+        "SADECE geçerli JSON olsun, markdown kod bloğu ekleme.\n")
