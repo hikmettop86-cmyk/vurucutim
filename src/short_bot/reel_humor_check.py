@@ -34,10 +34,20 @@ SENARYO:
 {text}
 
 Şu üç ölçütü kontrol et ve YALNIZ GERÇEK sorunları bildir:
-1. KOMİK mi? Zorlama, jenerik ya da düz mü? (Gerçekten esprili değilse "humor" sorunu.)
+1. KOMİK mi? Bir BÜTÜN olarak eğlenceli mi, yoksa düz belgesel mi? (Her cümle şaka
+   olmak zorunda DEĞİL — genel tat komikse sorun yok. Gerçekten sıkıcı/zorlama ise
+   "humor" sorunu.)
 2. REFERANSLAR GERÇEK mi? Uydurma/var olmayan dizi/karakter/olay varsa "reference" sorunu.
    (Gerçek ve tema-uyumlu referanslar SORUN DEĞİL.)
-3. BİYOLOJİ DOĞRU mu? Hayvan hakkında yanlış/uydurma bilgi varsa "biology" sorunu.
+3. BİYOLOJİ DOĞRU mu? Hayvan hakkında NET yanlış bilgi (yanlış ölçü, yanlış sınıf,
+   uydurma yetenek) varsa "biology" sorunu. NET yanlışı işaretle — sayılar/ölçüler
+   özellikle dikkat.
+
+ÖNEMLİ İSTİSNALAR (bunları SORUN SAYMA):
+- Mizahi HİPERBOL olgu hatası DEĞİLDİR: 'özgüven kıtaya sığmıyor', 'Afrika'nın vergi
+  memuru', 'kobra zehri ona ayran aşısı' gibi abartılar mizahtır, yanlış bilgi değil.
+- 'Aşık [Hayvan] der ki: ...' kapanışı bu kanalın İMZASIDIR (marka), klişe/tekrar SAYMA.
+- Karakterleştirme ('mahalle delisi', 'ağır abi') üsluptur, olgu iddiası değil.
 
 Sorun yoksa boş liste döndür. SADECE şu JSON: {{"issues": [{{"problem": "...", "kind": "humor|reference|biology"}}]}}"""
 
