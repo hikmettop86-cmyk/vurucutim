@@ -163,6 +163,47 @@ _DESCRIBE_PROMPT = (
 )
 
 
+class _TypeOutliers(BaseModel):
+    outlier_indices: list[int] = []
+
+
+def find_footage_outliers(descriptions: list[str], topic: str, *, invoke) -> list[int]:
+    """Klip tariflerinden, konunun ANA ÖZNESİNDEN farklı CANLI gösteren klip
+    indekslerini bulur (render-öncesi tür-tutarlılık doğrulaması).
+
+    KULLANICI İSTEĞİ: render pahalı; footage seçildikten SONRA, render'dan ÖNCE
+    yanlış klip DÜZELTİLMELİ (reddet-ve-baştan değil). Klip-başına vision kapısı
+    'hornbill' sorgusunu geçiriyor ama farklı hornbill türü/turaco geçebiliyor;
+    bu geçiş, seçilmiş TÜM klipleri TOPLUCA görüp sapanı yakalar.
+
+    ORTAM/habitat/manzara klipleri SAPAN SAYILMAZ (destekleyici b-roll).
+    ``invoke``: (prompt, schema)->instance — test enjeksiyonu / gerçek LLM.
+    Doğrulama çökerse [] (fail-open: render'ı durdurma)."""
+    if len(descriptions) < 2:
+        return []
+    listing = "\n".join(f"{i}: {d}" for i, d in enumerate(descriptions) if (d or "").strip())
+    if not listing.strip():
+        return []
+    prompt = (
+        f'Video konusu (ana özne): "{topic}".\n'
+        f'Aşağıda videonun kliplerinin görsel tarifleri var (index: tarif):\n{listing}\n\n'
+        f'Bu kliplerin çoğu konunun ana canlısını göstermeli. Bazıları ORTAM/habitat/'
+        f'manzara gösterebilir — bunlar SORUN DEĞİL (destekleyici b-roll).\n'
+        f'SORUN olan: bir klibin ANA ÖZNESİ, konunun öznesi SANILACAK ama ONDAN FARKLI, '
+        f'tanınabilir bir CANLI/TÜR ise (ör. konu "great hornbill" ama klip "blue turaco" '
+        f'ya da başka bir kuş gösteriyor). Bu izleyiciyi yanıltır — düzeltilmeli.\n'
+        f'Hangi index\'ler YANILTICI FARKLI CANLI gösteriyor? Ortam/manzara/habitat '
+        f'kliplerini SAYMA; sadece yanlış TÜR/CANLI olanları listele.\n'
+        f'SADECE JSON: {{"outlier_indices": [<index listesi>]}}'
+    )
+    try:
+        v = invoke(prompt, _TypeOutliers)
+        return sorted({i for i in (v.outlier_indices or []) if 0 <= i < len(descriptions)})
+    except Exception as e:  # noqa: BLE001 — doğrulama render'ı durdurmamalı
+        log.warning(f"footage tür-tutarlılık doğrulaması çalışmadı ({e}) → atlanıyor")
+        return []
+
+
 def _describe_image_file(path: Path, *, vision_call) -> str:
     """Yerel bir görüntü dosyasını vision ile İngilizce tarif eder (≤384px küçültür)."""
     from short_bot.claude_cli import run_json

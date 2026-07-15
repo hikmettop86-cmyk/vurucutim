@@ -214,6 +214,85 @@ def _match_with_fallback(d, query, *, topic_q, api_key, cache_dir, verify,
     return None, False
 
 
+def _describe_clip(clip, *, vision_call, ffmpeg_path: str) -> str:
+    """Klipten bir kare çıkarıp vision ile İngilizce tarif eder (tür-tutarlılık için)."""
+    import subprocess
+    import tempfile
+    from short_bot.footage_matcher import _describe_image_file
+    try:
+        with tempfile.TemporaryDirectory() as td:
+            f = Path(td) / "probe.jpg"
+            subprocess.run([ffmpeg_path, "-v", "error", "-y", "-ss", "1", "-i", str(clip),
+                            "-frames:v", "1", "-vf", "scale=384:-1", str(f)],
+                           capture_output=True, timeout=30)
+            if f.exists():
+                return _describe_image_file(f, vision_call=vision_call)
+    except Exception as e:  # noqa: BLE001
+        log.info(f"  klip tarifi çıkarılamadı ({clip}): {e}")
+    return ""
+
+
+def _repair_footage_types(clips_by_seg: dict, *, topic: str, seg_queries, d,
+                          vision_call, footage_deps, topic_pool, anchor: str,
+                          ffmpeg_path: str, pexels_api_key: str, clips_cache,
+                          used_clips: set, seen: dict, verify: bool) -> None:
+    """Render-ÖNCESİ tür-tutarlılık onarımı: seçilmiş klipleri topluca gör, konunun
+    öznesinden farklı CANLI gösteren klibi YENİDEN SEÇ. clips_by_seg YERİNDE güncellenir.
+
+    Ucuz düzeltme (render'dan önce): yalnız sapan klip değişir, senaryo/TTS/ses korunur.
+    """
+    from short_bot.claude_cli import run_json
+    from short_bot.footage_matcher import find_footage_outliers
+
+    # Benzersiz klipleri sırayla topla + tarif et.
+    uniq: list = []
+    seen_c: set = set()
+    for si in sorted(clips_by_seg):
+        for c in clips_by_seg[si]:
+            if str(c) not in seen_c:
+                seen_c.add(str(c))
+                uniq.append(c)
+    if len(uniq) < 2:
+        return
+    descs = [_describe_clip(c, vision_call=vision_call, ffmpeg_path=ffmpeg_path)
+             for c in uniq]
+
+    def _inv(prompt, schema):
+        return run_json(prompt, schema, claude_path=vision_call.claude_path,
+                        model=vision_call.model, backend=vision_call.backend,
+                        api_key=vision_call.api_key, retries=1, timeout_s=45)
+
+    outliers = find_footage_outliers(descs, topic, invoke=_inv)
+    if not outliers:
+        log.info(f"  render-öncesi tür kontrolü: {len(uniq)} klip TUTARLI")
+        return
+    bad = {str(uniq[i]) for i in outliers}
+    log.warning(f"  render-öncesi: {len(bad)}/{len(uniq)} yanlış-tür klip "
+                f"({', '.join(descs[i][:30] for i in outliers)}) → yeniden seçiliyor")
+    for i in outliers:
+        used_clips.add(str(uniq[i]))   # sapan bir daha gelmesin
+    for si in sorted(clips_by_seg):
+        yeni = []
+        for c in clips_by_seg[si]:
+            if str(c) not in bad:
+                yeni.append(c)
+                continue
+            q = seg_queries[si] if si < len(seg_queries) and seg_queries[si] else topic
+            clip, _gated = _match_with_fallback(
+                d, q, topic_q=topic, api_key=pexels_api_key, cache_dir=clips_cache,
+                verify=verify, vision_call=vision_call, footage_deps=footage_deps,
+                topic_pool=topic_pool, anchor=anchor, ffmpeg_path=ffmpeg_path,
+                exclude=set(used_clips), seen=seen)
+            if clip is not None and str(clip) not in bad:
+                used_clips.add(str(clip))
+                yeni.append(clip)
+                log.info(f"  seg{si}: yanlış-tür klip yerine yenisi seçildi")
+            else:
+                yeni.append(c)   # yenisi bulunamadı → eskiyi tut (fail-open)
+                log.info(f"  seg{si}: yanlış-tür yerine yeni bulunamadı → eski tutuldu")
+        clips_by_seg[si] = yeni
+
+
 def produce_reel_video(
     *, topic: str, channel, templates_dir: Path, work_dir: Path,
     out_path: Path, music_path: Path | None, ai33_api_key: str,
@@ -610,7 +689,23 @@ def produce_reel_video(
         log.info(f"  reel[süre] footage seg{si} ('{query[:30]}'): {len(got)} klip, "
                  f"{_time.perf_counter() - _seg_t0:.1f}s")
         clips_by_seg[si] = got
+    # RENDER-ÖNCESİ TÜR-TUTARLILIK DOĞRULAMASI (kullanıcı isteği): render pahalı;
+    # seçilmiş klipleri TOPLUCA görüp yanlış TÜRÜ (great hornbill yerine turaco)
+    # render'dan ÖNCE yakala + o klibi YENİDEN SEÇ. Klip-başına vision kapısı
+    # 'hornbill'i geçiriyor ama tür-içi tutarlılığı görmüyordu (biri diğerini kilitlemez).
+    if (getattr(reel, "verify_footage", True) and vision_call is not None
+            and len(clips_by_seg) >= 2):
+        try:
+            _repair_footage_types(
+                clips_by_seg, topic=topic, seg_queries=timeline.seg_queries, d=d,
+                vision_call=vision_call, footage_deps=footage_deps,
+                topic_pool=topic_pool, anchor=anchor, ffmpeg_path=ffmpeg_path,
+                pexels_api_key=pexels_api_key, clips_cache=clips_cache,
+                used_clips=used_clips, seen=seen_verdicts, verify=reel.verify_footage)
+        except Exception as e:  # noqa: BLE001 — doğrulama render'ı durdurmamalı
+            log.warning(f"  render-öncesi tür doğrulaması atlandı ({e})")
     # GÖRSEL LOOP: kapanış klibi = hook klibi → video başa sarınca sahne zıplamaz.
+    # (tür-onarımından SONRA: kapanış her zaman hook'un DOĞRULANMIŞ klibini alsın.)
     if _kapanis_loop and n_segs > 1 and 0 in clips_by_seg:
         clips_by_seg[n_segs - 1] = [clips_by_seg[0][0]]
     _phase("footage+vision")
