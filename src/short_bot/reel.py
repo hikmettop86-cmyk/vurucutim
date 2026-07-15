@@ -529,6 +529,10 @@ def produce_reel_video(
     # 12sn kapanış → 12sn freeze). Uzunsa visual_loop atlanır, kapanış KENDİ
     # hareketli kliplerini kullanır (loop hissini süreye feda et — donuk kabul edilemez).
     KAPANIS_LOOP_MAX_S = 5.0
+    # Statik footage reddi bu eşiğin ÜSTÜNDEKİ klip-başına-sürede devreye girer
+    # (donuk kuyruk uzun kliplerde görünür; kısa hızlı-kesim kliplerinde görünmez).
+    # Reddi kısa kliplere uygulamak boşuna yeniden-indirme → footage darboğazı (short 826).
+    STATIK_RED_MIN_S = 4.0
     _kap_span = (timeline.seg_spans[-1][1] - timeline.seg_spans[-1][0]
                  if len(timeline.seg_spans) > 1 else 0.0)
     _kapanis_loop = getattr(reel, "visual_loop", True) and _kap_span <= KAPANIS_LOOP_MAX_S
@@ -558,11 +562,19 @@ def produce_reel_video(
         got: list[Path] = []
         # STATİK KLİP REDDİ (short 818): hareketsiz footage uzun segmentte DONUK
         # kuyruk yapar (kapanış 14sn statik klip → 9sn freeze; Ken Burns kurtarmıyor).
-        # Statik klibi reddet, hareketli iste. Ama fail-open: hiç hareketli yoksa en
-        # az bir klip lazım (video > hata) → statik yedek tutulur.
+        # AMA statik reddi YALNIZ UZUN KLİPLERDE gerekli: her red bir YENİ İNDİRME
+        # tetikliyor; statik konularda (timsah pusu — hareketsiz footage) her segment
+        # want+4 kez indiriyordu → footage aşaması 33 DK (ölçüldü, short 826). Hızlı
+        # kesim segmentlerinde klip 2-3sn; statik olsa bile freeze GÖRÜNMEZ, o yüzden
+        # reddedip yeniden indirmek boşuna. Reddi klip-başına-süre uzunsa (kapanış gibi)
+        # uygula; kısa kliplerde İLK adayı kabul et (retry yok → darboğaz kalkar).
+        _span = (timeline.seg_spans[si][1] - timeline.seg_spans[si][0]
+                 if si < len(timeline.seg_spans) else 0.0)
+        _klip_suresi = _span / max(1, want)
+        _statik_red = _klip_suresi > STATIK_RED_MIN_S
         statik_yedek: Path | None = None
         deneme = 0
-        while len(got) < want and deneme < want + 4:
+        while len(got) < want and deneme < (want + 4 if _statik_red else want):
             deneme += 1
             clip, gated = _match_with_fallback(
                 d, query, topic_q=_topic_q, api_key=pexels_api_key,
@@ -580,7 +592,7 @@ def produce_reel_video(
             if clip is None or clip in got:
                 break        # yeni klip gelmedi → mevcutlarla yetin (fail-open)
             used_clips.add(str(clip))   # denenen klip TEKRAR gelmesin (statik dahil)
-            if measure_motion(clip, ffmpeg_path) < MOTION_MIN:
+            if _statik_red and measure_motion(clip, ffmpeg_path) < MOTION_MIN:
                 if statik_yedek is None:
                     statik_yedek = clip   # hareketli çıkmazsa fail-open yedeği
                 continue                  # statik → sıradaki adayı dene
