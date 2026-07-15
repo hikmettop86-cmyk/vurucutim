@@ -168,6 +168,9 @@ def persona_block(persona: Persona) -> str:
         "comment) ASLA çift tırnak (\") kullanma — diyalog/alıntı için TEK tırnak (') "
         "kullan. Örnek: karga 'kırmızı tişörtlü cimrinin teki geçti' der. Yanıt "
         "SADECE geçerli JSON olsun, markdown kod bloğu ekleme.\n\n"
-        "KAPANIŞ (close) EN FAZLA 120 KARAKTER: ozan imzasını buna göre KISA yaz "
-        "(2 mısra). Uzarsa üretim düşer. Yorum sorusunu close'a KOYMA — 'comment' "
-        "alanına yaz.\n")
+        "KAPANIŞ (close) = OZAN İMZASI, ZORUNLU (kanalın markası — atlanamaz): 'close'\n"
+        "alanı MUTLAKA 'Aşık [Hayvan/İsim] der ki:' ile başlayan, KAFİYELİ 2 mısralık\n"
+        "halk-ozanı kapanışı olmalı ve hook'un bir sözcüğünü içermeli (loop callback).\n"
+        "EN FAZLA 120 KARAKTER. Düz bir özet cümlesi ('işte bu yüzden ... gibisi yok')\n"
+        "KAPANIŞ DEĞİLDİR — o ozan imzasının yerini ALAMAZ. Yorum sorusunu close'a KOYMA,\n"
+        "'comment' alanına yaz.\n")
