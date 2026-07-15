@@ -276,9 +276,11 @@ class ReelConfig(BaseModel):
     @model_validator(mode="after")
     def _check(self) -> "ReelConfig":
         lo, hi = self.target_duration_s
-        if not (10 <= lo < hi <= 120):
+        # YouTube Shorts üst sınırı 2024'ten beri 180sn; referans mizah kanalları
+        # 125-160sn yayınlıyor ve sürükleyicilik için o uzunluk gerekiyor (ölçüldü).
+        if not (10 <= lo < hi <= 180):
             raise ValueError(
-                f"target_duration_s must satisfy 10 <= lo < hi <= 120, got ({lo}, {hi})"
+                f"target_duration_s must satisfy 10 <= lo < hi <= 180, got ({lo}, {hi})"
             )
         if self.enabled and not self.voice_id.strip():
             raise ValueError("reel.enabled=true ise voice_id zorunlu")
