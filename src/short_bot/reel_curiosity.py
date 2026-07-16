@@ -84,14 +84,16 @@ yine YASAK."""
 
 
 def write_candidates(topic: str, clip_descriptions: list[str], *, channel,
-                     seed: int = 0, invoke) -> list:
+                     seed: int = 0, invoke, target_duration_s=None) -> list:
     """3 iskeletle 3 paralel aday. Çöken aday düşürülür (fail-open).
 
     ``invoke``: (prompt, schema) -> FDDraftNarration (test enjeksiyonu / gerçek LLM).
+    ``target_duration_s``: görüntü-önce efektif süre (klip sayısından); None → kanal hedefi.
     """
     from short_bot.reel_models import FDDraftNarration
     from short_bot.reel_narration import _fd_prompt
-    base = _fd_prompt(topic, clip_descriptions, channel=channel, seed=seed)
+    base = _fd_prompt(topic, clip_descriptions, channel=channel, seed=seed,
+                      target_duration_s=target_duration_s)
 
     def _one(i):
         etiket, talimat = CURIOSITY_SKELETONS[i]
@@ -183,11 +185,14 @@ def write_curious_narration(topic: str, clip_descriptions: list[str],
                             clip_queries: list[str], *, channel, seed: int = 0,
                             claude_path: str = "claude", model: str = "default",
                             backend: str = "claude_cli", api_key: str | None = None,
-                            invoke=None):
+                            invoke=None, target_duration_s=None):
     """Yarışma hattı: 3 aday → yargıç → doktor → pinleme.
 
     Döner ``(ReelNarration, perm)`` — ``perm`` beat→orijinal-klip permütasyonu
     (çağıran fd_clips/descs/queries'i bununla yeniden dizer; kimlik = değişiklik yok).
+
+    ``target_duration_s``: görüntü-önce efektif süre (teslim klip sayısından); senaryo
+    o pencereye yazılır (loop yok). None → kanalın sabit hedefi (eski davranış).
     """
     from short_bot.claude_cli import run_json
     from short_bot.reel_narration import _pin_queries
@@ -196,12 +201,13 @@ def write_curious_narration(topic: str, clip_descriptions: list[str],
         api_key=api_key, retries=2))
 
     adaylar = write_candidates(topic, clip_descriptions, channel=channel,
-                               seed=seed, invoke=inv)
+                               seed=seed, invoke=inv, target_duration_s=target_duration_s)
     if not adaylar:
         log.warning("  merak: TÜM adaylar çöktü → tek-çağrı yola düşülüyor")
         n = _fallback_single(topic, clip_descriptions, clip_queries,
                              channel=channel, seed=seed, claude_path=claude_path,
-                             model=model, backend=backend, api_key=api_key)
+                             model=model, backend=backend, api_key=api_key,
+                             target_duration_s=target_duration_s)
         return n, list(range(len(clip_queries)))
 
     kazanan, verdict = judge_scripts(adaylar, topic=topic, invoke=inv)
@@ -209,7 +215,8 @@ def write_curious_narration(topic: str, clip_descriptions: list[str],
         kazanan = doctor_pass(kazanan, verdict.complaints, topic=topic, invoke=inv)
     # KELİME BÜTÇESİ (aslan dersi: prompt bütçesi yetmiyor, model 143 yazdı)
     from short_bot.reel_narration import _fd_enforce_budget
-    kazanan = _fd_enforce_budget(kazanan, channel, topic, invoke=inv)
+    kazanan = _fd_enforce_budget(kazanan, channel, topic, invoke=inv,
+                                 target_duration_s=target_duration_s)
 
     n_beats = len(kazanan.beats)
     perm = list(kazanan.clip_order) if len(kazanan.clip_order) == n_beats \

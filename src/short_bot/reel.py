@@ -232,11 +232,30 @@ def _match_with_fallback(d, query, *, topic_q, api_key, cache_dir, verify,
     return None, False
 
 
+# Klip başına EKRAN süresi. ÖLÇÜLDÜ/kullanıcı (2026-07-16, short 874 loop teşhisi):
+# eski ~11sn/klip → tek klip 5 alt-kesim boyunca gerilip LOOP oluyordu (aynı görüntü
+# 14sn). ~5.5sn/klip → her klip 1-2 alt-kesim, gerilme/loop yok. Video süresi ARTIK
+# teslim edilen ayrık klip sayısından türer (_footage_driven_duration) — sabit hedef değil.
+FD_SEC_PER_CLIP = 5.5
+FD_MIN_DURATION_S = 15
+
+
 def _footage_driven_clip_count(target_duration_s) -> int:
     """Görüntü-öncelikli modda kaç klip indirileceği. Klip başına ~11sn (bir beat).
     En az 3, en çok 6 (memory: N≈beat 3-6). 45-60sn → 5; 25-45 → 3."""
     lo, hi = target_duration_s
     return max(3, min(6, round((lo + hi) / 2 / 11)))
+
+
+def _footage_driven_duration(n_clips: int, target_duration_s):
+    """Teslim edilen ayrık klip sayısına göre EFEKTİF süre penceresi (lo, hi).
+
+    Her klip ~FD_SEC_PER_CLIP ekranda kalır → gerilme/loop YOK. Kanalın üst süresini
+    aşmaz, FD_MIN_DURATION_S'nin altına inmez. 3 klip → ~16sn; 6 → ~33sn; 8 → tavan.
+    Senaryo bu pencereye yazılır (gölge target_duration_s override'ı)."""
+    _lo, hi = target_duration_s
+    dur = max(FD_MIN_DURATION_S, min(int(hi), round(n_clips * FD_SEC_PER_CLIP)))
+    return (max(10, dur - 5), dur)
 
 
 def _footage_driven_seg_clip(clips: list, si: int, n_segs: int):
@@ -860,6 +879,12 @@ def produce_reel_video(
 
     # 2) Senaryo
     if footage_driven:
+        # SÜRE TESLİM EDİLEN KLİPTEN TÜRER (short 874 loop teşhisi): senaryo eski akışta
+        # sabit 30-45sn'ye yazılıp 3 klibe biniyordu → her klip ~14sn gerilme = LOOP.
+        # Artık efektif süre = ayrık klip × ~5.5sn; senaryo o pencereye yazılır (loop yok).
+        _eff_target = _footage_driven_duration(len(fd_clips), reel.target_duration_s)
+        log.info(f"  reel[süre]: {len(fd_clips)} klip → efektif hedef {_eff_target[0]}-"
+                 f"{_eff_target[1]}sn (loop önleme: ~{FD_SEC_PER_CLIP}sn/klip)")
         # Senaryo ELDEKİ footage tariflerine göre yazılır (beat=klip garanti).
         if getattr(reel, "curiosity_pipeline", True):
             # MERAK MİMARİSİ: 3 aday → yargıç → doktor. perm = beat→orijinal-klip
@@ -867,7 +892,8 @@ def produce_reel_video(
             narration, _fd_perm = d.write_curious_narration(
                 topic, fd_descs, fd_queries, channel=channel,
                 claude_path=llm_claude_path, model=llm_model,
-                backend=llm_backend, api_key=llm_api_key, seed=seed)
+                backend=llm_backend, api_key=llm_api_key, seed=seed,
+                target_duration_s=_eff_target)
             if (_fd_perm != list(range(len(_fd_perm)))
                     and len(_fd_perm) == len(fd_clips)):
                 fd_clips = [fd_clips[j] for j in _fd_perm]
@@ -877,7 +903,8 @@ def produce_reel_video(
             narration = d.write_footage_driven_narration(
                 topic, fd_descs, fd_queries, channel=channel,
                 claude_path=llm_claude_path, model=llm_model,
-                backend=llm_backend, api_key=llm_api_key, seed=seed)
+                backend=llm_backend, api_key=llm_api_key, seed=seed,
+                target_duration_s=_eff_target)
     else:
         narration = d.write_reel_narration(topic, channel=channel,
                                            claude_path=llm_claude_path, model=llm_model,

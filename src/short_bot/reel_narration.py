@@ -548,9 +548,13 @@ def _ensure_open_loop(n: ReelNarration, prompt: str, *, claude_path, model, back
 # ===========================================================================
 
 def build_footage_driven_prompt(topic: str, clip_descriptions: list[str], *,
-                                channel) -> str:
-    lo_s, hi_s = channel.reel.target_duration_s
-    lo_w, hi_w = reel_word_budget(channel.reel.target_duration_s)
+                                channel, target_duration_s=None) -> str:
+    # target_duration_s override: görüntü-önce modda süre TESLİM edilen klip
+    # sayısından türer (reel._footage_driven_duration) → senaryo o pencereye yazılır,
+    # 3 klibi 42sn'ye gerip loop yapmaz. None → kanalın sabit hedefi (eski davranış).
+    td = tuple(target_duration_s) if target_duration_s else channel.reel.target_duration_s
+    lo_s, hi_s = td
+    lo_w, hi_w = reel_word_budget(td)
     lang = _language_name(channel.language)
     n = len(clip_descriptions)
 
@@ -602,13 +606,14 @@ RULES:
 
 
 def _fd_prompt(topic: str, clip_descriptions: list[str], *, channel,
-               seed: int = 0) -> str:
+               seed: int = 0, target_duration_s=None) -> str:
     """Görüntü-önce senaryo prompt'u + persona + maskot (TEK bileşim noktası).
 
     reel_curiosity aday üretimi de aynı bileşimi kullanır — iki yerde kopya
     tutulsaydı persona/maskot değişiklikleri adaylara sessizce yansımazdı."""
     reel = getattr(channel, "reel", None)
-    prompt = build_footage_driven_prompt(topic, clip_descriptions, channel=channel)
+    prompt = build_footage_driven_prompt(topic, clip_descriptions, channel=channel,
+                                         target_duration_s=target_duration_s)
     persona = load_persona(getattr(reel, "persona", ""), language=channel.language)
     if persona:
         prompt += "\n\n" + persona_block(persona, seed=seed)
@@ -648,15 +653,18 @@ def _pin_queries(n, clip_queries: list[str], topic: str) -> ReelNarration:
 _FD_BUDGET_TOLERANCE = 1.10
 
 
-def _fd_enforce_budget(n, channel, topic: str, *, invoke):
+def _fd_enforce_budget(n, channel, topic: str, *, invoke, target_duration_s=None):
     """FD senaryosu kelime bütçesini aşarsa TEK kısaltma turu.
 
     GERÇEK HATA (aslan videosu): bütçe 54-81 kelimeyken model 143 yazdı → 67.6sn
     video (hedef 30-45). Prompt'taki sert bütçe satırı yetmiyor (persona 'mizah
     sıkıştırılamaz' der, model onu dinliyor). Beat SAYISI korunur (klip bağı);
-    kısaltma çöker/bozarsa orijinal döner (fail-open)."""
+    kısaltma çöker/bozarsa orijinal döner (fail-open).
+
+    target_duration_s: görüntü-önce efektif süre (klip sayısından); None → kanal hedefi."""
     from short_bot.reel_models import FDDraftNarration
-    lo_w, hi_w = reel_word_budget(channel.reel.target_duration_s)
+    td = tuple(target_duration_s) if target_duration_s else channel.reel.target_duration_s
+    lo_w, hi_w = reel_word_budget(td)
     mevcut = n.word_count()
     if mevcut <= hi_w * _FD_BUDGET_TOLERANCE:
         return n
@@ -690,7 +698,7 @@ def write_footage_driven_narration(topic: str, clip_descriptions: list[str],
                                    claude_path: str = "claude", model: str = "default",
                                    backend: str = "claude_cli",
                                    api_key: str | None = None,
-                                   seed: int = 0) -> ReelNarration:
+                                   seed: int = 0, target_duration_s=None) -> ReelNarration:
     """Eldeki footage tariflerinden senaryo (görüntü-öncelikli). Beat sayısı = tarif
     sayısı; visual_query'ler GERÇEK footage sorgularına SABİTLENİR → beat-footage
     eşlemesi garanti, vision-ses uyumu bozulamaz. Persona (mizah) korunur. seed:
@@ -700,14 +708,15 @@ def write_footage_driven_narration(topic: str, clip_descriptions: list[str],
         raise ValueError("write_footage_driven_narration: channel.reel yok")
     if not clip_descriptions:
         raise ValueError("write_footage_driven_narration: footage tarifi yok")
-    prompt = _fd_prompt(topic, clip_descriptions, channel=channel, seed=seed)
+    prompt = _fd_prompt(topic, clip_descriptions, channel=channel, seed=seed,
+                        target_duration_s=target_duration_s)
     # GEVŞEK şema (FDDraftNarration): model visual_query'leri boş bırakabiliyor
     # (ölçüldü: 3 denemede de boş) — bu modda alan zaten sabitleniyor,
     # gereksiz alan yüzünden üretim düşürülmez. Dönüş yine KATI ReelNarration.
     from short_bot.reel_models import FDDraftNarration
     n = run_json(prompt, FDDraftNarration, claude_path=claude_path, model=model,
                  backend=backend, api_key=api_key, retries=3)
-    n = _fd_enforce_budget(n, channel, topic,
+    n = _fd_enforce_budget(n, channel, topic, target_duration_s=target_duration_s,
                            invoke=lambda p, s: run_json(
                                p, s, claude_path=claude_path, model=model,
                                backend=backend, api_key=api_key, retries=2))

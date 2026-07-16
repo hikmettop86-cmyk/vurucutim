@@ -20,6 +20,22 @@ def test_klip_sayisi_sureden_turer():
     assert _footage_driven_clip_count((160, 180)) == 6 # tavan 6
 
 
+def test_footage_driven_duration_klipten_turer():
+    # LOOP TEŞHİSİ (short 874): süre klip sayısından türer → gerilme/loop yok.
+    from short_bot.reel import _footage_driven_duration, FD_MIN_DURATION_S
+    lo, hi = _footage_driven_duration(3, (30, 45))
+    assert 15 <= hi <= 20 and lo < hi            # 3 klip → ~16sn sıkı video
+    _, hi6 = _footage_driven_duration(6, (30, 45))
+    assert hi6 == 33                             # 6 klip → 33sn
+    _, hi_cap = _footage_driven_duration(20, (30, 45))
+    assert hi_cap == 45                          # kanal üst süresini aşmaz
+    _, hi_min = _footage_driven_duration(1, (30, 45))
+    assert hi_min == FD_MIN_DURATION_S           # min taban korunur
+    for n in range(1, 12):                       # her zaman geçerli pencere
+        a, b = _footage_driven_duration(n, (30, 45))
+        assert 10 <= a < b <= 45
+
+
 def test_beat_klip_eslemesi():
     # 3 klip → 5 segment (hook + 3 beat + close). hook=clips[0], close=clips[-1].
     clips = [Path("c0.mp4"), Path("c1.mp4"), Path("c2.mp4")]
