@@ -520,14 +520,21 @@ def _prepare_footage_driven(*, topic: str, channel, reel, d, work_dir: Path,
             return _rj(prompt, schema, claude_path=llm_claude_path, model=llm_model,
                        backend=llm_backend, api_key=llm_api_key, retries=2)
 
-        kesif = None
-        try:
-            kesif = d.discover_subject(
-                sources=sources, vision_call=vision_call, invoke=_disc_inv,
-                seed=seed, recent_titles=recent_titles)
-        except Exception as e:  # noqa: BLE001 — keşif üretimi durdurmaz
-            log.warning(f"  reel[keşif]: çöktü ({e}) → konu-yoluna düşülüyor")
-        if kesif is not None:
+        # İKİ deneme: ilk öznenin klipleri hareket kapısında erirse (thumbnail
+        # hareketi gösteremez — mirket/kartal tünemiş poz dersi) ikinci turda o
+        # özneden KAÇINARAK yeniden seçtirilir; o da olmazsa konu-yoluna düşülür.
+        denenen_ozneler: list[str] = []
+        for _kesif_tur in range(2):
+            kesif = None
+            try:
+                kesif = d.discover_subject(
+                    sources=sources, vision_call=vision_call, invoke=_disc_inv,
+                    seed=seed + _kesif_tur, recent_titles=recent_titles,
+                    avoid_subjects=denenen_ozneler or None)
+            except Exception as e:  # noqa: BLE001 — keşif üretimi durdurmaz
+                log.warning(f"  reel[keşif]: çöktü ({e}) → konu-yoluna düşülüyor")
+            if kesif is None:
+                break
             subj, adaylar = kesif
             denenen = 0
             for cand in adaylar:
@@ -558,10 +565,13 @@ def _prepare_footage_driven(*, topic: str, channel, reel, d, work_dir: Path,
                 kesif_yedek.extend(adaylar[denenen:])
                 log.info(f"  reel[keşif]: {len(clips)} klip indirildi "
                          f"(+{len(kesif_yedek)} yedek aday) → konu: {topic}")
-            else:
-                log.warning(f"  reel[keşif]: yalnız {len(set(map(str, clips)))} ayrık "
-                            f"klip indirilebildi → konu-yoluna düşülüyor")
-                clips, used_queries, used = [], [], set()
+                break                            # özne oturdu
+            denenen_ozneler.append(subj.subject_en)
+            log.warning(f"  reel[keşif]: '{subj.subject_en}' yalnız "
+                        f"{len(set(map(str, clips)))} ayrık klip verdi → "
+                        f"{'ikinci özne denenecek' if _kesif_tur == 0 else 'konu-yoluna düşülüyor'}")
+            clips, used_queries, used = [], [], set()
+            kesif_yedek.clear()
 
     if not clips:
         queries = d.footage_search_queries(

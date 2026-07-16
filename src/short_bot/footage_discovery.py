@@ -69,6 +69,7 @@ def _pick_queries(seed: int, n: int = 3) -> list[str]:
 
 def discover_subject(*, sources, vision_call, invoke, seed: int = 0,
                      recent_titles: list[str] | None = None,
+                     avoid_subjects: list[str] | None = None,
                      per_query: int = 12, max_describe: int = 24):
     """Stoku tara, özne seç, konu türet.
 
@@ -130,7 +131,10 @@ def discover_subject(*, sources, vision_call, invoke, seed: int = 0,
         "kurnazlık, gösteriş) — mizaha elverişli. İnsan/manzara/nesne ÖZNE OLAMAZ.\n"
         "  • SON VİDEOLARLA ÇAKIŞMA: aşağıdaki son video konularıyla AYNI ya da çok "
         f"benzer özneyi SEÇME (tekrar hissi verir):\n{son}\n"
-        "  • subject_en: öznenin İngilizce kısa adı (stok arama sorgusu olarak da "
+        + (("  • ŞU ÖZNELERİ DE SEÇME (bu koşuda klipleri hareket kapısından "
+            "geçemedi): " + ", ".join(avoid_subjects) + "\n")
+           if avoid_subjects else "")
+        + "  • subject_en: öznenin İngilizce kısa adı (stok arama sorgusu olarak da "
         "kullanılacak — 'archerfish', 'mantis shrimp' gibi).\n"
         "  • topic_tr: kliplerde GERÇEKTEN GÖRÜNEN davranıştan türetilmiş, mizah açılı "
         "TEK cümlelik Türkçe konu ('Bizimki ... yapıyor' tadında). Kliplerde OLMAYAN "

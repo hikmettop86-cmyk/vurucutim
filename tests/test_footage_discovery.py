@@ -98,3 +98,23 @@ def test_discover_gecersiz_indeksler_none(monkeypatch):
     out = discover_subject(sources=[_Src("pexels", [_cand(i) for i in range(6)])],
                            vision_call=object(), invoke=fake_invoke, seed=0)
     assert out is None
+
+
+def test_discover_avoid_subjects_prompta_girer(monkeypatch):
+    # İlk öznenin klipleri hareket kapısında eriyince ikinci deneme AYNI özneyi
+    # seçmesin diye kaçınma listesi prompt'a girer.
+    import short_bot.footage_matcher as FM
+    monkeypatch.setattr(FM, "describe_footage", lambda url, **k: "an eagle perched")
+    yakalanan = {}
+
+    def fake_invoke(prompt, schema):
+        yakalanan["p"] = prompt
+        return DiscoveredSubject(subject_en="falcon", topic_tr="Bizimki dalışa geçiyor",
+                                 clip_indices=[0, 1, 2, 3])
+
+    out = discover_subject(sources=[_Src("pexels", [_cand(i) for i in range(6)])],
+                           vision_call=object(), invoke=fake_invoke, seed=0,
+                           avoid_subjects=["eagle", "meerkat"])
+    assert out is not None
+    assert "eagle" in yakalanan["p"] and "meerkat" in yakalanan["p"]
+    assert "SEÇME" in yakalanan["p"]
