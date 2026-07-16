@@ -11,11 +11,9 @@ def _kanal(persona=""):
         schedule_cron="0 * * * *", duration_s=25, min_score=6.0,
         max_candidates_per_run=3, template="newscast",
         colors={"primary": "#fff"}, handle="@test", output_dir="out",
-        enabled=True, cta_enabled=False, cta_text="", cta_icons=[],
-        cta_duration_s=0, cta_show_handle=False, language="tr", max_age_hours=24,
+        enabled=True, language="tr", max_age_hours=24,
         reel=ReelConfig(enabled=True, voice_id="v1", persona=persona,
-                        target_duration_s=(25, 45), cta_enabled=False,
-                        comment_question=False, series_enabled=False),
+                        target_duration_s=(25, 45),                        comment_question=False, series_enabled=False),
     )
 
 

@@ -18,7 +18,8 @@ def test_rss_locales_cover_all_languages():
 
 
 def test_ui_labels_cover_all_languages_with_5_keys():
-    expected_keys = {"like", "subscribe", "share", "breaking", "source"}
+    # like/subscribe/share KALDIRILDI (2026-07-16, kullanıcı kararı)
+    expected_keys = {"breaking", "source"}
     for lang in SUPPORTED_LANGUAGES:
         assert lang in UI_LABELS
         assert set(UI_LABELS[lang].keys()) == expected_keys
@@ -38,7 +39,7 @@ def test_rss_locale_for_helper():
 
 def test_ui_labels_for_helper():
     labels = ui_labels_for("de")
-    assert labels["subscribe"] == "ABONNIEREN"
+    assert labels["breaking"] == "EILMELDUNG"
 
 
 def test_language_name_helper():

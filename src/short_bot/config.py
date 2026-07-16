@@ -304,11 +304,8 @@ class ChannelConfig:
     handle: str
     output_dir: str
     enabled: bool
-    cta_enabled: bool
-    cta_text: str
-    cta_icons: list[str]
-    cta_duration_s: int
-    cta_show_handle: bool
+    # Beğeni/abone CTA alanları KALDIRILDI (2026-07-16, kullanıcı kararı) —
+    # eski YAML'lardaki 'cta:' bölümü loader'da okunmaz, sessizce atlanır.
     language: str = "tr"
     # max_age_hours: pipeline drops RSS items older than this many hours
     # (0 = no limit). Default 24h prevents stale articles from being turned
@@ -460,7 +457,6 @@ def load_channel(path: Path) -> ChannelConfig:
     reel_data = data.get("reel")
     reel = ReelConfig.model_validate(reel_data) if reel_data else None
 
-    cta = data.get("cta", {})
     return ChannelConfig(
         slug=slug,
         name=data["name"],
@@ -479,11 +475,6 @@ def load_channel(path: Path) -> ChannelConfig:
         handle=data["handle"],
         output_dir=data["output_dir"],
         enabled=bool(data.get("enabled", True)),
-        cta_enabled=bool(cta.get("enabled", True)),
-        cta_text=cta.get("text", "BEĞEN · ABONE OL · PAYLAŞ"),
-        cta_icons=list(cta.get("icons", ["❤️", "🔔", "↗️"])),
-        cta_duration_s=int(cta.get("duration_s", 4)),
-        cta_show_handle=bool(cta.get("show_handle", True)),
         language=language,
         dna=dna,
         script_model=data.get("script_model"),
@@ -517,13 +508,6 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
         "handle": cfg.handle,
         "output_dir": cfg.output_dir,
         "enabled": cfg.enabled,
-        "cta": {
-            "enabled": cfg.cta_enabled,
-            "text": cfg.cta_text,
-            "icons": list(cfg.cta_icons),
-            "duration_s": cfg.cta_duration_s,
-            "show_handle": cfg.cta_show_handle,
-        },
     }
     if cfg.dynamic_dna:
         data["dynamic_dna"] = True

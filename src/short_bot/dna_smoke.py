@@ -49,7 +49,6 @@ def smoke_render_dna(
         handle="@smoke",
         duration_s=6,
         language=language,
-        cta_enabled=False,
     )
     template_path = Path(templates_dir) / f"{channel_template}.html.j2"
     if not template_path.exists():

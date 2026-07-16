@@ -67,8 +67,7 @@ def _job(body: str, *, headline_top="STAT", headline_bot="2026") -> RenderJob:
         channel_colors={"primary": "#06b6d4", "accent": "#facc15",
                          "bg_gradient": ["#0f172a", "#020617"]},
         handle="@x", duration_s=6, language="tr",
-        cta_enabled=False, cta_text="", cta_icons=[],
-        cta_duration_s=0, cta_show_handle=False, rss_source=None,
+ rss_source=None,
     )
 
 

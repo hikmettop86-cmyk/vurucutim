@@ -159,8 +159,6 @@ def save():
                 "bg_gradient": dna.palette.bg_gradient},
         handle=f"@{slug}", output_dir=f"output/{slug}",
         enabled=True,
-        cta_enabled=False, cta_text="", cta_icons=[],
-        cta_duration_s=0, cta_show_handle=False,
         language=language, dna=dna, script_model=None,
         content_source=content_source,
         generator=generator,

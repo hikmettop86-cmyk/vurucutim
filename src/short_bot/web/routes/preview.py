@@ -140,12 +140,6 @@ def preview(slug):
                      if request.args.get("archetype") in valid_archetypes
                      else cfg.template)
 
-    # CTA params (override channel's saved values for live preview)
-    cta_enabled_str = request.args.get("cta_enabled", "")
-    cta_enabled = cta_enabled_str == "1" if cta_enabled_str else False
-    cta_text = request.args.get("cta_text", "").strip() or (cfg.cta_text or "BEĞEN · ABONE OL · PAYLAŞ")
-    cta_show_handle_str = request.args.get("cta_show_handle", "")
-    cta_show_handle = cta_show_handle_str == "1" if cta_show_handle_str else cfg.cta_show_handle
     # RSS source preview (so user sees "Kaynak: NTV" overlay positioning before saving)
     rss_source = request.args.get("rss_source", "").strip() or None
 
@@ -160,11 +154,6 @@ def preview(slug):
         },
         handle=cfg.handle, duration_s=cfg.duration_s,
         language=cfg.language,
-        cta_enabled=cta_enabled,
-        cta_text=cta_text,
-        cta_icons=list(cfg.cta_icons or ["❤️", "🔔", "↗️"]),
-        cta_duration_s=cfg.cta_duration_s or 4,
-        cta_show_handle=cta_show_handle,
         rss_source=rss_source,
     )
     # sanitize_palette = yaml-original (custom_css o palette ile yazıldı);

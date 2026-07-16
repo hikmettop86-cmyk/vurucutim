@@ -112,55 +112,7 @@
     font-size: 28px; font-weight: 700; letter-spacing: 1px;
   }
 
-  {% if cta.enabled %}
-  /* Pre-flash + CTA overlay — same pattern as newscast for consistency */
-  .preflash {
-    position: absolute; inset: 0;
-    background: #fff; opacity: 0;
-    pointer-events: none; z-index: 50;
-    animation: flash 0.18s ease-out {{ duration_s - cta.duration_s - 0.15 }}s forwards;
-  }
-  @keyframes flash {
-    0% { opacity: 0; } 40% { opacity: 0.9; } 100% { opacity: 0; }
-  }
-  .cta {
-    position: absolute; inset: 0;
-    background: radial-gradient(ellipse at center, rgba(20,20,20,.92), rgba(0,0,0,.98));
-    padding: 0 60px;
-    text-align: center;
-    opacity: 0; pointer-events: none; z-index: 40;
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    animation: cta-fade-in 0.25s ease-out {{ duration_s - cta.duration_s }}s forwards;
-  }
-  @keyframes cta-fade-in { to { opacity: 1; } }
-  {% if cta.show_handle %}
-  .cta .handle-line {
-    font-size: 64px; font-weight: 900;
-    color: {{ colors.accent }};
-    margin-bottom: 50px;
-    text-shadow: 0 0 18px rgba(255,234,59,.7);
-  }
-  {% endif %}
-  .cta .sub-btn {
-    background: linear-gradient(180deg, #ff2d2d, #c81e1e);
-    color: #fff;
-    font-size: 88px; font-weight: 900;
-    padding: 40px 70px;
-    border-radius: 100px;
-    box-shadow: 0 12px 0 rgba(0,0,0,.5), 0 20px 60px rgba(255,45,45,.6);
-    display: inline-flex; align-items: center; gap: 28px;
-    margin-bottom: 60px;
-  }
-  .cta .icons-row {
-    display: flex; gap: 40px; margin-top: 30px;
-  }
-  .cta .icon-item {
-    display: flex; flex-direction: column; align-items: center;
-  }
-  .cta .icon-item .ic { font-size: 80px; }
-  .cta .icon-item .lbl { font-size: 24px; opacity: .7; margin-top: 4px; }
-  {% endif %}
+  {# Begeni/abone CTA karti KALDIRILDI (2026-07-16, kullanici karari). #}
 
   /* SOURCE CREDIT */
   .source-credit {
@@ -196,22 +148,7 @@
   <div class="progress"></div>
   <div class="handle">{{ handle }}</div>
 
-  {% if cta.enabled %}
-  <div class="preflash"></div>
-  <div class="cta">
-    {% if cta.show_handle %}<div class="handle-line">{{ handle }}</div>{% endif %}
-    <div class="sub-btn"><span>🔔</span><span>{{ ui_subscribe }}</span></div>
-    <div class="icons-row">
-      {% set icon_labels = [ui_like, ui_subscribe, ui_share] %}
-      {% for icon in cta.icons %}
-      <div class="icon-item">
-        <span class="ic">{{ icon }}</span>
-        <span class="lbl">{{ icon_labels[loop.index0] if loop.index0 < icon_labels|length else "" }}</span>
-      </div>
-      {% endfor %}
-    </div>
-  </div>
-  {% endif %}
+
 
   {% if rss_source %}
   <div class="source-credit">{{ ui_source }}: {{ rss_source }}</div>

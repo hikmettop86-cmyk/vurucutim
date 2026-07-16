@@ -21,9 +21,7 @@ def _channel_with_dna(language: str, ui_badge: str) -> ChannelConfig:
         max_candidates_per_run=1, template="newscast",
         colors={"primary": "#000", "accent": "#111", "bg_gradient": ["#000", "#111"]},
         handle="@t", output_dir="out",
-        enabled=True, cta_enabled=False, cta_text="", cta_icons=[],
-        cta_duration_s=0, cta_show_handle=False,
-        language=language, dna=dna, script_model=None,
+        enabled=True,        language=language, dna=dna, script_model=None,
         content_source="rss", generator=None,
     )
 
@@ -32,9 +30,8 @@ def test_ui_badge_overrides_breaking_when_set():
     cfg = _channel_with_dna(language="tr", ui_badge="❀ AŞK SÖZLERİ ❀")
     labels = _resolve_ui_labels(cfg)
     assert labels["breaking"] == "❀ AŞK SÖZLERİ ❀"
-    # Other labels untouched
-    assert labels["like"] == "BEĞEN"
-    assert labels["subscribe"] == "ABONE OL"
+    # Other labels untouched (like/subscribe/share 2026-07-16'da kaldırıldı)
+    assert labels["source"] == "Kaynak"
 
 
 def test_empty_ui_badge_keeps_locale_default():
@@ -56,9 +53,7 @@ def test_no_dna_keeps_locale_default():
         max_candidates_per_run=1, template="newscast",
         colors={"primary": "#000", "accent": "#111", "bg_gradient": ["#000", "#111"]},
         handle="@t", output_dir="out",
-        enabled=True, cta_enabled=False, cta_text="", cta_icons=[],
-        cta_duration_s=0, cta_show_handle=False,
-        language="de", dna=None, script_model=None,
+        enabled=True,        language="de", dna=None, script_model=None,
         content_source="rss", generator=None,
     )
     labels = _resolve_ui_labels(cfg)

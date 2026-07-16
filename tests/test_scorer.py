@@ -22,8 +22,7 @@ def _channel(name: str, keywords: list[str], language: str = "tr") -> ChannelCon
         schedule_cron="0 * * * *", duration_s=25, min_score=6.0,
         max_candidates_per_run=3, template="newscast",
         colors={"primary": "#fff"}, handle="@test", output_dir="out",
-        enabled=True, cta_enabled=True, cta_text="x", cta_icons=[],
-        cta_duration_s=4, cta_show_handle=True, language=language,
+        enabled=True, language=language,
         max_age_hours=24,
     )
 

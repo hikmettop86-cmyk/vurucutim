@@ -117,8 +117,6 @@ def _channel_with_template(template_str=None):
         max_candidates_per_run=1, template="stadium" if dna else "newscast",
         colors={"primary":"#000","accent":"#fff","bg_gradient":["#000","#111"]},
         handle="@x", output_dir="x", enabled=True,
-        cta_enabled=False, cta_text="", cta_icons=[],
-        cta_duration_s=0, cta_show_handle=False,
         language="tr", dna=dna,
     )
 
@@ -176,8 +174,6 @@ def _channel_with_template_and_keywords(template_str: str, keywords: list[str]):
         max_candidates_per_run=1, template="stadium",
         colors={"primary":"#000","accent":"#fff","bg_gradient":["#000","#111"]},
         handle="@x", output_dir="x", enabled=True,
-        cta_enabled=False, cta_text="", cta_icons=[],
-        cta_duration_s=0, cta_show_handle=False,
         language="en", dna=dna,
     )
 

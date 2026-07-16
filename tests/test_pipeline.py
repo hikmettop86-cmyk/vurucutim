@@ -29,9 +29,7 @@ def _make_test_channel(*, bg_video=None):
         colors={"primary": "#000", "accent": "#fff",
                 "bg_gradient": ["#000", "#111"]},
         handle="@x", output_dir="output/t",
-        enabled=True, cta_enabled=False, cta_text="",
-        cta_icons=[], cta_duration_s=0, cta_show_handle=False,
-        language="tr", bg_video=bg_video,
+        enabled=True,        language="tr", bg_video=bg_video,
     )
 
 
@@ -51,9 +49,7 @@ def _channel(tmp_path):
         max_candidates_per_run=10, template="default",
         colors={"primary": "#c81e1e", "accent": "#ffea3b", "bg_gradient": ["#1a3b6b", "#0a1a3b"]},
         handle="@x", output_dir=str(tmp_path / "output" / "test"),
-        enabled=True, cta_enabled=True, cta_text="A · B · C",
-        cta_icons=["❤️", "🔔", "↗️"], cta_duration_s=1, cta_show_handle=True,
-        language="tr",
+        enabled=True,        language="tr",
         max_age_hours=0,  # disable age filter — these tests use stub items, not live RSS
     )
 

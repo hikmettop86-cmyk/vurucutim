@@ -26,9 +26,7 @@ def _minimal_channel(tmp_path):
         template="newscast", colors={"primary": "#fff", "accent": "#000",
                                        "bg_gradient": ["#111", "#222"]},
         handle="@test", output_dir=str(tmp_path / "out"),
-        enabled=True, cta_enabled=False, cta_text="", cta_icons=[],
-        cta_duration_s=0, cta_show_handle=False,
-    )
+        enabled=True,    )
 
 
 def _item():

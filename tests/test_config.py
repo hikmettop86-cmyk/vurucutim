@@ -32,10 +32,9 @@ def test_load_channel(tmp_path):
     assert c.slug == "test"
     assert c.keywords == ["a", "b"]
     assert c.colors["primary"] == "#c81e1e"
-    assert c.cta_enabled is True
-    assert c.cta_duration_s == 4
-    assert c.cta_text == "A · B · C"
-    assert c.cta_icons == ["❤️", "🔔", "↗️"]
+    # Beğeni/abone CTA alanları KALDIRILDI (2026-07-16) — eski YAML'daki
+    # 'cta:' bölümü sessizce yok sayılır, alan olarak taşınmaz.
+    assert not hasattr(c, "cta_enabled")
 
 
 def test_load_channel_invalid_slug(tmp_path):
@@ -114,9 +113,6 @@ def test_save_channel_round_trips(tmp_path):
     assert loaded.name == "Türkçe Ad"
     assert loaded.keywords == ["son dakika", "asgari ücret"]
     assert loaded.colors == original.colors
-    assert loaded.cta_text == "BEĞEN · ABONE OL · PAYLAŞ"
-    assert loaded.cta_icons == ["❤️", "🔔", "↗️"]
-    assert loaded.cta_duration_s == 4
     assert loaded.handle == "@RoundTrip"
 
 
@@ -563,8 +559,7 @@ def test_channel_config_dynamic_dna_round_trip(tmp_path):
         schedule_cron="0 * * * *", duration_s=25, min_score=6.0,
         max_candidates_per_run=3, template="newscast",
         colors={"primary": "#fff"}, handle="@test", output_dir="out",
-        enabled=True, cta_enabled=True, cta_text="x", cta_icons=[],
-        cta_duration_s=4, cta_show_handle=True, language="tr",
+        enabled=True, language="tr",
         max_age_hours=24, dynamic_dna=True,
     )
     p = tmp_path / "ch.yaml"
@@ -581,8 +576,7 @@ def test_channel_config_dynamic_dna_false_not_written(tmp_path):
         schedule_cron="0 * * * *", duration_s=25, min_score=6.0,
         max_candidates_per_run=3, template="newscast",
         colors={"primary": "#fff"}, handle="@test", output_dir="out",
-        enabled=True, cta_enabled=True, cta_text="x", cta_icons=[],
-        cta_duration_s=4, cta_show_handle=True, language="tr",
+        enabled=True, language="tr",
         max_age_hours=24, dynamic_dna=False,
     )
     p = tmp_path / "ch.yaml"
@@ -622,8 +616,7 @@ def test_channel_config_negative_keywords_round_trip(tmp_path):
         schedule_cron="0 * * * *", duration_s=25, min_score=6.0,
         max_candidates_per_run=3, template="newscast",
         colors={"primary": "#fff"}, handle="@test", output_dir="out",
-        enabled=True, cta_enabled=True, cta_text="x", cta_icons=[],
-        cta_duration_s=4, cta_show_handle=True, language="tr",
+        enabled=True, language="tr",
         max_age_hours=24, dynamic_dna=False,
         negative_keywords=["wwe", "wrestling"],
     )
@@ -641,8 +634,7 @@ def test_channel_config_negative_keywords_empty_not_written(tmp_path):
         schedule_cron="0 * * * *", duration_s=25, min_score=6.0,
         max_candidates_per_run=3, template="newscast",
         colors={"primary": "#fff"}, handle="@test", output_dir="out",
-        enabled=True, cta_enabled=True, cta_text="x", cta_icons=[],
-        cta_duration_s=4, cta_show_handle=True, language="tr",
+        enabled=True, language="tr",
         max_age_hours=24, dynamic_dna=False,
         negative_keywords=[],
     )

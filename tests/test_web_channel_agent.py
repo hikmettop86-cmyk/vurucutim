@@ -272,8 +272,7 @@ def test_KUR_sonrasi_yonlendirme_404_VERMEZ(tmp_path, monkeypatch):
             colors={"primary": "#000000", "accent": "#ffffff",
                     "bg_gradient": ["#000000", "#111111"]},
             handle=f"@{plan.slug}", output_dir=f"output/{plan.slug}", enabled=True,
-            cta_enabled=False, cta_text="", cta_icons=[], cta_duration_s=0,
-            cta_show_handle=False, language=plan.language, dna=plan.dna,
+            language=plan.language, dna=plan.dna,
             script_model=None, content_source="generator",
             generator=GeneratorConfig(topic=plan.niche),
             reel=ReelConfig(enabled=True, voice_id=plan.voice.voice_id)))

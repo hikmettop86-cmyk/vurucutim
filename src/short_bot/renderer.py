@@ -13,11 +13,10 @@ from short_bot.models import RenderJob
 WIDTH = 1080
 HEIGHT = 1920
 
+# like/subscribe/share etiketleri KALDIRILDI (2026-07-16, kullanıcı kararı) —
+# şablonlarda beğeni/abone öğesi kalmadı.
 DEFAULT_UI_LABELS_TR: dict[str, str] = {
     "breaking": "SON DAKİKA",
-    "like": "BEĞEN",
-    "subscribe": "ABONE OL",
-    "share": "PAYLAŞ",
 }
 
 
@@ -84,19 +83,9 @@ def build_html(
         category=job.script.category,
         language=job.language,
         ui_breaking=labels["breaking"],
-        ui_like=labels["like"],
-        ui_subscribe=labels["subscribe"],
-        ui_share=labels["share"],
         ui_source=labels.get("source", "Source"),
         dna_css=dna_css,
         animation_style=animation_style,
-        cta={
-            "enabled": job.cta_enabled,
-            "text": job.cta_text,
-            "icons": job.cta_icons,
-            "duration_s": job.cta_duration_s,
-            "show_handle": job.cta_show_handle,
-        },
         rss_source=job.rss_source,
         narration=job.narration,
     )

@@ -173,8 +173,6 @@ def _cmd_create_channel(args) -> int:
         },
         handle=f"@{slug}", output_dir=f"output/{slug}",
         enabled=True,
-        cta_enabled=False, cta_text="", cta_icons=[],
-        cta_duration_s=0, cta_show_handle=False,
         language=args.language, dna=dna, script_model=None,
     )
     save_channel(yaml_path, cfg)

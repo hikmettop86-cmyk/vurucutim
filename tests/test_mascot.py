@@ -45,12 +45,10 @@ def test_mascot_promptta_persona_ile(monkeypatch):
         slug="m", name="M", keywords=["a"], rss_locale="tr-TR",
         schedule_cron="0 * * * *", duration_s=25, min_score=6.0,
         max_candidates_per_run=3, template="newscast", colors={"primary": "#fff"},
-        handle="@m", output_dir="o", enabled=True, cta_enabled=False, cta_text="",
-        cta_icons=[], cta_duration_s=0, cta_show_handle=False, language="tr",
+        handle="@m", output_dir="o", enabled=True, language="tr",
         max_age_hours=24,
         reel=ReelConfig(enabled=True, voice_id="v1", persona="vahsi_mizah",
-                        target_duration_s=(25, 45), cta_enabled=False,
-                        comment_question=False, series_enabled=False,
+                        target_duration_s=(25, 45),                        comment_question=False, series_enabled=False,
                         mascot_name="Deli Kâzım", mascot_animal="bal porsuğu",
                         mascot_trait="korkusuz deli"))
     RN.write_reel_narration("penguen", channel=ch)

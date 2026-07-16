@@ -166,7 +166,7 @@ def save(slug):
         abort(404)
     cfg = load_channel(path)
     # Reel kanalları reel-özel (reel-güvenli) save'i kullanır. Bayat sekmeden
-    # gelen bir POST'un DNA/CTA'yı bozmasını engelle (savunma derinliği).
+    # gelen bir POST'un DNA'yı bozmasını engelle (savunma derinliği).
     if cfg.reel and cfg.reel.enabled:
         return redirect(url_for("reel_edit.edit_reel", slug=slug))
 
@@ -464,11 +464,6 @@ def save(slug):
         handle=request.form.get("handle", cfg.handle),
         output_dir=cfg.output_dir,
         enabled=request.form.get("enabled") == "1",
-        cta_enabled=request.form.get("cta_enabled") == "1",
-        cta_text=request.form.get("cta_text", cfg.cta_text),
-        cta_icons=_form_get_list("cta_icons") or cfg.cta_icons,
-        cta_duration_s=_form_get_int("cta_duration_s", cfg.cta_duration_s),
-        cta_show_handle=request.form.get("cta_show_handle") == "1",
         language=cfg.language,
         dna=new_dna,
         script_model=cfg.script_model,

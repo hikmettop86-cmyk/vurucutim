@@ -33,9 +33,7 @@ claude_models: {dna: opus, default: haiku}
         max_candidates_per_run=5, template="newscast",
         colors={"primary": "#000", "accent": "#111", "bg_gradient": ["#000", "#111"]},
         handle="@h", output_dir="output/h",
-        enabled=True, cta_enabled=False, cta_text="", cta_icons=[],
-        cta_duration_s=0, cta_show_handle=False,
-        language="tr", dna=None, script_model=None,
+        enabled=True,        language="tr", dna=None, script_model=None,
         content_source="rss", generator=None,
     )
     gen_cfg = ChannelConfig(
@@ -44,9 +42,7 @@ claude_models: {dna: opus, default: haiku}
         max_candidates_per_run=1, template="stat-hero",
         colors={"primary": "#000", "accent": "#fff", "bg_gradient": ["#000", "#111"]},
         handle="@s", output_dir="output/s",
-        enabled=True, cta_enabled=False, cta_text="", cta_icons=[],
-        cta_duration_s=0, cta_show_handle=False,
-        language="tr", dna=dna, script_model="sonnet",
+        enabled=True,        language="tr", dna=dna, script_model="sonnet",
         content_source="generator",
         generator=GeneratorConfig(topic="Sevgi sözleri üretiyoruz."),
     )

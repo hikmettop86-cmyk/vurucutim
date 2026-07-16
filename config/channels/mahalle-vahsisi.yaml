@@ -17,12 +17,6 @@ colors:
 handle: '@DayiDiyorKi'
 output_dir: output/mahalle-vahsisi
 enabled: true
-cta:
-  enabled: false
-  text: ''
-  icons: []
-  duration_s: 0
-  show_handle: false
 reference_channels:
 - https://www.youtube.com/@Vahsimizah2024/shorts
 - https://www.youtube.com/@DiscoverNowGlobal/shorts
@@ -69,14 +63,13 @@ reel:
   arc_mode: planned
   identity_lock: true
   sting_enabled: true
-  cta_enabled: true
   comment_question: true
-  cta_text_custom: ''
   persona: vahsi_mizah
   mascot_name: Deli Kâzım
   mascot_animal: bal porsuğu
   mascot_trait: Geri Vitesi Olmayan Deli — çılgın, korkusuz, kimseden çekinmez, geri
     vites yok, mahallenin ruhsatsız delisi
+  footage_driven: true
 dna:
   archetype: newscast
   palette:

@@ -41,8 +41,7 @@ def _render_to_png(archetype: str, out_path: Path):
         channel_colors={"primary": "#c81e1e", "accent": "#ffea3b",
                          "bg_gradient": ["#1a3b6b", "#0a1a3b"]},
         handle="@TestKanal", duration_s=6,
-        language="tr", cta_enabled=False,
-    )
+        language="tr",    )
     template = Path(f"templates/{archetype}.html.j2")
     html = build_html(job, template, ui_labels={
         "like": "BEĞEN", "subscribe": "ABONE OL",

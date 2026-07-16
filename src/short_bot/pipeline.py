@@ -369,33 +369,7 @@ def unique_output_path(out_dir: Path, stem: str, suffix: str = ".mp4") -> Path:
         f"çıktı adı üretilemedi: {out_dir / stem}{suffix} ve -2..-{MAX_OUTPUT_SUFFIX} dolu")
 
 
-def _build_cta_sfx(channel) -> list:
-    """Build SFX overlay schedule for the CTA window. Returns empty if SFX missing."""
-    from short_bot.composer import SfxOverlay
-    sfx_dir = Path("assets/sfx")
-    whoosh = sfx_dir / "whoosh.mp3"
-    pop = sfx_dir / "pop.mp3"
-    ding = sfx_dir / "ding.mp3"
-    if not (whoosh.exists() and pop.exists() and ding.exists()):
-        return []  # SFX optional — silent if files missing
-    if not channel.cta_enabled:
-        return []
-
-    cta_start_ms = (channel.duration_s - channel.cta_duration_s) * 1000
-    # Timings match the CSS animations in the template:
-    #   handle-drop:  +0.05s
-    #   sub-pop:      +0.15s   ← whoosh here (entrance)
-    #   icon-pop #1:  +0.25s   ← pop1
-    #   icon-pop #2:  +0.40s   ← pop2
-    #   icon-pop #3:  +0.55s   ← pop3
-    #   sub-press:    +0.55s   ← ding (subscribe tap)
-    return [
-        SfxOverlay(path=whoosh, delay_ms=cta_start_ms + 100, volume=0.6),
-        SfxOverlay(path=pop, delay_ms=cta_start_ms + 250, volume=0.5),
-        SfxOverlay(path=pop, delay_ms=cta_start_ms + 400, volume=0.5),
-        SfxOverlay(path=pop, delay_ms=cta_start_ms + 550, volume=0.5),
-        SfxOverlay(path=ding, delay_ms=cta_start_ms + 550, volume=0.55),
-    ]
+# _build_cta_sfx KALDIRILDI (2026-07-16): CTA kapanış kartı silindi.
 
 
 _RUN_SUB_LOGGERS = (
@@ -761,9 +735,6 @@ def _produce_from_item(
         script=script, bg_image_path=bg, music_path=music,
         channel_colors=channel.colors, handle=channel.handle,
         duration_s=channel.duration_s, language=channel.language,
-        cta_enabled=channel.cta_enabled, cta_text=channel.cta_text,
-        cta_icons=channel.cta_icons, cta_duration_s=channel.cta_duration_s,
-        cta_show_handle=channel.cta_show_handle,
         rss_source=item.source,
     )
 
@@ -794,7 +765,7 @@ def _produce_from_item(
         slug = _slugify(item.title)
         out_path = unique_output_path(
             out_dir, f"{datetime.now(timezone.utc):%Y-%m-%d}_{slug}")
-        sfx_overlays = _build_cta_sfx(channel)
+        sfx_overlays = []
         bg_video_path = _resolve_pexels_bg(
             channel=channel, cache_dir=cache_dir,
             secrets_path=secrets_path, log=log)
@@ -1123,11 +1094,6 @@ def _run_rss(*, channel, run_id, log, eng, settings,
         handle=channel.handle,
         duration_s=channel.duration_s,
         language=channel.language,
-        cta_enabled=channel.cta_enabled,
-        cta_text=channel.cta_text,
-        cta_icons=channel.cta_icons,
-        cta_duration_s=channel.cta_duration_s,
-        cta_show_handle=channel.cta_show_handle,
         rss_source=picked.item.source if picked else None,
     )
 
@@ -1166,7 +1132,7 @@ def _run_rss(*, channel, run_id, log, eng, settings,
         out_path = unique_output_path(
             out_dir, f"{datetime.now(timezone.utc):%Y-%m-%d}_{slug}")
 
-        sfx_overlays = _build_cta_sfx(channel)
+        sfx_overlays = []
         bg_video_path = _resolve_pexels_bg(
             channel=channel, cache_dir=cache_dir,
             secrets_path=secrets_path, log=log,
@@ -1547,9 +1513,6 @@ def _run_generator(*, channel, run_id, log, eng, settings,
         script=chosen_result.script, bg_image_path=bg, music_path=music,
         channel_colors=channel.colors, handle=channel.handle,
         duration_s=channel.duration_s, language=channel.language,
-        cta_enabled=channel.cta_enabled, cta_text=channel.cta_text,
-        cta_icons=channel.cta_icons, cta_duration_s=channel.cta_duration_s,
-        cta_show_handle=channel.cta_show_handle,
         rss_source=None,  # generator path — no RSS source
     )
 
@@ -1593,7 +1556,7 @@ def _run_generator(*, channel, run_id, log, eng, settings,
         slug = _slugify(chosen_result.text)
         out_path = unique_output_path(
             out_dir, f"{datetime.now(timezone.utc):%Y-%m-%d}_{slug}")
-        sfx_overlays = _build_cta_sfx(channel)
+        sfx_overlays = []
 
         bg_video_path = _resolve_pexels_bg(
             channel=channel, cache_dir=cache_dir,
@@ -1741,10 +1704,6 @@ def _render_and_compose(
         from short_bot.tts.ai33_client import resolve_ai33_api_key
         from short_bot.voiced import produce_voiced_video
         log.info("  voiced mod: ai33 seslendirme")
-        # CTA SFX zamanlaması channel.duration_s'e göre hesaplanır; voiced'da
-        # süre sesten gelir ve narrator şablonunda görsel CTA yok → SFX yanlış
-        # anda, görselsiz çalardı. Bu yüzden voiced dalda SFX'i baskılıyoruz.
-        log.info("  voiced: gorsel CTA yok, CTA SFX baskilandi")
         return produce_voiced_video(
             item=item, body=body, script=script,
             bg_image_path=bg_image_path, music_path=music,
@@ -1839,7 +1798,6 @@ def _build_check_job(script, channel, *, music_path, ui_language):
         handle=channel.handle,
         duration_s=channel.duration_s,
         language=ui_language,
-        cta_enabled=False,   # CTA layer would only confuse measurements
     )
 
 

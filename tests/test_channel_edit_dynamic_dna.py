@@ -44,8 +44,6 @@ output_dir: "out"
         min_score=cfg.min_score, max_candidates_per_run=cfg.max_candidates_per_run,
         template=cfg.template, colors=cfg.colors, handle=cfg.handle,
         output_dir=cfg.output_dir, enabled=cfg.enabled,
-        cta_enabled=cfg.cta_enabled, cta_text=cfg.cta_text, cta_icons=cfg.cta_icons,
-        cta_duration_s=cfg.cta_duration_s, cta_show_handle=cfg.cta_show_handle,
         language=cfg.language, max_age_hours=cfg.max_age_hours,
         dynamic_dna=True,  # the form-handled mutation
     )

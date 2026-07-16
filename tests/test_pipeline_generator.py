@@ -41,9 +41,7 @@ def _gen_channel(tmp_path, slug="sevgi"):
         colors={"primary": "#000", "accent": "#fff",
                 "bg_gradient": ["#000", "#111"]},
         handle="@sevgi", output_dir=str(tmp_path / "out"),
-        enabled=True, cta_enabled=False, cta_text="", cta_icons=[],
-        cta_duration_s=0, cta_show_handle=False,
-        language="tr", dna=_dna_spec(), script_model="sonnet",
+        enabled=True,        language="tr", dna=_dna_spec(), script_model="sonnet",
         content_source="generator",
         generator=GeneratorConfig(
             topic="Sevgi sözleri üret",

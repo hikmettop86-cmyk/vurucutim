@@ -65,7 +65,8 @@ def test_reel_wizard_get_renders_key_fields(tmp_path):
     assert 'name="voice_id"' in body
     assert 'name="name"' in body
     assert 'name="variation_on"' in body
-    assert 'name="cta_enabled"' in body
+    assert 'name="cta_enabled"' not in body   # beğeni/abone kartı KALKTI (2026-07-16)
+    assert 'name="comment_question"' in body
     assert 'name="produce_now"' in body
     # niş çipleri
     assert "Hayvanlar" in body
@@ -81,7 +82,7 @@ def test_reel_post_writes_channel_yaml(tmp_path):
             "voice_id": "Q2IX97JeHBY3vNGzgM5s",
             "highlight_color": "#38bdf8",
             "cut_pacing": "auto", "music_mood": "upbeat",
-            "variation_on": "on", "cta_enabled": "on",
+            "variation_on": "on",
             "comment_question": "on",
             "produce_now": "0",
         })
@@ -106,7 +107,7 @@ def test_reel_post_variation_off_sets_vary_false(tmp_path):
             "topic": "doğa ve vahşi yaşam hakkında ilginç bilgiler",
             "voice_id": "Q2IX97JeHBY3vNGzgM5s",
             "highlight_color": "#38bdf8",
-            # variation_on / cta_enabled / comment_question GÖNDERİLMEDİ → kapalı
+            # variation_on / comment_question GÖNDERİLMEDİ → kapalı
             "produce_now": "0",
         })
     from short_bot.config import load_channel
@@ -114,7 +115,6 @@ def test_reel_post_variation_off_sets_vary_false(tmp_path):
     assert cfg.reel.hook_angle_vary is False
     assert cfg.reel.accent_vary is False
     assert cfg.reel.transition_vary is False
-    assert cfg.reel.cta_enabled is False
     assert cfg.reel.comment_question is False
 
 
@@ -220,19 +220,18 @@ def test_channel_list_shows_reel_badge(tmp_path):
 
 def test_reel_channel_card_is_distinct(tmp_path):
     """Reel kanalı, standart karttan görsel/işlevsel olarak ayrık render edilmeli:
-    kart rozeti '🎬 REEL', reel'e özgü çipler (süre + abone kartı), satırda 'Reel'."""
+    kart rozeti '🎬 REEL', reel'e özgü çipler (süre), satırda 'Reel'."""
     c = _client(tmp_path)
     with patch("short_bot.web.routes.reel_new.generate_dna", return_value=_fake_dna()):
         c.post("/channels/new-reel", data={
             "name": "Ayrik Reel", "language": "tr",
             "topic": "uzay ve gezegenler hakkında ilginç bilgiler",
             "voice_id": "Q2IX97JeHBY3vNGzgM5s", "highlight_color": "#38bdf8",
-            "cta_enabled": "on",
         })
     body = c.get("/channels").data.decode("utf-8")
     assert "🎬 REEL" in body          # ayrık kart rozeti (kart görünümü)
     assert "🎬 Reel" in body          # satır göstergesi (tablo görünümü)
-    assert "abone kartı" in body      # reel'e özgü özellik çipi
+    assert "abone kartı" not in body  # beğeni/abone çipi KALKTI (2026-07-16)
     assert "25-45sn" in body          # reel süre çipi (standart kartta yok)
     assert "#38bdf8" in body          # marka rengi kenarlık/şerit
 

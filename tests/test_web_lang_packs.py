@@ -87,12 +87,14 @@ def test_URETILMEMIS_dil_EKSIK_gorunur(tmp_path):
     assert "üret" in body.lower()
 
 
-def test_CTA_metinleri_PANELDE_gorunur(tmp_path):
-    """Almanca kanal açan biri ekranda NE YAZACAĞINI görebilmeli."""
+def test_CTA_metinleri_PANELDE_ARTIK_YOK(tmp_path):
+    """Beğeni/abone çipleri KALDIRILDI (2026-07-16): paket kartında CTA metni
+    önizlemesi kalmadı; rozet örneği hâlâ görünür (feed kimliği yaşıyor)."""
     a, _ = _app(tmp_path)
     body = a.test_client().get("/lang-packs").data.decode("utf-8")
-    assert "ABONE OL" in body            # Türkçe paket
-    assert "ABONNIEREN" in body          # Almanca paket
+    assert "ABONE OL" not in body
+    assert "ABONNIEREN" not in body
+    assert "rozet örneği" in body        # kimlik önizlemesi duruyor
 
 
 # --- SİHİRBAZ KAPISI: SESSİZ DÜŞME YASAĞININ PANEL UCU ---------------------

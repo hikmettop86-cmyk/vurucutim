@@ -126,11 +126,6 @@ def produce_voiced_video(
         handle=channel.handle,
         duration_s=cap_s,
         language=channel.language,
-        cta_enabled=channel.cta_enabled,
-        cta_text=channel.cta_text,
-        cta_icons=channel.cta_icons,
-        cta_duration_s=channel.cta_duration_s,
-        cta_show_handle=channel.cta_show_handle,
         rss_source=getattr(item, "source", None),
         narration=timeline,
     )

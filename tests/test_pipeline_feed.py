@@ -15,8 +15,7 @@ def _channel(tmp_path, feed_ids):
         template="newscast", colors={"primary": "#fff", "accent": "#000",
                                        "bg_gradient": ["#111", "#222"]},
         handle="@f", output_dir=str(tmp_path / "out"), enabled=True,
-        cta_enabled=False, cta_text="", cta_icons=[], cta_duration_s=0,
-        cta_show_handle=False, content_source="feed", auto_feed_ids=feed_ids,
+        content_source="feed", auto_feed_ids=feed_ids,
     )
 
 

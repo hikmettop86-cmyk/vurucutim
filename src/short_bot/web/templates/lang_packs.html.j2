@@ -7,7 +7,7 @@
   <div class="mb-6">
     <h1 class="text-2xl font-bold text-claude-text">Dil Paketleri</h1>
     <p class="text-sm text-claude-muted mt-1">
-      Bir kanalın ekranına basılan metinler (abone çipi, bölüm rozeti), anlatım LLM'ine
+      Bir kanalın ekranına basılan metinler (bölüm rozeti), anlatım LLM'ine
       giden yönergeler ve <span class="text-claude-text font-medium">aşınmış-kalıp
       denetçisi</span> — hepsi kanalın dilinden gelir. Paket yoksa o dilde kanal
       kurulamaz.
@@ -42,15 +42,8 @@
                              font-semibold">kodla gelir</span>
               {% endif %}
             </p>
-            <div class="flex flex-wrap gap-2 mt-3">
-              {% for c in d.pack.cta_texts %}
-                <span class="px-2 py-1 rounded-md bg-claude-surface-alt text-xs
-                             text-claude-text font-mono">{{ c }}</span>
-              {% endfor %}
-              <span class="px-2 py-1 rounded-md bg-claude-accent/10 text-xs
-                           text-claude-accent font-mono">
-                {{ d.pack.trade_cta.replace('{no}', '48') }}</span>
-            </div>
+            {# CTA metin önizlemeleri KALDIRILDI (2026-07-16): paket artık
+               beğeni/abone çipi metni taşımıyor. #}
             <p class="text-xs text-claude-muted mt-2">
               {{ d.pack.overused|length }} yasaklı ifade ·
               {{ d.pack.overused_patterns|length }} kalıp örüntüsü ·
@@ -61,7 +54,7 @@
           {% else %}
             <p class="text-sm text-red-700 mt-1">
               <b>Paket yok.</b> Bu dilde kanal kurulamaz. Türkçe pakete düşülmez —
-              Almanca bir kanalın ekranına Türkçe "ABONE OL" basması sessiz bir
+              Almanca bir kanalın ekranına Türkçe rozet/yönerge basması sessiz bir
               bozulmadır.
             </p>
           {% endif %}
@@ -87,7 +80,7 @@
                     class="w-full bg-claude-surface border border-claude-border rounded-lg
                            px-3 py-2 text-xs font-mono text-claude-text">{{ d.json }}</textarea>
           <p class="text-xs text-claude-muted mt-2">
-            Kaydetmeden önce doğrulanır: abone çipi 24 karaktere sığmalı, seri
+            Kaydetmeden önce doğrulanır: rozet başlığı 24 karaktere sığmalı, seri
             yönergelerinin yer tutucuları eksiksiz olmalı, regex'ler derlenmeli.
             Geçmezse reddedilir ve sebebi söylenir.
           </p>

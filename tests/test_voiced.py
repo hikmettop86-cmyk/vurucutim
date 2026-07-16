@@ -42,11 +42,6 @@ class _Channel:
     handle = "@test"
     colors = {"primary": "#0ea5e9", "accent": "#facc15",
               "bg_gradient": ["#0f172a", "#020617"]}
-    cta_enabled = False
-    cta_text = ""
-    cta_icons: list[str] = []
-    cta_duration_s = 0
-    cta_show_handle = True
     duration_s = 6
     voice = VoiceConfig(enabled=True, voice_id="elevenlabs_v1", speed=1.0,
                         target_duration_s=(45, 60))

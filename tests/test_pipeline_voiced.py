@@ -14,11 +14,6 @@ class _Channel:
     language = "tr"
     handle = "@c"
     colors = {"primary": "#111", "accent": "#222", "bg_gradient": ["#0f172a", "#020617"]}
-    cta_enabled = False
-    cta_text = ""
-    cta_icons: list[str] = []
-    cta_duration_s = 0
-    cta_show_handle = True
     duration_s = 6
     bg_video = None
     voice = None
@@ -105,10 +100,6 @@ def test_voiced_suppresses_cta_sfx(tmp_path, monkeypatch):
                         lambda **kw: (captured.update(kw), kw["out_path"])[1])
 
     class Voiced(_Channel):
-        cta_enabled = True
-        cta_text = "Takip et"
-        cta_icons = ["like"]
-        cta_duration_s = 2
         voice = VoiceConfig(enabled=True, voice_id="elevenlabs_v1")
 
     _render_and_compose(**_kwargs(tmp_path, channel=Voiced(),

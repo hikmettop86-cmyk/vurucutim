@@ -20,8 +20,7 @@ def channel_with_yt():
         schedule_cron="* * * * *", duration_s=30, min_score=0.0,
         max_candidates_per_run=5, template="newscast", colors={},
         handle="@x", output_dir="output/t", enabled=True,
-        cta_enabled=False, cta_text="", cta_icons=[], cta_duration_s=3,
-        cta_show_handle=False, language="tr",
+        language="tr",
         youtube=yt,
     )
 

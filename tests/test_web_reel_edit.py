@@ -51,8 +51,7 @@ def _make_news_channel(cfg_dir):
         schedule_cron="0 8 * * *", duration_s=6, min_score=6.0, max_candidates_per_run=10,
         template="stat-hero", colors={"primary": "#000", "accent": "#fff",
         "bg_gradient": ["#000", "#111"]}, handle="@haber", output_dir="output/haber",
-        enabled=True, cta_enabled=False, cta_text="", cta_icons=[], cta_duration_s=0,
-        cta_show_handle=False, language="tr", dna=None, content_source="rss")
+        enabled=True,        language="tr", dna=None, content_source="rss")
     save_channel(cfg_dir / "channels" / "haber.yaml", cfg)
 
 

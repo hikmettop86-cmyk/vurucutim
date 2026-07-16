@@ -33,8 +33,7 @@ def _channel(*, trend_boost: TrendBoostConfig | None) -> ChannelConfig:
         schedule_cron="0 * * * *", duration_s=25, min_score=6.0,
         max_candidates_per_run=10, template="newscast",
         colors={"primary": "#fff"}, handle="@t", output_dir="out",
-        enabled=True, cta_enabled=False, cta_text="", cta_icons=[],
-        cta_duration_s=0, cta_show_handle=False, language="tr",
+        enabled=True, language="tr",
         trend_boost=trend_boost,
     )
 

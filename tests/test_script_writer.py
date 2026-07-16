@@ -24,9 +24,7 @@ def _channel(language="tr", template="newscast", dna=None):
         colors={"primary": "#c81e1e", "accent": "#ffea3b",
                 "bg_gradient": ["#1a3b6b", "#0a1a3b"]},
         handle="@x", output_dir="output/test",
-        enabled=True, cta_enabled=False, cta_text="",
-        cta_icons=[], cta_duration_s=0, cta_show_handle=False,
-        language=language, dna=dna,
+        enabled=True,        language=language, dna=dna,
     )
 
 

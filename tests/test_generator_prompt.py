@@ -11,8 +11,6 @@ def _channel(language="tr"):
         max_candidates_per_run=1, template="stat-hero",
         colors={"primary": "#000", "accent": "#fff", "bg_gradient": ["#000", "#111"]},
         handle="@sevgi", output_dir="output/sevgi", enabled=True,
-        cta_enabled=False, cta_text="", cta_icons=[],
-        cta_duration_s=0, cta_show_handle=False,
         language=language, dna=None, script_model="sonnet",
         content_source="generator",
         generator=GeneratorConfig(

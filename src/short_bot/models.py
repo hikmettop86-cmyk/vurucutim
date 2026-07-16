@@ -92,11 +92,7 @@ class RenderJob:
     handle: str
     duration_s: int
     language: str = "tr"
-    cta_enabled: bool = True
-    cta_text: str = "BEĞEN · ABONE OL · PAYLAŞ"
-    cta_icons: list[str] = field(default_factory=lambda: ["❤️", "🔔", "↗️"])
-    cta_duration_s: int = 4
-    cta_show_handle: bool = True
+    # Beğeni/abone CTA alanları KALDIRILDI (2026-07-16, kullanıcı kararı).
     rss_source: str | None = None   # shown as "Kaynak: <source>" overlay
     # Doluysa video "voiced" modda render edilir: süre sesten gelir,
     # her karede window.__seek(t_ms) çağrılır.
