@@ -749,3 +749,36 @@ def test_fd_motion_min_kuyruk_sondasi_reencode(tmp_path):
     from short_bot.reel_grade import MOTION_MIN
     klip = _sentetik(tmp_path, "dk.mp4", 4, 4)             # son 4sn DONUK
     assert _fd_motion_min(klip, "ffmpeg") < MOTION_MIN
+
+
+# --- DURGUN OFSET DÜZELTMESİ (karınca videosu: kapanışın 5.6sn'si klip İÇİNDEKİ
+# donmuş bekleme bölümüne denk geldi — kapı klibi geçirdi, ofset yanlış yere düştü)
+
+def test_fd_motion_profile_pencere_listesi(tmp_path):
+    from short_bot.reel import _fd_motion_profile
+    klip = _sentetik(tmp_path, "mp.mp4", 6, 6)      # 6sn hareketli + 6sn donuk
+    prof = _fd_motion_profile(klip, "ffmpeg")
+    assert len(prof) >= 4                            # 2sn pencereler
+    assert max(prof[:3]) > 0.01                      # baş hareketli
+    assert min(prof[-2:]) < 0.005                    # kuyruk donuk
+
+
+def test_fd_fix_static_offsets_uzun_kesimi_hareketli_pencereye_kaydirir(tmp_path):
+    from short_bot.reel import _fd_fix_static_offsets
+    klip = _sentetik(tmp_path, "fx.mp4", 6, 6)
+    # kapanış alt-kesimi 5sn ve ofset 8. saniyeye (donuk yarıya) düşmüş
+    subcuts = [(0, 0.0, 3.0), (1, 3.0, 8.0)]
+    clip_paths = [klip, klip]
+    starts = [0.0, 8.0]
+    yeni = _fd_fix_static_offsets(clip_paths, subcuts, starts, "ffmpeg")
+    assert yeni[1] < 6.0                             # hareketli yarıya kaydı
+    assert yeni[0] == 0.0                            # kısa/temiz kesime dokunulmadı
+
+
+def test_fd_fix_static_offsets_olculemezse_dokunmaz(tmp_path):
+    from short_bot.reel import _fd_fix_static_offsets
+    bozuk = tmp_path / "b.mp4"
+    bozuk.write_bytes(b"mp4")
+    starts = [2.0]
+    yeni = _fd_fix_static_offsets([bozuk], [(0, 0.0, 5.0)], starts, "ffmpeg")
+    assert yeni == [2.0]                             # fail-open

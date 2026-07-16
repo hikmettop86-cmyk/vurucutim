@@ -294,17 +294,17 @@ _FD_STILL_WIN = 0.005
 _FD_STATIC_FRAC_MAX = 0.5
 
 
-def _fd_static_fraction(clip, ffmpeg_path: str = "ffmpeg") -> float:
-    """Klibin TAMAMI taranır: 2sn'lik pencerelerin ne kadarı durgun (0-1).
+def _fd_motion_profile(clip, ffmpeg_path: str = "ffmpeg") -> list[float]:
+    """Klibin 2sn'lik pencere başına hareket profili (fps=2, 64x64 gri fark ort.).
 
-    _fd_motion_min yalnız baş+son 4sn'ye bakar — ORTASI 30sn bakışma olan klibi
-    göremez (keçi videosu dersi). Okunamazsa 0.0 (fail-open: eleme yapma)."""
+    Hem durgunluk oranı (_fd_static_fraction) hem ofset düzeltmesi
+    (_fd_fix_static_offsets) bunu kullanır. Okunamazsa [] (fail-open)."""
     import subprocess
     import tempfile
     try:
         from PIL import Image, ImageChops, ImageStat
     except Exception:  # noqa: BLE001
-        return 0.0
+        return []
     try:
         with tempfile.TemporaryDirectory() as td:
             td = Path(td)
@@ -315,17 +315,61 @@ def _fd_static_fraction(clip, ffmpeg_path: str = "ffmpeg") -> float:
                 capture_output=True, timeout=60)
             kareler = sorted(td.glob("*.png"))
             if len(kareler) < 5:
-                return 0.0
+                return []
             imgs = [Image.open(k).convert("L") for k in kareler]
             diffs = [ImageStat.Stat(ImageChops.difference(a, b)).mean[0] / 255.0
                      for a, b in zip(imgs, imgs[1:])]
-            pencereler = [diffs[i:i + 4] for i in range(0, len(diffs), 4)]
-            durgun = sum(1 for w in pencereler
-                         if sum(w) / len(w) < _FD_STILL_WIN)
-            return durgun / len(pencereler)
+            return [sum(diffs[i:i + 4]) / len(diffs[i:i + 4])
+                    for i in range(0, len(diffs), 4)]
     except Exception as e:  # noqa: BLE001 — ölçüm hatası üretimi düşürmesin
-        log.info(f"  reel: durgunluk ölçülemedi ({clip}): {e}")
+        log.info(f"  reel: hareket profili ölçülemedi ({clip}): {e}")
+        return []
+
+
+def _fd_static_fraction(clip, ffmpeg_path: str = "ffmpeg") -> float:
+    """Klibin TAMAMI taranır: 2sn'lik pencerelerin ne kadarı durgun (0-1).
+
+    _fd_motion_min yalnız baş+son 4sn'ye bakar — ORTASI 30sn bakışma olan klibi
+    göremez (keçi videosu dersi). Okunamazsa 0.0 (fail-open: eleme yapma)."""
+    prof = _fd_motion_profile(clip, ffmpeg_path)
+    if not prof:
         return 0.0
+    return sum(1 for m in prof if m < _FD_STILL_WIN) / len(prof)
+
+
+def _fd_fix_static_offsets(clip_paths, subcuts, clip_starts, ffmpeg_path,
+                           *, min_span_s: float = 3.0) -> list[float]:
+    """Uzun alt-kesimlerin klip-içi ofsetini DURGUN pencereden HAREKETLİ pencereye kaydır.
+
+    GERÇEK HATA (karınca videosu): kapı klibi bütün olarak geçirdi (durgunluk
+    %40) ama kapanışın 5.6sn'lik alt-kesimi klip İÇİNDEKİ donmuş bekleme
+    bölümüne denk geldi → son 6sn tamamen dondu. clip_offsets ofsetleri süreye
+    eşit yayar, pencerelerin hareketinden habersizdir. Burada yalnız UZUN
+    (>= min_span_s) alt-kesimler kontrol edilir: ofsetin düştüğü pencere
+    durgunsa (< _FD_STILL_WIN) klibin EN HAREKETLİ penceresine kaydırılır.
+    Profil okunamazsa dokunulmaz (fail-open)."""
+    profiller: dict[str, list[float]] = {}
+    yeni = list(clip_starts)
+    for i, ((si, a, b), clip) in enumerate(zip(subcuts, clip_paths)):
+        span = b - a
+        if span < min_span_s or i >= len(yeni):
+            continue
+        key = str(clip)
+        if key not in profiller:
+            profiller[key] = _fd_motion_profile(clip, ffmpeg_path)
+        prof = profiller[key]
+        if not prof:
+            continue
+        w = min(int(yeni[i] / 2.0), len(prof) - 1)
+        if prof[w] >= _FD_STILL_WIN:
+            continue                     # ofset zaten hareketli pencerede
+        en_iyi = max(range(len(prof)), key=lambda k: prof[k])
+        if prof[en_iyi] < _FD_STILL_WIN:
+            continue                     # klipte hareketli pencere yok (kapı kaçırdı)
+        yeni[i] = en_iyi * 2.0
+        log.info(f"  reel[görüntü-önce]: alt-kesim {i} ofseti durgun pencereden "
+                 f"({clip_starts[i]:.1f}s) hareketliye ({yeni[i]:.1f}s) kaydırıldı")
+    return yeni
 
 
 def _fd_clip_ok(clip, ffmpeg_path: str = "ffmpeg") -> bool:
@@ -1192,6 +1236,10 @@ def produce_reel_video(
         except Exception as e:      # süre okunamadı → ofset 0 (klibin başı), üretim düşmesin
             log.warning(f"  reel: klip süresi okunamadı, ofset 0 ({Path(c).name}): {e}")
     clip_starts = clip_offsets(clip_paths, subcuts, _durs)
+    if footage_driven:
+        # Uzun alt-kesim ofseti klip içindeki donmuş bölüme düşmesin (karınca dersi).
+        clip_starts = _fd_fix_static_offsets(clip_paths, subcuts, clip_starts,
+                                             ffmpeg_path)
     cut_times = [a for (_si, a, _b) in subcuts[1:]]
     log.info(f"  reel: {len(subcuts)} alt-kesim ({profile.cut_pacing} tempo), "
              f"{len(set(map(str, clip_paths)))} farklı klip")
