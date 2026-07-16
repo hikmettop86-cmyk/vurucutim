@@ -109,6 +109,14 @@ def create_app(
     _langpacks.mkdir(parents=True, exist_ok=True)
     set_user_dir(_langpacks)
 
+    # Google Studio vision havuzu: anahtarlar db ile aynı veri kökünde (Electron'da
+    # data taşınabilir). Havuz opsiyonel — kurulamazsa hybrid vision OR fallback'ine düşer.
+    try:
+        from short_bot import google_studio
+        google_studio.set_pool_dir(db_path.parent / "google_pool")
+    except Exception:  # noqa: BLE001 — havuz kurulumu üretimi bloklayamaz
+        pass
+
     db.init_app(app)
 
     # JSON'da Türkçe karakterleri KAÇIRMA. Varsayılan ensure_ascii=True, "yayınlanacak"

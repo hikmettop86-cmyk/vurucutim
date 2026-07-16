@@ -65,6 +65,9 @@ test_output.log
 # YouTube credentials — NEVER commit (token.json, client_secrets.json contain secrets)
 data/youtube_credentials/
 
+# Google AI Studio rotasyonlu havuz — anahtarlar + durum; ASLA commit edilmez
+data/google_pool/
+
 # Tests not distributed
 tests/
 

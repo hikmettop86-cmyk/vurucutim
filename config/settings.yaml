@@ -7,16 +7,21 @@ web:
 fuzzy_dedup_threshold: 0.85
 log_level: INFO
 claude_models:
-  dna: opus
-  default: sonnet
-  script: opus
-  vision: default
-ai_backend: openrouter
+  dna: opus            # DNA/persona → Opus (Claude CLI)
+  default: sonnet      # skorlama/konu/metadata → Sonnet 5 (Claude CLI)
+  script: sonnet       # senaryo/yargic/doktor → Sonnet 5 (Claude CLI)
+  vision: default      # (hybrid'de kullanilmaz; vision Google Studio'ya gider)
+# hybrid: metin -> Claude CLI, vision -> Google Studio rotasyonlu havuz.
+# CLI yoksa -> OpenRouter (asagidaki openrouter_models fallback haritasi).
+# Studio kotasi biterse -> OpenRouter gemma (vision satiri).
+ai_backend: hybrid
 openrouter_models:
   dna: anthropic/claude-opus-4.8
-  default: google/gemini-3.1-flash-lite
+  default: anthropic/claude-sonnet-5
   script: anthropic/claude-sonnet-5
-  vision: google/gemini-2.5-flash-lite
+  vision: google/gemma-4-26b-a4b-it
+google_studio:
+  vision_model: gemini-3.1-flash-lite
 trends:
   enabled: true
   refresh_minutes: 60
