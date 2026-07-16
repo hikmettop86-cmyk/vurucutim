@@ -139,3 +139,68 @@ def test_fd_prompt_sert_kelime_butcesi_icerir():
     lo_w, hi_w = reel_word_budget((30, 45))
     assert f"{lo_w}" in p and f"{hi_w}" in p
     assert "WORD BUDGET" in p
+
+
+def _uzun_taslak(n_beats=3, kelime_per_beat=45):
+    from short_bot.reel_models import FDDraftNarration
+    beat = " ".join(["kelime"] * kelime_per_beat)
+    return FDDraftNarration.model_validate({
+        "hook": "hook cümlesi burada uzun uzun anlatıyor",
+        "beats": [{"text": beat, "visual_query": "", "keyword": f"K{i}"}
+                  for i in range(n_beats)],
+        "close": "kapanış cümlesi burada", "mood": "upbeat"})
+
+
+def test_fd_butce_zorlamasi_asimda_kisaltir():
+    # Aslan videosu 143 kelime yazdı (bütçe 54-81) → prompt tek başına yetmiyor.
+    # Aşımda TEK kısaltma turu; beat sayısı korunur (klip bağı).
+    from short_bot.reel_narration import _fd_enforce_budget
+    ch = _kanal(); ch.reel.target_duration_s = (30, 45)
+    uzun = _uzun_taslak()
+    kisa = _uzun_taslak(kelime_per_beat=20)
+    yakalanan = {}
+
+    def inv(p, s):
+        yakalanan["p"] = p
+        return kisa
+
+    out = _fd_enforce_budget(uzun, ch, "aslan", invoke=inv)
+    assert out is kisa
+    assert "KISALT" in yakalanan["p"]
+    assert "81" in yakalanan["p"]          # üst sınır promptta
+
+
+def test_fd_butce_icindeyse_dokunmaz():
+    from short_bot.reel_narration import _fd_enforce_budget
+    ch = _kanal(); ch.reel.target_duration_s = (30, 45)
+    kisa = _uzun_taslak(kelime_per_beat=20)   # ~70 kelime, bütçede
+    out = _fd_enforce_budget(kisa, ch, "aslan",
+                             invoke=lambda p, s: (_ for _ in ()).throw(
+                                 AssertionError("bütçedeyken çağrılmamalı")))
+    assert out is kisa
+
+
+def test_fd_butce_beat_sayisi_degisirse_orijinal_kalir():
+    from short_bot.reel_narration import _fd_enforce_budget
+    ch = _kanal(); ch.reel.target_duration_s = (30, 45)
+    uzun = _uzun_taslak(n_beats=3)
+    bozuk = _uzun_taslak(n_beats=4, kelime_per_beat=15)
+    out = _fd_enforce_budget(uzun, ch, "aslan", invoke=lambda p, s: bozuk)
+    assert out is uzun                     # klip bağı bozulamaz
+
+
+def test_fd_tek_cagri_yolu_butceyi_zorlar(monkeypatch):
+    # write_footage_driven_narration da aşımda kısaltma turu yapmalı.
+    promptlar = []
+
+    def fake(p, s, **k):
+        promptlar.append(p)
+        return _uzun_taslak() if len(promptlar) == 1 else _uzun_taslak(kelime_per_beat=20)
+
+    monkeypatch.setattr(RN, "run_json", fake)
+    ch = _kanal(); ch.reel.target_duration_s = (30, 45)
+    n = RN.write_footage_driven_narration(
+        "aslan", ["a", "b", "c"], ["q0", "q1", "q2"], channel=ch)
+    assert len(promptlar) == 2
+    assert "KISALT" in promptlar[1]
+    assert n.word_count() < 90

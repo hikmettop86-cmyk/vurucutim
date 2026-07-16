@@ -207,6 +207,9 @@ def write_curious_narration(topic: str, clip_descriptions: list[str],
     kazanan, verdict = judge_scripts(adaylar, topic=topic, invoke=inv)
     if verdict is not None and verdict.complaints:
         kazanan = doctor_pass(kazanan, verdict.complaints, topic=topic, invoke=inv)
+    # KELİME BÜTÇESİ (aslan dersi: prompt bütçesi yetmiyor, model 143 yazdı)
+    from short_bot.reel_narration import _fd_enforce_budget
+    kazanan = _fd_enforce_budget(kazanan, channel, topic, invoke=inv)
 
     n_beats = len(kazanan.beats)
     perm = list(kazanan.clip_order) if len(kazanan.clip_order) == n_beats \

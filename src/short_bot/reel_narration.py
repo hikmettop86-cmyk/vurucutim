@@ -643,6 +643,48 @@ def _pin_queries(n, clip_queries: list[str], topic: str) -> ReelNarration:
         clip_order=list(getattr(n, "clip_order", []) or []))
 
 
+# FD bütçe toleransı: bu çarpanın üstü kısaltma turunu tetikler. %10 tolerans:
+# TTS hızı zaten ±%18 oynuyor, ufak taşma videoyu bozmuyor.
+_FD_BUDGET_TOLERANCE = 1.10
+
+
+def _fd_enforce_budget(n, channel, topic: str, *, invoke):
+    """FD senaryosu kelime bütçesini aşarsa TEK kısaltma turu.
+
+    GERÇEK HATA (aslan videosu): bütçe 54-81 kelimeyken model 143 yazdı → 67.6sn
+    video (hedef 30-45). Prompt'taki sert bütçe satırı yetmiyor (persona 'mizah
+    sıkıştırılamaz' der, model onu dinliyor). Beat SAYISI korunur (klip bağı);
+    kısaltma çöker/bozarsa orijinal döner (fail-open)."""
+    from short_bot.reel_models import FDDraftNarration
+    lo_w, hi_w = reel_word_budget(channel.reel.target_duration_s)
+    mevcut = n.word_count()
+    if mevcut <= hi_w * _FD_BUDGET_TOLERANCE:
+        return n
+    log.info(f"  reel[bütçe]: {mevcut} kelime > {hi_w} üst sınır → kısaltma turu")
+    prompt = (
+        f"Konu: {topic}\n\n"
+        f"Aşağıdaki kısa video senaryosu {mevcut} kelime — "
+        f"KISALT: toplam (hook + beat'ler + close) EN FAZLA {hi_w} kelime olmalı "
+        f"(TTS ~1.95 kelime/sn okuyor; bu sınır videoyu hedef süreye oturtan şey).\n"
+        f"KURALLAR: beat SAYISI AYNEN kalsın (her beat bir klibe bağlı). Her beat'i "
+        f"sıkılaştır: en zayıf benzetmeleri/yan cümleleri at, EN İYİ espriyi koru. "
+        f"Az sayıda iyi kurulmuş espri > çok sayıda aceleye gelmiş espri. "
+        f"open_question/reveal_beat/clip_order/mood alanlarına DOKUNMA.\n\n"
+        f"SENARYO (JSON):\n{n.model_dump_json()}\n\n"
+        f"Kısaltılmış senaryoyu AYNI ŞEMADA, SADECE JSON olarak döndür.")
+    try:
+        out = invoke(prompt, FDDraftNarration)
+    except Exception as e:  # noqa: BLE001 — kısaltma çökerse orijinalle devam
+        log.warning(f"  reel[bütçe]: kısaltma çöktü ({e}) → orijinal kalıyor")
+        return n
+    if len(out.beats) != len(n.beats) or out.word_count() >= mevcut:
+        log.warning("  reel[bütçe]: kısaltma beat bağını bozdu ya da kısaltmadı "
+                    "→ orijinal kalıyor")
+        return n
+    log.info(f"  reel[bütçe]: {mevcut} → {out.word_count()} kelime")
+    return out
+
+
 def write_footage_driven_narration(topic: str, clip_descriptions: list[str],
                                    clip_queries: list[str], *, channel,
                                    claude_path: str = "claude", model: str = "default",
@@ -665,6 +707,10 @@ def write_footage_driven_narration(topic: str, clip_descriptions: list[str],
     from short_bot.reel_models import FDDraftNarration
     n = run_json(prompt, FDDraftNarration, claude_path=claude_path, model=model,
                  backend=backend, api_key=api_key, retries=3)
+    n = _fd_enforce_budget(n, channel, topic,
+                           invoke=lambda p, s: run_json(
+                               p, s, claude_path=claude_path, model=model,
+                               backend=backend, api_key=api_key, retries=2))
     return _pin_queries(n, clip_queries, topic)
 
 
