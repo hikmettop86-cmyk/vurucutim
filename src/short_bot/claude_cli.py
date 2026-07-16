@@ -2,17 +2,41 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import shutil
 import subprocess
+import threading
 import time
 from pathlib import Path
 from typing import TypeVar
 
 from pydantic import BaseModel, ValidationError
 
+log = logging.getLogger(__name__)
 T = TypeVar("T", bound=BaseModel)
+
+# ── Merkezî fallback kaydı ───────────────────────────────────────────────────
+# hybrid modda resolve_ai_call her rol için birincil (backend, model) → OpenRouter
+# fallback'i buraya kaydeder; _invoke_raw birincil çökünce TEK deneme fallback yapar.
+# Böylece 36+ çağrı noktası DEĞİŞMEDEN düşme-yolu kazanır. Kayıt yoksa davranış
+# birebir (eski claude_cli/openrouter modları korunur).
+_FALLBACKS: dict = {}
+_FALLBACKS_LOCK = threading.Lock()
+
+
+def register_fallback(primary_backend: str, primary_model: str,
+                      fb_backend: str, fb_model: str, fb_api_key: str | None) -> None:
+    """(birincil backend, model) → (fallback backend, model, key) — idempotent."""
+    with _FALLBACKS_LOCK:
+        _FALLBACKS[(primary_backend, primary_model)] = (fb_backend, fb_model, fb_api_key)
+
+
+def clear_fallbacks() -> None:
+    """Kayıtları temizle (test yardımı / mod değişimi)."""
+    with _FALLBACKS_LOCK:
+        _FALLBACKS.clear()
 
 
 class AIBackendError(RuntimeError):
@@ -81,9 +105,37 @@ def _extract_json(raw: str) -> str:
 def _invoke_raw(prompt: str, *, backend: str, model: str,
                 claude_path: str, api_key: str | None, timeout_s: int,
                 image_path: "Path | None" = None) -> str:
-    """Tek-atış ham çıktı. claude_cli → subprocess; openrouter → HTTP.
-    FileNotFoundError ve TimeoutExpired'i (claude_cli) yukarıya bırakır;
-    diğer hatalarda ClaudeCliError/OpenRouterError fırlatır."""
+    """Birincil backend + kayıtlı fallback (TEK deneme). Kayıt yoksa davranış birebir.
+
+    Birincil herhangi bir hatayla çökerse ve (backend, model) için fallback kayıtlıysa
+    OpenRouter'a tek atış düşülür; kayıt yoksa hata yükseltilir (run_json onu yakalar,
+    FileNotFoundError özel mesajını korur)."""
+    try:
+        return _invoke_primary(prompt, backend=backend, model=model,
+                               claude_path=claude_path, api_key=api_key,
+                               timeout_s=timeout_s, image_path=image_path)
+    except Exception as e:   # noqa: BLE001 — her başarısızlık fallback adayı
+        fb = _FALLBACKS.get((backend, model))
+        if fb is None:
+            raise
+        fb_backend, fb_model, fb_key = fb
+        log.warning(f"fallback: {backend}/{model} -> {fb_backend}/{fb_model} "
+                    f"({type(e).__name__})")
+        return _invoke_primary(prompt, backend=fb_backend, model=fb_model,
+                               claude_path=claude_path, api_key=fb_key,
+                               timeout_s=timeout_s, image_path=image_path)
+
+
+def _invoke_primary(prompt: str, *, backend: str, model: str,
+                    claude_path: str, api_key: str | None, timeout_s: int,
+                    image_path: "Path | None" = None) -> str:
+    """Tek-atış ham çıktı (fallback YOK). google_studio → havuz; claude_cli →
+    subprocess; openrouter → HTTP. FileNotFoundError ve TimeoutExpired'i (claude_cli)
+    yukarıya bırakır; diğer hatalarda ilgili *Error fırlatır."""
+    if backend == "google_studio":
+        from short_bot import google_studio   # fonksiyon-içi import → circular önler
+        return google_studio.generate(prompt, model=model, image_path=image_path,
+                                      timeout_s=timeout_s)
     if backend == "openrouter":
         from short_bot import openrouter_client   # fonksiyon-içi import → circular önler
         return openrouter_client.complete(prompt, model=model,
