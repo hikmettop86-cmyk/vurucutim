@@ -1456,7 +1456,7 @@ def _run_generator(*, channel, run_id, log, eng, settings,
         # BAŞARILI olunca yaz. Yarım kalan bir üretim bölüm numarasını tüketirse
         # feed'de #47'den #49'a atlarız — seri sayacının delik olması, serinin
         # gerçekliğine dair tek somut kanıtı çürütür.
-        acik_kapi: dict = {}
+        narr: dict = {}
         with tempfile.TemporaryDirectory() as reel_tmp:
             t0 = time.perf_counter()
             _reel_produce_or_none(
@@ -1468,13 +1468,27 @@ def _run_generator(*, channel, run_id, log, eng, settings,
                 hook_patterns=hook_pats,
                 cancel_check=lambda: is_run_cancelled(eng, run_id),
                 episode=episode,
-                on_narration=lambda n: acik_kapi.update(open_loop=n.open_loop),
+                on_narration=lambda n: narr.update(open_loop=n.open_loop, title=n.title),
             )
             render_ms = int((time.perf_counter() - t0) * 1000)
+        # SEO BAŞLIĞI: anlatımın 'title'ı (özne anahtar-kelimesi ÖNDE + kısa mahalle
+        # vuruşu). Boşsa uzun konu metnine düş (geriye uyum). Dosya adını da bu kısa
+        # başlığın slug'ıyla yeniden adlandır — eski davranış konu-cümlesinin çirkin,
+        # kesik slug'ını basıyordu.
+        seo_title = (narr.get("title") or "").strip()
+        if seo_title:
+            yeni_out = unique_output_path(
+                out_dir, f"{datetime.now(timezone.utc):%Y-%m-%d}_{_slugify(seo_title)}")
+            try:
+                reel_out.rename(yeni_out)
+                reel_out = yeni_out
+            except OSError as e:
+                log.warning(f"  reel: dosya yeniden adlandırılamadı ({e}) → eski ad")
+        video_title = (seo_title or chosen_result.text)[:100]
         log.info(f"  → {reel_out.name} ({render_ms}ms)")
         short_id = record_short(
             eng, channel=channel.slug, rss_item_guid=None,
-            title=chosen_result.text[:80], file_path=str(reel_out),
+            title=video_title, file_path=str(reel_out),
             duration_s=channel.duration_s,
             script_json=chosen_result.script.model_dump_json(), render_ms=render_ms,
         )
@@ -1485,10 +1499,10 @@ def _run_generator(*, channel, run_id, log, eng, settings,
                 record_episode(
                     eng, channel.slug, episode_no=episode.episode_no,
                     arc_pos=episode.arc_pos, topic=chosen_result.text,
-                    open_loop=acik_kapi.get("open_loop", ""), short_id=short_id)
+                    open_loop=narr.get("open_loop", ""), short_id=short_id)
                 log.info(f"  seri: bölüm #{episode.episode_no} kaydedildi"
                          + (" (kapı açık → sonraki bölümün konusu hazır)"
-                            if acik_kapi.get("open_loop") else " (kapı yok → ark biter)"))
+                            if narr.get("open_loop") else " (kapı yok → ark biter)"))
                 # PLANLI ARK SAYACI — yalnız üretim BAŞARILIYSA ilerler. Başarısız bir
                 # koşu planı tüketirse o bölüm hiç üretilmemiş olur ve planda delik kalır.
                 if arc_id is not None:

@@ -151,6 +151,13 @@ OUTPUT a JSON object:
       ✓ "MERCEK EFSANESİ"                ← efsaneyi efsane olarak adlandırıyor
       ✓ "DAMLALAR GERÇEKTEN YAKAR MI?"   ← soruyor, cevabı saklıyor
   Merak, efsaneyi ONAYLAMAKTAN değil SORGULAMAKTAN doğar.
+- "title": VİDEO BAŞLIĞI ({lang}) — YouTube ve dosya adı için, cover_title'dan AYRI.
+  KISA (≤60 karakter) + SEO-DOSTU: ÖZNENİN ADI (hayvan/konu anahtar-kelimesi) EN BAŞTA
+  olsun — izleyici aramada onu yazar, aramada BULUNMASI için baştaki kelime kritik.
+  Ardından kısa bir merak/vuruş gelir. KONUŞMA CÜMLESİ DEĞİL, gerçek bir başlık.
+    KÖTÜ: 'Bizim bukalemunlar renk değiştirip mahalle kavgasını başlatıyor'  ← uzun cümle
+    İYİ:  'Bukalemun Mahalle Kavgası: Renk Değiştiren Kabadayı'              ← özne önde, kısa
+  Nokta yok. Clickbait/'inanamayacaksın' YASAK — dürüst ama merak açan.
 - "peak_beat": 0-based index of the beat that carries the BIGGEST shock/reveal.
   It must be in the MIDDLE of the beat list, not the first and not the last.
   Bu, beğeni tetiğinin ve abone isteğinin yerleşeceği andır: beğeni bir karar değil,
@@ -283,7 +290,7 @@ def fit_word_budget(n: ReelNarration, *, lo_w: int, hi_w: int) -> ReelNarration:
         # kaybolurdu). Kısaltma BEAT atar, alan silmez.
         return ReelNarration(hook=n.hook, beats=beats, close=n.close, mood=n.mood,
                              hook_visual=n.hook_visual, close_visual=n.close_visual,
-                             cover_title=n.cover_title, comment=n.comment,
+                             cover_title=n.cover_title, title=n.title, comment=n.comment,
                              open_loop=n.open_loop, peak_beat=peak)
 
     beats = list(n.beats)
@@ -581,7 +588,11 @@ RULES:
 - Narration in {lang}.
 - Leave every beat's "visual_query" as "" (empty) — the real footage query is bound
   by the code afterward.
-- Output a ReelNarration JSON: hook, cover_title, beats[text, visual_query, keyword],
+- Also write "title": the VIDEO TITLE for YouTube + filename (SEPARATE from cover_title).
+  SHORT (<=60 chars) + SEO: the SUBJECT's name (animal/topic keyword) FIRST (viewers
+  search that word), then a short hook. A real title, NOT a spoken sentence, no period.
+  e.g. 'Alligator Snapping Turtle: Bataklığın Sessiz Kabadayısı'.
+- Output a ReelNarration JSON: hook, title, cover_title, beats[text, visual_query, keyword],
   close, comment, mood, peak_beat (peak_beat in the MIDDLE, not first/last).
 """
 
@@ -624,7 +635,7 @@ def write_footage_driven_narration(topic: str, clip_descriptions: list[str],
         hook=n.hook, beats=beats, close=n.close, mood=n.mood,
         hook_visual=(clip_queries[0] if clip_queries else n.hook_visual),
         close_visual=(clip_queries[-1] if clip_queries else n.close_visual),
-        cover_title=n.cover_title, comment=n.comment,
+        cover_title=n.cover_title, title=n.title, comment=n.comment,
         open_loop=n.open_loop, peak_beat=n.peak_beat)
 
 

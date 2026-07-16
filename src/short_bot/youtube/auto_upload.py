@@ -145,6 +145,9 @@ def run_auto_upload(*, eng, short_id: int, channel, credentials,
             claude_path=claude_path, model=model,
             backend=backend, api_key=api_key,
             hook_patterns=hook_pats,
+            # Reel'in ürettiği kısa SEO başlığını temel al (row.title); mizah
+            # kanalında metadata bunu koruyup haber tonuna sapmasın.
+            base_title=(row.title or ""),
         )
         generated = {"title": meta.title, "description": meta.description, "tags": meta.tags}
     except Exception:

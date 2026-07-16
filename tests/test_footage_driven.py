@@ -82,3 +82,16 @@ def test_prompt_bos_tarif_isaretlenir_ve_olay_yasagi(monkeypatch):
     assert "invent NO specific" in p                # uydurma yasağı
     assert "Do NOT narrate an ACTION or EVENT" in p # klip-dışı olay anlatımı yasak
     assert "must be ABOUT the creature/subject in CLIP" in p  # beat i = klip i öznesi
+
+
+def test_prompt_seo_title_ister(monkeypatch):
+    # Görüntü-önce prompt kısa SEO başlığı (title) istemeli — dosya adı + YouTube
+    # başlığı bundan gelir (uzun konu cümlesi yerine).
+    yakalanan = {}
+    monkeypatch.setattr(RN, "run_json",
+                        lambda p, s, **k: (yakalanan.__setitem__("p", p),
+                                           _fake_narration())[1])
+    RN.write_footage_driven_narration("kartal", ["a", "b", "c"],
+                                      ["q0", "q1", "q2"], channel=_kanal())
+    p = yakalanan["p"]
+    assert '"title"' in p and "SEO" in p

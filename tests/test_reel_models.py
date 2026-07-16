@@ -184,3 +184,11 @@ def test_comment_yalniz_soru_cumlesini_tutar():
                       comment="Was ist besser: A oder B? Schreib nur den Buchstaben.",
                       mood="neutral")
     assert n.comment == "Was ist besser: A oder B?"
+
+
+def test_title_varsayilan_bos_ve_asiri_uzun_kirpilir():
+    from short_bot.reel_models import TITLE_MAX_CHARS
+    assert _narr().title == ""                       # varsayılan boş (geriye uyum)
+    # Aşırı uzun başlık üretimi DÜŞÜRMEZ, KIRPILIR (bkz. comment/cover_title dersi)
+    n = _narr(title="Elektrikli Yilan Baligi Voltaj Kabadayi " * 8)
+    assert 0 < len(n.title) <= TITLE_MAX_CHARS

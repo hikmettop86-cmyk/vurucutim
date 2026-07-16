@@ -580,8 +580,11 @@ def produce_reel_video(
         else:
             log.warning("  reel: açık kapı KURULAMADI → bu bölüm seriyi ilerletmiyor, "
                         "abone isteği takas değil rica olarak düşecek")
-        if on_narration is not None:
-            on_narration(narration)
+    # Anlatım çağırana HER ZAMAN bildirilir (episode olsun olmasın): başlık + açık
+    # kapı gibi anlatım-türevi alanlar seri-DIŞI reel'de de çağırana lazım (SEO
+    # başlığı + dosya adı anlatımın 'title' alanından gelir).
+    if on_narration is not None:
+        on_narration(narration)
     _phase("senaryo(LLM)")
 
     # 2b) AI KURGUCU: anlatımı okuyup kurgu kararlarını verir (tempo, kesme efekti,

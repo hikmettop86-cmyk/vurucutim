@@ -67,6 +67,10 @@ COMMENT_MAX_CHARS = 90
 # Boşsa eski davranışa düşülür (hook cümlesi kartta) — fail-open.
 COVER_TITLE_MAX_CHARS = 40
 COVER_TITLE_MAX_WORDS = 6
+# SEO VİDEO BAŞLIĞI üst sınırı. cover_title EKRAN manşetidir (kısa, metafor);
+# title YouTube/dosya başlığıdır — özne anahtar-kelimesi önde + mahalle vuruşu.
+# YouTube sert sınırı 100; Shorts için 90 tut (kısa+net). Taşarsa KIRPILIR (reddetme).
+TITLE_MAX_CHARS = 90
 
 # AÇIK KAPI: tek cümlelik, SPESİFİK bir vaat. Bir sonraki bölümün konu tohumu olacağı
 # için "daha fazlası var" gibi içi boş bir cümle işe yaramaz — tohum olacak kadar
@@ -96,6 +100,10 @@ class ReelNarration(BaseModel):
     close_visual: str = Field(default="", max_length=120)
     # Kare-sıfır manşeti (3-6 kelime). Konuşulmaz, yalnız ekranda durur.
     cover_title: str = Field(default="", max_length=COVER_TITLE_MAX_CHARS)
+    # SEO VİDEO BAŞLIĞI (YouTube + dosya adı). cover_title EKRAN manşeti (metafor);
+    # bu ise ÖZNE anahtar-kelimesi ÖNDE (aramada bulunsun) + kısa mahalle vuruşu.
+    # Boşsa çağıran uzun konu metnine düşer (geriye uyum, sıfır regresyon).
+    title: str = Field(default="", max_length=TITLE_MAX_CHARS)
     # AÇIK KAPI: bu bölümün tepesi ödendikten SONRA açılan yeni, spesifik soru.
     # Bir sonraki bölümün KONU TOHUMUDUR (bkz. reel_series) — abone isteğini bir
     # ricadan TAKASA çeviren şey budur. Cümlenin kendisi tepe-sonrası beat'in
@@ -210,6 +218,15 @@ class ReelNarration(BaseModel):
         if isinstance(v, str):
             v = strip_non_turkish_diacritics(v).strip()
             return v[:OPEN_LOOP_MAX_CHARS].rstrip()
+        return v
+
+    @field_validator("title", mode="before")
+    @classmethod
+    def _trim_title(cls, v):
+        """SEO başlığını KIRP — bir karakterlik taşma koca üretimi düşürmesin."""
+        if isinstance(v, str):
+            v = strip_non_turkish_diacritics(v).strip()
+            return v[:TITLE_MAX_CHARS].rstrip()
         return v
 
     def peak_segment(self) -> int:

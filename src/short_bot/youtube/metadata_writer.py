@@ -25,9 +25,30 @@ class YoutubeMetadata(BaseModel):
 def build_metadata_prompt(*, channel, script: dict,
                           rss_source: str | None,
                           rss_link: str | None,
-                          hook_patterns=None) -> str:
+                          hook_patterns=None, base_title: str = "") -> str:
     """Compose the prompt for Sonnet. Returns a string."""
     lang_name = LANGUAGE_NAMES.get(channel.language, channel.language)
+
+    # MİZAH PERSONA override'ı: prompt varsayılan olarak HABER-tonlu (fair-use
+    # disclaimer, #sondakika, kuru dil). Kanalın bir reel personası varsa (mizah)
+    # bu ton YANLIŞ. Aşağıdaki blok en sona konur ve varsayılanları EZER; ayrıca
+    # reel zaten iyi bir SEO başlığı (base_title) ürettiyse onu temel al.
+    _reel = getattr(channel, "reel", None)
+    _persona_raw = getattr(_reel, "persona", "") if _reel is not None else ""
+    _persona = _persona_raw.strip() if isinstance(_persona_raw, str) else ""
+    override = ""
+    if base_title:
+        override += (f"ZATEN İYİ BİR VİDEO BAŞLIĞI VAR: {base_title!r}\n"
+                     f"Bunu KORU ya da hafif iyileştir; anahtar kelime EN BAŞTA kalsın.\n")
+    if _persona:
+        override += (
+            "KANAL TONU (EN ÖNEMLİ — yukarıdaki haber kurallarını EZER): Bu bir MİZAH/"
+            "EĞLENCE Shorts kanalı, HABER DEĞİL. Başlık + açıklama EĞLENCELİ, sokak-ağzı, "
+            "merak açan olsun; kuru/resmi haber dili KULLANMA. Fair-use/haber-özeti "
+            "disclaimer'ını EKLEME (bu ÖZGÜN mizah içeriği, haber alıntısı değil). "
+            "Hashtag'ler mizah/hayvan/eğlence odaklı olsun (ör. #shorts #komik #hayvanlar "
+            "#mizah), #sondakika/#haber KULLANMA.\n")
+    override_block = ("\n" + override + "\n") if override else ""
 
     hook_block = ""
     if hook_patterns:
@@ -104,7 +125,7 @@ TAGS KURALLARI:
 - 1-3 kelimeli, virgülsüz
 - Genel ("haber") + spesifik (konu kelimeleri)
 - "shorts" tag'i MUTLAKA dahil
-
+{override_block}
 ÇIKTI: SADECE aşağıdaki JSON formatında, başka metin yazma:
 {{
   "title": "<60-100 char>",
@@ -120,13 +141,13 @@ def generate_youtube_metadata(*, channel, script: dict,
                               model: str = "sonnet",
                               backend: str = "claude_cli",
                               api_key: str | None = None,
-                              hook_patterns=None) -> YoutubeMetadata:
+                              hook_patterns=None, base_title: str = "") -> YoutubeMetadata:
     """Call Sonnet to produce metadata. Raises ClaudeCliError on failure —
     callers should fall back to non-LLM build_snippet."""
     prompt = build_metadata_prompt(
         channel=channel, script=script,
         rss_source=rss_source, rss_link=rss_link,
-        hook_patterns=hook_patterns,
+        hook_patterns=hook_patterns, base_title=base_title,
     )
     return run_json(
         prompt, YoutubeMetadata,
