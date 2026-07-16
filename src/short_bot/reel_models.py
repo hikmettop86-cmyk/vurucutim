@@ -110,6 +110,23 @@ class ReelNarration(BaseModel):
     # yüzünden koca bir üretim (LLM + TTS + footage + montaj) çöpe gitmemeli.
     comment: str = Field(default="", max_length=COMMENT_MAX_CHARS)
     mood: Literal["upbeat", "neutral", "calm"]
+
+    @field_validator("mood", mode="before")
+    @classmethod
+    def _mood_zorla(cls, v):
+        """mood bir İPUCUDUR (müzik seçimi) — geçersiz etiket üretimi ÖLDÜREMEZ.
+
+        GERÇEK HATA (keşif modu ilk koşusu): model 3 denemede de mood='mizahi ve
+        enerjik' yazdı → Literal doğrulaması üretimi düşürdü. Serbest metin en
+        yakın kovaya zorlanır; emin olunamazsa 'upbeat' (mizah kanalı varsayılanı)."""
+        if isinstance(v, str) and v not in ("upbeat", "neutral", "calm"):
+            s = v.lower()
+            if any(k in s for k in ("calm", "sakin", "hüzün", "huzun", "yavaş", "yavas")):
+                return "calm"
+            if any(k in s for k in ("neutral", "nötr", "notr", "ciddi")):
+                return "neutral"
+            return "upbeat"
+        return v
     # Hook/close KENDİ görsel sorgusu (İngilizce stok araması). Boşsa ilk/son
     # beat'in sorgusu ödünç alınır (eski davranış). Hook videonun en kritik
     # karesi — kendi vurucu görselini hak eder (gerçek şikâyet: "ilk girişteki

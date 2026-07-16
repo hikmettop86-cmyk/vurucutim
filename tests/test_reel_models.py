@@ -192,3 +192,12 @@ def test_title_varsayilan_bos_ve_asiri_uzun_kirpilir():
     # Aşırı uzun başlık üretimi DÜŞÜRMEZ, KIRPILIR (bkz. comment/cover_title dersi)
     n = _narr(title="Elektrikli Yilan Baligi Voltaj Kabadayi " * 8)
     assert 0 < len(n.title) <= TITLE_MAX_CHARS
+
+
+def test_mood_serbest_metni_kovaya_zorlar():
+    # GERÇEK HATA (keşif modu): model mood='mizahi ve enerjik' yazdı → Literal
+    # doğrulaması 3 denemeyi de yaktı. mood ipucudur, üretimi öldüremez.
+    assert _narr(mood="mizahi ve enerjik").mood == "upbeat"
+    assert _narr(mood="sakin ve huzurlu").mood == "calm"
+    assert _narr(mood="nötr anlatım").mood == "neutral"
+    assert _narr(mood="upbeat").mood == "upbeat"      # geçerli değer dokunulmaz
