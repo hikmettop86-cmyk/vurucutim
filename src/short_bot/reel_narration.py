@@ -597,6 +597,48 @@ RULES:
 """
 
 
+def _fd_prompt(topic: str, clip_descriptions: list[str], *, channel,
+               seed: int = 0) -> str:
+    """Görüntü-önce senaryo prompt'u + persona + maskot (TEK bileşim noktası).
+
+    reel_curiosity aday üretimi de aynı bileşimi kullanır — iki yerde kopya
+    tutulsaydı persona/maskot değişiklikleri adaylara sessizce yansımazdı."""
+    reel = getattr(channel, "reel", None)
+    prompt = build_footage_driven_prompt(topic, clip_descriptions, channel=channel)
+    persona = load_persona(getattr(reel, "persona", ""), language=channel.language)
+    if persona:
+        prompt += "\n\n" + persona_block(persona, seed=seed)
+        from short_bot.persona import mascot_block
+        mblok = mascot_block(getattr(reel, "mascot_name", ""),
+                             getattr(reel, "mascot_animal", ""),
+                             getattr(reel, "mascot_trait", ""))
+        if mblok:
+            prompt += "\n\n" + mblok
+    return prompt
+
+
+def _pin_queries(n, clip_queries: list[str], topic: str) -> ReelNarration:
+    """visual_query'leri GERÇEK footage sorgularına sabitle (LLM'inkini yok say).
+
+    Dönüş KATI ReelNarration — gevşek FD taslağı burada resmileşir. Merak
+    alanları (open_question/reveal_beat/clip_order) taslaktan taşınır."""
+    from short_bot.reel_models import ReelBeat
+    beats = []
+    for i, b in enumerate(n.beats):
+        q = (clip_queries[i] if i < len(clip_queries)
+             else (clip_queries[-1] if clip_queries else "")) or b.visual_query or topic
+        beats.append(ReelBeat(text=b.text, visual_query=q, keyword=b.keyword))
+    return ReelNarration(
+        hook=n.hook, beats=beats, close=n.close, mood=n.mood,
+        hook_visual=(clip_queries[0] if clip_queries else n.hook_visual),
+        close_visual=(clip_queries[-1] if clip_queries else n.close_visual),
+        cover_title=n.cover_title, title=n.title, comment=n.comment,
+        open_loop=n.open_loop, peak_beat=n.peak_beat,
+        open_question=getattr(n, "open_question", ""),
+        reveal_beat=getattr(n, "reveal_beat", -1),
+        clip_order=list(getattr(n, "clip_order", []) or []))
+
+
 def write_footage_driven_narration(topic: str, clip_descriptions: list[str],
                                    clip_queries: list[str], *, channel,
                                    claude_path: str = "claude", model: str = "default",
@@ -612,35 +654,14 @@ def write_footage_driven_narration(topic: str, clip_descriptions: list[str],
         raise ValueError("write_footage_driven_narration: channel.reel yok")
     if not clip_descriptions:
         raise ValueError("write_footage_driven_narration: footage tarifi yok")
-    prompt = build_footage_driven_prompt(topic, clip_descriptions, channel=channel)
-    persona = load_persona(getattr(reel, "persona", ""), language=channel.language)
-    if persona:
-        prompt += "\n\n" + persona_block(persona, seed=seed)
-        from short_bot.persona import mascot_block
-        mblok = mascot_block(getattr(reel, "mascot_name", ""),
-                             getattr(reel, "mascot_animal", ""),
-                             getattr(reel, "mascot_trait", ""))
-        if mblok:
-            prompt += "\n\n" + mblok
+    prompt = _fd_prompt(topic, clip_descriptions, channel=channel, seed=seed)
     # GEVŞEK şema (FDDraftNarration): model visual_query'leri boş bırakabiliyor
-    # (ölçüldü: 3 denemede de boş) — bu modda alan zaten aşağıda sabitleniyor,
+    # (ölçüldü: 3 denemede de boş) — bu modda alan zaten sabitleniyor,
     # gereksiz alan yüzünden üretim düşürülmez. Dönüş yine KATI ReelNarration.
     from short_bot.reel_models import FDDraftNarration
     n = run_json(prompt, FDDraftNarration, claude_path=claude_path, model=model,
                  backend=backend, api_key=api_key, retries=3)
-    # visual_query'leri GERÇEK footage sorgularına sabitle (LLM'in ürettiğini yok say).
-    from short_bot.reel_models import ReelBeat
-    beats = []
-    for i, b in enumerate(n.beats):
-        q = (clip_queries[i] if i < len(clip_queries)
-             else (clip_queries[-1] if clip_queries else "")) or b.visual_query or topic
-        beats.append(ReelBeat(text=b.text, visual_query=q, keyword=b.keyword))
-    return ReelNarration(
-        hook=n.hook, beats=beats, close=n.close, mood=n.mood,
-        hook_visual=(clip_queries[0] if clip_queries else n.hook_visual),
-        close_visual=(clip_queries[-1] if clip_queries else n.close_visual),
-        cover_title=n.cover_title, title=n.title, comment=n.comment,
-        open_loop=n.open_loop, peak_beat=n.peak_beat)
+    return _pin_queries(n, clip_queries, topic)
 
 
 def footage_search_queries(topic: str, *, n: int, channel,
