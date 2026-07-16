@@ -396,9 +396,11 @@ _RUN_SUB_LOGGERS = (
     # (kurgucunun kararı, footage red gerekçeleri, faz süreleri) yalnız stdout'a
     # gidiyordu; panelden bakan kullanıcı hiçbirini göremiyordu.
     "short_bot.assets_library",
+    "short_bot.footage_discovery",
     "short_bot.footage_matcher",
     "short_bot.footage_sources",
     "short_bot.reel",
+    "short_bot.reel_curiosity",
     "short_bot.reel_director",
     "short_bot.reel_render",
     "short_bot.tts.align",
