@@ -427,8 +427,6 @@ _RUN_SUB_LOGGERS = (
     "short_bot.reel",
     "short_bot.reel_director",
     "short_bot.reel_render",
-    "short_bot.storyblocks_browser",
-    "short_bot.storyblocks_source",
     "short_bot.tts.align",
     "short_bot.voiced",
 )
@@ -1810,8 +1808,6 @@ def _reel_produce_or_none(
         pexels_api_key=resolve_pexels_api_key(secrets),
         pixabay_api_key=resolve_pixabay_api_key(secrets),
         footage_priority=getattr(settings, "footage_priority", ["pexels"]),
-        storyblocks_session=getattr(settings, "storyblocks_session",
-                                    "data/storyblocks_session.json"),
         ffmpeg_path=settings.ffmpeg_path, browser=settings.playwright_browser,
         llm_claude_path=llm_call.claude_path, llm_model=llm_call.model,
         llm_backend=llm_call.backend, llm_api_key=llm_call.api_key,

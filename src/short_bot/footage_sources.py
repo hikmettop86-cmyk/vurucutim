@@ -1,4 +1,4 @@
-"""Çoklu footage kaynağı: ortak protokol + Pexels/Pixabay (+ Faz 2 Storyblocks)."""
+"""Çoklu footage kaynağı: ortak protokol + Pexels/Pixabay."""
 from __future__ import annotations
 import logging
 from pathlib import Path
@@ -93,22 +93,15 @@ class PixabaySource:
         return _pexels_download(cand.url, cache_dir)   # düz HTTP GET; URL agnostik
 
 
-def build_footage_sources(priority, *, pexels_key="", pixabay_key="",
-                          storyblocks_session=None):
+def build_footage_sources(priority, *, pexels_key="", pixabay_key=""):
     """`priority` sırasına göre, anahtarı olan (available) kaynakları döndürür.
 
     Hiçbiri kullanılamıyorsa geriye-uyum için [PexelsSource(pexels_key)] döner.
-    ``storyblocks_session`` yoksa Storyblocks (available()=False) atlanır.
+    Tanınmayan kaynak adları (ör. eski config'lerdeki 'storyblocks' — 2026-07-16'da
+    KALDIRILDI: yavaş Playwright kazıması + ücretli plan) sessizce atlanır.
     """
-    def _mk_storyblocks():
-        # Fonksiyon-içi import: footage_sources import edilirken playwright/
-        # storyblocks_source YÜKLENMESIN (circular + tembel tarayıcı).
-        from short_bot.storyblocks_source import StoryblocksSource
-        return StoryblocksSource(session_path=storyblocks_session)
-
     reg = {"pexels": lambda: PexelsSource(pexels_key),
-           "pixabay": lambda: PixabaySource(pixabay_key),
-           "storyblocks": _mk_storyblocks}
+           "pixabay": lambda: PixabaySource(pixabay_key)}
     out = []
     for name in (priority or ["pexels"]):
         mk = reg.get(name)

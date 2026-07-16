@@ -45,8 +45,6 @@ class Settings:
     whisper_quality: str = "auto"
     whisper_device: str = "auto"
     footage_priority: list = field(default_factory=lambda: ["pexels"])
-    storyblocks_session: str = "data/storyblocks_session.json"
-    storyblocks_max_concurrent: int = 3
 
 
 @dataclass(frozen=True)
@@ -368,10 +366,9 @@ def load_settings(path: Path) -> Settings:
         trends=trends,
         whisper_quality=wh_data.get("quality", "auto"),
         whisper_device=wh_data.get("device", "auto"),
+        # Eski config'lerde 'storyblocks' kalmış olabilir (2026-07-16'da kaldırıldı)
+        # → build_footage_sources tanımadığı adı zaten atlar, burada temizlemek şart değil.
         footage_priority=list(ft_data.get("priority", ["pexels"])),
-        storyblocks_session=str(ft_data.get("storyblocks_session",
-                                            "data/storyblocks_session.json")),
-        storyblocks_max_concurrent=int(ft_data.get("storyblocks_max_concurrent", 3)),
     )
 
 

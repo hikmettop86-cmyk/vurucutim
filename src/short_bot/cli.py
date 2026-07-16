@@ -376,57 +376,6 @@ def _add_web(sub):
     p.set_defaults(func=_cmd_web)
 
 
-def _add_storyblocks_login(sub):
-    p = sub.add_parser(
-        "storyblocks-login",
-        help="Storyblocks tarayıcı oturumu oluştur (headed Chrome ile giriş)")
-    p.add_argument("--config-dir", default="config")
-    p.add_argument("--session", default=None,
-                   help="Oturum dosyası yolu (varsayılan: "
-                        "settings.footage.storyblocks_session)")
-    p.add_argument("--status", action="store_true",
-                   help="Sadece oturum durumunu göster (tarayıcı açmaz)")
-    p.add_argument("--delete", action="store_true",
-                   help="Kayıtlı oturumu sil")
-    p.set_defaults(func=_cmd_storyblocks_login)
-
-
-def _cmd_storyblocks_login(args) -> int:
-    from short_bot import storyblocks_login as sbl
-
-    session = args.session
-    if not session:
-        try:
-            settings = load_settings(Path(args.config_dir) / "settings.yaml")
-            session = getattr(settings, "storyblocks_session",
-                              "data/storyblocks_session.json")
-        except Exception:
-            session = "data/storyblocks_session.json"
-
-    if args.status:
-        st = sbl.session_status(session)
-        if st["has_session"]:
-            print(f"Oturum VAR: {st['path']} "
-                  f"({st['size']} bayt, {st['age_seconds']}sn önce)")
-        else:
-            print(f"Oturum YOK: {st['path']}")
-        return 0
-
-    if args.delete:
-        ok = sbl.delete_session(session)
-        print("Oturum silindi." if ok else "Silinecek oturum yok.")
-        return 0
-
-    print(f"Storyblocks giriş akışı başlıyor (headed Chrome açılacak) → {session}")
-    try:
-        res = sbl.run_login(session)
-    except Exception as e:
-        print(f"Hata: {e}", file=sys.stderr)
-        return 1
-    print(res.get("message", ""))
-    return 0 if res.get("ok") else 1
-
-
 def _cmd_web(args) -> int:
     from pathlib import Path
     from short_bot.web import create_app
@@ -469,7 +418,6 @@ def main(argv: list[str] | None = None) -> int:
     _add_rebuild_css(sub)
     _add_migrate_channel(sub)
     _add_web(sub)
-    _add_storyblocks_login(sub)
     args = parser.parse_args(argv)
     return args.func(args)
 

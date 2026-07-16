@@ -270,20 +270,17 @@ def _fd_motion_min(clip, ffmpeg_path: str = "ffmpeg") -> float:
 
 
 def _rotate_sources(footage_deps, si: int):
-    """Hızlı API sağlayıcılarını (Pexels/Pixabay) segment bazında DÖNDÜR — her segment
-    farklı sağlayıcıdan BAŞLASIN (çeşitlilik). Storyblocks (yavaş, Playwright) her
-    zaman SON çare kalır.
+    """API sağlayıcılarını (Pexels/Pixabay) segment bazında DÖNDÜR — her segment
+    farklı sağlayıcıdan BAŞLASIN (çeşitlilik).
 
     KULLANICI: 'neden tek sağlayıcıya bakıyor?'. Sistem ilk klibi bulunca duruyordu;
     Pexels havuzu kıtsa (ör. şempanze) aynı klipler TEKRAR ediyordu. Round-robin,
-    farklı segmentleri farklı hızlı-API'den beslediği için etkin havuzu genişletir."""
+    farklı segmentleri farklı API'den beslediği için etkin havuzu genişletir."""
     srcs = list(getattr(footage_deps, "sources", None) or [])
-    fast = [s for s in srcs if getattr(s, "name", "") != "storyblocks"]
-    slow = [s for s in srcs if getattr(s, "name", "") == "storyblocks"]
-    if len(fast) < 2:
+    if len(srcs) < 2:
         return footage_deps            # döndürecek bir şey yok
-    r = si % len(fast)
-    rotated = fast[r:] + fast[:r] + slow
+    r = si % len(srcs)
+    rotated = srcs[r:] + srcs[:r]
     return FootageDeps(sources=rotated, verify_footage=footage_deps.verify_footage)
 
 
@@ -379,7 +376,7 @@ def _repair_footage_types(clips_by_seg: dict, *, topic: str, seg_queries, d,
 
 def _prepare_footage_driven(*, topic: str, channel, reel, d, work_dir: Path,
                             pexels_api_key: str, pixabay_api_key: str,
-                            footage_priority, storyblocks_session,
+                            footage_priority,
                             vision_call, ffmpeg_path: str,
                             llm_claude_path: str, llm_model: str,
                             llm_backend: str, llm_api_key: str | None):
@@ -395,7 +392,7 @@ def _prepare_footage_driven(*, topic: str, channel, reel, d, work_dir: Path,
 
     sources = build_footage_sources(
         footage_priority or ["pexels"], pexels_key=pexels_api_key,
-        pixabay_key=pixabay_api_key, storyblocks_session=storyblocks_session)
+        pixabay_key=pixabay_api_key)
     footage_deps = FootageDeps(sources=sources)
     from short_bot.reel_relevance import build_topic_pool, derive_footage_anchor
     anchor = (getattr(reel, "footage_anchor", "") or "").strip()
@@ -547,7 +544,6 @@ def produce_reel_video(
     out_path: Path, music_path: Path | None, ai33_api_key: str,
     pexels_api_key: str, pixabay_api_key: str = "",
     footage_priority: list | None = None,
-    storyblocks_session: str | None = None,
     ffmpeg_path: str = "ffmpeg", fps: int = 30,
     browser: str = "chromium",
     llm_claude_path: str = "claude", llm_model: str = "default",
@@ -641,7 +637,7 @@ def produce_reel_video(
         fd_clips, fd_descs, fd_queries = _prepare_footage_driven(
             topic=topic, channel=channel, reel=reel, d=d, work_dir=work_dir,
             pexels_api_key=pexels_api_key, pixabay_api_key=pixabay_api_key,
-            footage_priority=footage_priority, storyblocks_session=storyblocks_session,
+            footage_priority=footage_priority,
             vision_call=vision_call, ffmpeg_path=ffmpeg_path,
             llm_claude_path=llm_claude_path, llm_model=llm_model,
             llm_backend=llm_backend, llm_api_key=llm_api_key)
@@ -830,8 +826,7 @@ def produce_reel_video(
     # sıradaki denenir. Anahtarları olmayan kaynaklar atlanır.
     sources = build_footage_sources(
         footage_priority or ["pexels"],
-        pexels_key=pexels_api_key, pixabay_key=pixabay_api_key,
-        storyblocks_session=storyblocks_session)
+        pexels_key=pexels_api_key, pixabay_key=pixabay_api_key)
     footage_deps = FootageDeps(sources=sources)
     # Konu-havuzu + kanal çıpası (footage alaka gate'i için). Çıpa boşsa
     # dna.search_query_template'ten İngilizce token türetilir (ör. "whale ocean").
@@ -945,8 +940,8 @@ def produce_reel_video(
                 d, query, topic_q=_topic_q, api_key=pexels_api_key,
                 cache_dir=clips_cache, verify=reel.verify_footage,
                 vision_call=vision_call,
-                # Round-robin: her segment farklı hızlı-API'den başlasın (çeşitlilik,
-                # tekrar azalır); Storyblocks son çare.
+                # Round-robin: her segment farklı API'den başlasın (çeşitlilik,
+                # tekrar azalır).
                 footage_deps=_rotate_sources(footage_deps, si),
                 topic_pool=topic_pool, anchor=anchor, ffmpeg_path=ffmpeg_path,
                 budget={"gate": 0, "dl": 0},
@@ -1094,15 +1089,6 @@ def produce_reel_video(
         log.warning("  reel: kapanış hook'un sözcüklerini GERİ ÇAĞIRMIYOR → "
                     "video 'biter', izleyici döngüye girmez (loop kaybı)")
 
-    # Storyblocks footage için açılmış olabilecek kalıcı sync_playwright'ı KAPAT:
-    # aksi hâlde aynı thread'de reel_render'ın sync_playwright'ı "Playwright Sync
-    # API inside the asyncio loop" hatası verir. close() idempotent; kullanılmadıysa
-    # no-op, sonraki reel'de gerekirse yeniden başlar.
-    try:
-        from short_bot.storyblocks_browser import close as _sb_close
-        _sb_close()
-    except Exception:
-        pass
 
     # KOORDİNELİ KESİNTİ ANLARI: 3-5 beat sınırında dört kanal AYNI KAREDE ateşlenir
     # (vuruş sesi + tam güçlü uzun efekt + altyazı darbesi + görüntü punch'ı); diğer

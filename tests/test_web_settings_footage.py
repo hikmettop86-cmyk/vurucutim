@@ -20,8 +20,23 @@ def test_settings_get_has_pixabay_and_footage(tmp_path):
     body = app.test_client().get("/settings").data.decode("utf-8")
     assert 'name="pixabay_api_key"' in body
     assert "Footage" in body
-    for s in ("pexels", "pixabay", "storyblocks"):
+    for s in ("pexels", "pixabay"):
         assert f'value="{s}"' in body or f'name="footage_src_{s}"' in body
+
+
+def test_settings_sb_kaynagi_tamamen_kaldirildi(tmp_path):
+    # Storyblocks KALDIRILDI (2026-07-16): yavaş Playwright kazıması + ücretli plan.
+    # Ne kaynak kutusu ne bağlantı bölümü kalmalı; route'lar 404 olmalı.
+    # (Sayfa config YOLLARINI da basar; tmp_path test adını içerdiğinden ham
+    # 'storyblocks' araması yanlış pozitif verir → spesifik UI izlerine bak.)
+    app, _ = _client(tmp_path)
+    client = app.test_client()
+    body = client.get("/settings").data.decode("utf-8")
+    assert 'name="footage_src_storyblocks"' not in body      # kaynak kutusu yok
+    assert "Storyblocks bağlantısı" not in body              # bağlantı bölümü yok
+    assert "/settings/storyblocks/" not in body              # buton action'ları yok
+    assert client.post("/settings/storyblocks/connect").status_code == 404
+    assert client.post("/settings/storyblocks/disconnect").status_code == 404
 
 
 def test_settings_post_saves_pixabay_and_priority(tmp_path):
@@ -37,38 +52,9 @@ def test_settings_post_saves_pixabay_and_priority(tmp_path):
     assert data["footage"]["priority"] == ["pixabay", "pexels"]
 
 
-def test_settings_shows_storyblocks_status(tmp_path, monkeypatch):
-    # Bağlantı durumunu deterministik sabitle (gerçek oturum dosyasına bağlı olmasın).
-    import short_bot.web.routes.settings as st
-    monkeypatch.setattr(st, "_storyblocks_connected", lambda: False)
-    app, _ = _client(tmp_path)
-    body = app.test_client().get("/settings").data.decode("utf-8")
-    assert "Storyblocks" in body
-    assert "/settings/storyblocks/connect" in body
-
-
-def test_storyblocks_connect_triggers_login(tmp_path, monkeypatch):
-    app, _ = _client(tmp_path)
-    calls = []
-    import short_bot.web.routes.settings as st
-    # login'i sahtele (gerçek tarayıcı açılmasın)
-    monkeypatch.setattr(st, "_launch_storyblocks_login", lambda path: calls.append(path))
-    r = app.test_client().post("/settings/storyblocks/connect")
-    assert r.status_code in (200, 302)
-    assert len(calls) == 1
-
-
-def test_storyblocks_disconnect_deletes(tmp_path, monkeypatch):
-    app, _ = _client(tmp_path)
-    import short_bot.web.routes.settings as st
-    deleted = []
-    monkeypatch.setattr(st, "_delete_storyblocks_session", lambda path: deleted.append(path))
-    r = app.test_client().post("/settings/storyblocks/disconnect")
-    assert r.status_code in (200, 302) and len(deleted) == 1
-
-
 def test_settings_footage_canonical_order_with_real_values(tmp_path):
-    """Gerçek template value=source-adı gönderir; hepsi seçili → kanonik sıra."""
+    """Gerçek template value=source-adı gönderir; hepsi seçili → kanonik sıra.
+    Eski istemciden gelen storyblocks kutusu YOK SAYILIR (kaldırıldı)."""
     app, cfg = _client(tmp_path)
     app.test_client().post("/settings", data={
         "footage_src_storyblocks": "storyblocks",
@@ -76,16 +62,15 @@ def test_settings_footage_canonical_order_with_real_values(tmp_path):
         "footage_src_pexels": "pexels",
     })
     data = yaml.safe_load((cfg / "settings.yaml").read_text(encoding="utf-8"))
-    assert data["footage"]["priority"] == ["storyblocks", "pixabay", "pexels"]
+    assert data["footage"]["priority"] == ["pixabay", "pexels"]
 
 
 def test_settings_footage_subset_and_order(tmp_path):
-    # sadece storyblocks + pexels (value=adı) → [storyblocks, pexels] kanonik
+    # sadece pexels (value=adı) → [pexels]
     app, cfg = _client(tmp_path)
-    app.test_client().post("/settings", data={
-        "footage_src_storyblocks": "storyblocks", "footage_src_pexels": "pexels"})
+    app.test_client().post("/settings", data={"footage_src_pexels": "pexels"})
     data = yaml.safe_load((cfg / "settings.yaml").read_text(encoding="utf-8"))
-    assert data["footage"]["priority"] == ["storyblocks", "pexels"]
+    assert data["footage"]["priority"] == ["pexels"]
 
 
 def test_settings_footage_none_defaults_pexels(tmp_path):

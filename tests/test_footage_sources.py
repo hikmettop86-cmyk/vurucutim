@@ -68,7 +68,8 @@ def test_build_footage_sources_priority_and_gating():
     # her iki anahtar var → öncelik sırası korunur
     srcs = build_footage_sources(["pixabay", "pexels"], pexels_key="p", pixabay_key="x")
     assert [s.name for s in srcs] == ["pixabay", "pexels"]
-    # sadece pexels anahtarı → pixabay/storyblocks elenir
+    # sadece pexels anahtarı → pixabay elenir; tanınmayan ad (eski config'de
+    # kalmış 'storyblocks') sessizce atlanır
     srcs = build_footage_sources(["storyblocks", "pixabay", "pexels"],
                                  pexels_key="p", pixabay_key="")
     assert [s.name for s in srcs] == ["pexels"]

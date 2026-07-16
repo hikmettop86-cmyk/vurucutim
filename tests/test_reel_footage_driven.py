@@ -76,7 +76,7 @@ def test_prepare_indirir_ve_tarif_eder(tmp_path, monkeypatch):
     clips, descs, queries = _prepare_footage_driven(
         topic="şempanze", channel=_fd_channel(), reel=_fd_channel().reel, d=d,
         work_dir=tmp_path, pexels_api_key="k", pixabay_api_key="",
-        footage_priority=["pexels"], storyblocks_session=None,
+        footage_priority=["pexels"],
         vision_call=object(), ffmpeg_path="ffmpeg",
         llm_claude_path="claude", llm_model="default",
         llm_backend="claude_cli", llm_api_key=None)
@@ -97,7 +97,7 @@ def test_prepare_hic_footage_yoksa_hata(tmp_path, monkeypatch):
         _prepare_footage_driven(
             topic="x", channel=_fd_channel(), reel=_fd_channel().reel, d=d,
             work_dir=tmp_path, pexels_api_key="k", pixabay_api_key="",
-            footage_priority=["pexels"], storyblocks_session=None,
+            footage_priority=["pexels"],
             vision_call=object(), ffmpeg_path="ffmpeg", llm_claude_path="claude",
             llm_model="default", llm_backend="claude_cli", llm_api_key=None)
 
@@ -219,7 +219,7 @@ def _fd_prep_kwargs(tmp_path):
     ch = _fd_channel()
     return dict(topic="okçu balığı", channel=ch, reel=ch.reel,
                 work_dir=tmp_path, pexels_api_key="k", pixabay_api_key="",
-                footage_priority=["pexels"], storyblocks_session=None,
+                footage_priority=["pexels"],
                 vision_call=object(), ffmpeg_path="ffmpeg",
                 llm_claude_path="claude", llm_model="default",
                 llm_backend="claude_cli", llm_api_key=None)
@@ -420,7 +420,7 @@ def test_prepare_az_klip_uce_kelepcelenir(tmp_path, monkeypatch):
     clips, descs, queries = _prepare_footage_driven(
         topic="şempanze", channel=_fd_channel(), reel=_fd_channel().reel, d=d,
         work_dir=tmp_path, pexels_api_key="k", pixabay_api_key="",
-        footage_priority=["pexels"], storyblocks_session=None,
+        footage_priority=["pexels"],
         vision_call=object(), ffmpeg_path="ffmpeg", llm_claude_path="claude",
         llm_model="default", llm_backend="claude_cli", llm_api_key=None)
 
