@@ -204,6 +204,56 @@ def find_footage_outliers(descriptions: list[str], topic: str, *, invoke) -> lis
         return []
 
 
+def find_offsubject_clips(descriptions: list[str], tail_descriptions: list[str],
+                          subject: str, *, invoke) -> list[int]:
+    """GÖRÜNTÜ-ÖNCE eleme: senaryo SONRA yazılır ve kliplerin İÇERİĞİNİ anlatır —
+    find_footage_outliers'ın habitat/b-roll affı burada GEÇERSİZDİR.
+
+    GERÇEK HATA (short 846, okçu balığı): 'bağlama uyan' bataklık b-roll'ü senaryoya
+    "satılamamış bataklık" beati yazdırdı; telefon (scroll) klibi "adamlar telefonda"
+    beati; mantis "peygamber devesi" beati — video konudan koptu. (short 845):
+    kapı 'örümcek ≈ atlayan örümcek' saydı, 5 klipten 3'ü ağ ören örümcekti.
+
+    Eleme kuralları (şüphede ELE — tekrar, alakasızdan iyidir):
+      • özne klipte HİÇ görünmüyor (yalnız ortam/manzara/nesne)
+      • konudakinden FARKLI tanınabilir TÜR (tür düzeyi eşleşme şart)
+      • özne yalnız bir EKRANDA (telefon/monitör/TV) görünüyor
+      • BAŞ ve SON kare alakasız sahneler → derleme/kaydırma videosu (offset kayması)
+
+    ``tail_descriptions``: klip sonundan ikinci kare tarifi (boş olabilir).
+    Çökerse [] (fail-open: üretimi durdurma)."""
+    if not descriptions:
+        return []
+    satirlar = []
+    for i, d in enumerate(descriptions):
+        t = (tail_descriptions[i] if i < len(tail_descriptions) else "") or ""
+        satirlar.append(f'{i}: BAŞ="{(d or "").strip()}" | SON="{t.strip()}"')
+    listing = "\n".join(satirlar)
+    prompt = (
+        f'Video konusu (ana özne): "{subject}".\n'
+        f'Aşağıda videonun kliplerinin görsel tarifleri var — her klip için baştan '
+        f'(BAŞ) ve sondan (SON) birer kare tarifi:\n{listing}\n\n'
+        f'Bu videoda senaryo, kliplerin İÇERİĞİNE göre yazılacak. Bu yüzden HER KLİP '
+        f'konunun ana öznesini GÖSTERMEK ZORUNDA — ortam/manzara/habitat affı YOK.\n'
+        f'Şu kliplerin index\'lerini listele (şüphedeysen ELE — tekrar, alakasızdan iyidir):\n'
+        f'  • özne klipte hiç görünmüyor (yalnız manzara/ortam/nesne/insan)\n'
+        f'  • konudakinden FARKLI bir TÜR/canlı görünüyor — TÜR DÜZEYİNDE eşleşme şart '
+        f'(ör. konu "jumping spider" ise ağında asılı duran bir örümcek FARKLI türdür; '
+        f'konu "archerfish" ise akvaryumdaki başka balık ELENİR)\n'
+        f'  • özne yalnız bir EKRAN/telefon/monitör/TV İÇİNDE görünüyor '
+        f'(ör. "a person holding a smartphone showing a video of ...")\n'
+        f'  • BAŞ ve SON kareler birbiriyle alakasız sahneler gösteriyor → DERLEME/'
+        f'kaydırma videosu; klip ilerledikçe sahne değişir, kullanılamaz\n'
+        f'SADECE JSON: {{"outlier_indices": [<index listesi>]}}'
+    )
+    try:
+        v = invoke(prompt, _TypeOutliers)
+        return sorted({i for i in (v.outlier_indices or []) if 0 <= i < len(descriptions)})
+    except Exception as e:  # noqa: BLE001 — eleme üretimi durdurmamalı
+        log.warning(f"görüntü-önce konu-dışı eleme çalışmadı ({e}) → atlanıyor")
+        return []
+
+
 def _describe_image_file(path: Path, *, vision_call) -> str:
     """Yerel bir görüntü dosyasını vision ile İngilizce tarif eder (≤384px küçültür)."""
     from short_bot.claude_cli import run_json

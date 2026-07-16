@@ -244,6 +244,31 @@ def _footage_driven_seg_clip(clips: list, si: int, n_segs: int):
     return clips[min(beat_i, last)]
 
 
+def _fd_motion_min(clip, ffmpeg_path: str = "ffmpeg") -> float:
+    """Klibin BAŞ ve SON penceresinin hareket MİNİMUMU (görüntü-önce statik reddi).
+
+    measure_motion yalnız ilk ~4sn'yi örnekler (fps=4, 16 kare). Görüntü-önce bir
+    klip 2 segmenti (son beat + close, ~13sn) taşıyabilir ve alt-kesim offsetleri
+    klibin SONUNA yayılır. GERÇEK HATA (okçu balığı repro): başı hareketli sonu
+    durgun amber sürü klibi kapıdan geçti → kapanışta 8.1sn donuk kare. Son ~4sn
+    ayrıca ölçülür, ikisinin minimumu esas. Kuyruk çıkarılamazsa baş ölçümü döner
+    (fail-open: iyi klibi asla eleme — measure_motion sözleşmesiyle aynı)."""
+    import subprocess
+    import tempfile
+    m1 = measure_motion(clip, ffmpeg_path)
+    try:
+        with tempfile.TemporaryDirectory() as td:
+            t = Path(td) / "tail.mp4"
+            subprocess.run([ffmpeg_path, "-v", "error", "-y", "-sseof", "-4",
+                            "-i", str(clip), "-c", "copy", str(t)],
+                           capture_output=True, timeout=30)
+            if t.exists() and t.stat().st_size > 0:
+                return min(m1, measure_motion(t, ffmpeg_path))
+    except Exception:  # noqa: BLE001 — ölçüm hatası eleme yapmasın
+        pass
+    return m1
+
+
 def _rotate_sources(footage_deps, si: int):
     """Hızlı API sağlayıcılarını (Pexels/Pixabay) segment bazında DÖNDÜR — her segment
     farklı sağlayıcıdan BAŞLASIN (çeşitlilik). Storyblocks (yavaş, Playwright) her
@@ -262,15 +287,21 @@ def _rotate_sources(footage_deps, si: int):
     return FootageDeps(sources=rotated, verify_footage=footage_deps.verify_footage)
 
 
-def _describe_clip(clip, *, vision_call, ffmpeg_path: str) -> str:
-    """Klipten bir kare çıkarıp vision ile İngilizce tarif eder (tür-tutarlılık için)."""
+def _describe_clip(clip, *, vision_call, ffmpeg_path: str,
+                   tail_s: float | None = None) -> str:
+    """Klipten bir kare çıkarıp vision ile İngilizce tarif eder (tür-tutarlılık için).
+
+    ``tail_s`` verilirse kare klibin SONUNDAN alınır (-sseof). Görüntü-önce eleme
+    baş+son iki kareyi karşılaştırır: derleme/kaydırma klibinde (short 846: telefon
+    scroll klibi) baş ve son FARKLI sahnedir — tek kare bunu asla yakalayamaz."""
     import subprocess
     import tempfile
     from short_bot.footage_matcher import _describe_image_file
+    seek = ["-sseof", f"-{tail_s}"] if tail_s else ["-ss", "1"]
     try:
         with tempfile.TemporaryDirectory() as td:
             f = Path(td) / "probe.jpg"
-            subprocess.run([ffmpeg_path, "-v", "error", "-y", "-ss", "1", "-i", str(clip),
+            subprocess.run([ffmpeg_path, "-v", "error", "-y", *seek, "-i", str(clip),
                             "-frames:v", "1", "-vf", "scale=384:-1", str(f)],
                            capture_output=True, timeout=30)
             if f.exists():
@@ -385,6 +416,11 @@ def _prepare_footage_driven(*, topic: str, channel, reel, d, work_dir: Path,
     misses = 0
     idx = 0
     max_attempts = n_clips * 4
+    # STATİK RED (short 846): görüntü-önce prep'te hareket kontrolü YOKTU — eski
+    # akışın reddi order-döngüsünde yaşıyor ve footage-driven onu atlıyor. Statik
+    # mantis klibi kapanışta 8.1sn DONUK kare yaptı. Eski akışla aynı ilke: statik
+    # atlanır, hiç hareketli çıkmazsa fail-open yedeği kabul edilir.
+    statik_yedek: tuple | None = None
     while len(clips) < n_clips and idx < max_attempts and misses < len(queries):
         query = queries[idx % len(queries)]
         idx += 1
@@ -399,8 +435,18 @@ def _prepare_footage_driven(*, topic: str, channel, reel, d, work_dir: Path,
             continue
         misses = 0
         used.add(str(clip))
+        if _fd_motion_min(clip, ffmpeg_path) < MOTION_MIN:
+            if statik_yedek is None:
+                statik_yedek = (clip, query)
+            log.info(f"  reel[görüntü-önce]: statik klip atlandı ({clip.name})")
+            continue
         clips.append(clip)
         used_queries.append(query)
+    if not clips and statik_yedek is not None:
+        clips.append(statik_yedek[0])
+        used_queries.append(statik_yedek[1])
+        log.warning("  reel[görüntü-önce]: hareketli klip yok → statik kabul "
+                    "(donuk kuyruk riski, video yokluğundan yeğdir)")
     if not clips:
         raise RuntimeError(
             f"reel: görüntü-önce — '{topic}' için hiç footage bulunamadı")
@@ -418,6 +464,63 @@ def _prepare_footage_driven(*, topic: str, channel, reel, d, work_dir: Path,
     if not any(descs):
         log.warning("  reel[görüntü-önce]: vision tarifleri BOŞ (vision kapalı?) → "
                     "senaryo footage'a körlemesine yazılacak (uyum garantisi zayıflar)")
+    # --- TARİF-SONRASI ELEME + YERİNE KOYMA (görüntü-önce kalite kapısı) -----
+    # Senaryo bu tarifleri ANLATACAK: konu-dışı klip = konu-dışı beat.
+    # GERÇEK HATA (short 846): 'bağlama uyan' bataklık b-roll'ü, telefon scroll
+    # klibi ve mantis kapıdan geçti → senaryo çöpü anlatıp konudan koptu; boş
+    # tarifli klip için beat UYDURULDU ('uydurma' yasağına rağmen). (short 845):
+    # kapı 'örümcek ≈ atlayan örümcek' saydı → 3/5 klip ağ ören örümcekti.
+    # Burada tarif düzeyinde elenir; yerine DÜZ ÖZNE sorgusuyla (queries[0],
+    # sıkı kapı) klip aranır — 846'da q0 havuzunda 6 GERÇEK okçu balığı klibi
+    # dururken çöp b-roll kabul edilmişti. Bulunamazsa klip DÜŞER: az ama konulu
+    # klip, çok ama çöp klipten yeğdir (döngüsel tamamlama 3'ün altını önler).
+    if vision_call is not None and any((x or "").strip() for x in descs):
+        from short_bot.claude_cli import run_json
+        from short_bot.footage_matcher import find_offsubject_clips
+        with ThreadPoolExecutor(max_workers=LOCATE_WORKERS) as ex:
+            tails = list(ex.map(
+                lambda c: _describe_clip(c, vision_call=vision_call,
+                                         ffmpeg_path=ffmpeg_path, tail_s=2.0),
+                clips))
+
+        def _inv(prompt, schema):
+            return run_json(prompt, schema, claude_path=vision_call.claude_path,
+                            model=vision_call.model, backend=vision_call.backend,
+                            api_key=vision_call.api_key, retries=1, timeout_s=45)
+
+        atilan = set(find_offsubject_clips(
+            descs, tails, f"{topic} (EN: {queries[0]})", invoke=_inv))
+        atilan |= {i for i, x in enumerate(descs) if not (x or "").strip()}
+        dusen: list[int] = []
+        for i in sorted(atilan):
+            log.info(f"  reel[görüntü-önce]: klip {i} konu-dışı/tarifsiz "
+                     f"('{(descs[i] or '')[:40]}') → düz özne sorgusuyla yenileniyor")
+            yeni = d.match_beat_clip(
+                queries[0], api_key=pexels_api_key, cache_dir=clips_cache,
+                verify=getattr(reel, "verify_footage", True),
+                vision_call=vision_call, deps=footage_deps,
+                topic_pool=topic_pool, ffmpeg_path=ffmpeg_path,
+                budget={"gate": 0, "dl": 0}, exclude=used, context=context,
+                seen=seen, bank=[], hook=False)
+            yeni_desc = (_describe_clip(yeni, vision_call=vision_call,
+                                        ffmpeg_path=ffmpeg_path)
+                         if yeni is not None else "")
+            if (yeni is not None and yeni_desc.strip()
+                    and _fd_motion_min(yeni, ffmpeg_path) >= MOTION_MIN):
+                used.add(str(yeni))
+                clips[i], descs[i], used_queries[i] = yeni, yeni_desc, queries[0]
+            else:
+                dusen.append(i)
+        for i in reversed(dusen):
+            log.warning(f"  reel[görüntü-önce]: klip {i} elendi, yerine konulu "
+                        f"klip yok → düşürüldü (az ama konulu > çok ama çöp)")
+            del clips[i]
+            del descs[i]
+            del used_queries[i]
+        if not clips:
+            raise RuntimeError(
+                f"reel: görüntü-önce — '{topic}' için KONUDA klip kalmadı "
+                f"(hepsi konu-dışı/tarifsiz elendi)")
     # MİN 3 KLİP: ReelNarration en az 3 beat ister (min_length=3) ve
     # write_footage_driven_narration klip sayısı kadar beat ("EXACTLY n") yazdırır.
     # Havuz 3'ten az AYRIK klip verirse (nadir, tuhaf konu) senaryo doğrulaması
