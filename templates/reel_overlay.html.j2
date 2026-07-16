@@ -118,6 +118,15 @@ html,body{width:1080px;height:1920px;overflow:hidden;background:transparent;
   font-weight:800;text-shadow:0 3px 12px rgba(0,0,0,.9);opacity:.9}
 /* BEĞENİ/ABONE ÇİPİ YOK (2026-07-16, kullanıcı kararı): "kullanıcı gerçekten
    içinden gelirse abone veya beğenme yapar". y 760-1020 bandı boşaldı. */
+/* AÇIK SORU ÇİPİ (merak mimarisi): hook'un açtığı soru asılı kalır, reveal
+   anında 'cevaplandı'ya döner. Eski cta bandında (y ~1055-1120, boşalmıştı). */
+#qchip{position:absolute;bottom:810px;left:50%;transform:translateX(-50%);
+  background:rgba(0,0,0,.72);color:#fff;font-weight:800;font-size:34px;
+  padding:10px 26px;border-radius:999px;white-space:nowrap;display:none;
+  max-width:960px;overflow:hidden;border:3px solid {{ highlight_color }}}
+#qchip.on{display:block}
+#qchip.done{background:{{ highlight_color }};color:{{ chip_text }};
+  border-color:rgba(0,0,0,.4)}
 /* layout varyantları — marka aynı, konum/hiza farklı */
 .stage.lower_left .cap{text-align:left;left:60px;right:220px;bottom:540px}
 .stage.lower_left .big{text-align:left;left:60px;right:120px}
@@ -138,11 +147,14 @@ html,body{width:1080px;height:1920px;overflow:hidden;background:transparent;
 <div class="cap">{% for w in words %}<span class="w" data-s="{{ w.start }}" data-e="{{ w.end }}" data-seg="{{ w.seg }}">{{ w.word }}</span>
 {% endfor %}</div>
 <div id="handle">{{ handle }}</div>
+{% if question_text %}<div id="qchip">🤔 {{ question_text }}</div>{% endif %}
 <div id="rgbsplit"></div><div id="lightleak"></div><div id="glitch"></div>
 <div id="flash"></div>
 </div>
 <script>
 const LEAD=0.08,CHUNK_MAX=3,DUR={{ duration_s }},LAST={{ last_seg }};
+const QREVEAL={{ reveal_at }};
+const QCHIP=document.getElementById('qchip');
 // Öbek başına kelime sayısı SABİT DEĞİL: fitCap() sığana kadar 3→2→1 düşürür.
 let CHUNK=CHUNK_MAX;
 /* MANŞET VARSA hook segmentinde ALTYAZI DA AKAR: kartta artık cümle değil 3-6
@@ -340,6 +352,11 @@ window.__seek=function(tms){
   /* Rozet HOOK segmentinde durur — yani KARE SIFIRDA. Feed'in küçük resmi orasıdır
      ve tanınma orada olur. Gövdede kalsaydı altyazıyla dikkat için yarışırdı. */
   if(BADGE)BADGE.classList.toggle('on',seg===0);
+  if(QCHIP){
+    // 1.2sn'de belirir (hook pop'u ezmesin), reveal+2.5sn'de kaybolur.
+    QCHIP.classList.toggle('on', t>=1.2 && t<QREVEAL+2.5);
+    QCHIP.classList.toggle('done', QREVEAL>0 && t>=QREVEAL);   // ✓ cevaplandı
+  }
   for(const c of CARDS){const s=+c.dataset.s,e=+c.dataset.e;c.classList.toggle('on',t>=s&&t<e);}
   /* Çubuğu 0.25% adıma yuvarla (2.7px): ardışık kareler AYNILAŞIR → renderer
      screenshot yerine kopyalayabilir (kare-dedup, 3-4x hızlı). Görsel fark yok. */
@@ -397,6 +414,7 @@ window.__sig=function(){
   let s=vis+'|'+hot+'|'+mkSeg+'|'+MLAYER.innerHTML.length+'|';
   s+=(HOOK.classList.contains('on')?1:0)+''+(CLOSE.classList.contains('on')?1:0)+'|';
   s+=(BADGE&&BADGE.classList.contains('on')?1:0)+'|';
+  s+=(QCHIP?QCHIP.className:'')+'|';
   for(const c of CARDS)s+=(c.classList.contains('on')?1:0);
   s+='|'+BAR.style.width+'|';
   s+=[FLASH,RGB,LEAK,GLITCH].map(e=>(e.style.opacity||'0')+':'+(e.style.transform||'')).join(',');

@@ -38,6 +38,8 @@ def build_reel_overlay_html(
     flash: bool = True, cut_effect: str = "flash",
     handle: str = "",
     badge: str = "",              # feed kimliği rozeti ("BİLİNMEYEN TARİH #47")
+    question_text: str = "",      # açık-soru çipi metni ("" = çip yok; merak mimarisi)
+    reveal_at_s: float | None = None,   # cevabın ödendiği saniye (çip ✓'ya döner)
     lang: str = "tr",             # CSS uppercase DİLE DUYARLI — lang'sız 'i' → 'I'
     font: str = "Montserrat",
     markers: list | None = None,
@@ -82,6 +84,8 @@ def build_reel_overlay_html(
         hook=timeline.hook, close=timeline.close, handle=handle,
         cover_title=getattr(timeline, "cover_title", "") or "",
         badge=badge, lang=lang,
+        question_text=(question_text or "").strip()[:48],
+        reveal_at=f"{(reveal_at_s or 0.0):.3f}",
         font=font, font_import=_FONT_IMPORTS.get(font, _FONT_IMPORTS["Montserrat"]),
         words=words, cards=cards, duration_s=f"{timeline.duration_s:.3f}",
         last_seg=last_seg, cuts=json.dumps(cuts),
