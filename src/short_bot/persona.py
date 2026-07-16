@@ -18,6 +18,33 @@ class Persona(BaseModel):
     humor_check: bool = True
 
 
+# KAPANIŞ İMZASI STİLLERİ (kullanıcı geri bildirimi: her video aynı 'Aşık X der ki'
+# ozan kalıbıyla bitince FORMÜLLEŞİYOR). İmza kalır — kanalın markası — ama STİL DÖNER.
+# seed'e göre (per-video deterministik, bkz. build_variation_profile deseni) seçilir;
+# ardışık videolar farklı stil alır → imza hissi korunur, tekrar hissi azalır.
+# Sıra ÖNEMLİ: index 0 = OZAN (eski varsayılan davranış → seed=0'da geriye uyum).
+SIGNATURE_STYLES: list[tuple[str, str]] = [
+    ("OZAN İMZASI",
+     "'close' alanı 'Aşık [Hayvan/İsim] der ki:' ile başlasın; KAFİYELİ 2 mısralık "
+     "halk-ozanı beyti (örn. 'Aşık Porsuki der ki: psuğum ben yolum dar, korku bilmem "
+     "zerre kadar.')."),
+    ("MAHALLE ÖZLÜ SÖZÜ",
+     "'close' bir MAHALLE ÖZLÜ SÖZÜ / atasözü tadında olsun — kısa, vurucu, sokak "
+     "bilgeliği ('Bu mahallede kural bir: ...' ya da '... eden, ... bulur.' gibi). "
+     "'Aşık ... der ki' KALIBINI KULLANMA — bu videonun imzası ozan DEĞİL, özlü söz."),
+    ("RACON LAFI",
+     "'close' kahramanın mikrofonu bırakırcasına attığı KISA bir RACON lafı olsun — "
+     "bir-iki cümle, kabadayı ağzı, kesip atan ('Mahalle böyle bir yer koçum; anladıysan "
+     "anladın.'). Kafiye ŞART DEĞİL. 'Aşık ... der ki' KALIBINI KULLANMA."),
+]
+
+
+def signature_style(seed: int) -> tuple[str, str]:
+    """Bu videonun kapanış-imzası stili (etiket, talimat). seed%3 → deterministik
+    rotasyon; ardışık videolar farklı stil alır (formülleşmeyi kırar)."""
+    return SIGNATURE_STYLES[seed % len(SIGNATURE_STYLES)]
+
+
 def load_persona(slug: str, *, language: str) -> Persona | None:
     if not (slug or "").strip():
         return None                      # kişiliksiz: bugünkü prompt, sıfır regresyon
@@ -50,7 +77,8 @@ def mascot_block(name: str, animal: str, trait: str) -> str:
         f"KONU BAŞKA BİR HAYVANSA: {name} onu kendi mahalle-abisi gözünden YORUMLAR/"
         f"KIYASLAR — o hayvanın yanına gitmez (coğrafi tutarlılık). Örnek: 'bu penguen "
         f"çakıl çalıyormuş; bizim {name} görse taşı da alırdı sahibini de'.\n"
-        f"Manşet ve ozan imzası {name}'ın ismini taşıyabilir ('Aşık {name} der ki...').\n")
+        f"Manşet ve kapanış imzası {name}'ın ismini taşıyabilir (imza stili döner: "
+        f"ozan beyti / mahalle özlü sözü / racon lafı — sana bu videonunki verilir).\n")
 
 
 def topic_guidance(persona: Persona | None) -> str:
@@ -135,8 +163,9 @@ def channel_topic_guidance(persona_slug: str, language: str) -> str:
     return topic_guidance(p)
 
 
-def persona_block(persona: Persona) -> str:
+def persona_block(persona: Persona, *, seed: int = 0) -> str:
     kurallar = "\n".join(f"{i+1}. {r}" for i, r in enumerate(persona.rules))
+    imza_etiket, imza_talimat = signature_style(seed)
     return (
         "=== ANLATIM PERSONASI + SAHNE MODU (EN ÖNEMLİ KATMAN — YUKARIDAKİ YAPIYI EZER) ===\n"
         "DİKKAT: Yukarıda 'ilginç bilgi arkı' (hook→en şok edici BİLGİ→twist) anlatıldı.\n"
@@ -215,9 +244,10 @@ def persona_block(persona: Persona) -> str:
         "comment) ASLA çift tırnak (\") kullanma — diyalog/alıntı için TEK tırnak (') "
         "kullan. Örnek: karga 'kırmızı tişörtlü cimrinin teki geçti' der. Yanıt "
         "SADECE geçerli JSON olsun, markdown kod bloğu ekleme.\n\n"
-        "KAPANIŞ (close) = OZAN İMZASI, ZORUNLU (kanalın markası — atlanamaz): 'close'\n"
-        "alanı MUTLAKA 'Aşık [Hayvan/İsim] der ki:' ile başlayan, KAFİYELİ 2 mısralık\n"
-        "halk-ozanı kapanışı olmalı ve hook'un bir sözcüğünü içermeli (loop callback).\n"
-        "EN FAZLA 120 KARAKTER. Düz bir özet cümlesi ('işte bu yüzden ... gibisi yok')\n"
-        "KAPANIŞ DEĞİLDİR — o ozan imzasının yerini ALAMAZ. Yorum sorusunu close'a KOYMA,\n"
-        "'comment' alanına yaz.\n")
+        "KAPANIŞ (close) = MAHALLE İMZASI, ZORUNLU (kanalın markası — atlanamaz). Her\n"
+        "video bir imzayla biter AMA STİL DÖNER (hep aynı ozan kalıbı = formül, yapay\n"
+        f"durur). BU VİDEONUN İMZA STİLİ → {imza_etiket}: {imza_talimat}\n"
+        "HANGİ STİL OLURSA OLSUN: 'close' EN FAZLA 120 KARAKTER, hook'un bir sözcüğünü\n"
+        "içersin (loop callback), düz özet cümlesi ('işte bu yüzden ... gibisi yok')\n"
+        "imza SAYILMAZ. Yukarıdaki few-shot örneği ozan stilini gösterebilir ama SEN bu\n"
+        "videonun stilini uygula. Yorum sorusunu close'a KOYMA, 'comment' alanına yaz.\n")

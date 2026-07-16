@@ -550,7 +550,7 @@ def produce_reel_video(
         narration = d.write_footage_driven_narration(
             topic, fd_descs, fd_queries, channel=channel,
             claude_path=llm_claude_path, model=llm_model,
-            backend=llm_backend, api_key=llm_api_key)
+            backend=llm_backend, api_key=llm_api_key, seed=seed)
     else:
         narration = d.write_reel_narration(topic, channel=channel,
                                            claude_path=llm_claude_path, model=llm_model,

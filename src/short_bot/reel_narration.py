@@ -327,7 +327,7 @@ def write_reel_narration(topic: str, *, channel, claude_path: str = "claude",
     # eklenir. Persona None ise prompt bugünkü gibi kalır → sıfır regresyon.
     persona = load_persona(getattr(reel, "persona", ""), language=channel.language)
     if persona:
-        prompt = prompt + "\n\n" + persona_block(persona)
+        prompt = prompt + "\n\n" + persona_block(persona, seed=seed)
         # MASKOT: tekrar eden ana karakter (persona TON verir, maskot KARAKTER).
         from short_bot.persona import mascot_block
         mblok = mascot_block(getattr(reel, "mascot_name", ""),
@@ -590,10 +590,12 @@ def write_footage_driven_narration(topic: str, clip_descriptions: list[str],
                                    clip_queries: list[str], *, channel,
                                    claude_path: str = "claude", model: str = "default",
                                    backend: str = "claude_cli",
-                                   api_key: str | None = None) -> ReelNarration:
+                                   api_key: str | None = None,
+                                   seed: int = 0) -> ReelNarration:
     """Eldeki footage tariflerinden senaryo (görüntü-öncelikli). Beat sayısı = tarif
     sayısı; visual_query'ler GERÇEK footage sorgularına SABİTLENİR → beat-footage
-    eşlemesi garanti, vision-ses uyumu bozulamaz. Persona (mizah) korunur."""
+    eşlemesi garanti, vision-ses uyumu bozulamaz. Persona (mizah) korunur. seed:
+    kapanış-imzası stilini döndürür (persona_block)."""
     reel = getattr(channel, "reel", None)
     if reel is None:
         raise ValueError("write_footage_driven_narration: channel.reel yok")
@@ -602,7 +604,7 @@ def write_footage_driven_narration(topic: str, clip_descriptions: list[str],
     prompt = build_footage_driven_prompt(topic, clip_descriptions, channel=channel)
     persona = load_persona(getattr(reel, "persona", ""), language=channel.language)
     if persona:
-        prompt += "\n\n" + persona_block(persona)
+        prompt += "\n\n" + persona_block(persona, seed=seed)
         from short_bot.persona import mascot_block
         mblok = mascot_block(getattr(reel, "mascot_name", ""),
                              getattr(reel, "mascot_animal", ""),
