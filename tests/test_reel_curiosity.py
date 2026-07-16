@@ -32,8 +32,9 @@ def test_iskeletler_uc_farkli_strateji():
 
 
 def test_rubrik_kritik_maddeleri_iceriyor():
+    # NOT .lower() ile arama YAPMA: Python'da "AÇIK".lower() == "açik" (ı değil i)
+    # — Türkçe kavramları rubrikteki YAZILDIĞI hâliyle ara.
     from short_bot.reel_curiosity import RUBRIC
-    low = RUBRIC.lower()
-    for kavram in ("açık döngü", "sızıntı", "kanca", "tırman", "ödeme", "mizah"):
-        assert kavram in low, f"rubrikte eksik kavram: {kavram}"
-    assert "görüntü" in low or "klib" in low or "klip" in low
+    for kavram in ("AÇIK DÖNGÜ", "SIZINTI", "KANCASI", "TIRMANIŞ", "ÖDEME",
+                   "MİZAH", "GÖRÜNTÜ SADAKATİ", "KLİŞE"):
+        assert kavram in RUBRIC, f"rubrikte eksik kavram: {kavram}"
