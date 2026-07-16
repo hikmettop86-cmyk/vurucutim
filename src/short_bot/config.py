@@ -269,6 +269,11 @@ class ReelConfig(BaseModel):
     # edilir, senaryo o GERÇEK tariflere göre yazılır (vision-ses uyumu garanti).
     # False (varsayılan) = bugünkü senaryo-önce akış — SIFIR REGRESYON.
     footage_driven: bool = False
+    # KEŞİF (yalnız footage_driven=True iken): konu STOKTAN doğar — jenerik aksiyon
+    # sorgularıyla Pexels/Pixabay taranır, >=4 ayrık klipli özne seçilir, konu o
+    # kliplerden türetilir (kullanıcı önerisi 2026-07-16; 858 loop dersinin kökten
+    # çözümü). Kapatılırsa eski konu-bankası→sorgu yolu kullanılır.
+    footage_discovery: bool = True
 
     @field_validator("target_duration_s", mode="before")
     @classmethod
@@ -615,6 +620,7 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
             "mascot_animal": cfg.reel.mascot_animal,
             "mascot_trait": cfg.reel.mascot_trait,
             "footage_driven": cfg.reel.footage_driven,
+            "footage_discovery": cfg.reel.footage_discovery,
         }
     if cfg.dna is not None:
         # mode='json' → tuple becomes list, ready for YAML round-trip

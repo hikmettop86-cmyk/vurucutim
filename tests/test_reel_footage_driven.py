@@ -68,12 +68,12 @@ def test_prepare_indirir_ve_tarif_eder(tmp_path, monkeypatch):
 
     d = ReelDeps(
         footage_search_queries=lambda topic, **k: ["chimpanzee", "chimpanzee fighting"],
-        match_beat_clip=fake_match)
+        match_beat_clip=fake_match, discover_subject=lambda **k: None)
     # vision tarifini deterministik yap
     monkeypatch.setattr(REEL, "_describe_clip",
                         lambda c, **k: f"a chimpanzee ({c.name})")
 
-    clips, descs, queries = _prepare_footage_driven(
+    clips, descs, queries, _topic = _prepare_footage_driven(
         topic="şempanze", channel=_fd_channel(), reel=_fd_channel().reel, d=d,
         work_dir=tmp_path, pexels_api_key="k", pixabay_api_key="",
         footage_priority=["pexels"],
@@ -90,7 +90,7 @@ def test_prepare_indirir_ve_tarif_eder(tmp_path, monkeypatch):
 def test_prepare_hic_footage_yoksa_hata(tmp_path, monkeypatch):
     d = ReelDeps(
         footage_search_queries=lambda topic, **k: ["nonexistent"],
-        match_beat_clip=lambda q, **kw: None)
+        match_beat_clip=lambda q, **kw: None, discover_subject=lambda **k: None)
     monkeypatch.setattr(REEL, "_describe_clip", lambda c, **k: "")
     import pytest
     with pytest.raises(RuntimeError, match="footage bulunamadı"):
@@ -152,7 +152,7 @@ def _fd_deps(calls, tmp_path):
         transcribe_words=lambda p, **kw: [],
         retime=lambda src, out, zones, **kw: (Path(out).write_bytes(b"m"), Path(out))[1],
         insert_pause=lambda src, out, **kw: (Path(out).write_bytes(b"m"), Path(out))[1],
-        match_beat_clip=fake_match,
+        match_beat_clip=fake_match, discover_subject=lambda **k: None,
         render_reel_overlay_frames=lambda tl, out, **kw: 900,
         assemble_reel=lambda **kw: (calls.append(("assemble", kw)), kw["out_path"])[1])
 
@@ -244,13 +244,13 @@ def test_prepare_konu_disi_klip_yerine_konulu_gelir(tmp_path, monkeypatch):
 
     d = ReelDeps(
         footage_search_queries=lambda t, **k: ["archerfish", "archerfish spitting"],
-        match_beat_clip=fake_match)
+        match_beat_clip=fake_match, discover_subject=lambda **k: None)
     monkeypatch.setattr(REEL, "_describe_clip", fake_desc)
     monkeypatch.setattr(FM, "find_offsubject_clips",
                         lambda descs, tails, subject, **k: [
                             i for i, x in enumerate(descs) if "smartphone" in x])
 
-    clips, descs, queries = _prepare_footage_driven(d=d, **_fd_prep_kwargs(tmp_path))
+    clips, descs, queries, _topic = _prepare_footage_driven(d=d, **_fd_prep_kwargs(tmp_path))
     assert len(clips) == len(descs) == len(queries) == 5
     assert all("archerfish" in x for x in descs)          # çöp tarif kalmadı
     assert all("smartphone" not in x for x in descs)
@@ -279,13 +279,13 @@ def test_prepare_yerine_konulamayan_konu_disi_klip_dusurulur(tmp_path, monkeypat
 
     d = ReelDeps(
         footage_search_queries=lambda t, **k: ["archerfish", "archerfish spitting"],
-        match_beat_clip=fake_match)
+        match_beat_clip=fake_match, discover_subject=lambda **k: None)
     monkeypatch.setattr(REEL, "_describe_clip", fake_desc)
     monkeypatch.setattr(FM, "find_offsubject_clips",
                         lambda descs, tails, subject, **k: [
                             i for i, x in enumerate(descs) if "marsh" in x])
 
-    clips, descs, queries = _prepare_footage_driven(d=d, **_fd_prep_kwargs(tmp_path))
+    clips, descs, queries, _topic = _prepare_footage_driven(d=d, **_fd_prep_kwargs(tmp_path))
     assert all("marsh" not in x for x in descs)           # çöp düştü
     assert len(clips) == len(descs) == len(queries)       # hizalı
     assert len(clips) >= 3                                # min 3 korunur (pad)
@@ -309,11 +309,11 @@ def test_prepare_bos_tarif_yargicsiz_da_elenir(tmp_path, monkeypatch):
 
     d = ReelDeps(
         footage_search_queries=lambda t, **k: ["archerfish", "archerfish spitting"],
-        match_beat_clip=fake_match)
+        match_beat_clip=fake_match, discover_subject=lambda **k: None)
     monkeypatch.setattr(REEL, "_describe_clip", fake_desc)
     monkeypatch.setattr(FM, "find_offsubject_clips", lambda *a, **k: [])
 
-    clips, descs, queries = _prepare_footage_driven(d=d, **_fd_prep_kwargs(tmp_path))
+    clips, descs, queries, _topic = _prepare_footage_driven(d=d, **_fd_prep_kwargs(tmp_path))
     assert all((x or "").strip() for x in descs)          # boş tarif kalmadı
 
 
@@ -332,13 +332,13 @@ def test_prepare_statik_klip_atlanir(tmp_path, monkeypatch):
 
     d = ReelDeps(
         footage_search_queries=lambda t, **k: ["archerfish", "archerfish spitting"],
-        match_beat_clip=fake_match)
+        match_beat_clip=fake_match, discover_subject=lambda **k: None)
     monkeypatch.setattr(REEL, "_describe_clip", lambda c, **k: f"an archerfish ({Path(c).name})")
     monkeypatch.setattr(REEL, "measure_motion",
                         lambda c, *a, **k: 0.001 if "static" in Path(c).name else 1.0)
     monkeypatch.setattr(FM, "find_offsubject_clips", lambda *a, **k: [])
 
-    clips, descs, queries = _prepare_footage_driven(d=d, **_fd_prep_kwargs(tmp_path))
+    clips, descs, queries, _topic = _prepare_footage_driven(d=d, **_fd_prep_kwargs(tmp_path))
     assert all("static" not in Path(c).name for c in clips)   # statik seçilmedi
     assert len(clips) == 5                                     # hareketlilerle doldu
 
@@ -387,7 +387,7 @@ def test_prepare_hepsi_statikse_URETIM_DUSER(tmp_path, monkeypatch):
 
     d = ReelDeps(
         footage_search_queries=lambda t, **k: ["archerfish"],
-        match_beat_clip=fake_match)
+        match_beat_clip=fake_match, discover_subject=lambda **k: None)
     monkeypatch.setattr(REEL, "_describe_clip", lambda c, **k: "an archerfish")
     monkeypatch.setattr(REEL, "measure_motion", lambda c, *a, **k: 0.001)
     monkeypatch.setattr(FM, "find_offsubject_clips", lambda *a, **k: [])
@@ -415,7 +415,7 @@ def test_prepare_az_ayrik_klip_URETIMI_DUSURUR(tmp_path, monkeypatch):
 
     d = ReelDeps(
         footage_search_queries=lambda topic, **k: ["chimpanzee", "chimpanzee fighting"],
-        match_beat_clip=fake_match)
+        match_beat_clip=fake_match, discover_subject=lambda **k: None)
     monkeypatch.setattr(REEL, "_describe_clip", lambda c, **k: f"desc {c.name}")
 
     import pytest
@@ -426,3 +426,68 @@ def test_prepare_az_ayrik_klip_URETIMI_DUSURUR(tmp_path, monkeypatch):
             footage_priority=["pexels"],
             vision_call=object(), ffmpeg_path="ffmpeg", llm_claude_path="claude",
             llm_model="default", llm_backend="claude_cli", llm_api_key=None)
+
+
+# --- KEŞİF MODU: konu stoktan doğar (kullanıcı önerisi, 2026-07-16) -----------
+
+def test_prepare_kesif_basarili_konuyu_stoktan_turetir(tmp_path, monkeypatch):
+    from short_bot.footage_discovery import DiscoveredSubject
+    from short_bot.footage_sources import FootageCandidate
+
+    cands = [FootageCandidate(url=f"http://x/{i}.mp4", duration_s=15,
+                              image=f"http://x/{i}.jpg", source="pexels",
+                              ident=str(i)) for i in range(5)]
+    subj = DiscoveredSubject(subject_en="mantis shrimp",
+                             topic_tr="Bizimki tek yumrukla akvaryum camı çatlatıyor",
+                             clip_indices=[0, 1, 2, 3])
+
+    def fake_download(src, cand, cache_dir):
+        f = Path(cache_dir) / f"disc_{cand.ident}.mp4"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_bytes(b"mp4")
+        return f
+
+    d = ReelDeps(
+        footage_search_queries=lambda t, **k: (_ for _ in ()).throw(
+            AssertionError("keşif başarılıyken eski konu-yolu ÇAĞRILMAMALI")),
+        match_beat_clip=lambda q, **kw: None,
+        discover_subject=lambda **k: (subj, cands),
+        download_candidate=fake_download)
+    monkeypatch.setattr(REEL, "_describe_clip",
+                        lambda c, **k: f"a mantis shrimp ({Path(c).name})")
+    monkeypatch.setattr(FM, "find_offsubject_clips", lambda *a, **k: [])
+
+    clips, descs, queries, topic = _prepare_footage_driven(
+        d=d, **_fd_prep_kwargs(tmp_path))
+    assert topic == "Bizimki tek yumrukla akvaryum camı çatlatıyor"   # konu stoktan
+    assert len(clips) >= 3
+    assert all(q == "mantis shrimp" for q in queries)                 # sorgu = özne
+    assert all("disc_" in Path(c).name for c in clips)                # keşif klipleri
+
+
+def test_prepare_kesif_bos_donerse_eski_yola_duser(tmp_path, monkeypatch):
+    cagri = {"eski_yol": False}
+
+    def fake_queries(t, **k):
+        cagri["eski_yol"] = True
+        return ["archerfish"]
+
+    def fake_match(q, **kw):
+        excl = kw.get("exclude") or set()
+        for i in range(10):
+            f = tmp_path / f"c{i}.mp4"
+            if str(f) not in excl:
+                f.write_bytes(b"mp4")
+                return f
+        return None
+
+    d = ReelDeps(footage_search_queries=fake_queries, match_beat_clip=fake_match,
+                 discover_subject=lambda **k: None)
+    monkeypatch.setattr(REEL, "_describe_clip", lambda c, **k: "an archerfish")
+    monkeypatch.setattr(FM, "find_offsubject_clips", lambda *a, **k: [])
+
+    clips, descs, queries, topic = _prepare_footage_driven(
+        d=d, **_fd_prep_kwargs(tmp_path))
+    assert cagri["eski_yol"] is True                  # fail-open: konu-yolu devrede
+    assert topic == "okçu balığı"                     # konu değişmedi
+    assert len(clips) >= 3

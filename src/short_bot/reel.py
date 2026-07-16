@@ -16,7 +16,14 @@ from short_bot.audio_probe import trailing_silence_s as _tail
 from short_bot.footage_matcher import FootageDeps, SubjectPos, download_banked
 from short_bot.footage_matcher import locate_subject as _locate
 from short_bot.footage_matcher import match_beat_clip as _match
+from short_bot.footage_discovery import discover_subject as _discover_subject
 from short_bot.footage_sources import build_footage_sources
+
+
+def _download_candidate(src, cand, cache_dir):
+    """Keşif adayını kendi kaynağından indir (test enjeksiyonu için ayrık)."""
+    return src.download(cand, cache_dir)
+
 from short_bot.reel_assembler import assemble_reel as _assemble
 from short_bot.reel_markers import _marker_worthy_segs, build_markers
 from short_bot.music_profile import (MUSIC_UNDER_SPEECH_DB, music_gain_db,
@@ -102,6 +109,9 @@ class ReelDeps:
     # GÖRÜNTÜ-ÖNCELİKLİ MOD (yalnız reel.footage_driven=True iken kullanılır)
     write_footage_driven_narration: Callable = _write_fd_narr
     footage_search_queries: Callable = _fd_queries
+    # KEŞİF: konu stoktan doğar (kullanıcı önerisi 2026-07-16, bkz. footage_discovery)
+    discover_subject: Callable = _discover_subject
+    download_candidate: Callable = _download_candidate
     health_check: Callable = _health
     synthesize: Callable = _synth
     probe_duration_s: Callable = _probe
@@ -379,21 +389,77 @@ def _prepare_footage_driven(*, topic: str, channel, reel, d, work_dir: Path,
                             footage_priority,
                             vision_call, ffmpeg_path: str,
                             llm_claude_path: str, llm_model: str,
-                            llm_backend: str, llm_api_key: str | None):
+                            llm_backend: str, llm_api_key: str | None,
+                            seed: int = 0,
+                            recent_titles: list[str] | None = None):
     """Görüntü-öncelikli hazırlık: konu → EN sorgu → N AYRIK klip indir → vision ile
     tarif et. Döner (clips, descriptions, queries) — üçü index-hizalı (beat=klip
     garantisinin temeli). Vision kapısı (tür doğru + net) hâlâ uygulanır; ama senaryo
     SONRA yazıldığı için tür-onarım/ikincil-özne/aksiyon-query GEREKSİZLEŞİR."""
     n_clips = _footage_driven_clip_count(reel.target_duration_s)
-    queries = d.footage_search_queries(
-        topic, n=n_clips, channel=channel, claude_path=llm_claude_path,
-        model=llm_model, backend=llm_backend, api_key=llm_api_key)
-    log.info(f"  reel[görüntü-önce]: {n_clips} klip hedefi, sorgular={queries}")
-
     sources = build_footage_sources(
         footage_priority or ["pexels"], pexels_key=pexels_api_key,
         pixabay_key=pixabay_api_key)
     footage_deps = FootageDeps(sources=sources)
+    clips_cache = work_dir / "clips"
+    clips: list[Path] = []
+    used_queries: list[str] = []
+    used: set[str] = set()
+    seen: dict = {}
+
+    # --- KEŞİF: KONU STOKTAN DOĞAR (kullanıcı önerisi, 2026-07-16) ------------
+    # Eski akış konuyu önce seçip stok arıyordu → kıt havuz = looplu video (858)
+    # ya da üretim düşüşü. Keşif: stok taranır, >=4 ayrık klipli ÖZNE seçilir,
+    # konu o kliplerden türetilir. Kurulamazsa eski konu-yoluna düşülür.
+    if (getattr(reel, "footage_discovery", True) and vision_call is not None
+            and d.discover_subject is not None):
+        from short_bot.claude_cli import run_json as _rj
+
+        def _disc_inv(prompt, schema):
+            return _rj(prompt, schema, claude_path=llm_claude_path, model=llm_model,
+                       backend=llm_backend, api_key=llm_api_key, retries=2)
+
+        kesif = None
+        try:
+            kesif = d.discover_subject(
+                sources=sources, vision_call=vision_call, invoke=_disc_inv,
+                seed=seed, recent_titles=recent_titles)
+        except Exception as e:  # noqa: BLE001 — keşif üretimi durdurmaz
+            log.warning(f"  reel[keşif]: çöktü ({e}) → konu-yoluna düşülüyor")
+        if kesif is not None:
+            subj, adaylar = kesif
+            for cand in adaylar:
+                if len(clips) >= n_clips:
+                    break
+                src = next((x for x in sources
+                            if getattr(x, "name", "") == cand.source), sources[0])
+                try:
+                    clip = d.download_candidate(src, cand, clips_cache)
+                except Exception:  # noqa: BLE001 — tek aday akışı düşürmesin
+                    clip = None
+                if clip is None or str(clip) in used:
+                    continue
+                used.add(str(clip))
+                if _fd_motion_min(clip, ffmpeg_path) < MOTION_MIN:
+                    log.info(f"  reel[keşif]: statik aday atlandı ({clip.name})")
+                    continue
+                clips.append(clip)
+                used_queries.append(subj.subject_en)
+            if len(set(map(str, clips))) >= 3:
+                topic = subj.topic_tr            # KONU ARTIK STOKTAN
+                queries = [subj.subject_en]
+                log.info(f"  reel[keşif]: {len(clips)} klip indirildi → konu: {topic}")
+            else:
+                log.warning(f"  reel[keşif]: yalnız {len(set(map(str, clips)))} ayrık "
+                            f"klip indirilebildi → konu-yoluna düşülüyor")
+                clips, used_queries, used = [], [], set()
+
+    if not clips:
+        queries = d.footage_search_queries(
+            topic, n=n_clips, channel=channel, claude_path=llm_claude_path,
+            model=llm_model, backend=llm_backend, api_key=llm_api_key)
+        log.info(f"  reel[görüntü-önce]: {n_clips} klip hedefi, sorgular={queries}")
+
     from short_bot.reel_relevance import build_topic_pool, derive_footage_anchor
     anchor = (getattr(reel, "footage_anchor", "") or "").strip()
     if not anchor:
@@ -402,14 +468,10 @@ def _prepare_footage_driven(*, topic: str, channel, reel, d, work_dir: Path,
     topic_pool = build_topic_pool(queries, anchor=anchor)
     topic_q = (topic.split(",")[0].strip()[:40] or "nature")
     context = topic.strip()[:200]
-    clips_cache = work_dir / "clips"
 
     # N AYRIK klip: sorguları döndürerek indir; exclude ile tekrar önlenir. Bir tam
     # tur boyunca (misses == len(queries)) yeni klip gelmezse havuz tükenmiştir → dur.
-    clips: list[Path] = []
-    used_queries: list[str] = []
-    used: set[str] = set()
-    seen: dict = {}
+    # (Keşif klipleri indirdiyse bu döngü hiç koşmaz — clips zaten dolu.)
     misses = 0
     idx = 0
     max_attempts = n_clips * 4
@@ -418,7 +480,9 @@ def _prepare_footage_driven(*, topic: str, channel, reel, d, work_dir: Path,
     # mantis klibi kapanışta 8.1sn DONUK kare yaptı. Eski akışla aynı ilke: statik
     # atlanır, hiç hareketli çıkmazsa fail-open yedeği kabul edilir.
     statik_yedek: tuple | None = None
-    while len(clips) < n_clips and idx < max_attempts and misses < len(queries):
+    kesif_doldu = bool(clips)     # keşif klipleri indirdiyse konu-yolu döngüsü koşmaz
+    while (not kesif_doldu and len(clips) < n_clips
+           and idx < max_attempts and misses < len(queries)):
         query = queries[idx % len(queries)]
         idx += 1
         clip, _gated = _match_with_fallback(
@@ -532,7 +596,7 @@ def _prepare_footage_driven(*, topic: str, channel, reel, d, work_dir: Path,
             f"bulundu (en az {MIN_FD_DISTINCT} gerekir). Tekrarlı/looplu video "
             f"üretmek yerine düşülüyor; stok havuzu bu konu için kıt.")
     log.info(f"  reel[görüntü-önce]: {len(clips)} klip tarif edildi ({ayrik} ayrık)")
-    return clips, descs, used_queries
+    return clips, descs, used_queries, topic
 
 
 def produce_reel_video(
@@ -550,6 +614,7 @@ def produce_reel_video(
     hook_patterns=None, assets_root: Path | None = None,
     episode=None,        # EpisodePlan — seri/cliffhanger mimarisi (bkz. reel_series)
     on_narration=None,   # callback(narration): açık kapıyı çağırana bildir (ark zinciri)
+    recent_titles: list[str] | None = None,   # keşif tekrar-önleme (son video başlıkları)
 ) -> Path:
     reel = getattr(channel, "reel", None)
     if reel is None or not reel.enabled:
@@ -630,13 +695,16 @@ def produce_reel_video(
     fd_queries: list = []
     if footage_driven:
         log.info("  reel: GÖRÜNTÜ-ÖNCELİKLİ mod açık — footage önce, senaryo sonra")
-        fd_clips, fd_descs, fd_queries = _prepare_footage_driven(
+        fd_clips, fd_descs, fd_queries, fd_topic = _prepare_footage_driven(
             topic=topic, channel=channel, reel=reel, d=d, work_dir=work_dir,
             pexels_api_key=pexels_api_key, pixabay_api_key=pixabay_api_key,
             footage_priority=footage_priority,
             vision_call=vision_call, ffmpeg_path=ffmpeg_path,
             llm_claude_path=llm_claude_path, llm_model=llm_model,
-            llm_backend=llm_backend, llm_api_key=llm_api_key)
+            llm_backend=llm_backend, llm_api_key=llm_api_key,
+            seed=seed, recent_titles=recent_titles)
+        # KEŞİF konuyu stoktan türettiyse senaryo/manşet/başlık o konudan yazılır.
+        topic = fd_topic
         _phase("footage-önce(indir+tarif)")
 
     # 2) Senaryo
