@@ -32,6 +32,13 @@ _FALLBACKS_LOCK = threading.Lock()
 # google_studio vision (8-yollu) ve openrouter paralelliği ETKİLENMEZ.
 _CLI_LOCK = threading.Lock()
 
+# MALİYET ÖNCELİĞİ (kullanıcı direktifi 2026-07-16): OpenRouter neredeyse HİÇ tetiklenmemeli
+# (API-bazlı, pahalı). CLI hang'i rate-limit kaynaklı ve GEÇİCİ — ÖLÇÜLDÜ: bir çağrı takılınca
+# sonraki temizlenmiş pencerede başarılı (5 ardışıkta 1. takıldı, 2-5. hızlı). Bu yüzden CLI
+# hang'inde OR'a DÜŞMEK YERİNE CLI tekrar denenir. OR yalnız CLI tüm denemelerde patlarsa
+# (plan uzun süre doygun) ya da CLI KURULU DEĞİLSE — son çare, nadir.
+_CLI_MAX_ATTEMPTS = 3
+
 
 def register_fallback(primary_backend: str, primary_model: str,
                       fb_backend: str, fb_model: str, fb_api_key: str | None) -> None:
@@ -114,15 +121,19 @@ def _invoke_raw(prompt: str, *, backend: str, model: str,
                 image_path: "Path | None" = None) -> str:
     """Birincil backend + kayıtlı fallback (TEK deneme). Kayıt yoksa davranış birebir.
 
-    Birincil herhangi bir hatayla çökerse ve (backend, model) için fallback kayıtlıysa
-    OpenRouter'a tek atış düşülür; kayıt yoksa hata yükseltilir (run_json onu yakalar,
-    FileNotFoundError özel mesajını korur)."""
+    claude_cli için: hang'de OR'a düşmeden CLI tekrar denenir (maliyet önceliği; bkz.
+    _CLI_MAX_ATTEMPTS notu). google_studio/openrouter için: birincil + tek fallback denemesi.
+    Kayıt yoksa hata yükseltilir (run_json onu yakalar, FileNotFoundError mesajını korur)."""
+    fb = _FALLBACKS.get((backend, model))
+    if backend == "claude_cli":
+        return _invoke_cli_with_retry(prompt, model=model, claude_path=claude_path,
+                                      api_key=api_key, timeout_s=timeout_s,
+                                      image_path=image_path, fb=fb)
     try:
         return _invoke_primary(prompt, backend=backend, model=model,
                                claude_path=claude_path, api_key=api_key,
                                timeout_s=timeout_s, image_path=image_path)
     except Exception as e:   # noqa: BLE001 — her başarısızlık fallback adayı
-        fb = _FALLBACKS.get((backend, model))
         if fb is None:
             raise
         fb_backend, fb_model, fb_key = fb
@@ -131,6 +142,40 @@ def _invoke_raw(prompt: str, *, backend: str, model: str,
         return _invoke_primary(prompt, backend=fb_backend, model=fb_model,
                                claude_path=claude_path, api_key=fb_key,
                                timeout_s=timeout_s, image_path=image_path)
+
+
+def _invoke_cli_with_retry(prompt: str, *, model: str, claude_path: str,
+                           api_key: str | None, timeout_s: int, image_path, fb) -> str:
+    """CLI hang'inde OR'a DÜŞME → CLI'yi tekrar dene (rate penceresi temizlenir; ölçüldü).
+    OR yalnız CLI tüm denemelerde patlar (plan uzun doygun) ya da CLI kurulu değilse — son çare.
+
+    ``fb``: (fb_backend, fb_model, fb_key) ya da None."""
+    last: Exception | None = None
+    for attempt in range(1, _CLI_MAX_ATTEMPTS + 1):
+        try:
+            return _invoke_primary(prompt, backend="claude_cli", model=model,
+                                   claude_path=claude_path, api_key=api_key,
+                                   timeout_s=timeout_s, image_path=image_path)
+        except FileNotFoundError as e:
+            last = e
+            break   # CLI KURULU DEĞİL → tekrar denemek anlamsız, son çareye (OR) geç
+        except (subprocess.TimeoutExpired, ClaudeCliError) as e:
+            last = e   # hang / geçici hata (rate-limit) → tekrar dene
+            if attempt < _CLI_MAX_ATTEMPTS:
+                log.info(f"claude cli deneme {attempt}/{_CLI_MAX_ATTEMPTS} takıldı "
+                         f"({type(e).__name__}) → OR'a düşmeden tekrar deneniyor")
+                time.sleep(min(2 * attempt, 8))
+    # Buraya: CLI tüm denemelerde patladı ya da kurulu değil → son çare OR (nadir).
+    if fb is not None:
+        fb_backend, fb_model, fb_key = fb
+        log.warning(f"son çare fallback: claude_cli/{model} -> {fb_backend}/{fb_model} "
+                    f"({type(last).__name__ if last else '?'}) — {_CLI_MAX_ATTEMPTS} CLI denemesi tükendi")
+        return _invoke_primary(prompt, backend=fb_backend, model=fb_model,
+                               claude_path=claude_path, api_key=fb_key,
+                               timeout_s=timeout_s, image_path=image_path)
+    if last is not None:
+        raise last
+    raise ClaudeCliError("claude cli tüm denemelerde başarısız")
 
 
 def _invoke_primary(prompt: str, *, backend: str, model: str,

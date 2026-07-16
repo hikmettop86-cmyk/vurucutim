@@ -9,14 +9,17 @@ import short_bot.claude_cli as CC
 
 
 # ── claude_cli merkezî fallback registry ─────────────────────────────────────
-def test_fallback_cli_yoksa_openrouter(monkeypatch):
+def test_cli_yoksa_hemen_openrouter(monkeypatch):
+    # CLI KURULU DEĞİL (FileNotFoundError) → tekrar denemek anlamsız → hemen OR.
     CC.clear_fallbacks()
     CC.register_fallback("claude_cli", "sonnet", "openrouter",
                          "anthropic/claude-sonnet-5", "or-key")
     seen = {}
+    calls = {"cli": 0}
 
     def fake_primary(prompt, *, backend, model, claude_path, api_key, timeout_s, image_path=None):
         if backend == "claude_cli":
+            calls["cli"] += 1
             raise FileNotFoundError("claude yok")
         seen.update(backend=backend, model=model, api_key=api_key)
         return "OR CEVAP"
@@ -25,18 +28,70 @@ def test_fallback_cli_yoksa_openrouter(monkeypatch):
     out = CC._invoke_raw("selam", backend="claude_cli", model="sonnet",
                          claude_path="claude", api_key=None, timeout_s=10)
     assert out == "OR CEVAP"
+    assert calls["cli"] == 1     # FileNotFoundError → retry YOK, tek deneme sonra OR
     assert seen == {"backend": "openrouter", "model": "anthropic/claude-sonnet-5",
                     "api_key": "or-key"}
 
 
-def test_fallback_kayitsizken_hata_gecer(monkeypatch):
+def test_cli_hang_israrla_retry_eder_or_a_dusmez(monkeypatch):
+    # MALİYET ÖNCELİĞİ: CLI hang'inde OR'a DÜŞME → CLI'yi tekrar dene (pencere temizlenir,
+    # ölçüldü: hang'den sonraki çağrı başarılı). İlk deneme takılır, ikinci başarılı → OR YOK.
+    import subprocess
     CC.clear_fallbacks()
+    CC.register_fallback("claude_cli", "sonnet", "openrouter",
+                         "anthropic/claude-sonnet-5", "or-key")
+    monkeypatch.setattr(CC.time, "sleep", lambda s: None)
+    n = {"cli": 0, "or": 0}
 
-    def fake_primary(prompt, **k):
-        raise FileNotFoundError("claude yok")
+    def fake_primary(prompt, *, backend, model, claude_path, api_key, timeout_s, image_path=None):
+        if backend == "claude_cli":
+            n["cli"] += 1
+            if n["cli"] == 1:
+                raise subprocess.TimeoutExpired("claude", timeout_s)   # ilk deneme takıldı
+            return "CLI CEVAP"                                          # ikinci başarılı
+        n["or"] += 1
+        return "OR CEVAP"
 
     monkeypatch.setattr(CC, "_invoke_primary", fake_primary)
-    with pytest.raises(FileNotFoundError):   # kayıt yok → davranış birebir
+    out = CC._invoke_raw("x", backend="claude_cli", model="sonnet",
+                         claude_path="claude", api_key=None, timeout_s=10)
+    assert out == "CLI CEVAP"    # CLI'de kaldı
+    assert n["cli"] == 2 and n["or"] == 0   # OR HİÇ tetiklenmedi
+
+
+def test_cli_tum_denemeler_patlarsa_son_care_or(monkeypatch):
+    # CLI 3 denemede de takılırsa (plan uzun süre doygun) → son çare OR (nadir).
+    import subprocess
+    CC.clear_fallbacks()
+    CC.register_fallback("claude_cli", "sonnet", "openrouter",
+                         "anthropic/claude-sonnet-5", "or-key")
+    monkeypatch.setattr(CC.time, "sleep", lambda s: None)
+    n = {"cli": 0}
+
+    def fake_primary(prompt, *, backend, model, claude_path, api_key, timeout_s, image_path=None):
+        if backend == "claude_cli":
+            n["cli"] += 1
+            raise subprocess.TimeoutExpired("claude", timeout_s)
+        return "OR CEVAP"
+
+    monkeypatch.setattr(CC, "_invoke_primary", fake_primary)
+    out = CC._invoke_raw("x", backend="claude_cli", model="sonnet",
+                         claude_path="claude", api_key=None, timeout_s=10)
+    assert out == "OR CEVAP"
+    assert n["cli"] == CC._CLI_MAX_ATTEMPTS   # tüm denemeler tükendi, sonra OR
+
+
+def test_cli_hang_kayitsizken_hata_verir(monkeypatch):
+    # Fallback yok + CLI hep patlıyor → son hatayı yükseltir (run_json yakalar).
+    import subprocess
+    CC.clear_fallbacks()
+    monkeypatch.setattr(CC.time, "sleep", lambda s: None)
+
+    def fake_primary(prompt, **k):
+        raise subprocess.TimeoutExpired("claude", 10)
+
+    monkeypatch.setattr(CC, "_invoke_primary", fake_primary)
+    with pytest.raises(subprocess.TimeoutExpired):
         CC._invoke_raw("x", backend="claude_cli", model="sonnet",
                        claude_path="claude", api_key=None, timeout_s=10)
 

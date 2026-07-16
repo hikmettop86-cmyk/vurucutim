@@ -40,6 +40,15 @@ _PT_OFFSET_H = -7
 
 _ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
+# Güvenlik filtrelerini KAPAT: girdi stok DOĞA görüntüsü (avcı/kavga/av), çıktı nötr TARİF.
+# Gemini varsayılanı hayvan-şiddeti thumbnail'larını bloklayıp BOŞ dönüyordu → gemma'ya
+# ücretli fallback (ölçüldü: 42 vision'ın ~10'u). BLOCK_NONE ile hepsi ücretsiz Google'da kalır.
+_SAFETY_OFF = [
+    {"category": c, "threshold": "BLOCK_NONE"} for c in (
+        "HARM_CATEGORY_HARASSMENT", "HARM_CATEGORY_HATE_SPEECH",
+        "HARM_CATEGORY_SEXUALLY_EXPLICIT", "HARM_CATEGORY_DANGEROUS_CONTENT")
+]
+
 
 class GoogleStudioError(Exception):
     """google_studio HTTP/istek hatası (status + gövde taşır)."""
@@ -327,7 +336,8 @@ def _http_generate(api_key: str, model: str, prompt: str, *,
         b64 = base64.b64encode(Path(image_path).read_bytes()).decode("ascii")
         parts.append({"inline_data": {"mime_type": "image/jpeg", "data": b64}})
     body = {"contents": [{"role": "user", "parts": parts}],
-            "generationConfig": {"maxOutputTokens": max_tokens}}
+            "generationConfig": {"maxOutputTokens": max_tokens},
+            "safetySettings": _SAFETY_OFF}
     # x-goog-api-key: hem AIza... hem AQ.... formatında çalışır (Google önerilen yol).
     try:
         r = requests.post(_ENDPOINT.format(model=model), json=body,
