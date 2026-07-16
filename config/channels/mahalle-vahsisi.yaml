@@ -69,7 +69,6 @@ reel:
   mascot_animal: bal porsuğu
   mascot_trait: Geri Vitesi Olmayan Deli — çılgın, korkusuz, kimseden çekinmez, geri
     vites yok, mahallenin ruhsatsız delisi
-  footage_driven: true
 dna:
   archetype: newscast
   palette:

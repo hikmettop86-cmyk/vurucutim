@@ -78,25 +78,33 @@ def test_save_channel_omits_reel_when_none(tmp_path):
     assert "reel" not in yaml.safe_load(out.read_text(encoding="utf-8"))
 
 
-def test_footage_driven_defaults_false(tmp_path):
-    # SIFIR REGRESYON: bloğu olan mevcut tüm kanallar senaryo-önce kalmalı.
+def test_curated_defaults(tmp_path):
+    # Kürate-klip modu alanları varsayılanı (SP1 pivot 2026-07-17).
     cfg = load_channel(_write(tmp_path, {"reel": {
         "enabled": True, "voice_id": "v1", "target_duration_s": [45, 60]}}))
-    assert cfg.reel.footage_driven is False
+    assert cfg.reel.subreddits == []
+    assert cfg.reel.curated_min_ups == 500
+    assert cfg.reel.curated_time == "week"
+    assert cfg.reel.curated_max_duration == 90
 
 
-def test_footage_driven_parses_and_round_trips(tmp_path):
+def test_curated_parses_and_round_trips(tmp_path):
     cfg = load_channel(_write(tmp_path, {"reel": {
         "enabled": True, "voice_id": "v1", "target_duration_s": [45, 60],
-        "footage_driven": True}}))
-    assert cfg.reel.footage_driven is True
-    # save → load round-trip (to_channel_data alanı yazmalı)
+        "subreddits": ["AnimalsBeingJerks", "likeus"], "curated_min_ups": 1000,
+        "curated_time": "month", "curated_max_duration": 60}}))
+    assert cfg.reel.subreddits == ["AnimalsBeingJerks", "likeus"]
+    assert cfg.reel.curated_min_ups == 1000
+    assert cfg.reel.curated_time == "month"
     p2 = tmp_path / "rt.yaml"
     save_channel(p2, cfg)
-    assert load_channel(p2).reel.footage_driven is True
+    rt = load_channel(p2).reel
+    assert rt.subreddits == ["AnimalsBeingJerks", "likeus"]
+    assert rt.curated_max_duration == 60
 
 
-def test_curiosity_pipeline_varsayilan_acik():
-    from short_bot.config import ReelConfig
-    r = ReelConfig(enabled=True, voice_id="v")
-    assert r.curiosity_pipeline is True
+def test_content_source_curated_accepted(tmp_path):
+    # content_source="curated" (kürate-klip fabrikası) geçerli bir kaynak.
+    cfg = load_channel(_write(tmp_path, {"content_source": "curated", "reel": {
+        "enabled": True, "voice_id": "v1"}}))
+    assert cfg.content_source == "curated"

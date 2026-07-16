@@ -396,11 +396,9 @@ _RUN_SUB_LOGGERS = (
     # (kurgucunun kararı, footage red gerekçeleri, faz süreleri) yalnız stdout'a
     # gidiyordu; panelden bakan kullanıcı hiçbirini göremiyordu.
     "short_bot.assets_library",
-    "short_bot.footage_discovery",
     "short_bot.footage_matcher",
     "short_bot.footage_sources",
     "short_bot.reel",
-    "short_bot.reel_curiosity",
     "short_bot.reel_narration",
     "short_bot.reel_director",
     "short_bot.reel_render",
@@ -1409,17 +1407,6 @@ def _run_generator(*, channel, run_id, log, eng, settings,
     # Reel formatı: footage-sürüklü üretim (etkinse render/compose'u atla)
     reel_call = resolve_ai_call(settings, secrets, "vision")
     if getattr(channel, "reel", None) is not None and channel.reel.enabled:
-        # KEŞİF tekrar-önleme: son video başlıkları (özne çakışması kontrolü için).
-        recent_titles: list[str] = []
-        try:
-            from sqlalchemy import select as _sel
-            from short_bot.db import shorts as _sh
-            with eng.connect() as _c:
-                recent_titles = [r.title for r in _c.execute(
-                    _sel(_sh.c.title).where(_sh.c.channel == channel.slug)
-                    .order_by(_sh.c.id.desc()).limit(15)) if r.title]
-        except Exception:  # noqa: BLE001 — başlıksız keşif de çalışır
-            pass
         out_dir = Path(channel.output_dir); out_dir.mkdir(parents=True, exist_ok=True)
         reel_out = unique_output_path(
             out_dir,
@@ -1443,7 +1430,6 @@ def _run_generator(*, channel, run_id, log, eng, settings,
                 templates_dir=templates_dir, cache_dir=cache_dir,
                 work_dir=Path(reel_tmp), log=log, llm_call=gen_call,
                 vision_call=reel_call, seed=generated_id,
-                recent_titles=recent_titles,
                 hook_patterns=hook_pats,
                 cancel_check=lambda: is_run_cancelled(eng, run_id),
                 episode=episode,
@@ -1760,7 +1746,7 @@ def _reel_produce_or_none(
     *, channel, topic, out_path, settings, secrets, music_root, templates_dir,
     cache_dir, work_dir, log, llm_call, vision_call, seed: int = 0,
     hook_patterns=None, cancel_check=None,
-    episode=None, on_narration=None, recent_titles=None,
+    episode=None, on_narration=None,
 ) -> "Path | None":
     """Kanal reel ise reel videoyu üretip out_path döndürür; değilse None."""
     reel = getattr(channel, "reel", None)
@@ -1795,7 +1781,6 @@ def _reel_produce_or_none(
         # (music_root paketlenmiş uygulamada taşınır; assets/ ona bitişiktir).
         assets_root=Path(music_root).parent,
         episode=episode, on_narration=on_narration,
-        recent_titles=recent_titles,
     )
 
 

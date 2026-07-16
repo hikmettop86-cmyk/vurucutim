@@ -16,13 +16,7 @@ from short_bot.audio_probe import trailing_silence_s as _tail
 from short_bot.footage_matcher import FootageDeps, SubjectPos, download_banked
 from short_bot.footage_matcher import locate_subject as _locate
 from short_bot.footage_matcher import match_beat_clip as _match
-from short_bot.footage_discovery import discover_subject as _discover_subject
 from short_bot.footage_sources import build_footage_sources
-
-
-def _download_candidate(src, cand, cache_dir):
-    """Keşif adayını kendi kaynağından indir (test enjeksiyonu için ayrık)."""
-    return src.download(cand, cache_dir)
 
 from short_bot.reel_assembler import assemble_reel as _assemble
 from short_bot.reel_markers import _marker_worthy_segs, build_markers
@@ -38,9 +32,6 @@ from short_bot.reel_interrupt import (impact_cut_indices, select_interrupts,
 from short_bot.reel_tempo import plan_zones, remap_words, retimed_duration_s
 from short_bot.reel_tempo import retime as _retime
 from short_bot.reel_narration import write_reel_narration as _write_narr
-from short_bot.reel_curiosity import write_curious_narration as _write_curious
-from short_bot.reel_narration import write_footage_driven_narration as _write_fd_narr
-from short_bot.reel_narration import footage_search_queries as _fd_queries
 from short_bot.reel_numbers import find_numbers
 from short_bot.reel_grade import MOTION_MIN, measure_motion
 from short_bot.reel_pacing import clip_offsets, plan_subcuts, subcut_clip_index
@@ -107,14 +98,6 @@ TAIL_KEEP_S = 0.4
 @dataclass(frozen=True)
 class ReelDeps:
     write_reel_narration: Callable = _write_narr
-    # GÖRÜNTÜ-ÖNCELİKLİ MOD (yalnız reel.footage_driven=True iken kullanılır)
-    write_footage_driven_narration: Callable = _write_fd_narr
-    # MERAK MİMARİSİ: 3 aday → yargıç → doktor (bkz. reel_curiosity)
-    write_curious_narration: Callable = _write_curious
-    footage_search_queries: Callable = _fd_queries
-    # KEŞİF: konu stoktan doğar (kullanıcı önerisi 2026-07-16, bkz. footage_discovery)
-    discover_subject: Callable = _discover_subject
-    download_candidate: Callable = _download_candidate
     health_check: Callable = _health
     synthesize: Callable = _synth
     probe_duration_s: Callable = _probe
@@ -230,172 +213,6 @@ def _match_with_fallback(d, query, *, topic_q, api_key, cache_dir, verify,
                      f"'{last_q[:30]}' klibi kullanıldı (DOĞRULANMADI)")
             return clip, False
     return None, False
-
-
-# Klip başına EKRAN süresi. ÖLÇÜLDÜ/kullanıcı (2026-07-16, short 874 loop teşhisi):
-# eski ~11sn/klip → tek klip 5 alt-kesim boyunca gerilip LOOP oluyordu (aynı görüntü
-# 14sn). ~5.5sn/klip → her klip 1-2 alt-kesim, gerilme/loop yok. Video süresi ARTIK
-# teslim edilen ayrık klip sayısından türer (_footage_driven_duration) — sabit hedef değil.
-FD_SEC_PER_CLIP = 5.5
-FD_MIN_DURATION_S = 15
-
-
-def _footage_driven_clip_count(target_duration_s) -> int:
-    """Görüntü-öncelikli modda kaç klip indirileceği. Klip başına ~11sn (bir beat).
-    En az 3, en çok 6 (memory: N≈beat 3-6). 45-60sn → 5; 25-45 → 3."""
-    lo, hi = target_duration_s
-    return max(3, min(6, round((lo + hi) / 2 / 11)))
-
-
-def _footage_driven_duration(n_clips: int, target_duration_s):
-    """Teslim edilen ayrık klip sayısına göre EFEKTİF süre penceresi (lo, hi).
-
-    Her klip ~FD_SEC_PER_CLIP ekranda kalır → gerilme/loop YOK. Kanalın üst süresini
-    aşmaz, FD_MIN_DURATION_S'nin altına inmez. 3 klip → ~16sn; 6 → ~33sn; 8 → tavan.
-    Senaryo bu pencereye yazılır (gölge target_duration_s override'ı)."""
-    _lo, hi = target_duration_s
-    dur = max(FD_MIN_DURATION_S, min(int(hi), round(n_clips * FD_SEC_PER_CLIP)))
-    return (max(10, dur - 5), dur)
-
-
-def _footage_driven_seg_clip(clips: list, si: int, n_segs: int):
-    """beat=klip eşlemesi (görüntü-öncelikli): segment si → önden indirilmiş klip.
-
-      seg 0 (hook)          → clips[0]
-      seg 1+i (beat i)      → clips[i]  (i len(clips) aşarsa son klibe kelepçelenir)
-      seg n_segs-1 (close)  → clips[-1]
-
-    LLM'in yazdığı beat sayısı klip sayısından SAPSA bile her segment bir klip alır
-    (build_footage_driven_prompt N beat ister ama garanti değil)."""
-    last = len(clips) - 1
-    if si == 0:
-        return clips[0]
-    if n_segs > 1 and si == n_segs - 1:
-        return clips[last]
-    beat_i = si - 1                       # seg 1 = beat 0
-    return clips[min(beat_i, last)]
-
-
-def _fd_motion_min(clip, ffmpeg_path: str = "ffmpeg") -> float:
-    """Klibin BAŞ ve SON penceresinin hareket MİNİMUMU (görüntü-önce statik reddi).
-
-    measure_motion yalnız ilk ~4sn'yi örnekler (fps=4, 16 kare). Görüntü-önce bir
-    klip 2 segmenti (son beat + close, ~13sn) taşıyabilir ve alt-kesim offsetleri
-    klibin SONUNA yayılır. GERÇEK HATA (okçu balığı repro): başı hareketli sonu
-    durgun amber sürü klibi kapıdan geçti → kapanışta 8.1sn donuk kare.
-
-    Kuyruk sondası YENİDEN-KODLAR (-c copy DEĞİL): GERÇEK HATA (keçi videosu,
-    son 8sn 0.0000 donuk): -c copy keyframe sınırında boş/bozuk dosya verip
-    fail-open 1.0 döndürüyordu → donmuş kuyruklu klip kapıdan geçiyordu.
-    Kuyruk yine çıkarılamazsa baş ölçümü döner (fail-open)."""
-    import subprocess
-    import tempfile
-    m1 = measure_motion(clip, ffmpeg_path)
-    try:
-        with tempfile.TemporaryDirectory() as td:
-            t = Path(td) / "tail.mp4"
-            subprocess.run([ffmpeg_path, "-v", "error", "-y", "-sseof", "-4",
-                            "-i", str(clip), "-vf", "scale=64:64", "-an",
-                            "-preset", "ultrafast", str(t)],
-                           capture_output=True, timeout=60)
-            if t.exists() and t.stat().st_size > 0:
-                return min(m1, measure_motion(t, ffmpeg_path))
-    except Exception:  # noqa: BLE001 — ölçüm hatası eleme yapmasın
-        pass
-    return m1
-
-
-# Durgun pencere eşiği (ölçüldü, keçi videosu): bakışma/duran hayvan 0.002-0.005,
-# gerçek hareket 0.03-0.18. Klip pencerelerinin yarıdan fazlası bu eşiğin
-# altındaysa klip 'çoğunluğu durgun'dur — baş/son hareketli olsa bile izleyici
-# uzun donuk bölüm görür (kullanıcı: '0:24'ten sonra donuyor').
-_FD_STILL_WIN = 0.005
-_FD_STATIC_FRAC_MAX = 0.5
-
-
-def _fd_motion_profile(clip, ffmpeg_path: str = "ffmpeg") -> list[float]:
-    """Klibin 2sn'lik pencere başına hareket profili (fps=2, 64x64 gri fark ort.).
-
-    Hem durgunluk oranı (_fd_static_fraction) hem ofset düzeltmesi
-    (_fd_fix_static_offsets) bunu kullanır. Okunamazsa [] (fail-open)."""
-    import subprocess
-    import tempfile
-    try:
-        from PIL import Image, ImageChops, ImageStat
-    except Exception:  # noqa: BLE001
-        return []
-    try:
-        with tempfile.TemporaryDirectory() as td:
-            td = Path(td)
-            subprocess.run(
-                [ffmpeg_path, "-v", "error", "-i", str(clip),
-                 "-vf", "fps=2,scale=64:64,format=gray",
-                 "-frames:v", "120", str(td / "s%03d.png")],   # en çok 60sn
-                capture_output=True, timeout=60)
-            kareler = sorted(td.glob("*.png"))
-            if len(kareler) < 5:
-                return []
-            imgs = [Image.open(k).convert("L") for k in kareler]
-            diffs = [ImageStat.Stat(ImageChops.difference(a, b)).mean[0] / 255.0
-                     for a, b in zip(imgs, imgs[1:])]
-            return [sum(diffs[i:i + 4]) / len(diffs[i:i + 4])
-                    for i in range(0, len(diffs), 4)]
-    except Exception as e:  # noqa: BLE001 — ölçüm hatası üretimi düşürmesin
-        log.info(f"  reel: hareket profili ölçülemedi ({clip}): {e}")
-        return []
-
-
-def _fd_static_fraction(clip, ffmpeg_path: str = "ffmpeg") -> float:
-    """Klibin TAMAMI taranır: 2sn'lik pencerelerin ne kadarı durgun (0-1).
-
-    _fd_motion_min yalnız baş+son 4sn'ye bakar — ORTASI 30sn bakışma olan klibi
-    göremez (keçi videosu dersi). Okunamazsa 0.0 (fail-open: eleme yapma)."""
-    prof = _fd_motion_profile(clip, ffmpeg_path)
-    if not prof:
-        return 0.0
-    return sum(1 for m in prof if m < _FD_STILL_WIN) / len(prof)
-
-
-def _fd_fix_static_offsets(clip_paths, subcuts, clip_starts, ffmpeg_path,
-                           *, min_span_s: float = 3.0) -> list[float]:
-    """Uzun alt-kesimlerin klip-içi ofsetini DURGUN pencereden HAREKETLİ pencereye kaydır.
-
-    GERÇEK HATA (karınca videosu): kapı klibi bütün olarak geçirdi (durgunluk
-    %40) ama kapanışın 5.6sn'lik alt-kesimi klip İÇİNDEKİ donmuş bekleme
-    bölümüne denk geldi → son 6sn tamamen dondu. clip_offsets ofsetleri süreye
-    eşit yayar, pencerelerin hareketinden habersizdir. Burada yalnız UZUN
-    (>= min_span_s) alt-kesimler kontrol edilir: ofsetin düştüğü pencere
-    durgunsa (< _FD_STILL_WIN) klibin EN HAREKETLİ penceresine kaydırılır.
-    Profil okunamazsa dokunulmaz (fail-open)."""
-    profiller: dict[str, list[float]] = {}
-    yeni = list(clip_starts)
-    for i, ((si, a, b), clip) in enumerate(zip(subcuts, clip_paths)):
-        span = b - a
-        if span < min_span_s or i >= len(yeni):
-            continue
-        key = str(clip)
-        if key not in profiller:
-            profiller[key] = _fd_motion_profile(clip, ffmpeg_path)
-        prof = profiller[key]
-        if not prof:
-            continue
-        w = min(int(yeni[i] / 2.0), len(prof) - 1)
-        if prof[w] >= _FD_STILL_WIN:
-            continue                     # ofset zaten hareketli pencerede
-        en_iyi = max(range(len(prof)), key=lambda k: prof[k])
-        if prof[en_iyi] < _FD_STILL_WIN:
-            continue                     # klipte hareketli pencere yok (kapı kaçırdı)
-        yeni[i] = en_iyi * 2.0
-        log.info(f"  reel[görüntü-önce]: alt-kesim {i} ofseti durgun pencereden "
-                 f"({clip_starts[i]:.1f}s) hareketliye ({yeni[i]:.1f}s) kaydırıldı")
-    return yeni
-
-
-def _fd_clip_ok(clip, ffmpeg_path: str = "ffmpeg") -> bool:
-    """Görüntü-önce klip kapısı: baş/son hareketli VE çoğunluğu durgun değil."""
-    if _fd_motion_min(clip, ffmpeg_path) < MOTION_MIN:
-        return False
-    return _fd_static_fraction(clip, ffmpeg_path) <= _FD_STATIC_FRAC_MAX
 
 
 def _rotate_sources(footage_deps, si: int):
@@ -563,272 +380,6 @@ def _repair_footage_types(clips_by_seg: dict, *, topic: str, seg_queries, d,
         clips_by_seg[si] = yeni
 
 
-def _prepare_footage_driven(*, topic: str, channel, reel, d, work_dir: Path,
-                            pexels_api_key: str, pixabay_api_key: str,
-                            footage_priority,
-                            vision_call, ffmpeg_path: str,
-                            llm_claude_path: str, llm_model: str,
-                            llm_backend: str, llm_api_key: str | None,
-                            seed: int = 0,
-                            recent_titles: list[str] | None = None):
-    """Görüntü-öncelikli hazırlık: konu → EN sorgu → N AYRIK klip indir → vision ile
-    tarif et. Döner (clips, descriptions, queries) — üçü index-hizalı (beat=klip
-    garantisinin temeli). Vision kapısı (tür doğru + net) hâlâ uygulanır; ama senaryo
-    SONRA yazıldığı için tür-onarım/ikincil-özne/aksiyon-query GEREKSİZLEŞİR."""
-    n_clips = _footage_driven_clip_count(reel.target_duration_s)
-    sources = build_footage_sources(
-        footage_priority or ["pexels"], pexels_key=pexels_api_key,
-        pixabay_key=pixabay_api_key)
-    footage_deps = FootageDeps(sources=sources)
-    clips_cache = work_dir / "clips"
-    clips: list[Path] = []
-    used_queries: list[str] = []
-    used: set[str] = set()
-    seen: dict = {}
-    kesif_yedek: list = []       # keşfin indirilmemiş adayları (eleme düşüşünde devreye girer)
-
-    # --- KEŞİF: KONU STOKTAN DOĞAR (kullanıcı önerisi, 2026-07-16) ------------
-    # Eski akış konuyu önce seçip stok arıyordu → kıt havuz = looplu video (858)
-    # ya da üretim düşüşü. Keşif: stok taranır, >=4 ayrık klipli ÖZNE seçilir,
-    # konu o kliplerden türetilir. Kurulamazsa eski konu-yoluna düşülür.
-    if (getattr(reel, "footage_discovery", True) and vision_call is not None
-            and d.discover_subject is not None):
-        from short_bot.claude_cli import run_json as _rj
-
-        def _disc_inv(prompt, schema):
-            return _rj(prompt, schema, claude_path=llm_claude_path, model=llm_model,
-                       backend=llm_backend, api_key=llm_api_key, retries=2)
-
-        # İKİ deneme: ilk öznenin klipleri hareket kapısında erirse (thumbnail
-        # hareketi gösteremez — mirket/kartal tünemiş poz dersi) ikinci turda o
-        # özneden KAÇINARAK yeniden seçtirilir; o da olmazsa konu-yoluna düşülür.
-        denenen_ozneler: list[str] = []
-        for _kesif_tur in range(2):
-            kesif = None
-            try:
-                kesif = d.discover_subject(
-                    sources=sources, vision_call=vision_call, invoke=_disc_inv,
-                    seed=seed + _kesif_tur, recent_titles=recent_titles,
-                    avoid_subjects=denenen_ozneler or None)
-            except Exception as e:  # noqa: BLE001 — keşif üretimi durdurmaz
-                log.warning(f"  reel[keşif]: çöktü ({e}) → konu-yoluna düşülüyor")
-            if kesif is None:
-                break
-            subj, adaylar = kesif
-            denenen = 0
-            for cand in adaylar:
-                denenen += 1
-                if len(clips) >= n_clips:
-                    denenen -= 1
-                    break
-                src = next((x for x in sources
-                            if getattr(x, "name", "") == cand.source), sources[0])
-                try:
-                    clip = d.download_candidate(src, cand, clips_cache)
-                except Exception:  # noqa: BLE001 — tek aday akışı düşürmesin
-                    clip = None
-                if clip is None or str(clip) in used:
-                    continue
-                used.add(str(clip))
-                if not _fd_clip_ok(clip, ffmpeg_path):
-                    log.info(f"  reel[keşif]: statik/durgun aday atlandı ({clip.name})")
-                    continue
-                clips.append(clip)
-                used_queries.append(subj.subject_en)
-            if len(set(map(str, clips))) >= 3:
-                topic = subj.topic_tr            # KONU ARTIK STOKTAN
-                queries = [subj.subject_en]
-                # İNDİRİLMEMİŞ adaylar YEDEK havuz: eleme klip düşürürse önce
-                # buradan tamamlanır (panel koşusu dersi: eleme 2'ye düşürünce
-                # yedek dururken üretim düşüyordu).
-                kesif_yedek.extend(adaylar[denenen:])
-                log.info(f"  reel[keşif]: {len(clips)} klip indirildi "
-                         f"(+{len(kesif_yedek)} yedek aday) → konu: {topic}")
-                break                            # özne oturdu
-            denenen_ozneler.append(subj.subject_en)
-            log.warning(f"  reel[keşif]: '{subj.subject_en}' yalnız "
-                        f"{len(set(map(str, clips)))} ayrık klip verdi → "
-                        f"{'ikinci özne denenecek' if _kesif_tur == 0 else 'konu-yoluna düşülüyor'}")
-            clips, used_queries, used = [], [], set()
-            kesif_yedek.clear()
-
-    if not clips:
-        queries = d.footage_search_queries(
-            topic, n=n_clips, channel=channel, claude_path=llm_claude_path,
-            model=llm_model, backend=llm_backend, api_key=llm_api_key)
-        log.info(f"  reel[görüntü-önce]: {n_clips} klip hedefi, sorgular={queries}")
-
-    from short_bot.reel_relevance import build_topic_pool, derive_footage_anchor
-    anchor = (getattr(reel, "footage_anchor", "") or "").strip()
-    if not anchor:
-        tmpl = getattr(getattr(channel, "dna", None), "search_query_template", "") or ""
-        anchor = derive_footage_anchor(tmpl)
-    topic_pool = build_topic_pool(queries, anchor=anchor)
-    topic_q = (topic.split(",")[0].strip()[:40] or "nature")
-    context = topic.strip()[:200]
-
-    # N AYRIK klip: sorguları döndürerek indir; exclude ile tekrar önlenir. Bir tam
-    # tur boyunca (misses == len(queries)) yeni klip gelmezse havuz tükenmiştir → dur.
-    # (Keşif klipleri indirdiyse bu döngü hiç koşmaz — clips zaten dolu.)
-    misses = 0
-    idx = 0
-    max_attempts = n_clips * 4
-    # STATİK RED (short 846): görüntü-önce prep'te hareket kontrolü YOKTU — eski
-    # akışın reddi order-döngüsünde yaşıyor ve footage-driven onu atlıyor. Statik
-    # mantis klibi kapanışta 8.1sn DONUK kare yaptı. Eski akışla aynı ilke: statik
-    # atlanır, hiç hareketli çıkmazsa fail-open yedeği kabul edilir.
-    statik_yedek: tuple | None = None
-    kesif_doldu = bool(clips)     # keşif klipleri indirdiyse konu-yolu döngüsü koşmaz
-    while (not kesif_doldu and len(clips) < n_clips
-           and idx < max_attempts and misses < len(queries)):
-        query = queries[idx % len(queries)]
-        idx += 1
-        clip, _gated = _match_with_fallback(
-            d, query, topic_q=topic_q, api_key=pexels_api_key, cache_dir=clips_cache,
-            verify=getattr(reel, "verify_footage", True), vision_call=vision_call,
-            footage_deps=_rotate_sources(footage_deps, len(clips)),
-            topic_pool=topic_pool, anchor=anchor, ffmpeg_path=ffmpeg_path,
-            exclude=used, context=context, seen=seen)
-        if clip is None or str(clip) in used:
-            misses += 1
-            continue
-        misses = 0
-        used.add(str(clip))
-        if not _fd_clip_ok(clip, ffmpeg_path):
-            if statik_yedek is None:
-                statik_yedek = (clip, query)
-            log.info(f"  reel[görüntü-önce]: statik/durgun klip atlandı ({clip.name})")
-            continue
-        clips.append(clip)
-        used_queries.append(query)
-    if not clips and statik_yedek is not None:
-        clips.append(statik_yedek[0])
-        used_queries.append(statik_yedek[1])
-        log.warning("  reel[görüntü-önce]: hareketli klip yok → statik kabul "
-                    "(donuk kuyruk riski, video yokluğundan yeğdir)")
-    if not clips:
-        raise RuntimeError(
-            f"reel: görüntü-önce — '{topic}' için hiç footage bulunamadı")
-    if len(clips) < n_clips:
-        log.warning(f"  reel[görüntü-önce]: {len(clips)}/{n_clips} klip bulundu "
-                    f"(havuz kıt) → mevcutlarla devam")
-
-    # PARALEL tarif (LOCATE_WORKERS): her klip bağımsız bir vision çağrısı.
-    from concurrent.futures import ThreadPoolExecutor
-    with ThreadPoolExecutor(max_workers=LOCATE_WORKERS) as ex:
-        descs = list(ex.map(
-            lambda c: _describe_clip(c, vision_call=vision_call,
-                                     ffmpeg_path=ffmpeg_path),
-            clips))
-    if not any(descs):
-        log.warning("  reel[görüntü-önce]: vision tarifleri BOŞ (vision kapalı?) → "
-                    "senaryo footage'a körlemesine yazılacak (uyum garantisi zayıflar)")
-    # --- TARİF-SONRASI ELEME + YERİNE KOYMA (görüntü-önce kalite kapısı) -----
-    # Senaryo bu tarifleri ANLATACAK: konu-dışı klip = konu-dışı beat.
-    # GERÇEK HATA (short 846): 'bağlama uyan' bataklık b-roll'ü, telefon scroll
-    # klibi ve mantis kapıdan geçti → senaryo çöpü anlatıp konudan koptu; boş
-    # tarifli klip için beat UYDURULDU ('uydurma' yasağına rağmen). (short 845):
-    # kapı 'örümcek ≈ atlayan örümcek' saydı → 3/5 klip ağ ören örümcekti.
-    # Burada tarif düzeyinde elenir; yerine DÜZ ÖZNE sorgusuyla (queries[0],
-    # sıkı kapı) klip aranır — 846'da q0 havuzunda 6 GERÇEK okçu balığı klibi
-    # dururken çöp b-roll kabul edilmişti. Bulunamazsa klip DÜŞER: az ama konulu
-    # klip, çok ama çöp klipten yeğdir (döngüsel tamamlama 3'ün altını önler).
-    if vision_call is not None and any((x or "").strip() for x in descs):
-        from short_bot.claude_cli import run_json
-        from short_bot.footage_matcher import find_offsubject_clips
-        with ThreadPoolExecutor(max_workers=LOCATE_WORKERS) as ex:
-            tails = list(ex.map(
-                lambda c: _describe_clip(c, vision_call=vision_call,
-                                         ffmpeg_path=ffmpeg_path, tail_s=2.0),
-                clips))
-
-        def _inv(prompt, schema):
-            return run_json(prompt, schema, claude_path=vision_call.claude_path,
-                            model=vision_call.model, backend=vision_call.backend,
-                            api_key=vision_call.api_key, retries=1, timeout_s=45)
-
-        atilan = set(find_offsubject_clips(
-            descs, tails, f"{topic} (EN: {queries[0]})", invoke=_inv))
-        atilan |= {i for i, x in enumerate(descs) if not (x or "").strip()}
-        def _yedekten_klip():
-            """Keşfin indirilmemiş adaylarından bir sonraki KULLANILABİLİR klip.
-
-            Panel koşusu dersi: eleme klipleri düşürünce yedek adaylar dururken
-            üretim düşüyordu. Aynı özneden, zaten LLM'in seçtiği kliplerdir —
-            düz-sorgu aramasından daha isabetli ve daha ucuz."""
-            while kesif_yedek:
-                cand = kesif_yedek.pop(0)
-                src = next((x for x in sources
-                            if getattr(x, "name", "") == cand.source), sources[0])
-                try:
-                    aday = d.download_candidate(src, cand, clips_cache)
-                except Exception:  # noqa: BLE001 — tek aday akışı düşürmesin
-                    aday = None
-                if (aday is None or str(aday) in used
-                        or not _fd_clip_ok(aday, ffmpeg_path)):
-                    continue
-                aday_desc = _describe_clip(aday, vision_call=vision_call,
-                                           ffmpeg_path=ffmpeg_path)
-                if not aday_desc.strip():
-                    continue
-                return aday, aday_desc
-            return None, ""
-
-        dusen: list[int] = []
-        for i in sorted(atilan):
-            log.info(f"  reel[görüntü-önce]: klip {i} konu-dışı/tarifsiz "
-                     f"('{(descs[i] or '')[:40]}') → yenileniyor")
-            # 1) Önce keşfin YEDEK adayları (aynı özneden, seçilmiş klipler).
-            yeni, yeni_desc = _yedekten_klip()
-            if yeni is not None:
-                used.add(str(yeni))
-                clips[i], descs[i], used_queries[i] = yeni, yeni_desc, queries[0]
-                log.info(f"  reel[keşif]: klip {i} yedek adayla değiştirildi")
-                continue
-            # 2) Yedek yoksa düz özne sorgusuyla sıkı-kapılı arama.
-            yeni = d.match_beat_clip(
-                queries[0], api_key=pexels_api_key, cache_dir=clips_cache,
-                verify=getattr(reel, "verify_footage", True),
-                vision_call=vision_call, deps=footage_deps,
-                topic_pool=topic_pool, ffmpeg_path=ffmpeg_path,
-                budget={"gate": 0, "dl": 0}, exclude=used, context=context,
-                seen=seen, bank=[], hook=False)
-            yeni_desc = (_describe_clip(yeni, vision_call=vision_call,
-                                        ffmpeg_path=ffmpeg_path)
-                         if yeni is not None else "")
-            if (yeni is not None and yeni_desc.strip()
-                    and _fd_clip_ok(yeni, ffmpeg_path)):
-                used.add(str(yeni))
-                clips[i], descs[i], used_queries[i] = yeni, yeni_desc, queries[0]
-            else:
-                dusen.append(i)
-        for i in reversed(dusen):
-            log.warning(f"  reel[görüntü-önce]: klip {i} elendi, yerine konulu "
-                        f"klip yok → düşürüldü (az ama konulu > çok ama çöp)")
-            del clips[i]
-            del descs[i]
-            del used_queries[i]
-        if not clips:
-            raise RuntimeError(
-                f"reel: görüntü-önce — '{topic}' için KONUDA klip kalmadı "
-                f"(hepsi konu-dışı/tarifsiz elendi)")
-    # MİN 3 AYRIK KLİP — YOKSA ÜRETİM DÜŞER. Eski kural klipleri döngüsel kopyalayıp
-    # 3'e tamamlıyordu ('video yokluğundan yeğdir'). GERÇEK HATA (short 858, kullanıcı
-    # yakaladı: 'aynı görüntü sürekli looplanmış'): havuz 1 klibe düşünce o tek klip
-    # 15 alt-kesim boyunca loop'landı. Looplu video, video yokluğundan YEĞ DEĞİL —
-    # izleyicide 'bozuk kanal' izlenimi bırakır. Net hatayla düş; konu/slot başka
-    # koşuda taze konuyla değerlendirilir.
-    MIN_FD_DISTINCT = 3
-    ayrik = len(set(map(str, clips)))
-    if ayrik < MIN_FD_DISTINCT:
-        raise RuntimeError(
-            f"reel: görüntü-önce — '{topic}' için yalnız {ayrik} ayrık konulu klip "
-            f"bulundu (en az {MIN_FD_DISTINCT} gerekir). Tekrarlı/looplu video "
-            f"üretmek yerine düşülüyor; stok havuzu bu konu için kıt.")
-    log.info(f"  reel[görüntü-önce]: {len(clips)} klip tarif edildi ({ayrik} ayrık)")
-    return clips, descs, used_queries, topic
-
-
 def produce_reel_video(
     *, topic: str, channel, templates_dir: Path, work_dir: Path,
     out_path: Path, music_path: Path | None, ai33_api_key: str,
@@ -844,7 +395,6 @@ def produce_reel_video(
     hook_patterns=None, assets_root: Path | None = None,
     episode=None,        # EpisodePlan — seri/cliffhanger mimarisi (bkz. reel_series)
     on_narration=None,   # callback(narration): açık kapıyı çağırana bildir (ark zinciri)
-    recent_titles: list[str] | None = None,   # keşif tekrar-önleme (son video başlıkları)
 ) -> Path:
     reel = getattr(channel, "reel", None)
     if reel is None or not reel.enabled:
@@ -915,64 +465,14 @@ def produce_reel_video(
     log.info("  reel: ai33 preflight healthy")
     _phase("preflight")
 
-    # GÖRÜNTÜ-ÖNCELİKLİ MOD (flag; varsayılan KAPALI = SIFIR REGRESYON). Açıkken
-    # footage ÖNCE indirilir + vision ile tarif edilir; senaryo o tariflere UYAR
-    # (vision-ses uyumu matematiksel garanti). Kapalıyken bu blok ATLANIR ve akış
-    # bugünküyle BİREBİR aynıdır (write_reel_narration + footage döngüsü).
-    footage_driven = bool(getattr(reel, "footage_driven", False))
-    fd_clips: list = []
-    fd_descs: list = []
-    fd_queries: list = []
-    if footage_driven:
-        log.info("  reel: GÖRÜNTÜ-ÖNCELİKLİ mod açık — footage önce, senaryo sonra")
-        fd_clips, fd_descs, fd_queries, fd_topic = _prepare_footage_driven(
-            topic=topic, channel=channel, reel=reel, d=d, work_dir=work_dir,
-            pexels_api_key=pexels_api_key, pixabay_api_key=pixabay_api_key,
-            footage_priority=footage_priority,
-            vision_call=vision_call, ffmpeg_path=ffmpeg_path,
-            llm_claude_path=llm_claude_path, llm_model=llm_model,
-            llm_backend=llm_backend, llm_api_key=llm_api_key,
-            seed=seed, recent_titles=recent_titles)
-        # KEŞİF konuyu stoktan türettiyse senaryo/manşet/başlık o konudan yazılır.
-        topic = fd_topic
-        _phase("footage-önce(indir+tarif)")
-
     # 2) Senaryo
-    if footage_driven:
-        # SÜRE TESLİM EDİLEN KLİPTEN TÜRER (short 874 loop teşhisi): senaryo eski akışta
-        # sabit 30-45sn'ye yazılıp 3 klibe biniyordu → her klip ~14sn gerilme = LOOP.
-        # Artık efektif süre = ayrık klip × ~5.5sn; senaryo o pencereye yazılır (loop yok).
-        _eff_target = _footage_driven_duration(len(fd_clips), reel.target_duration_s)
-        log.info(f"  reel[süre]: {len(fd_clips)} klip → efektif hedef {_eff_target[0]}-"
-                 f"{_eff_target[1]}sn (loop önleme: ~{FD_SEC_PER_CLIP}sn/klip)")
-        # Senaryo ELDEKİ footage tariflerine göre yazılır (beat=klip garanti).
-        if getattr(reel, "curiosity_pipeline", True):
-            # MERAK MİMARİSİ: 3 aday → yargıç → doktor. perm = beat→orijinal-klip
-            # permütasyonu (dramaturji sırası); klipler ona göre yeniden dizilir.
-            narration, _fd_perm = d.write_curious_narration(
-                topic, fd_descs, fd_queries, channel=channel,
-                claude_path=llm_claude_path, model=llm_model,
-                backend=llm_backend, api_key=llm_api_key, seed=seed,
-                target_duration_s=_eff_target)
-            if (_fd_perm != list(range(len(_fd_perm)))
-                    and len(_fd_perm) == len(fd_clips)):
-                fd_clips = [fd_clips[j] for j in _fd_perm]
-                fd_descs = [fd_descs[j] for j in _fd_perm]
-                fd_queries = [fd_queries[j] for j in _fd_perm]
-        else:
-            narration = d.write_footage_driven_narration(
-                topic, fd_descs, fd_queries, channel=channel,
-                claude_path=llm_claude_path, model=llm_model,
-                backend=llm_backend, api_key=llm_api_key, seed=seed,
-                target_duration_s=_eff_target)
-    else:
-        narration = d.write_reel_narration(topic, channel=channel,
-                                           claude_path=llm_claude_path, model=llm_model,
-                                           backend=llm_backend, api_key=llm_api_key,
-                                           hook_angle=profile.hook_angle,
-                                           series_directive=bits.series_directive,
-                                           comment_line=bits.comment_line,
-                                           hook_patterns=hook_patterns, seed=seed)
+    narration = d.write_reel_narration(topic, channel=channel,
+                                       claude_path=llm_claude_path, model=llm_model,
+                                       backend=llm_backend, api_key=llm_api_key,
+                                       hook_angle=profile.hook_angle,
+                                       series_directive=bits.series_directive,
+                                       comment_line=bits.comment_line,
+                                       hook_patterns=hook_patterns, seed=seed)
     log.info(f"  reel: {narration.word_count()} kelime, {len(narration.beats)} beat")
     # Manşet KONUŞULMAZ (senaryo logunda görünmez) ama feed'in küçük resmi ODUR —
     # videonun izlenip izlenmeyeceğine orada karar veriliyor. Loglanmazsa sonradan
@@ -1182,10 +682,6 @@ def produce_reel_video(
     # 4 alt-kesime yayıldığında aynı görüntü 4 kesim üst üste ekranda kalıyordu.
     # MERAK RAMPASI: curiosity açıkken kesim temposu tepeye doğru sıkışır.
     _peak_ramp_s = None
-    if footage_driven and getattr(reel, "curiosity_pipeline", True):
-        _ps = narration.peak_segment()
-        if 0 <= _ps < len(timeline.seg_spans):
-            _peak_ramp_s = timeline.seg_spans[_ps][1]
     if getattr(reel, "fast_cuts", True):
         subcuts = plan_subcuts(timeline.seg_spans, timeline.words,
                                profile.cut_pacing, peak_s=_peak_ramp_s)
@@ -1223,14 +719,6 @@ def produce_reel_video(
     # koşuda 67 vision çağrısının çoğu aynı martı/pelikan/kelebek döngüsüydü;
     # bütçe onlara gidince YENİ adaylara hiç sıra gelmiyordu.
     seen_verdicts: dict = {}
-    # GÖRÜNTÜ-ÖNCELİKLİ: klipler ZATEN indirildi (senaryo öncesi). Her segmente
-    # hazır klibi ata (beat=klip) ve segment döngüsünü ATLA (order boşaltılır).
-    # Mevcut senaryo-önce döngüsü BİREBİR korunur — yalnızca boş order ile çalışmaz.
-    if footage_driven:
-        for si in range(n_segs):
-            clips_by_seg[si] = [_footage_driven_seg_clip(fd_clips, si, n_segs)]
-        log.info(f"  reel[görüntü-önce]: {n_segs} segment ↔ {len(fd_clips)} klip eşlendi")
-        order = []
     for si in order:
         query = timeline.seg_queries[si]
         if query is None:
@@ -1299,7 +787,7 @@ def produce_reel_video(
     # seçilmiş klipleri TOPLUCA görüp yanlış TÜRÜ (great hornbill yerine turaco)
     # render'dan ÖNCE yakala + o klibi YENİDEN SEÇ. Klip-başına vision kapısı
     # 'hornbill'i geçiriyor ama tür-içi tutarlılığı görmüyordu (biri diğerini kilitlemez).
-    if (not footage_driven and getattr(reel, "verify_footage", True)
+    if (getattr(reel, "verify_footage", True)
             and vision_call is not None and len(clips_by_seg) >= 2):
         try:
             _repair_footage_types(
@@ -1312,7 +800,7 @@ def produce_reel_video(
             log.warning(f"  render-öncesi tür doğrulaması atlandı ({e})")
     # GÖRSEL LOOP: kapanış klibi = hook klibi → video başa sarınca sahne zıplamaz.
     # (tür-onarımından SONRA: kapanış her zaman hook'un DOĞRULANMIŞ klibini alsın.)
-    if not footage_driven and _kapanis_loop and n_segs > 1 and 0 in clips_by_seg:
+    if _kapanis_loop and n_segs > 1 and 0 in clips_by_seg:
         clips_by_seg[n_segs - 1] = [clips_by_seg[0][0]]
     _phase("footage+vision")
 
@@ -1333,10 +821,6 @@ def produce_reel_video(
         except Exception as e:      # süre okunamadı → ofset 0 (klibin başı), üretim düşmesin
             log.warning(f"  reel: klip süresi okunamadı, ofset 0 ({Path(c).name}): {e}")
     clip_starts = clip_offsets(clip_paths, subcuts, _durs)
-    if footage_driven:
-        # Uzun alt-kesim ofseti klip içindeki donmuş bölüme düşmesin (karınca dersi).
-        clip_starts = _fd_fix_static_offsets(clip_paths, subcuts, clip_starts,
-                                             ffmpeg_path)
     cut_times = [a for (_si, a, _b) in subcuts[1:]]
     log.info(f"  reel: {len(subcuts)} alt-kesim ({profile.cut_pacing} tempo), "
              f"{len(set(map(str, clip_paths)))} farklı klip")
@@ -1406,7 +890,7 @@ def produce_reel_video(
     # (payoff hook klibiyle aynı) → en az 1'e, yoksa peak_beat'e itilir.
     _question_text = ""
     _reveal_at_s = None
-    if footage_driven and getattr(narration, "open_question", "").strip():
+    if getattr(narration, "open_question", "").strip():
         rb = narration.reveal_beat if narration.reveal_beat >= 0 else narration.peak_beat
         rb = max(1, min(rb, len(narration.beats) - 1))
         _reveal_seg = rb + 1                     # segment 0 = hook

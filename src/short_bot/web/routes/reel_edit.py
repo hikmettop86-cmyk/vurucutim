@@ -140,7 +140,6 @@ def save_reel(slug):
             # forma bağlıyoruz ki kullanıcı ayarı kaydetmekle ayarı KAYBETMESİN.
             tempo_zones=request.form.get("reel_tempo_zones") == "on",
             interrupts=request.form.get("reel_interrupts") == "on",
-            footage_driven=request.form.get("reel_footage_driven") == "on",
             # Persona ailesi bu formda YOK ama görüntü-önce kanalları persona
             # kanallarıdır; korunmazsa reel ayarı kaydı personayı SİLER (aynı desen:
             # channel_edit.py). old değerini taşı.

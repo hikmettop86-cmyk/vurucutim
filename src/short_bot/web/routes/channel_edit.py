@@ -426,8 +426,6 @@ def save(slug):
             mascot_name=(old.mascot_name if old else ""),
             mascot_animal=(old.mascot_animal if old else ""),
             mascot_trait=(old.mascot_trait if old else ""),
-            # Görüntü-önce bayrağı bu formda checkbox olarak YOK — koru (reset tuzağı).
-            footage_driven=(old.footage_driven if old else False),
         )
     else:
         new_reel = cfg.reel

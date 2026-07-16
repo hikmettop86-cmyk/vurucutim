@@ -238,8 +238,6 @@
               {% if not c.reel or c.reel.transitions_zoom %}checked{% endif %}> Zoom-punch</label>
             <label class="flex items-center gap-2"><input type="checkbox" name="reel_verify_footage"
               {% if not c.reel or c.reel.verify_footage %}checked{% endif %}> Vision doğrulama</label>
-            <label class="flex items-center gap-2" title="Görüntü-öncelikli mod: footage ÖNCE indirilir + vision ile tarif edilir, senaryo o gerçek görüntülere göre yazılır (vision-ses uyumu matematiksel garanti). Kapalıyken bugünkü senaryo-önce akış (varsayılan)."><input type="checkbox" name="reel_footage_driven"
-              {% if c.reel and c.reel.footage_driven %}checked{% endif %}> 🎞️ Görüntü-önce senaryo</label>
           </div>
         </div>
       </section>

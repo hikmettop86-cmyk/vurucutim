@@ -266,18 +266,13 @@ class ReelConfig(BaseModel):
     mascot_name: str = ""      # "Deli Kâzım"
     mascot_animal: str = ""    # "bal porsuğu"
     mascot_trait: str = ""     # "Geri Vitesi Olmayan Deli — çılgın, korkusuz, geri vites yok"
-    # GÖRÜNTÜ-ÖNCELİKLİ MOD: True ise footage ÖNCE indirilir + vision ile tarif
-    # edilir, senaryo o GERÇEK tariflere göre yazılır (vision-ses uyumu garanti).
-    # False (varsayılan) = bugünkü senaryo-önce akış — SIFIR REGRESYON.
-    footage_driven: bool = False
-    # KEŞİF (yalnız footage_driven=True iken): konu STOKTAN doğar — jenerik aksiyon
-    # sorgularıyla Pexels/Pixabay taranır, >=4 ayrık klipli özne seçilir, konu o
-    # kliplerden türetilir (kullanıcı önerisi 2026-07-16; 858 loop dersinin kökten
-    # çözümü). Kapatılırsa eski konu-bankası→sorgu yolu kullanılır.
-    footage_discovery: bool = True
-    # MERAK MİMARİSİ (spec 2026-07-16): 3 aday senaryo → rubrik yargıcı → doktor.
-    # Yalnız footage_driven=True iken etkin. Kapatılırsa tek-çağrı akış birebir.
-    curiosity_pipeline: bool = True
+    # KÜRATE-KLİP MODU (content_source="curated", pivot 2026-07-17): kanalın cevher
+    # çekeceği subreddit listesi. Boşsa reddit_gems.DEFAULT_SUBS. NİŞ = subreddit
+    # listesi + persona/ses → aynı hattan birçok kanal (bkz. curated-clip-pivot).
+    subreddits: list[str] = Field(default_factory=list)
+    curated_min_ups: int = 500       # cevher eşiği (topluluk oyu = kalite sinyali)
+    curated_time: str = "week"       # reddit 'top' penceresi: hour/day/week/month/year/all
+    curated_max_duration: int = 90   # saniye — daha uzun klipler atlanır
 
     @field_validator("target_duration_s", mode="before")
     @classmethod
@@ -324,7 +319,7 @@ class ChannelConfig:
     negative_keywords: list[str] = field(default_factory=list)
     dna: DnaSpec | None = None
     script_model: str | None = None
-    content_source: Literal["rss", "generator", "feed"] = "rss"
+    content_source: Literal["rss", "generator", "feed", "curated"] = "rss"
     generator: GeneratorConfig | None = None
     auto_feed_ids: list[int] = field(default_factory=list)
     youtube: YoutubeChannelConfig | None = None
@@ -407,9 +402,9 @@ def load_channel(path: Path) -> ChannelConfig:
         )
 
     content_source = data.get("content_source", "rss")
-    if content_source not in ("rss", "generator", "feed"):
+    if content_source not in ("rss", "generator", "feed", "curated"):
         raise ValueError(
-            f"content_source must be 'rss', 'generator' or 'feed', "
+            f"content_source must be 'rss', 'generator', 'feed' or 'curated', "
             f"got {content_source!r}"
         )
 
@@ -624,9 +619,10 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
             "mascot_name": cfg.reel.mascot_name,
             "mascot_animal": cfg.reel.mascot_animal,
             "mascot_trait": cfg.reel.mascot_trait,
-            "footage_driven": cfg.reel.footage_driven,
-            "footage_discovery": cfg.reel.footage_discovery,
-            "curiosity_pipeline": cfg.reel.curiosity_pipeline,
+            "subreddits": list(cfg.reel.subreddits),
+            "curated_min_ups": cfg.reel.curated_min_ups,
+            "curated_time": cfg.reel.curated_time,
+            "curated_max_duration": cfg.reel.curated_max_duration,
         }
     if cfg.dna is not None:
         # mode='json' → tuple becomes list, ready for YAML round-trip
