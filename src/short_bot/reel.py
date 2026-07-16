@@ -406,6 +406,7 @@ def _prepare_footage_driven(*, topic: str, channel, reel, d, work_dir: Path,
     used_queries: list[str] = []
     used: set[str] = set()
     seen: dict = {}
+    kesif_yedek: list = []       # keşfin indirilmemiş adayları (eleme düşüşünde devreye girer)
 
     # --- KEŞİF: KONU STOKTAN DOĞAR (kullanıcı önerisi, 2026-07-16) ------------
     # Eski akış konuyu önce seçip stok arıyordu → kıt havuz = looplu video (858)
@@ -428,8 +429,11 @@ def _prepare_footage_driven(*, topic: str, channel, reel, d, work_dir: Path,
             log.warning(f"  reel[keşif]: çöktü ({e}) → konu-yoluna düşülüyor")
         if kesif is not None:
             subj, adaylar = kesif
+            denenen = 0
             for cand in adaylar:
+                denenen += 1
                 if len(clips) >= n_clips:
+                    denenen -= 1
                     break
                 src = next((x for x in sources
                             if getattr(x, "name", "") == cand.source), sources[0])
@@ -448,7 +452,12 @@ def _prepare_footage_driven(*, topic: str, channel, reel, d, work_dir: Path,
             if len(set(map(str, clips))) >= 3:
                 topic = subj.topic_tr            # KONU ARTIK STOKTAN
                 queries = [subj.subject_en]
-                log.info(f"  reel[keşif]: {len(clips)} klip indirildi → konu: {topic}")
+                # İNDİRİLMEMİŞ adaylar YEDEK havuz: eleme klip düşürürse önce
+                # buradan tamamlanır (panel koşusu dersi: eleme 2'ye düşürünce
+                # yedek dururken üretim düşüyordu).
+                kesif_yedek.extend(adaylar[denenen:])
+                log.info(f"  reel[keşif]: {len(clips)} klip indirildi "
+                         f"(+{len(kesif_yedek)} yedek aday) → konu: {topic}")
             else:
                 log.warning(f"  reel[keşif]: yalnız {len(set(map(str, clips)))} ayrık "
                             f"klip indirilebildi → konu-yoluna düşülüyor")
@@ -552,10 +561,42 @@ def _prepare_footage_driven(*, topic: str, channel, reel, d, work_dir: Path,
         atilan = set(find_offsubject_clips(
             descs, tails, f"{topic} (EN: {queries[0]})", invoke=_inv))
         atilan |= {i for i, x in enumerate(descs) if not (x or "").strip()}
+        def _yedekten_klip():
+            """Keşfin indirilmemiş adaylarından bir sonraki KULLANILABİLİR klip.
+
+            Panel koşusu dersi: eleme klipleri düşürünce yedek adaylar dururken
+            üretim düşüyordu. Aynı özneden, zaten LLM'in seçtiği kliplerdir —
+            düz-sorgu aramasından daha isabetli ve daha ucuz."""
+            while kesif_yedek:
+                cand = kesif_yedek.pop(0)
+                src = next((x for x in sources
+                            if getattr(x, "name", "") == cand.source), sources[0])
+                try:
+                    aday = d.download_candidate(src, cand, clips_cache)
+                except Exception:  # noqa: BLE001 — tek aday akışı düşürmesin
+                    aday = None
+                if (aday is None or str(aday) in used
+                        or _fd_motion_min(aday, ffmpeg_path) < MOTION_MIN):
+                    continue
+                aday_desc = _describe_clip(aday, vision_call=vision_call,
+                                           ffmpeg_path=ffmpeg_path)
+                if not aday_desc.strip():
+                    continue
+                return aday, aday_desc
+            return None, ""
+
         dusen: list[int] = []
         for i in sorted(atilan):
             log.info(f"  reel[görüntü-önce]: klip {i} konu-dışı/tarifsiz "
-                     f"('{(descs[i] or '')[:40]}') → düz özne sorgusuyla yenileniyor")
+                     f"('{(descs[i] or '')[:40]}') → yenileniyor")
+            # 1) Önce keşfin YEDEK adayları (aynı özneden, seçilmiş klipler).
+            yeni, yeni_desc = _yedekten_klip()
+            if yeni is not None:
+                used.add(str(yeni))
+                clips[i], descs[i], used_queries[i] = yeni, yeni_desc, queries[0]
+                log.info(f"  reel[keşif]: klip {i} yedek adayla değiştirildi")
+                continue
+            # 2) Yedek yoksa düz özne sorgusuyla sıkı-kapılı arama.
             yeni = d.match_beat_clip(
                 queries[0], api_key=pexels_api_key, cache_dir=clips_cache,
                 verify=getattr(reel, "verify_footage", True),

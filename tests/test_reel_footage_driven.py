@@ -491,3 +491,48 @@ def test_prepare_kesif_bos_donerse_eski_yola_duser(tmp_path, monkeypatch):
     assert cagri["eski_yol"] is True                  # fail-open: konu-yolu devrede
     assert topic == "okçu balığı"                     # konu değişmedi
     assert len(clips) >= 3
+
+
+def test_prepare_eleme_dusurunce_kesif_yedegi_devreye_girer(tmp_path, monkeypatch):
+    # Panel koşusu dersi: eleme klipleri düşürünce keşfin İNDİRİLMEMİŞ adayları
+    # dururken üretim düşüyordu ('yalnız 2 ayrık klip'). Yedek havuz önce denenir.
+    from short_bot.footage_discovery import DiscoveredSubject
+    from short_bot.footage_sources import FootageCandidate
+
+    cands = [FootageCandidate(url=f"http://x/{i}.mp4", duration_s=15,
+                              image=f"http://x/{i}.jpg", source="pexels",
+                              ident=str(i)) for i in range(8)]
+    subj = DiscoveredSubject(subject_en="pufferfish",
+                             topic_tr="Bizimki akvaryumun raconunu kesiyor",
+                             clip_indices=[0, 1, 2, 3, 4, 5, 6, 7])
+
+    def fake_download(src, cand, cache_dir):
+        f = Path(cache_dir) / f"disc_{cand.ident}.mp4"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_bytes(b"mp4")
+        return f
+
+    def fake_desc(c, **k):
+        n = Path(c).name
+        # ilk indirilen 5'ten biri (disc_2) ÇÖP tarifli; yedekler temiz
+        return "a person holding a phone" if n == "disc_2.mp4" else f"a pufferfish ({n})"
+
+    d = ReelDeps(
+        footage_search_queries=lambda t, **k: (_ for _ in ()).throw(
+            AssertionError("keşif varken eski yol çağrılmamalı")),
+        match_beat_clip=lambda q, **kw: (_ for _ in ()).throw(
+            AssertionError("yedek varken düz-sorgu aramasına gidilmemeli")),
+        discover_subject=lambda **k: (subj, cands),
+        download_candidate=fake_download)
+    monkeypatch.setattr(REEL, "_describe_clip", fake_desc)
+    monkeypatch.setattr(FM, "find_offsubject_clips",
+                        lambda descs, tails, subject, **k: [
+                            i for i, x in enumerate(descs) if "phone" in x])
+
+    clips, descs, queries, topic = _prepare_footage_driven(
+        d=d, **_fd_prep_kwargs(tmp_path))
+    assert all("phone" not in x for x in descs)          # çöp gitti
+    assert len(clips) == 5                               # yedekten tamamlandı
+    assert len(set(map(str, clips))) == 5                # hepsi ayrık
+    assert any("disc_5" in Path(c).name or "disc_6" in Path(c).name
+               or "disc_7" in Path(c).name for c in clips)   # yedek aday kullanıldı
