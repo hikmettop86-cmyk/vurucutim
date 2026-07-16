@@ -201,3 +201,25 @@ def test_mood_serbest_metni_kovaya_zorlar():
     assert _narr(mood="sakin ve huzurlu").mood == "calm"
     assert _narr(mood="nötr anlatım").mood == "neutral"
     assert _narr(mood="upbeat").mood == "upbeat"      # geçerli değer dokunulmaz
+
+
+def test_merak_alanlari_varsayilan_ve_dogrulama():
+    # Merak mimarisi (spec 2026-07-16): hepsi varsayılan-boş → geriye uyum.
+    n = _narr()
+    assert n.open_question == ""
+    assert n.reveal_beat == -1
+    assert n.clip_order == []
+    # open_question kırpılır, reddedilmez (comment/cover_title dersi)
+    n2 = _narr(open_question="Bu balık neden herkesi korkutuyor acaba " * 4)
+    assert 0 < len(n2.open_question) <= 48
+    # reveal_beat aralığa kelepçelenir (3 beat -> 0..2)
+    assert _narr(reveal_beat=7).reveal_beat == 2
+    assert _narr(reveal_beat=1).reveal_beat == 1
+
+
+def test_clip_order_permutasyon_degilse_bosalir():
+    # Geçersiz clip_order üretimi DÜŞÜREMEZ — kimlik sırasına (boş) düşer.
+    assert _narr(clip_order=[0, 1, 2]).clip_order == [0, 1, 2]
+    assert _narr(clip_order=[0, 0, 1]).clip_order == []     # tekrar → geçersiz
+    assert _narr(clip_order=[0, 1]).clip_order == []        # eksik → geçersiz
+    assert _narr(clip_order=[0, 1, 5]).clip_order == []     # aralık dışı → geçersiz

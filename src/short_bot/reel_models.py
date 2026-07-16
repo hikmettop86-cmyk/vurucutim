@@ -150,6 +150,36 @@ class ReelNarration(BaseModel):
     # -1 = LLM söylemedi → ORTA beat varsayılır ("en iyi bilgiyi öne koyma" hatasına
     # düşmektense ortaya varsay).
     peak_beat: int = Field(default=-1)
+    # --- MERAK MİMARİSİ (spec 2026-07-16) — hepsi varsayılan-boş (geriye uyum) ---
+    # Hook'un açtığı merak sorusu; ekranda küçük çip olarak asılı kalır ve reveal
+    # anında 'cevaplandı'ya döner. Kırpılır, reddedilmez (comment/cover_title dersi).
+    open_question: str = Field(default="", max_length=200)
+    # Cevabın ödendiği beat (0-tabanlı). -1 = belirtilmedi → peak_beat kullanılır.
+    reveal_beat: int = Field(default=-1)
+    # Adayın klipleri DRAMATURJİYE göre dizmesi: beat i, orijinal kliplerden
+    # clip_order[i]'yi anlatır. Permütasyon değilse boşaltılır (kimlik sırası).
+    clip_order: list[int] = Field(default_factory=list)
+
+    @field_validator("open_question", mode="before")
+    @classmethod
+    def _oq_kirp(cls, v):
+        if not isinstance(v, str):
+            return ""
+        v = strip_non_turkish_diacritics(v).strip()
+        return v[:48].rstrip() if len(v) > 48 else v
+
+    @model_validator(mode="after")
+    def _merak_alanlarini_kelepcele(self):
+        """Merak alanları İPUCUDUR — geçersiz değer üretimi ÖLDÜREMEZ (mood dersi)."""
+        n = len(self.beats)
+        if self.reveal_beat >= n:
+            self.reveal_beat = n - 1
+        if self.reveal_beat < -1:
+            self.reveal_beat = -1
+        co = list(self.clip_order or [])
+        if co and sorted(co) != list(range(n)):
+            self.clip_order = []          # permütasyon değil → kimlik sırası
+        return self
 
     @model_validator(mode="before")
     @classmethod
