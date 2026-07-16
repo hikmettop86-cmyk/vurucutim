@@ -1204,6 +1204,20 @@ def produce_reel_video(
         log.info(f"  reel: {len(markers)} belirteç, {len(todo)} konum ölçümü, "
                  f"{_time.perf_counter() - _mk_t0:.1f}s")
 
+    # AÇIK SORU ÇİPİ + REVEAL KORKULUĞU (merak mimarisi). reveal_beat=0 sızıntıdır
+    # (payoff hook klibiyle aynı) → en az 1'e, yoksa peak_beat'e itilir.
+    _question_text = ""
+    _reveal_at_s = None
+    if footage_driven and getattr(narration, "open_question", "").strip():
+        rb = narration.reveal_beat if narration.reveal_beat >= 0 else narration.peak_beat
+        rb = max(1, min(rb, len(narration.beats) - 1))
+        _reveal_seg = rb + 1                     # segment 0 = hook
+        if 0 <= _reveal_seg < len(timeline.seg_spans):
+            _question_text = narration.open_question
+            _reveal_at_s = timeline.seg_spans[_reveal_seg][0]
+            log.info(f"  merak: soru çipi '{_question_text}' → reveal @ "
+                     f"{_reveal_at_s:.1f}s (beat {rb})")
+
     # TEPE ANI: en büyük reveal'in bittiği saniye. Riser/impact sesi, koordineli
     # kesintiler ve punch-in zamanlaması buradan türer. (Beğeni/abone çipleri
     # 2026-07-16'da kaldırıldı — kullanıcı kararı; tepe artık yalnız ritim çıpası.)
@@ -1242,6 +1256,8 @@ def produce_reel_video(
         arrow_frequency=reel.arrow_frequency if reel.arrows_enabled else "off",
         cut_effect=profile.cut_effect, handle=channel.handle,
         badge=bits.badge,
+        question_text=_question_text,
+        reveal_at_s=_reveal_at_s,
         lang=channel.language,
         font=reel.font,
         markers=markers,

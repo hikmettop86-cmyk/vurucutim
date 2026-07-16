@@ -620,3 +620,70 @@ def test_curiosity_permutasyonu_klipleri_yeniden_dizer(tmp_path, monkeypatch):
         vision_call=object(), deps=deps)
     # hook klibi = permütasyon sonrası ilk klip = orijinal c2.mp4
     assert Path(rec["clip_paths"][0]).name == "c2.mp4"
+
+
+def test_soru_cipi_render_cagrisina_gecer(tmp_path, monkeypatch):
+    import short_bot.reel as R
+    monkeypatch.setattr(R, "_describe_clip", lambda c, **k: f"a chimpanzee {c.name}")
+    calls = []
+    deps = _fd_deps(calls, tmp_path)
+
+    def fake_curious(topic, descs, queries, **kw):
+        n = _fd_narr().model_copy(update={"open_question": "Kim kazanacak dersin?",
+                                          "reveal_beat": 2, "peak_beat": 1})
+        return n, [0, 1, 2]
+
+    rec = {}
+    deps = replace(deps, write_curious_narration=fake_curious,
+                   render_reel_overlay_frames=lambda tl, out, **kw: (
+                       rec.update(kw), 900)[1])
+    produce_reel_video(
+        topic="şempanze", channel=_FDChannel(),
+        templates_dir=Path("templates"), work_dir=tmp_path,
+        out_path=tmp_path / "out.mp4", music_path=tmp_path / "m.mp3",
+        ai33_api_key="k", pexels_api_key="pk", ffmpeg_path="ffmpeg",
+        vision_call=object(), deps=deps)
+    assert rec["question_text"] == "Kim kazanacak dersin?"
+    assert rec["reveal_at_s"] and rec["reveal_at_s"] > 0
+
+
+def test_reveal_beat_sifir_sizinti_korkulugu(tmp_path, monkeypatch):
+    # reveal_beat=0 → payoff hook klibiyle aynı → sızıntı. En az 1'e itilir.
+    import short_bot.reel as R
+    monkeypatch.setattr(R, "_describe_clip", lambda c, **k: f"a chimpanzee {c.name}")
+    calls = []
+
+    def fake_curious(topic, descs, queries, **kw):
+        n = _fd_narr().model_copy(update={"open_question": "Soru bu mu?",
+                                          "reveal_beat": 0, "peak_beat": 0})
+        return n, [0, 1, 2]
+
+    rec = {}
+    deps = replace(_fd_deps(calls, tmp_path), write_curious_narration=fake_curious,
+                   render_reel_overlay_frames=lambda tl, out, **kw: (
+                       rec.update(kw), 900)[1])
+    produce_reel_video(
+        topic="şempanze", channel=_FDChannel(),
+        templates_dir=Path("templates"), work_dir=tmp_path,
+        out_path=tmp_path / "out.mp4", music_path=tmp_path / "m.mp3",
+        ai33_api_key="k", pexels_api_key="pk", ffmpeg_path="ffmpeg",
+        vision_call=object(), deps=deps)
+    assert rec["reveal_at_s"] > 0     # segment 2 başlangıcı (hook'tan sonra)
+
+
+def test_soru_yoksa_cip_parametreleri_bos(tmp_path, monkeypatch):
+    import short_bot.reel as R
+    monkeypatch.setattr(R, "_describe_clip", lambda c, **k: f"a chimpanzee {c.name}")
+    calls = []
+    rec = {}
+    deps = replace(_fd_deps(calls, tmp_path),
+                   render_reel_overlay_frames=lambda tl, out, **kw: (
+                       rec.update(kw), 900)[1])
+    produce_reel_video(
+        topic="şempanze", channel=_FDChannel(),
+        templates_dir=Path("templates"), work_dir=tmp_path,
+        out_path=tmp_path / "out.mp4", music_path=tmp_path / "m.mp3",
+        ai33_api_key="k", pexels_api_key="pk", ffmpeg_path="ffmpeg",
+        vision_call=object(), deps=deps)
+    assert rec["question_text"] == ""
+    assert rec["reveal_at_s"] is None
