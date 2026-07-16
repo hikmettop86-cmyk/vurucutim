@@ -97,6 +97,8 @@ class YoutubeVideoStats(db.Model):
     comments = db.Column(db.Integer, default=0)
     watch_time_min = db.Column(db.Float, default=0.0)
     avg_view_duration_s = db.Column(db.Float, default=0.0)
+    subscribers_gained = db.Column(db.Integer, default=0)
+    avg_view_percentage = db.Column(db.Float, default=0.0)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 

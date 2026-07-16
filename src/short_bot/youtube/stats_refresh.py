@@ -89,6 +89,8 @@ def refresh_channel_stats(*, eng, channel_slug: str, yt_creds_root: Path,
             views=c["views"], likes=c["likes"], comments=c["comments"],
             watch_time_min=a["watch_time_min"],
             avg_view_duration_s=a["avg_view_duration_s"],
+            subscribers_gained=a.get("subscribers_gained", 0),
+            avg_view_percentage=a.get("avg_view_percentage", 0.0),
         )
 
     return RefreshResult(channel_slug, len(video_ids), channel_updated)

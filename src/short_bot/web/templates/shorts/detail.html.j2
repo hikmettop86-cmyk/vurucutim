@@ -105,9 +105,17 @@
         <div class="text-[10px] text-claude-muted uppercase">Ort. izleme süresi</div>
         <div class="font-bold text-lg">{{ "%.0f"|format(v.avg_view_duration_s) }}s</div>
       </div>
+      <div>
+        <div class="text-[10px] text-claude-muted uppercase">Yeni abone (7g)</div>
+        <div class="font-bold text-lg">{{ v.subscribers_gained or 0 }}</div>
+      </div>
+      <div>
+        <div class="text-[10px] text-claude-muted uppercase">Ort. izlenme % (7g)</div>
+        <div class="font-bold text-lg">{{ "%.0f"|format(v.avg_view_percentage or 0) }}%</div>
+      </div>
     </div>
     <div class="text-[10px] text-claude-subtle mt-2">
-      Snapshot: {{ v.snapshot_date }} · Kümülatif istatistikler.
+      Snapshot: {{ v.snapshot_date }} · Kümülatif istatistikler · İzlenme %'si loop'larla 100'ü aşabilir (iyi sinyal).
     </div>
   </div>
 {% endif %}

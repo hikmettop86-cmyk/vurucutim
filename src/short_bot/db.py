@@ -103,6 +103,11 @@ youtube_video_stats = Table(
     Column("comments", Integer, default=0),
     Column("watch_time_min", Float, default=0.0),
     Column("avg_view_duration_s", Float, default=0.0),
+    # Dönüşüm görünürlüğü (2026-07-16): abone kazanımı video başına 7x oynuyor —
+    # hangi video dönüştürüyor görmeden içerik kararı alınamaz. Pencere metriği
+    # (7 gün), kümülatif değil. avg_view_percentage Shorts loop'larıyla %100'ü aşar.
+    Column("subscribers_gained", Integer, default=0),
+    Column("avg_view_percentage", Float, default=0.0),
     Column("updated_at", DateTime, default=_utcnow),
 )
 Index("idx_yt_video_stats_video_date",
@@ -325,6 +330,9 @@ def _migrate_add_columns(eng: Engine) -> None:
         # KONUNUN KAYNAĞI. Mevcut kayıtların hepsi arama/referans outlier'larından
         # geldi → 'search'. Yeni: 'llm' (modelin üretimi, YouTube kanıtı yok).
         ("topic_bank", "source", "TEXT DEFAULT 'search' NOT NULL"),
+        # Dönüşüm metrikleri (bkz. youtube_video_stats tablo tanımı).
+        ("youtube_video_stats", "subscribers_gained", "INTEGER DEFAULT 0"),
+        ("youtube_video_stats", "avg_view_percentage", "REAL DEFAULT 0.0"),
     ]
     with eng.begin() as conn:
         for table, col, coltype in migrations:
@@ -661,7 +669,9 @@ def get_last_youtube_upload_at(eng: Engine):
 
 def upsert_video_stats(eng: Engine, *, video_id: str, snapshot_date,
                        views: int, likes: int, comments: int,
-                       watch_time_min: float, avg_view_duration_s: float) -> None:
+                       watch_time_min: float, avg_view_duration_s: float,
+                       subscribers_gained: int = 0,
+                       avg_view_percentage: float = 0.0) -> None:
     """UPSERT a video stats row keyed on (video_id, snapshot_date)."""
     from sqlalchemy.dialects.sqlite import insert as sqlite_insert
     iso = snapshot_date.isoformat()
@@ -671,6 +681,8 @@ def upsert_video_stats(eng: Engine, *, video_id: str, snapshot_date,
             views=views, likes=likes, comments=comments,
             watch_time_min=watch_time_min,
             avg_view_duration_s=avg_view_duration_s,
+            subscribers_gained=subscribers_gained,
+            avg_view_percentage=avg_view_percentage,
             updated_at=_utcnow(),
         )
         stmt = stmt.on_conflict_do_update(
@@ -679,6 +691,8 @@ def upsert_video_stats(eng: Engine, *, video_id: str, snapshot_date,
                 views=views, likes=likes, comments=comments,
                 watch_time_min=watch_time_min,
                 avg_view_duration_s=avg_view_duration_s,
+                subscribers_gained=subscribers_gained,
+                avg_view_percentage=avg_view_percentage,
                 updated_at=_utcnow(),
             ),
         )
