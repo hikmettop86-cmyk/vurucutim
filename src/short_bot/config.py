@@ -274,6 +274,9 @@ class ReelConfig(BaseModel):
     # kliplerden türetilir (kullanıcı önerisi 2026-07-16; 858 loop dersinin kökten
     # çözümü). Kapatılırsa eski konu-bankası→sorgu yolu kullanılır.
     footage_discovery: bool = True
+    # MERAK MİMARİSİ (spec 2026-07-16): 3 aday senaryo → rubrik yargıcı → doktor.
+    # Yalnız footage_driven=True iken etkin. Kapatılırsa tek-çağrı akış birebir.
+    curiosity_pipeline: bool = True
 
     @field_validator("target_duration_s", mode="before")
     @classmethod
@@ -621,6 +624,7 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
             "mascot_trait": cfg.reel.mascot_trait,
             "footage_driven": cfg.reel.footage_driven,
             "footage_discovery": cfg.reel.footage_discovery,
+            "curiosity_pipeline": cfg.reel.curiosity_pipeline,
         }
     if cfg.dna is not None:
         # mode='json' → tuple becomes list, ready for YAML round-trip

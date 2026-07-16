@@ -38,6 +38,7 @@ from short_bot.reel_interrupt import (impact_cut_indices, select_interrupts,
 from short_bot.reel_tempo import plan_zones, remap_words, retimed_duration_s
 from short_bot.reel_tempo import retime as _retime
 from short_bot.reel_narration import write_reel_narration as _write_narr
+from short_bot.reel_curiosity import write_curious_narration as _write_curious
 from short_bot.reel_narration import write_footage_driven_narration as _write_fd_narr
 from short_bot.reel_narration import footage_search_queries as _fd_queries
 from short_bot.reel_numbers import find_numbers
@@ -108,6 +109,8 @@ class ReelDeps:
     write_reel_narration: Callable = _write_narr
     # GÖRÜNTÜ-ÖNCELİKLİ MOD (yalnız reel.footage_driven=True iken kullanılır)
     write_footage_driven_narration: Callable = _write_fd_narr
+    # MERAK MİMARİSİ: 3 aday → yargıç → doktor (bkz. reel_curiosity)
+    write_curious_narration: Callable = _write_curious
     footage_search_queries: Callable = _fd_queries
     # KEŞİF: konu stoktan doğar (kullanıcı önerisi 2026-07-16, bkz. footage_discovery)
     discover_subject: Callable = _discover_subject
@@ -751,10 +754,23 @@ def produce_reel_video(
     # 2) Senaryo
     if footage_driven:
         # Senaryo ELDEKİ footage tariflerine göre yazılır (beat=klip garanti).
-        narration = d.write_footage_driven_narration(
-            topic, fd_descs, fd_queries, channel=channel,
-            claude_path=llm_claude_path, model=llm_model,
-            backend=llm_backend, api_key=llm_api_key, seed=seed)
+        if getattr(reel, "curiosity_pipeline", True):
+            # MERAK MİMARİSİ: 3 aday → yargıç → doktor. perm = beat→orijinal-klip
+            # permütasyonu (dramaturji sırası); klipler ona göre yeniden dizilir.
+            narration, _fd_perm = d.write_curious_narration(
+                topic, fd_descs, fd_queries, channel=channel,
+                claude_path=llm_claude_path, model=llm_model,
+                backend=llm_backend, api_key=llm_api_key, seed=seed)
+            if (_fd_perm != list(range(len(_fd_perm)))
+                    and len(_fd_perm) == len(fd_clips)):
+                fd_clips = [fd_clips[j] for j in _fd_perm]
+                fd_descs = [fd_descs[j] for j in _fd_perm]
+                fd_queries = [fd_queries[j] for j in _fd_perm]
+        else:
+            narration = d.write_footage_driven_narration(
+                topic, fd_descs, fd_queries, channel=channel,
+                claude_path=llm_claude_path, model=llm_model,
+                backend=llm_backend, api_key=llm_api_key, seed=seed)
     else:
         narration = d.write_reel_narration(topic, channel=channel,
                                            claude_path=llm_claude_path, model=llm_model,

@@ -142,6 +142,10 @@ def _fd_deps(calls, tmp_path):
         write_reel_narration=lambda *a, **kw: calls.append("SENARYO-ONCE"),  # ÇAĞRILMAMALI
         write_footage_driven_narration=lambda *a, **kw: (
             calls.append("gorunti-once-narr"), _fd_narr())[1],
+        # curiosity varsayılanı AÇIK: fixture LLM'e gitmez, aynı sahte narr +
+        # kimlik permütasyonu döner (eski testlerin davranış sözleşmesi korunur).
+        write_curious_narration=lambda *a, **kw: (
+            calls.append("gorunti-once-narr"), (_fd_narr(), [0, 1, 2]))[1],
         footage_search_queries=lambda topic, **k: (
             calls.append("sorgu"), ["chimpanzee", "chimpanzee fighting"])[1],
         health_check=lambda **kw: "healthy",
@@ -536,3 +540,83 @@ def test_prepare_eleme_dusurunce_kesif_yedegi_devreye_girer(tmp_path, monkeypatc
     assert len(set(map(str, clips))) == 5                # hepsi ayrık
     assert any("disc_5" in Path(c).name or "disc_6" in Path(c).name
                or "disc_7" in Path(c).name for c in clips)   # yedek aday kullanıldı
+
+
+# --- MERAK MİMARİSİ kablolaması (spec 2026-07-16) -----------------------------
+from dataclasses import replace
+
+
+def test_curiosity_acikken_yarisma_hatti_cagrilir(tmp_path, monkeypatch):
+    import short_bot.reel as R
+    monkeypatch.setattr(R, "_describe_clip", lambda c, **k: f"a chimpanzee {c.name}")
+    calls = []
+    deps = _fd_deps(calls, tmp_path)
+
+    def fake_curious(topic, descs, queries, **kw):
+        calls.append("merak-hatti")
+        return _fd_narr(), [0, 1, 2]
+
+    deps = replace(deps, write_curious_narration=fake_curious)
+    out = produce_reel_video(
+        topic="şempanze kavgası", channel=_FDChannel(),
+        templates_dir=Path("templates"), work_dir=tmp_path,
+        out_path=tmp_path / "out.mp4", music_path=tmp_path / "m.mp3",
+        ai33_api_key="k", pexels_api_key="pk", ffmpeg_path="ffmpeg",
+        vision_call=object(), deps=deps)
+    assert out == tmp_path / "out.mp4"
+    assert "merak-hatti" in calls
+    assert "gorunti-once-narr" not in calls     # tek-çağrı yol ÇAĞRILMADI
+
+
+def test_curiosity_kapaliyken_eski_tek_cagri(tmp_path, monkeypatch):
+    import short_bot.reel as R
+    from short_bot.config import ReelConfig
+    monkeypatch.setattr(R, "_describe_clip", lambda c, **k: f"a chimpanzee {c.name}")
+
+    class _Kapali(_FDChannel):
+        reel = ReelConfig(enabled=True, voice_id="v1", target_duration_s=(45, 60),
+                          persona="vahsi_mizah", footage_driven=True,
+                          curiosity_pipeline=False)
+
+    calls = []
+    deps = replace(_fd_deps(calls, tmp_path),
+                   write_curious_narration=lambda *a, **k: (_ for _ in ()).throw(
+                       AssertionError("kapalıyken çağrılmamalı")))
+    produce_reel_video(
+        topic="şempanze kavgası", channel=_Kapali(),
+        templates_dir=Path("templates"), work_dir=tmp_path,
+        out_path=tmp_path / "out.mp4", music_path=tmp_path / "m.mp3",
+        ai33_api_key="k", pexels_api_key="pk", ffmpeg_path="ffmpeg",
+        vision_call=object(), deps=deps)
+    assert "gorunti-once-narr" in calls
+
+
+def test_curiosity_permutasyonu_klipleri_yeniden_dizer(tmp_path, monkeypatch):
+    # perm=[2,0,1] → montaja giden klip sırası da o dramaturjiyle dizilmeli.
+    # DİKKAT: perm uzunluğu == klip sayısı olmalı (guard aksi hâlde atlar) →
+    # 3 kliplik kanal ((25,45) → 3 klip hedefi) kullanılır.
+    import short_bot.reel as R
+    from short_bot.config import ReelConfig
+    monkeypatch.setattr(R, "_describe_clip", lambda c, **k: f"a chimpanzee {c.name}")
+
+    class _UcKlip(_FDChannel):
+        reel = ReelConfig(enabled=True, voice_id="v1", target_duration_s=(25, 45),
+                          persona="vahsi_mizah", footage_driven=True)
+
+    calls = []
+    deps = _fd_deps(calls, tmp_path)
+
+    def fake_curious(topic, descs, queries, **kw):
+        return _fd_narr(), [2, 0, 1]
+
+    rec = {}
+    deps = replace(deps, write_curious_narration=fake_curious,
+                   assemble_reel=lambda **kw: (rec.update(kw), kw["out_path"])[1])
+    produce_reel_video(
+        topic="şempanze", channel=_UcKlip(),
+        templates_dir=Path("templates"), work_dir=tmp_path,
+        out_path=tmp_path / "out.mp4", music_path=tmp_path / "m.mp3",
+        ai33_api_key="k", pexels_api_key="pk", ffmpeg_path="ffmpeg",
+        vision_call=object(), deps=deps)
+    # hook klibi = permütasyon sonrası ilk klip = orijinal c2.mp4
+    assert Path(rec["clip_paths"][0]).name == "c2.mp4"

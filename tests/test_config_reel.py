@@ -94,3 +94,9 @@ def test_footage_driven_parses_and_round_trips(tmp_path):
     p2 = tmp_path / "rt.yaml"
     save_channel(p2, cfg)
     assert load_channel(p2).reel.footage_driven is True
+
+
+def test_curiosity_pipeline_varsayilan_acik():
+    from short_bot.config import ReelConfig
+    r = ReelConfig(enabled=True, voice_id="v")
+    assert r.curiosity_pipeline is True
