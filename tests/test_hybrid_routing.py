@@ -172,8 +172,8 @@ def _settings(**over):
         claude_models={"dna": "opus", "default": "sonnet", "script": "sonnet", "vision": "default"},
         ai_backend="hybrid",
         openrouter_models={"dna": "anthropic/claude-opus-4.8",
-                           "default": "anthropic/claude-sonnet-5",
-                           "script": "anthropic/claude-sonnet-5",
+                           "default": "google/gemini-3.1-flash-lite",
+                           "script": "google/gemini-3.1-flash-lite",
                            "vision": "google/gemma-4-26b-a4b-it"},
         google_studio={"vision_model": "gemini-3.1-flash-lite"})
     base.update(over)
@@ -190,18 +190,19 @@ def test_resolve_hybrid_vision_google_studio():
         "openrouter", "google/gemma-4-26b-a4b-it", "or")
 
 
-def test_resolve_hybrid_metin_cli():
+def test_resolve_hybrid_metin_openrouter_gemini():
+    # ÖLÇÜLDÜ: metin → OR gemini-flash-lite (ucuz/hızlı/persona-sadık); CLI rate-limit thrash.
     from short_bot.config import resolve_ai_call
     CC.clear_fallbacks()
     s = _settings()
     txt = resolve_ai_call(s, {"openrouter_api_key": "or"}, "script")
-    assert txt.backend == "claude_cli" and txt.model == "sonnet" and txt.api_key is None
-    assert CC._FALLBACKS[("claude_cli", "sonnet")] == (
-        "openrouter", "anthropic/claude-sonnet-5", "or")
+    assert txt.backend == "openrouter" and txt.model == "google/gemini-3.1-flash-lite"
+    assert txt.api_key == "or"                       # OR key doğrudan çağrıda
+    default = resolve_ai_call(s, {"openrouter_api_key": "or"}, "default")
+    assert default.backend == "openrouter" and default.model == "google/gemini-3.1-flash-lite"
+    # DNA (nadir, yüksek bahis) → Sonnet 5
     dna = resolve_ai_call(s, {"openrouter_api_key": "or"}, "dna")
-    assert dna.backend == "claude_cli" and dna.model == "opus"
-    assert CC._FALLBACKS[("claude_cli", "opus")] == (
-        "openrouter", "anthropic/claude-opus-4.8", "or")
+    assert dna.backend == "openrouter" and dna.model == "anthropic/claude-opus-4.8"
 
 
 def test_resolve_openrouter_mode_bozulmadi():
@@ -209,4 +210,4 @@ def test_resolve_openrouter_mode_bozulmadi():
     from short_bot.config import resolve_ai_call
     s = _settings(ai_backend="openrouter")
     c = resolve_ai_call(s, {"openrouter_api_key": "or"}, "script")
-    assert c.backend == "openrouter" and c.model == "anthropic/claude-sonnet-5"
+    assert c.backend == "openrouter" and c.model == "google/gemini-3.1-flash-lite"

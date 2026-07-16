@@ -11,14 +11,16 @@ claude_models:
   default: sonnet      # skorlama/konu/metadata → Sonnet 5 (Claude CLI)
   script: sonnet       # senaryo/yargic/doktor → Sonnet 5 (Claude CLI)
   vision: default      # (hybrid'de kullanilmaz; vision Google Studio'ya gider)
-# hybrid: metin -> Claude CLI, vision -> Google Studio rotasyonlu havuz.
-# CLI yoksa -> OpenRouter (asagidaki openrouter_models fallback haritasi).
-# Studio kotasi biterse -> OpenRouter gemma (vision satiri).
+# hybrid: metin -> OpenRouter (asagidaki modeller), vision -> Google Studio havuzu.
+# OLCULDU 2026-07-16: gemini-3.1-flash-lite ~4sn/$0.002 persona-sadik; CLI Sonnet
+# ~7-cagri burst'te Max-plan rate-limit thrash'i, OR Sonnet ~89sn/$0.10.
+# DNA (nadir, yuksek bahis) Sonnet 5; video-basi metin gemini-flash-lite.
+# vision satiri = Google havuzu tukenince OR gemma fallback.
 ai_backend: hybrid
 openrouter_models:
-  dna: anthropic/claude-opus-4.8
-  default: anthropic/claude-sonnet-5
-  script: anthropic/claude-sonnet-5
+  dna: anthropic/claude-sonnet-5
+  default: google/gemini-3.1-flash-lite
+  script: google/gemini-3.1-flash-lite
   vision: google/gemma-4-26b-a4b-it
 google_studio:
   vision_model: gemini-3.1-flash-lite

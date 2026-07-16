@@ -669,9 +669,11 @@ class AICall:
 def resolve_ai_call(settings: Settings, secrets: dict, role: str) -> AICall:
     """role: 'dna' | 'default' | 'script' | 'vision'. Aktif backend'e göre model+key çözer."""
     if settings.ai_backend == "hybrid":
-        # Metin → Claude CLI (Sonnet 5 / DNA Opus); vision → Google Studio havuzu.
-        # Her rolde OpenRouter fallback'i claude_cli registry'sine kaydedilir → birincil
-        # çökerse (CLI yok / havuz tükendi) düşme-yolu; 36+ çağrı noktası değişmez.
+        # Metin → OpenRouter (ÖLÇÜLDÜ 2026-07-16: gemini-3.1-flash-lite ~4sn/$0.002 ve
+        # persona-sadık; Claude CLI ~7-çağrı burst'te Max-plan rate-limit thrash'ine
+        # giriyordu, OR Sonnet ~89sn/$0.10). DNA hariç metin gemini-flash-lite'a gider;
+        # DNA (nadir, yüksek bahis) openrouter_models'ta Sonnet 5'e eşlenir.
+        # Vision → Google Studio ücretsiz havuz; tükenirse OR gemma fallback (registry).
         from short_bot import claude_cli
         or_key = secrets.get("openrouter_api_key", "") or None
         if role == "vision":
@@ -681,12 +683,10 @@ def resolve_ai_call(settings: Settings, secrets: dict, role: str) -> AICall:
                 settings.openrouter_models.get("vision", "google/gemma-4-26b-a4b-it"), or_key)
             return AICall(backend="google_studio", model=gs_model,
                           api_key=None, claude_path=settings.claude_cli_path)
-        cli_model = settings.claude_models.get(role, "sonnet")
-        fb_model = (settings.openrouter_models.get(role)
-                    or settings.openrouter_models.get("default", "anthropic/claude-sonnet-5"))
-        claude_cli.register_fallback("claude_cli", cli_model, "openrouter", fb_model, or_key)
-        return AICall(backend="claude_cli", model=cli_model,
-                      api_key=None, claude_path=settings.claude_cli_path)
+        or_model = (settings.openrouter_models.get(role)
+                    or settings.openrouter_models.get("default", "google/gemini-3.1-flash-lite"))
+        return AICall(backend="openrouter", model=or_model,
+                      api_key=or_key, claude_path=settings.claude_cli_path)
     if settings.ai_backend == "openrouter":
         model = (settings.openrouter_models.get(role)
                  or settings.openrouter_models.get("default", ""))
