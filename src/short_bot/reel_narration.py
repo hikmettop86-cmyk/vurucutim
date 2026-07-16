@@ -550,6 +550,7 @@ def _ensure_open_loop(n: ReelNarration, prompt: str, *, claude_path, model, back
 def build_footage_driven_prompt(topic: str, clip_descriptions: list[str], *,
                                 channel) -> str:
     lo_s, hi_s = channel.reel.target_duration_s
+    lo_w, hi_w = reel_word_budget(channel.reel.target_duration_s)
     lang = _language_name(channel.language)
     n = len(clip_descriptions)
 
@@ -570,6 +571,9 @@ WE ALREADY HAVE THESE {n} CLIPS, IN THIS ORDER (they WILL appear on screen):
 {listing}
 
 RULES:
+- HARD WORD BUDGET: the whole spoken script (hook + beats + close) must be
+  between {lo_w} and {hi_w} words TOTAL — TTS reads ~1.95 words/s, so this is
+  what makes the video actually land in {lo_s}-{hi_s}s. Count your words.
 - Write EXACTLY {n} beats. Beat i narrates CLIP i (same order). hook is over clip 0,
   close is over the last clip.
 - Narrate WHAT IS ACTUALLY ON SCREEN. NEVER invent a thing the clip does not show

@@ -127,3 +127,15 @@ def test_prompt_seo_title_ister(monkeypatch):
                                       ["q0", "q1", "q2"], channel=_kanal())
     p = yakalanan["p"]
     assert '"title"' in p and "SEO" in p
+
+
+def test_fd_prompt_sert_kelime_butcesi_icerir():
+    # Keçi videosu 65.6sn çıktı (hedef 45-60): FD prompt'ta kelime bütçesi YOKTU.
+    # Artık reel_word_budget'tan gelen sert sınır prompt'ta.
+    from short_bot.reel_narration import build_footage_driven_prompt, reel_word_budget
+    ch = _kanal()
+    ch.reel.target_duration_s = (30, 45)
+    p = build_footage_driven_prompt("kartal", ["a", "b", "c"], channel=ch)
+    lo_w, hi_w = reel_word_budget((30, 45))
+    assert f"{lo_w}" in p and f"{hi_w}" in p
+    assert "WORD BUDGET" in p
