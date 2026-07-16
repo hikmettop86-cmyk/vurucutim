@@ -45,6 +45,106 @@ def signature_style(seed: int) -> tuple[str, str]:
     return SIGNATURE_STYLES[seed % len(SIGNATURE_STYLES)]
 
 
+# --- SENARYO ÇEŞİTLEME EKSENLERİ (kullanıcı: 'senaryo hep aynı kalıp, videolar
+# hep sıkıcı'). Kök neden ÖLÇÜLDÜ: prompt, açılış örneği olarak birebir 'Ula bak
+# hele sahneye kardeş...' veriyordu ve iskelet sabitti → art arda 5 videonun 5'i
+# de aynı cümleyle açıldı, hepsi aynı sesle anlatıldı, benzetmeler hep aynı
+# dünyalardan geldi (emlakçı, kahvehane, pusu). İmza rotasyonunun kanıtlanmış
+# deseni üç BAĞIMSIZ eksene genişletildi: açılış stili, anlatıcı sesi, benzetme
+# dünyaları. Eksenler TUZLANMIŞ hash ile döner (reel_subscribe._idx deseni) —
+# seed%N hepsini kilitleseydi 'imza=ozan olan her video aynı açılışı alır' olurdu.
+
+HOOK_STYLES: list[tuple[str, str]] = [
+    ("SAHNE DAVETİ",
+     "İzleyiciyi olayın ortasına çağır — ama KENDİ sözlerinle, taze bir davetle "
+     "('Şu köşedeki tipe bak', 'Gel buraya gel, bunu görmen lazım' tadında)."),
+    ("UYARI / TEHDİT",
+     "Hook bir mahalle uyarısı olsun: izleyiciyi bu hayvana karşı uyar "
+     "('Sakın... o masum surata kanma', 'Bu tiple asla dalaşma' tadında)."),
+    ("TERS KÖŞE TANITIM",
+     "Önce masum/sıradan tanıt, aynı cümlede tersine çevir ('Şu uyuşuk amca var ya... "
+     "mahallenin en tehlikeli adamı o.' tadında). Kontrast ne sert, o kadar iyi."),
+    ("OLAYIN ORTASINDAN",
+     "Hook olayın TAM ORTASINDAN, aksiyonla açılsın — takdim yok, patlama var "
+     "('Kobra yere serildi. Evet, kobra. Seren adam da şu ufaklık.' tadında)."),
+    ("DEDİKODU / SON DAKİKA",
+     "Mahalleye haber getirir gibi aç ('Duydun mu, aşağı mahallede olay çıkmış...', "
+     "'Son dakika koçum: ...' tadında) — sıcak bir kulis bilgisi verir gibi."),
+    ("İZLEYİCİYE RACON SORUSU",
+     "İzleyiciye meydan okuyan bir racon sorusuyla aç ('Sen olsan bu adama bulaşır "
+     "mıydın?', 'Karşında böylesi olsa ne yapardın?' tadında). Bilgi sorusu DEĞİL "
+     "('biliyor muydunuz' yine yasak) — cesaret/racon sorusu."),
+]
+
+FRAME_STYLES: list[tuple[str, str]] = [
+    ("CANLI MAÇ SPİKERİ",
+     "Olayı saha kenarından, maç heyecanıyla nakleden spiker sesi — tempo yüksek, "
+     "goller/fauller anons edilir gibi."),
+    ("BELGESEL PARODİSİ",
+     "Belgesel anlatıcısını mahalle ağzıyla taklit et — 'doğanın bu asil evladı' "
+     "diye başlayıp 'ama bizimki resmen zorba çıktı' diye bozulan ciddiyetsiz ses."),
+    ("OLAY YERİ MUHABİRİ",
+     "Olay yerinden canlı bağlanan muhabir sesi — 'şu an arkamda gördüğünüz...' "
+     "tadında, kameramana laf atan, yayını koparmayan telaşlı canlılık."),
+    ("KAHVEHANE ANLATICISI",
+     "Kahvehane masasından olayı BİZZAT GÖRMÜŞ adamın ağzı — 'vallahi gözümle "
+     "gördüm' enerjisi, dinleyenleri masaya toplayan abartılı tanıklık. Olayı yine "
+     "ŞİMDİKİ zamanda canlandır ('bak şimdi şöyle yapıyor...')."),
+    ("ESNAF GEZDİRMESİ",
+     "Müşteriye mal/mahal gezdiren esnaf ağzı — hayvanı ve arazisini 'buyur abi, "
+     "şu tarafta da...' diye sunar, öve öve bitiremez ama araya dobra uyarılar "
+     "sıkıştırır ('yalnız şununla göz göze gelme')."),
+    ("DEDİKODUCU KOMŞU",
+     "Balkondan balkona dedikodu veren komşu sesi — 'kızım duydun mu', 'ay ben "
+     "bunu hep diyordum' tadında, olayları içeriden bilen keyifli fısıltı ama "
+     "sahne yine gözünün önünde AKAR."),
+]
+
+# Benzetme dünyaları havuzu: her videoya İKİ farklı dünya seçilir, gerisi o video
+# için kapanır. Böylece 'her videoda emlakçı + kahvehane' tekrarı kırılır.
+METAPHOR_DOMAINS: list[str] = [
+    "otomotiv/sanayi (Tofaş, usta-çırak, vites, egzoz)",
+    "esnaf/pazar (pazarcı, manav, veresiye defteri)",
+    "futbol/maç (hakem, ofsayt, 90+3, taraftar)",
+    "devlet dairesi/bürokrasi (evrak, sıra numarası, mesai)",
+    "düğün/eğlence (davul-zurna, takı töreni, halay başı)",
+    "eski Türk dizileri/filmleri (Kurtlar Vadisi, Çukur, Yeşilçam raconu)",
+    "apartman/site yönetimi (aidat, yönetici, asansör arızası)",
+    "dolmuş/trafik (şoför, 'inecek var', makas atmak)",
+    "kahvehane/okey (taş, çay ocağı, kâğıt oyunu)",
+    "berber/kuaför (ustura, saç-sakal, ayna)",
+    "spor salonu/boks (ring, antrenör, ağır sıklet)",
+    "ekonomi/kira-zam (enflasyon, kira artışı, pazarlık)",
+]
+
+
+def _rot(seed: int, salt: str, n: int) -> int:
+    """Tuzlanmış deterministik eksen seçimi (reel_subscribe._idx deseni)."""
+    import hashlib
+    h = hashlib.sha1(f"{seed}:{salt}".encode("utf-8")).hexdigest()
+    return int(h, 16) % n
+
+
+def hook_style(seed: int) -> tuple[str, str]:
+    """Bu videonun AÇILIŞ stili (etiket, talimat) — imzadan bağımsız döner."""
+    return HOOK_STYLES[_rot(seed, "hook", len(HOOK_STYLES))]
+
+
+def frame_style(seed: int) -> tuple[str, str]:
+    """Bu videonun ANLATICI SESİ (etiket, talimat) — diğer eksenlerden bağımsız."""
+    return FRAME_STYLES[_rot(seed, "frame", len(FRAME_STYLES))]
+
+
+def metaphor_domains(seed: int) -> tuple[str, str]:
+    """Bu videonun İKİ benzetme dünyası — birbirinden farklı, videolar arası döner."""
+    n = len(METAPHOR_DOMAINS)
+    i = _rot(seed, "dom1", n)
+    j = _rot(seed, "dom2", n - 1)
+    if j >= i:
+        j += 1                      # ikinci dünya birinciden HEP farklı
+    return METAPHOR_DOMAINS[i], METAPHOR_DOMAINS[j]
+
+
 def load_persona(slug: str, *, language: str) -> Persona | None:
     if not (slug or "").strip():
         return None                      # kişiliksiz: bugünkü prompt, sıfır regresyon
@@ -166,6 +266,9 @@ def channel_topic_guidance(persona_slug: str, language: str) -> str:
 def persona_block(persona: Persona, *, seed: int = 0) -> str:
     kurallar = "\n".join(f"{i+1}. {r}" for i, r in enumerate(persona.rules))
     imza_etiket, imza_talimat = signature_style(seed)
+    acilis_etiket, acilis_talimat = hook_style(seed)
+    ses_etiket, ses_talimat = frame_style(seed)
+    dunya1, dunya2 = metaphor_domains(seed)
     return (
         "=== ANLATIM PERSONASI + SAHNE MODU (EN ÖNEMLİ KATMAN — YUKARIDAKİ YAPIYI EZER) ===\n"
         "DİKKAT: Yukarıda 'ilginç bilgi arkı' (hook→en şok edici BİLGİ→twist) anlatıldı.\n"
@@ -177,9 +280,10 @@ def persona_block(persona: Persona, *, seed: int = 0) -> str:
         f"TON ÖRNEĞİ (aynen bu tadda yaz — mahalle ağzı, canlı, komik):\n---\n"
         f"{persona.few_shot}\n---\n\n"
         "SAHNENİN İSKELETİ (fact-arc DEĞİL, scene-arc — beat'leri buna göre kur):\n"
-        "  • AÇILIŞ (hook) = SAHNEYE DAVET, bilgi sorusu DEĞİL. İzleyiciyi olayın\n"
-        "    ortasına at: 'Ula bak hele sahneye kardeş...', 'Sakın ama sakın ...'.\n"
-        "    'Biliyor muydunuz' KESİN YASAK — o bilgi tonudur, sahneyi öldürür.\n"
+        "  • AÇILIŞ (hook): bu videonun AÇILIŞ STİLİ aşağıdaki ÇEŞİTLEME REÇETESİNDE\n"
+        "    verilir — ona uy. 'Biliyor muydunuz' KESİN YASAK (bilgi tonu sahneyi\n"
+        "    öldürür). 'Ula bak hele sahneye' KALIBI DA YASAK: art arda 5 video bu\n"
+        "    cümleyle açıldı, formül ele verdi — her video KENDİ sözleriyle açılır.\n"
         "  • KURULUM: hayvanı bir mahalle karakteri olarak sahneye koy (lakap + kimlik),\n"
         "    ortamı kur.\n"
         "  • OLAY / ÇATIŞMA: bir ŞEY OLUR — rakip çıkar, tehdit gelir, meydan okunur.\n"
@@ -187,7 +291,20 @@ def persona_block(persona: Persona, *, seed: int = 0) -> str:
         "    karakter ATIŞSIN. Çatışma yoksa hayvanın 'olayı' sahnelensin (kurnazlık,\n"
         "    blöf, gösteri) — yine bir AN olarak, ders olarak değil.\n"
         "  • TEPE (peak_beat) = en çarpıcı AN, bir BİLGİ değil bir DÖNÜŞ: ters köşe.\n"
-        "  • RACON + KAPANIŞ: kahraman racon keser/kazanır → ozan imzası.\n\n"
+        "  • RACON + KAPANIŞ: kahraman racon keser/kazanır → mahalle imzası (stil aşağıda).\n\n"
+        "=== BU VİDEONUN ÇEŞİTLEME REÇETESİ (formül kırıcı — HER VİDEO FARKLI) ===\n"
+        "Aynı kanalın videoları art arda izlenir; açılış/ses/benzetme tekrarı anında\n"
+        "sırıtır. Bu videoya ÖZEL seçimler (SONRAKİ videolar farklısını alacak):\n"
+        f"  • AÇILIŞ STİLİ → {acilis_etiket}: {acilis_talimat}\n"
+        "    (Örnek sözleri AYNEN kopyalama — stilin RUHUNU al, cümleyi kendin kur.)\n"
+        f"  • ANLATICI SESİ → {ses_etiket}: {ses_talimat}\n"
+        "    (Hangi ses olursa olsun: şimdiki zaman, canlı sahne, mahalle sıcaklığı.)\n"
+        f"  • BENZETME DÜNYALARI → bu videoda benzetmeler AĞIRLIKLA şu İKİ dünyadan:\n"
+        f"    (1) {dunya1}  (2) {dunya2}.\n"
+        "    Başka dünyadan EN FAZLA bir benzetme. Listende yoksa emlakçı/kahvehane\n"
+        "    klişesine GİRME — o dünyalar başka videoların hakkı.\n"
+        "  • HİTAP DOZU: 'bizimki' EN FAZLA 2 kez — yerine isim/lakap ve dönen\n"
+        "    hitaplar kullan (kardeş, koçum, reis, usta, gardaş, kaptan...).\n\n"
         "SEMPATİK VE SICAK OL (EN ÖNEMLİSİ — kullanıcı geri bildirimi): karakter\n"
         "SEVİLESİ olmalı, mesafeli/resmi değil. Güleryüzlü bir mahalle abisi anlatıyor:\n"
         "hayvana sevgiyle takılır, insani zaafları olan bir tip gibi sunar ('bizimki',\n"
