@@ -162,6 +162,51 @@ _DESCRIBE_PROMPT = (
     'SADECE JSON: {"content": "<English description>"}'
 )
 
+# STORYBOARD: tek kare değil, klipten zaman-sıralı N kare tek ızgarada. Vision klibin
+# BOYUNCA ne OLDUĞUNU (aksiyon/hareket) görür → senaryo gerçek footage'a yazılır, tek
+# donmuş andan tahmin yürütmez (kullanıcı önerisi 2026-07-16). is_static: tüm kareler
+# neredeyse aynıysa (monoton/donuk klip) True → çağıran kısa tutar/eler.
+class _StoryboardDescription(BaseModel):
+    content: str = ""
+    is_static: bool = False
+
+
+_STORYBOARD_PROMPT = (
+    "Bu bir STORYBOARD: tek bir video klipten alınmış {n} kare, ZAMAN SIRASINA göre "
+    "soldan sağa, yukarıdan aşağıya dizili. Kareler arasındaki DEĞİŞİME bak ve klibin "
+    "BOYUNCA NE OLDUĞUNU (öznenin hareketi/aksiyonu) 1-2 kısa İngilizce cümleyle anlat. "
+    "SPESİFİK ol: özne ne yapıyor, nasıl hareket ediyor (ör. 'an alligator slowly opens "
+    "its jaws then lunges forward'). Genel/durağan tarif ('an alligator on a dock') YETMEZ.\n"
+    "is_static: kareler neredeyse AYNIYSA (özne kıpırdamıyor, klip monoton/donuk) true, "
+    "belirgin hareket/aksiyon varsa false.\n"
+    # NOT: .format(n=...) ile kullanılır → literal JSON süslü parantezleri {{ }} ile kaçırılır.
+    'SADECE JSON: {{"content": "<English action description>", "is_static": <bool>}}'
+)
+
+
+def describe_storyboard(path: "Path", *, vision_call, n_frames: int = 6):
+    """Storyboard ızgarasını vision ile tarif eder → (content, is_static).
+
+    Klibin aksiyonunu (zaman içinde) yakalar; tek-kare tahmininden üstün. Vision yok /
+    hata → ("", False) (çağıran tek-kare yoluna düşer; üretim durmaz)."""
+    from short_bot.claude_cli import run_json
+    try:
+        try:
+            from PIL import Image
+            im = Image.open(path)
+            im.thumbnail((768, 768))   # ızgara olduğu için tek kareden geniş tutulur
+            im.convert("RGB").save(path, "JPEG")
+        except Exception:  # noqa: BLE001
+            pass
+        v = run_json(_STORYBOARD_PROMPT.format(n=n_frames), _StoryboardDescription,
+                     claude_path=vision_call.claude_path, model=vision_call.model,
+                     backend=vision_call.backend, api_key=vision_call.api_key,
+                     image_path=path, retries=2, timeout_s=45)
+        return (v.content or "").strip(), bool(v.is_static)
+    except Exception as e:  # noqa: BLE001
+        log.warning(f"storyboard describe hatası: {e}")
+        return "", False
+
 
 class _TypeOutliers(BaseModel):
     outlier_indices: list[int] = []

@@ -413,19 +413,79 @@ def _rotate_sources(footage_deps, si: int):
     return FootageDeps(sources=rotated, verify_footage=footage_deps.verify_footage)
 
 
-def _describe_clip(clip, *, vision_call, ffmpeg_path: str,
-                   tail_s: float | None = None) -> str:
-    """Klipten bir kare çıkarıp vision ile İngilizce tarif eder (tür-tutarlılık için).
+def _clip_duration_s(clip, ffmpeg_path: str) -> float:
+    """Klip süresi (ffprobe). Okunamazsa 0.0 (çağıran storyboard'ı atlar)."""
+    import subprocess
+    probe = "ffprobe" if ffmpeg_path in ("ffmpeg", "") else ffmpeg_path.replace("ffmpeg", "ffprobe")
+    try:
+        out = subprocess.run([probe, "-v", "error", "-show_entries", "format=duration",
+                              "-of", "csv=p=0", str(clip)],
+                             capture_output=True, text=True, timeout=20)
+        return float((out.stdout or "0").strip() or 0)
+    except Exception:  # noqa: BLE001
+        return 0.0
 
-    ``tail_s`` verilirse kare klibin SONUNDAN alınır (-sseof). Görüntü-önce eleme
-    baş+son iki kareyi karşılaştırır: derleme/kaydırma klibinde (short 846: telefon
-    scroll klibi) baş ve son FARKLI sahnedir — tek kare bunu asla yakalayamaz."""
+
+def _storyboard_frames(clip, out_path, ffmpeg_path: str, *, cols: int = 3, rows: int = 2) -> bool:
+    """Klipten cols×rows kareyi ZAMAN-eşit örnekleyip tek ızgara görsele diz (PIL).
+
+    Vision tek donmuş an yerine klibin BOYUNCA aksiyonunu görür (kullanıcı önerisi).
+    Süre okunamaz / yeterli kare çıkmaz / PIL yoksa False (çağıran tek-kareye düşer)."""
     import subprocess
     import tempfile
-    from short_bot.footage_matcher import _describe_image_file
-    seek = ["-sseof", f"-{tail_s}"] if tail_s else ["-ss", "1"]
+    n = cols * rows
+    dur = _clip_duration_s(clip, ffmpeg_path)
+    if dur <= 0:
+        return False
+    times = [dur * (i + 0.5) / n for i in range(n)]   # uçlardan içeride, eşit aralık
+    try:
+        from PIL import Image
+    except Exception:  # noqa: BLE001 — PIL yoksa storyboard yok
+        return False
+    with tempfile.TemporaryDirectory() as td:
+        frames = []
+        for i, t in enumerate(times):
+            fp = Path(td) / f"f{i}.jpg"
+            subprocess.run([ffmpeg_path, "-v", "error", "-y", "-ss", f"{t:.3f}",
+                            "-i", str(clip), "-frames:v", "1", "-vf", "scale=256:-1", str(fp)],
+                           capture_output=True, timeout=20)
+            if fp.exists() and fp.stat().st_size > 0:
+                frames.append(fp)
+        if len(frames) < 2:            # storyboard için en az 2 farklı an gerekir
+            return False
+        try:
+            imgs = [Image.open(f).convert("RGB") for f in frames]
+            w, h = imgs[0].size
+            grid = Image.new("RGB", (w * cols, h * rows), (0, 0, 0))
+            for idx, im in enumerate(imgs):
+                r, c = divmod(idx, cols)
+                grid.paste(im.resize((w, h)), (c * w, r * h))
+            grid.save(out_path, "JPEG")
+            return True
+        except Exception:  # noqa: BLE001
+            return False
+
+
+def _describe_clip(clip, *, vision_call, ffmpeg_path: str,
+                   tail_s: float | None = None) -> str:
+    """Klipten STORYBOARD (zaman-sıralı 6 kare, tek ızgara) çıkarıp vision ile klibin
+    BOYUNCA ne olduğunu (aksiyon) tarif eder — tek donmuş andan tahmin DEĞİL (kullanıcı
+    önerisi 2026-07-16). Storyboard kurulamazsa tek-kareye düşer (fail-open).
+
+    ``tail_s`` (geriye-uyum): storyboard zaten tüm klibi kapsadığı için baş/son ayrımı
+    gereksizleşir; verilirse yalnız tek-kare fallback'inde SON kareyi almaya yönlendirir."""
+    import subprocess
+    import tempfile
+    from short_bot.footage_matcher import _describe_image_file, describe_storyboard
     try:
         with tempfile.TemporaryDirectory() as td:
+            board = Path(td) / "board.jpg"
+            if _storyboard_frames(clip, board, ffmpeg_path):
+                desc, _static = describe_storyboard(board, vision_call=vision_call)
+                if desc:
+                    return desc
+            # storyboard kurulamadı/boş döndü → tek-kare yolu (eski davranış)
+            seek = ["-sseof", f"-{tail_s}"] if tail_s else ["-ss", "1"]
             f = Path(td) / "probe.jpg"
             subprocess.run([ffmpeg_path, "-v", "error", "-y", *seek, "-i", str(clip),
                             "-frames:v", "1", "-vf", "scale=384:-1", str(f)],
