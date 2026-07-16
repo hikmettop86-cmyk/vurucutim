@@ -54,7 +54,7 @@ def test_discover_ozne_secer_ve_konu_turetir(monkeypatch):
         yakalanan["p"] = prompt
         return DiscoveredSubject(subject_en="archerfish",
                                  topic_tr="Bizimki su üstündeki böceği tazyikli suyla vuruyor",
-                                 clip_indices=[0, 2, 3, 5])
+                                 clip_indices=[0, 2, 3, 5, 6, 7])
 
     out = discover_subject(sources=[_Src("pexels", cands)], vision_call=object(),
                            invoke=fake_invoke, seed=1,
@@ -62,7 +62,7 @@ def test_discover_ozne_secer_ve_konu_turetir(monkeypatch):
     assert out is not None
     subj, secilen = out
     assert subj.subject_en == "archerfish"
-    assert [c.ident for c in secilen] == ["0", "2", "3", "5"]   # seçilen klipler, sırayla
+    assert [c.ident for c in secilen] == ["0", "2", "3", "5", "6", "7"]  # seçilen klipler, sırayla
     p = yakalanan["p"]
     assert "Okçu Balığı" in p                 # son başlıklar tekrar-önleme için promptta
     assert str(MIN_SUBJECT_CLIPS) in p        # min klip kuralı promptta
@@ -93,9 +93,9 @@ def test_discover_gecersiz_indeksler_none(monkeypatch):
 
     def fake_invoke(prompt, schema):
         return DiscoveredSubject(subject_en="fish", topic_tr="Bizimki bir şeyler yapıyor",
-                                 clip_indices=[50, 51, 52, 53])   # havuz dışı
+                                 clip_indices=[50, 51, 52, 53, 54, 55])   # havuz dışı
 
-    out = discover_subject(sources=[_Src("pexels", [_cand(i) for i in range(6)])],
+    out = discover_subject(sources=[_Src("pexels", [_cand(i) for i in range(8)])],
                            vision_call=object(), invoke=fake_invoke, seed=0)
     assert out is None
 
@@ -110,7 +110,7 @@ def test_discover_avoid_subjects_prompta_girer(monkeypatch):
     def fake_invoke(prompt, schema):
         yakalanan["p"] = prompt
         return DiscoveredSubject(subject_en="falcon", topic_tr="Bizimki dalışa geçiyor",
-                                 clip_indices=[0, 1, 2, 3])
+                                 clip_indices=[0, 1, 2, 3, 4, 5])
 
     out = discover_subject(sources=[_Src("pexels", [_cand(i) for i in range(6)])],
                            vision_call=object(), invoke=fake_invoke, seed=0,

@@ -456,10 +456,10 @@ def test_prepare_kesif_basarili_konuyu_stoktan_turetir(tmp_path, monkeypatch):
 
     cands = [FootageCandidate(url=f"http://x/{i}.mp4", duration_s=15,
                               image=f"http://x/{i}.jpg", source="pexels",
-                              ident=str(i)) for i in range(5)]
+                              ident=str(i)) for i in range(6)]
     subj = DiscoveredSubject(subject_en="mantis shrimp",
                              topic_tr="Bizimki tek yumrukla akvaryum camı çatlatıyor",
-                             clip_indices=[0, 1, 2, 3])
+                             clip_indices=[0, 1, 2, 3, 4, 5])
 
     def fake_download(src, cand, cache_dir):
         f = Path(cache_dir) / f"disc_{cand.ident}.mp4"

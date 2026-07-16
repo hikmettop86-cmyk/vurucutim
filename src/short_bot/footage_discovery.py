@@ -26,7 +26,12 @@ from pydantic import BaseModel, Field
 log = logging.getLogger(__name__)
 
 # Özne bu kadar AYRIK klip sunamıyorsa aday bile değil (858 dersi: az klip = loop).
-MIN_SUBJECT_CLIPS = 4
+# 4 → 6 (MARGIN, kök-neden analizi 2026-07-17): discover_subject özneyi THUMBNAIL'dan
+# seçiyor (hareket GÖRÜLEMEZ); indirilen klipler motion gate'e (_fd_clip_ok) takılıyor —
+# stok hayvan klipleri çoğu durgun (güneşlenen/oturan/zoo). Tam 4 seçince 2 durgun elenince
+# <3 kalıp üretim düşüyordu (leopar/karakal). 6 seçmek 2-3 durgun-rediyle bile ≥3 hareketli
+# klip + yedek havuz bırakır; ayrıca bol-footage'lı (=genelde dinamik) öznelere yöneltir.
+MIN_SUBJECT_CLIPS = 6
 
 # Jenerik aksiyon sorguları: tür adı YOK — havuz ne veriyorsa o. Mizah kanalının
 # 'karakterli hayvan' ihtiyacına göre aksiyon/çatışma ağırlıklı.
@@ -70,7 +75,7 @@ def _pick_queries(seed: int, n: int = 3) -> list[str]:
 def discover_subject(*, sources, vision_call, invoke, seed: int = 0,
                      recent_titles: list[str] | None = None,
                      avoid_subjects: list[str] | None = None,
-                     per_query: int = 12, max_describe: int = 24):
+                     per_query: int = 15, max_describe: int = 30):
     """Stoku tara, özne seç, konu türet.
 
     Döner: ``(DiscoveredSubject, [FootageCandidate, ...])`` — adaylar seçilen
