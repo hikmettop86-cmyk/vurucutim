@@ -651,46 +651,56 @@ def _pin_queries(n, clip_queries: list[str], topic: str) -> ReelNarration:
 # FD bütçe toleransı: bu çarpanın üstü kısaltma turunu tetikler. %10 tolerans:
 # TTS hızı zaten ±%18 oynuyor, ufak taşma videoyu bozmuyor.
 _FD_BUDGET_TOLERANCE = 1.10
+# Kısaltma DÖNGÜSÜ tur sayısı. GERÇEK HATA (short 875, kullanıcı: '10sn sonra donma'):
+# gemini-flash-lite tek turda ~47 kelimeyi 28'e indirmiyor (45'e iniyor, hâlâ taşkın) →
+# video 24.6sn → 3 klip aşırı gerildi → DONMA. Ucuz+hızlı (gemini ~4sn) olduğu için
+# bütçenin altına inene kadar döndürülür; her tur bir öncekini besler.
+_FD_BUDGET_MAX_ROUNDS = 3
 
 
 def _fd_enforce_budget(n, channel, topic: str, *, invoke, target_duration_s=None):
-    """FD senaryosu kelime bütçesini aşarsa TEK kısaltma turu.
+    """FD senaryosu kelime bütçesini aşarsa bütçenin ALTINA inene kadar (en çok
+    ``_FD_BUDGET_MAX_ROUNDS`` tur) kısaltır. Beat SAYISI korunur (klip bağı). Bir tur
+    kısaltmaz/bozarsa o noktada durur ve o ana kadarki EN KISA sürümü döner (fail-open).
 
-    GERÇEK HATA (aslan videosu): bütçe 54-81 kelimeyken model 143 yazdı → 67.6sn
-    video (hedef 30-45). Prompt'taki sert bütçe satırı yetmiyor (persona 'mizah
-    sıkıştırılamaz' der, model onu dinliyor). Beat SAYISI korunur (klip bağı);
-    kısaltma çöker/bozarsa orijinal döner (fail-open).
-
-    target_duration_s: görüntü-önce efektif süre (klip sayısından); None → kanal hedefi."""
+    Süre görüntü-önce modda klip sayısından türer; taşkın senaryo klipleri gererek
+    DONMAYA yol açar → bu kapı videoyu hedef süreye oturtan tek mekanizma.
+    target_duration_s: efektif süre (klip sayısından); None → kanal hedefi."""
     from short_bot.reel_models import FDDraftNarration
     td = tuple(target_duration_s) if target_duration_s else channel.reel.target_duration_s
     lo_w, hi_w = reel_word_budget(td)
-    mevcut = n.word_count()
-    if mevcut <= hi_w * _FD_BUDGET_TOLERANCE:
-        return n
-    log.info(f"  reel[bütçe]: {mevcut} kelime > {hi_w} üst sınır → kısaltma turu")
-    prompt = (
-        f"Konu: {topic}\n\n"
-        f"Aşağıdaki kısa video senaryosu {mevcut} kelime — "
-        f"KISALT: toplam (hook + beat'ler + close) EN FAZLA {hi_w} kelime olmalı "
-        f"(TTS ~1.95 kelime/sn okuyor; bu sınır videoyu hedef süreye oturtan şey).\n"
-        f"KURALLAR: beat SAYISI AYNEN kalsın (her beat bir klibe bağlı). Her beat'i "
-        f"sıkılaştır: en zayıf benzetmeleri/yan cümleleri at, EN İYİ espriyi koru. "
-        f"Az sayıda iyi kurulmuş espri > çok sayıda aceleye gelmiş espri. "
-        f"open_question/reveal_beat/clip_order/mood alanlarına DOKUNMA.\n\n"
-        f"SENARYO (JSON):\n{n.model_dump_json()}\n\n"
-        f"Kısaltılmış senaryoyu AYNI ŞEMADA, SADECE JSON olarak döndür.")
-    try:
-        out = invoke(prompt, FDDraftNarration)
-    except Exception as e:  # noqa: BLE001 — kısaltma çökerse orijinalle devam
-        log.warning(f"  reel[bütçe]: kısaltma çöktü ({e}) → orijinal kalıyor")
-        return n
-    if len(out.beats) != len(n.beats) or out.word_count() >= mevcut:
-        log.warning("  reel[bütçe]: kısaltma beat bağını bozdu ya da kısaltmadı "
-                    "→ orijinal kalıyor")
-        return n
-    log.info(f"  reel[bütçe]: {mevcut} → {out.word_count()} kelime")
-    return out
+    limit = hi_w * _FD_BUDGET_TOLERANCE
+    best = n
+    for tur in range(1, _FD_BUDGET_MAX_ROUNDS + 1):
+        mevcut = best.word_count()
+        if mevcut <= limit:
+            break
+        log.info(f"  reel[bütçe]: {mevcut} kelime > {hi_w} üst sınır → kısaltma "
+                 f"turu {tur}/{_FD_BUDGET_MAX_ROUNDS}")
+        prompt = (
+            f"Konu: {topic}\n\n"
+            f"Aşağıdaki kısa video senaryosu {mevcut} kelime — ZORUNLU KISALT: toplam "
+            f"(hook + beat'ler + close) {hi_w} kelimeyi KESİNLİKLE AŞMASIN (şu an "
+            f"{mevcut - hi_w} kelime fazla). TTS ~1.95 kelime/sn okuyor; bu sınır videoyu "
+            f"footage süresine oturtan şey — aşarsan görüntü donuyor.\n"
+            f"KURALLAR: beat SAYISI AYNEN {len(best.beats)} kalsın (her beat bir klibe "
+            f"bağlı). Her beat'i sertçe sıkılaştır: yan cümleleri/zayıf benzetmeleri AT, "
+            f"tek EN İYİ espriyi koru. Az ama vurucu > çok ama aceleye gelmiş. "
+            f"open_question/reveal_beat/clip_order/mood alanlarına DOKUNMA.\n\n"
+            f"SENARYO (JSON):\n{best.model_dump_json()}\n\n"
+            f"Kısaltılmış senaryoyu AYNI ŞEMADA, SADECE JSON olarak döndür.")
+        try:
+            out = invoke(prompt, FDDraftNarration)
+        except Exception as e:  # noqa: BLE001 — kısaltma çökerse o ana kadarki en kısa
+            log.warning(f"  reel[bütçe]: kısaltma çöktü ({e}) → {best.word_count()} kelimeyle kalınıyor")
+            break
+        if len(out.beats) != len(n.beats) or out.word_count() >= mevcut:
+            log.warning(f"  reel[bütçe]: tur {tur} kısaltmadı/beat bozdu "
+                        f"→ {best.word_count()} kelimeyle kalınıyor")
+            break
+        log.info(f"  reel[bütçe]: {mevcut} → {out.word_count()} kelime")
+        best = out
+    return best
 
 
 def write_footage_driven_narration(topic: str, clip_descriptions: list[str],

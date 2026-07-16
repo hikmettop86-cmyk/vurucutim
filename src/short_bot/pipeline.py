@@ -401,6 +401,7 @@ _RUN_SUB_LOGGERS = (
     "short_bot.footage_sources",
     "short_bot.reel",
     "short_bot.reel_curiosity",
+    "short_bot.reel_narration",
     "short_bot.reel_director",
     "short_bot.reel_render",
     "short_bot.tts.align",
