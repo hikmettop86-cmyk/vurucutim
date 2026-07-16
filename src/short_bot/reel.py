@@ -986,8 +986,15 @@ def produce_reel_video(
     # ALT-KESİM PLANI footage'dan ÖNCE hesaplanır: bir segment kaç kesim alacaksa
     # o kadar klip çekilir. Eskiden hook/close'a KOŞULSUZ 1 klip veriliyordu; hook
     # 4 alt-kesime yayıldığında aynı görüntü 4 kesim üst üste ekranda kalıyordu.
+    # MERAK RAMPASI: curiosity açıkken kesim temposu tepeye doğru sıkışır.
+    _peak_ramp_s = None
+    if footage_driven and getattr(reel, "curiosity_pipeline", True):
+        _ps = narration.peak_segment()
+        if 0 <= _ps < len(timeline.seg_spans):
+            _peak_ramp_s = timeline.seg_spans[_ps][1]
     if getattr(reel, "fast_cuts", True):
-        subcuts = plan_subcuts(timeline.seg_spans, timeline.words, profile.cut_pacing)
+        subcuts = plan_subcuts(timeline.seg_spans, timeline.words,
+                               profile.cut_pacing, peak_s=_peak_ramp_s)
     else:
         subcuts = [(i, a, b) for i, (a, b) in enumerate(timeline.seg_spans)]
     cuts_in_seg: dict[int, int] = {}

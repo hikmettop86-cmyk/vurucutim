@@ -18,12 +18,25 @@ def _target(pacing: str) -> tuple[float, float]:
     return TARGET_S.get(pacing, TARGET_S["medium"])
 
 
+def _ramp_factor(t: float, peak_s: float | None) -> float:
+    """Merak rampası: hedef alt-kesim süresi çarpanı (peak_s yoksa 1.0 = eski davranış).
+
+    Hook'ta 1.25 (geniş nefes) → tepeye 0.75 (sıkışan kesim, gerilim hızlanır)
+    → tepe sonrası 1.1 (rahatlar). Bkz. spec 2026-07-16 merak mimarisi."""
+    if not peak_s or peak_s <= 0:
+        return 1.0
+    if t <= peak_s:
+        return 1.25 - 0.5 * (t / peak_s)
+    return 1.1
+
+
 def _word_starts_in(words, a: float, b: float) -> list[float]:
     """(a,b) aralığındaki kelime başlangıçları (artan)."""
     return sorted(w.start_s for w in (words or []) if a < w.start_s < b)
 
 
-def plan_subcuts(seg_spans, words, pacing: str = "medium") -> list[tuple[int, float, float]]:
+def plan_subcuts(seg_spans, words, pacing: str = "medium",
+                 peak_s: float | None = None) -> list[tuple[int, float, float]]:
     """Her segmenti hedef aralığa böl → [(seg_index, start_s, end_s), ...].
 
     Kesim sınırları kelime başlangıcına hizalanır. Segment 2*MIN_SUBCUT_S'ten
@@ -41,7 +54,9 @@ def plan_subcuts(seg_spans, words, pacing: str = "medium") -> list[tuple[int, fl
         cursor = a
         target = (lo + hi) / 2.0
         while True:
-            want = cursor + target
+            # merak rampası: tepeye yaklaştıkça hedef süre kısalır (peak_s yoksa 1.0)
+            carpan = _ramp_factor(cursor, peak_s)
+            want = cursor + target * carpan
             if b - want < MIN_SUBCUT_S:       # kalan çok kısa → son parça uzasın
                 break
             # hedefe en yakın kelime başlangıcı (min parça süresi korunarak)
@@ -50,7 +65,7 @@ def plan_subcuts(seg_spans, words, pacing: str = "medium") -> list[tuple[int, fl
             if not cands:
                 break
             pick = min(cands, key=lambda s: abs(s - want))
-            if pick - cursor > hi + 1.0:      # hizalama çok uzattıysa vazgeç
+            if pick - cursor > hi * carpan + 1.0:   # hizalama çok uzattıysa vazgeç
                 break
             cut_at.append(pick)
             cursor = pick
