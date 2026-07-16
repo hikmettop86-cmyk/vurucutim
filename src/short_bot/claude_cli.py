@@ -25,6 +25,13 @@ T = TypeVar("T", bound=BaseModel)
 _FALLBACKS: dict = {}
 _FALLBACKS_LOCK = threading.Lock()
 
+# `claude -p` subprocess çağrılarını SERİLEŞTİR. ÖLÇÜLDÜ (2026-07-16 canlı): 3 eşzamanlı
+# `claude -p` → en az 1'i 90sn timeout'a takılıyor (Max planı/CLI ~2 eşzamanlıyı kaldırıp
+# 3.'yü asıyor); 3 seri → her biri ~4sn. Merak pipeline'ı 3 adayı paralel yazıyordu →
+# timeout → OpenRouter fallback (senaryo fazı 573sn, %54). Serileştirme yalnız CLI'yi bağlar;
+# google_studio vision (8-yollu) ve openrouter paralelliği ETKİLENMEZ.
+_CLI_LOCK = threading.Lock()
+
 
 def register_fallback(primary_backend: str, primary_model: str,
                       fb_backend: str, fb_model: str, fb_api_key: str | None) -> None:
@@ -149,8 +156,11 @@ def _invoke_primary(prompt: str, *, backend: str, model: str,
     cmd = [resolved_path, "-p", "--output-format", "text"]
     if model != "default":
         cmd += ["--model", model]
-    proc = subprocess.run(cmd, input=effective_prompt, capture_output=True, text=True,
-                          encoding="utf-8", timeout=timeout_s, check=False)
+    # Serileştir: eşzamanlı `claude -p` takılıyor (bkz. _CLI_LOCK notu). Kilit yalnız
+    # subprocess boyunca tutulur; timeout süresi kadar (nadiren) diğer CLI çağrıları bekler.
+    with _CLI_LOCK:
+        proc = subprocess.run(cmd, input=effective_prompt, capture_output=True, text=True,
+                              encoding="utf-8", timeout=timeout_s, check=False)
     if proc.returncode != 0:
         raise ClaudeCliError(f"claude exit {proc.returncode}: {proc.stderr[:500]}")
     return proc.stdout

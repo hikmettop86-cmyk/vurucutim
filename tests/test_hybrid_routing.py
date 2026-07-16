@@ -58,6 +58,40 @@ def test_google_studio_exhausted_fallback(monkeypatch):
     assert out == "OR:google/gemma-4-26b-a4b-it"
 
 
+def test_claude_cli_cagrilari_serilesir(monkeypatch):
+    # KÖK NEDEN (canlı ölçüm): 3 eşzamanlı `claude -p` → 1'i 90sn timeout; seri → 4sn.
+    # Max planı/CLI eşzamanlı çağrıda takılıyor → subprocess'ler serileşmeli (yalnız CLI).
+    import concurrent.futures as cf
+    import threading
+    import time
+    CC.clear_fallbacks()
+    state = {"n": 0, "max": 0}
+    slock = threading.Lock()
+
+    def fake_run(cmd, **kw):
+        with slock:
+            state["n"] += 1
+            state["max"] = max(state["max"], state["n"])
+        time.sleep(0.05)
+        with slock:
+            state["n"] -= 1
+
+        class R:
+            returncode = 0
+            stdout = "ok"
+            stderr = ""
+        return R()
+
+    monkeypatch.setattr(CC, "_resolve_claude_binary", lambda p: "claude")
+    monkeypatch.setattr(CC.subprocess, "run", fake_run)
+    with cf.ThreadPoolExecutor(max_workers=4) as ex:
+        outs = list(ex.map(lambda i: CC._invoke_primary(
+            "x", backend="claude_cli", model="sonnet", claude_path="claude",
+            api_key=None, timeout_s=10), range(4)))
+    assert all(o == "ok" for o in outs)
+    assert state["max"] == 1   # serileşti — asla 2+ eşzamanlı claude -p
+
+
 def test_google_studio_dispatch_generate_cagirir(monkeypatch):
     CC.clear_fallbacks()
     import short_bot.google_studio as GS
