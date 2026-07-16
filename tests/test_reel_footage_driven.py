@@ -687,3 +687,65 @@ def test_soru_yoksa_cip_parametreleri_bos(tmp_path, monkeypatch):
         vision_call=object(), deps=deps)
     assert rec["question_text"] == ""
     assert rec["reveal_at_s"] is None
+
+
+# --- DURGUN KLİP KAPISI v2 (keçi videosu dersi: 24-56s hareket ~0.003) --------
+
+def _sentetik(tmp_path, adi, hareketli_s, durgun_s, *, once_hareketli=True):
+    """testsrc (hareketli) + tek renk (durgun) birleştirilmiş sentetik klip."""
+    import subprocess
+    p = tmp_path / adi
+    a = f"testsrc=duration={hareketli_s}:size=160x120:rate=8"
+    b = f"color=c=gray:duration={durgun_s}:size=160x120:rate=8"
+    ilk, son = (a, b) if once_hareketli else (b, a)
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", ilk,
+         "-f", "lavfi", "-i", son,
+         "-filter_complex", "[0:v][1:v]concat=n=2:v=1[v]", "-map", "[v]",
+         str(p)], check=True, capture_output=True, timeout=120)
+    return p
+
+
+def test_fd_static_fraction_cogu_durgun_klibi_olcer(tmp_path):
+    # Keçi videosu dersi: klip başta hareketli, ortası/sonu 30sn bakışma →
+    # baş/son penceresi kapıdan geçirdi, izleyici 'donuyor' dedi. Tüm klip
+    # taranır; durgun pencere ORANI ölçülür.
+    from short_bot.reel import _fd_static_fraction
+    cogu_durgun = _sentetik(tmp_path, "cd.mp4", 3, 12)     # 12/15 durgun
+    assert _fd_static_fraction(cogu_durgun, "ffmpeg") > 0.5
+    cogu_hareketli = _sentetik(tmp_path, "ch.mp4", 12, 3)  # 3/15 durgun
+    assert _fd_static_fraction(cogu_hareketli, "ffmpeg") < 0.5
+
+
+def test_fd_static_fraction_okunamazsa_fail_open(tmp_path):
+    from short_bot.reel import _fd_static_fraction
+    bozuk = tmp_path / "bozuk.mp4"
+    bozuk.write_bytes(b"mp4")
+    assert _fd_static_fraction(bozuk, "ffmpeg") == 0.0     # eleme YAPMA
+
+
+def test_fd_clip_ok_birlesik_kapi(tmp_path, monkeypatch):
+    import short_bot.reel as R
+    from short_bot.reel import _fd_clip_ok
+    # hareket iyi + durgunluk az → geçer
+    monkeypatch.setattr(R, "_fd_motion_min", lambda c, f: 0.05)
+    monkeypatch.setattr(R, "_fd_static_fraction", lambda c, f: 0.2)
+    assert _fd_clip_ok("x.mp4", "ffmpeg") is True
+    # çoğunluğu durgun → elenir (baş/son hareketli olsa bile)
+    monkeypatch.setattr(R, "_fd_static_fraction", lambda c, f: 0.7)
+    assert _fd_clip_ok("x.mp4", "ffmpeg") is False
+    # kuyruk donuk → elenir
+    monkeypatch.setattr(R, "_fd_static_fraction", lambda c, f: 0.1)
+    monkeypatch.setattr(R, "_fd_motion_min", lambda c, f: 0.001)
+    assert _fd_clip_ok("x.mp4", "ffmpeg") is False
+
+
+def test_fd_motion_min_kuyruk_sondasi_reencode(tmp_path):
+    # GERÇEK HATA (keçi videosu, son 8sn 0.0000 donuk): kuyruk sondası -c copy
+    # ile çıkarılıyordu; stok kliplerde keyframe sınırı boş dosya verip fail-open
+    # 1.0 döndürüyordu. Sonda artık yeniden-kodlar — sentetik donuk kuyruk her
+    # kapsayıcıda yakalanmalı.
+    from short_bot.reel import _fd_motion_min
+    from short_bot.reel_grade import MOTION_MIN
+    klip = _sentetik(tmp_path, "dk.mp4", 4, 4)             # son 4sn DONUK
+    assert _fd_motion_min(klip, "ffmpeg") < MOTION_MIN

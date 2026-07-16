@@ -263,9 +263,12 @@ def _fd_motion_min(clip, ffmpeg_path: str = "ffmpeg") -> float:
     measure_motion yalnız ilk ~4sn'yi örnekler (fps=4, 16 kare). Görüntü-önce bir
     klip 2 segmenti (son beat + close, ~13sn) taşıyabilir ve alt-kesim offsetleri
     klibin SONUNA yayılır. GERÇEK HATA (okçu balığı repro): başı hareketli sonu
-    durgun amber sürü klibi kapıdan geçti → kapanışta 8.1sn donuk kare. Son ~4sn
-    ayrıca ölçülür, ikisinin minimumu esas. Kuyruk çıkarılamazsa baş ölçümü döner
-    (fail-open: iyi klibi asla eleme — measure_motion sözleşmesiyle aynı)."""
+    durgun amber sürü klibi kapıdan geçti → kapanışta 8.1sn donuk kare.
+
+    Kuyruk sondası YENİDEN-KODLAR (-c copy DEĞİL): GERÇEK HATA (keçi videosu,
+    son 8sn 0.0000 donuk): -c copy keyframe sınırında boş/bozuk dosya verip
+    fail-open 1.0 döndürüyordu → donmuş kuyruklu klip kapıdan geçiyordu.
+    Kuyruk yine çıkarılamazsa baş ölçümü döner (fail-open)."""
     import subprocess
     import tempfile
     m1 = measure_motion(clip, ffmpeg_path)
@@ -273,13 +276,63 @@ def _fd_motion_min(clip, ffmpeg_path: str = "ffmpeg") -> float:
         with tempfile.TemporaryDirectory() as td:
             t = Path(td) / "tail.mp4"
             subprocess.run([ffmpeg_path, "-v", "error", "-y", "-sseof", "-4",
-                            "-i", str(clip), "-c", "copy", str(t)],
-                           capture_output=True, timeout=30)
+                            "-i", str(clip), "-vf", "scale=64:64", "-an",
+                            "-preset", "ultrafast", str(t)],
+                           capture_output=True, timeout=60)
             if t.exists() and t.stat().st_size > 0:
                 return min(m1, measure_motion(t, ffmpeg_path))
     except Exception:  # noqa: BLE001 — ölçüm hatası eleme yapmasın
         pass
     return m1
+
+
+# Durgun pencere eşiği (ölçüldü, keçi videosu): bakışma/duran hayvan 0.002-0.005,
+# gerçek hareket 0.03-0.18. Klip pencerelerinin yarıdan fazlası bu eşiğin
+# altındaysa klip 'çoğunluğu durgun'dur — baş/son hareketli olsa bile izleyici
+# uzun donuk bölüm görür (kullanıcı: '0:24'ten sonra donuyor').
+_FD_STILL_WIN = 0.005
+_FD_STATIC_FRAC_MAX = 0.5
+
+
+def _fd_static_fraction(clip, ffmpeg_path: str = "ffmpeg") -> float:
+    """Klibin TAMAMI taranır: 2sn'lik pencerelerin ne kadarı durgun (0-1).
+
+    _fd_motion_min yalnız baş+son 4sn'ye bakar — ORTASI 30sn bakışma olan klibi
+    göremez (keçi videosu dersi). Okunamazsa 0.0 (fail-open: eleme yapma)."""
+    import subprocess
+    import tempfile
+    try:
+        from PIL import Image, ImageChops, ImageStat
+    except Exception:  # noqa: BLE001
+        return 0.0
+    try:
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            subprocess.run(
+                [ffmpeg_path, "-v", "error", "-i", str(clip),
+                 "-vf", "fps=2,scale=64:64,format=gray",
+                 "-frames:v", "120", str(td / "s%03d.png")],   # en çok 60sn
+                capture_output=True, timeout=60)
+            kareler = sorted(td.glob("*.png"))
+            if len(kareler) < 5:
+                return 0.0
+            imgs = [Image.open(k).convert("L") for k in kareler]
+            diffs = [ImageStat.Stat(ImageChops.difference(a, b)).mean[0] / 255.0
+                     for a, b in zip(imgs, imgs[1:])]
+            pencereler = [diffs[i:i + 4] for i in range(0, len(diffs), 4)]
+            durgun = sum(1 for w in pencereler
+                         if sum(w) / len(w) < _FD_STILL_WIN)
+            return durgun / len(pencereler)
+    except Exception as e:  # noqa: BLE001 — ölçüm hatası üretimi düşürmesin
+        log.info(f"  reel: durgunluk ölçülemedi ({clip}): {e}")
+        return 0.0
+
+
+def _fd_clip_ok(clip, ffmpeg_path: str = "ffmpeg") -> bool:
+    """Görüntü-önce klip kapısı: baş/son hareketli VE çoğunluğu durgun değil."""
+    if _fd_motion_min(clip, ffmpeg_path) < MOTION_MIN:
+        return False
+    return _fd_static_fraction(clip, ffmpeg_path) <= _FD_STATIC_FRAC_MAX
 
 
 def _rotate_sources(footage_deps, si: int):
@@ -447,8 +500,8 @@ def _prepare_footage_driven(*, topic: str, channel, reel, d, work_dir: Path,
                 if clip is None or str(clip) in used:
                     continue
                 used.add(str(clip))
-                if _fd_motion_min(clip, ffmpeg_path) < MOTION_MIN:
-                    log.info(f"  reel[keşif]: statik aday atlandı ({clip.name})")
+                if not _fd_clip_ok(clip, ffmpeg_path):
+                    log.info(f"  reel[keşif]: statik/durgun aday atlandı ({clip.name})")
                     continue
                 clips.append(clip)
                 used_queries.append(subj.subject_en)
@@ -508,10 +561,10 @@ def _prepare_footage_driven(*, topic: str, channel, reel, d, work_dir: Path,
             continue
         misses = 0
         used.add(str(clip))
-        if _fd_motion_min(clip, ffmpeg_path) < MOTION_MIN:
+        if not _fd_clip_ok(clip, ffmpeg_path):
             if statik_yedek is None:
                 statik_yedek = (clip, query)
-            log.info(f"  reel[görüntü-önce]: statik klip atlandı ({clip.name})")
+            log.info(f"  reel[görüntü-önce]: statik/durgun klip atlandı ({clip.name})")
             continue
         clips.append(clip)
         used_queries.append(query)
@@ -579,7 +632,7 @@ def _prepare_footage_driven(*, topic: str, channel, reel, d, work_dir: Path,
                 except Exception:  # noqa: BLE001 — tek aday akışı düşürmesin
                     aday = None
                 if (aday is None or str(aday) in used
-                        or _fd_motion_min(aday, ffmpeg_path) < MOTION_MIN):
+                        or not _fd_clip_ok(aday, ffmpeg_path)):
                     continue
                 aday_desc = _describe_clip(aday, vision_call=vision_call,
                                            ffmpeg_path=ffmpeg_path)
@@ -611,7 +664,7 @@ def _prepare_footage_driven(*, topic: str, channel, reel, d, work_dir: Path,
                                         ffmpeg_path=ffmpeg_path)
                          if yeni is not None else "")
             if (yeni is not None and yeni_desc.strip()
-                    and _fd_motion_min(yeni, ffmpeg_path) >= MOTION_MIN):
+                    and _fd_clip_ok(yeni, ffmpeg_path)):
                 used.add(str(yeni))
                 clips[i], descs[i], used_queries[i] = yeni, yeni_desc, queries[0]
             else:
