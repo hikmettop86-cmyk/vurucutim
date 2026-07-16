@@ -318,7 +318,7 @@ def persona_block(persona: Persona, *, seed: int = 0) -> str:
         "  • ARAÇ KUTUSU — bunları KARIŞTIR, arka arkaya AYNISINI kullanma:\n"
         "      (a) 'sanırsın X' benzetmesi   (b) kısa patlama cümle ('Kobra şokta. Kobra\n"
         "      iptal.', 'Yürüyüşe bak.')   (c) diyalog/iç ses   (d) izleyiciye seslenme\n"
-        "      ('bak hele', 'yok artık kardeş')   (e) absürt abartı ('mezara değil paralel\n"
+        "      ('yok artık kardeş', 'gördün mü şunu')   (e) absürt abartı ('mezara değil paralel\n"
         "      evrene fırlatır').\n"
         "    RİTİM DEĞİŞSİN: uzun bir cümlenin ardından kısa bir patlama gelsin.\n"
         "  • 'SANIRSIN' TUZAĞI (824 hatası — kullanıcı fark etti): benzetmeyi HER cümleye\n"

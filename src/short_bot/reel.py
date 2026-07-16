@@ -518,24 +518,20 @@ def _prepare_footage_driven(*, topic: str, channel, reel, d, work_dir: Path,
             raise RuntimeError(
                 f"reel: görüntü-önce — '{topic}' için KONUDA klip kalmadı "
                 f"(hepsi konu-dışı/tarifsiz elendi)")
-    # MİN 3 KLİP: ReelNarration en az 3 beat ister (min_length=3) ve
-    # write_footage_driven_narration klip sayısı kadar beat ("EXACTLY n") yazdırır.
-    # Havuz 3'ten az AYRIK klip verirse (nadir, tuhaf konu) senaryo doğrulaması
-    # patlar → "mevcutlarla devam" fail-open sözü tutmazdı. Mevcut klipleri DÖNGÜSEL
-    # tekrarla 3'e tamamla (üçü de hizalı kalsın); tekrarlı ama üretilen video,
-    # video yokluğundan yeğdir.
-    MIN_FD_CLIPS = 3
-    if 0 < len(clips) < MIN_FD_CLIPS:
-        base_n = len(clips)
-        log.warning(f"  reel[görüntü-önce]: yalnız {base_n} ayrık klip → {MIN_FD_CLIPS}'e "
-                    f"döngüsel tekrarla tamamlanıyor (tekrarlı video)")
-        i = 0
-        while len(clips) < MIN_FD_CLIPS:
-            clips.append(clips[i % base_n])
-            descs.append(descs[i % base_n])
-            used_queries.append(used_queries[i % base_n])
-            i += 1
-    log.info(f"  reel[görüntü-önce]: {len(clips)} klip tarif edildi")
+    # MİN 3 AYRIK KLİP — YOKSA ÜRETİM DÜŞER. Eski kural klipleri döngüsel kopyalayıp
+    # 3'e tamamlıyordu ('video yokluğundan yeğdir'). GERÇEK HATA (short 858, kullanıcı
+    # yakaladı: 'aynı görüntü sürekli looplanmış'): havuz 1 klibe düşünce o tek klip
+    # 15 alt-kesim boyunca loop'landı. Looplu video, video yokluğundan YEĞ DEĞİL —
+    # izleyicide 'bozuk kanal' izlenimi bırakır. Net hatayla düş; konu/slot başka
+    # koşuda taze konuyla değerlendirilir.
+    MIN_FD_DISTINCT = 3
+    ayrik = len(set(map(str, clips)))
+    if ayrik < MIN_FD_DISTINCT:
+        raise RuntimeError(
+            f"reel: görüntü-önce — '{topic}' için yalnız {ayrik} ayrık konulu klip "
+            f"bulundu (en az {MIN_FD_DISTINCT} gerekir). Tekrarlı/looplu video "
+            f"üretmek yerine düşülüyor; stok havuzu bu konu için kıt.")
+    log.info(f"  reel[görüntü-önce]: {len(clips)} klip tarif edildi ({ayrik} ayrık)")
     return clips, descs, used_queries
 
 

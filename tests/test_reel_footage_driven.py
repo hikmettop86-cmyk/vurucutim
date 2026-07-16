@@ -371,9 +371,9 @@ def test_fd_motion_min_okunamazsa_fail_open(tmp_path):
     assert _fd_motion_min(bozuk, "ffmpeg") >= MOTION_MIN
 
 
-def test_prepare_hepsi_statikse_fail_open(tmp_path, monkeypatch):
-    # Havuz tümüyle statikse video ÇÖKMEZ — statik yedek kabul edilir (donuk
-    # kuyruk riski, ama video yokluğundan yeğdir; eski akışla aynı ilke).
+def test_prepare_hepsi_statikse_URETIM_DUSER(tmp_path, monkeypatch):
+    # 858 dersi: tek (üstelik statik) klibin loop'u en kötü video. Hepsi statikse
+    # yedek kabul edip sevk etmek yerine üretim NET hatayla düşer.
     havuz = [tmp_path / f"static{i}.mp4" for i in range(2)]
     for p in havuz:
         p.write_bytes(b"mp4")
@@ -392,15 +392,16 @@ def test_prepare_hepsi_statikse_fail_open(tmp_path, monkeypatch):
     monkeypatch.setattr(REEL, "measure_motion", lambda c, *a, **k: 0.001)
     monkeypatch.setattr(FM, "find_offsubject_clips", lambda *a, **k: [])
 
-    clips, descs, queries = _prepare_footage_driven(d=d, **_fd_prep_kwargs(tmp_path))
-    assert len(clips) >= 3                                # döngüsel tamamlama
+    import pytest
+    with pytest.raises(RuntimeError, match="ayrık"):
+        _prepare_footage_driven(d=d, **_fd_prep_kwargs(tmp_path))
 
 
-def test_prepare_az_klip_uce_kelepcelenir(tmp_path, monkeypatch):
-    # Havuz yalnız 2 AYRIK klip veriyor. ReelNarration min 3 beat ister; klipler 3'e
-    # döngüsel tamamlanmazsa write_footage_driven_narration'ın "EXACTLY n beats" istemi
-    # doğrulamaya takılıp üretimi ÇÖKERTİRDİ (fail-open sözü tutmazdı). Tekrarlı ama
-    # üretilen video, video yokluğundan yeğdir.
+def test_prepare_az_ayrik_klip_URETIMI_DUSURUR(tmp_path, monkeypatch):
+    # GERÇEK HATA (short 858, kullanıcı yakaladı: 'aynı görüntü sürekli looplanmış'):
+    # havuz 1 ayrık klibe düşünce eski kural klibi 3'e kopyalayıp LOOPLU videoyu
+    # sevk etti. Looplu video, video yokluğundan YEĞ DEĞİL — 3'ten az AYRIK klip
+    # kaldıysa üretim DÜŞER (net hatayla; konu/slot başka koşuda değerlendirilir).
     havuz = [tmp_path / "a.mp4", tmp_path / "b.mp4"]
     for p in havuz:
         p.write_bytes(b"mp4")
@@ -417,13 +418,11 @@ def test_prepare_az_klip_uce_kelepcelenir(tmp_path, monkeypatch):
         match_beat_clip=fake_match)
     monkeypatch.setattr(REEL, "_describe_clip", lambda c, **k: f"desc {c.name}")
 
-    clips, descs, queries = _prepare_footage_driven(
-        topic="şempanze", channel=_fd_channel(), reel=_fd_channel().reel, d=d,
-        work_dir=tmp_path, pexels_api_key="k", pixabay_api_key="",
-        footage_priority=["pexels"],
-        vision_call=object(), ffmpeg_path="ffmpeg", llm_claude_path="claude",
-        llm_model="default", llm_backend="claude_cli", llm_api_key=None)
-
-    assert len(clips) >= 3                            # min 3 beat için 3'e tamamlandı
-    assert len(descs) == len(clips) == len(queries)  # üçü hâlâ index-hizalı
-    assert len(set(map(str, clips))) == 2            # yalnız 2 ayrık (tekrarla dolduruldu)
+    import pytest
+    with pytest.raises(RuntimeError, match="ayrık"):
+        _prepare_footage_driven(
+            topic="şempanze", channel=_fd_channel(), reel=_fd_channel().reel, d=d,
+            work_dir=tmp_path, pexels_api_key="k", pixabay_api_key="",
+            footage_priority=["pexels"],
+            vision_call=object(), ffmpeg_path="ffmpeg", llm_claude_path="claude",
+            llm_model="default", llm_backend="claude_cli", llm_api_key=None)
