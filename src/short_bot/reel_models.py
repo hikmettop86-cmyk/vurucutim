@@ -50,6 +50,24 @@ class ReelBeat(BaseModel):
         return v.strip()
 
 
+class FDDraftBeat(BaseModel):
+    """GÖRÜNTÜ-ÖNCE ayrıştırma beat'i: visual_query SERBEST (boş olabilir).
+
+    GERÇEK HATA: model, görüntü-önce senaryosunda visual_query'leri 3 denemede de
+    BOŞ döndürdü → ReelBeat'in min_length=2 doğrulaması üretimi düşürdü. Oysa bu
+    modda alan zaten YOK SAYILIP gerçek footage sorgusuna sabitleniyor
+    (write_footage_driven_narration) — gerekmeyen alan üretim düşüremez.
+    Senaryo-önce yol ReelBeat'in katı doğrulamasını AYNEN korur."""
+    text: str = Field(min_length=8, max_length=500)
+    visual_query: str = Field(default="", max_length=120)
+    keyword: str = Field(default="", max_length=40)
+
+    @field_validator("text", "keyword", mode="before")
+    @classmethod
+    def _norm(cls, v):
+        return strip_non_turkish_diacritics(v) if isinstance(v, str) else v
+
+
 # Kapanış DAR: uzun kapanış close segmentini şişirir (bir koşuda videonun %27'si)
 # ve ekranı 13 saniye statik bir metin bloğu kaplar. Araştırma: outro ≤5sn, statik
 # son kare LOOP'U ÖLDÜRÜR — izleyici bittiğini görür, başa dönmez.
@@ -285,6 +303,16 @@ class ReelNarration(BaseModel):
 
     def word_count(self) -> int:
         return len(self.full_text().split())
+
+
+class FDDraftNarration(ReelNarration):
+    """GÖRÜNTÜ-ÖNCE LLM çıktısının GEVŞEK ayrıştırma şeması.
+
+    Tek fark: beat'ler FDDraftBeat (visual_query boş olabilir — zaten gerçek
+    footage sorgusuna sabitleniyor, bkz. FDDraftBeat). close/comment/title
+    doğrulamaları ebeveynden AYNEN miras alınır. write_footage_driven_narration
+    sabitleme sonrası KATI ReelNarration döndürür — senaryo-önce yol etkilenmez."""
+    beats: list[FDDraftBeat] = Field(min_length=3, max_length=6)
 
 
 @dataclass(frozen=True)

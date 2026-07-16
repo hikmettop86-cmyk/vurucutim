@@ -622,7 +622,11 @@ def write_footage_driven_narration(topic: str, clip_descriptions: list[str],
                              getattr(reel, "mascot_trait", ""))
         if mblok:
             prompt += "\n\n" + mblok
-    n = run_json(prompt, ReelNarration, claude_path=claude_path, model=model,
+    # GEVŞEK şema (FDDraftNarration): model visual_query'leri boş bırakabiliyor
+    # (ölçüldü: 3 denemede de boş) — bu modda alan zaten aşağıda sabitleniyor,
+    # gereksiz alan yüzünden üretim düşürülmez. Dönüş yine KATI ReelNarration.
+    from short_bot.reel_models import FDDraftNarration
+    n = run_json(prompt, FDDraftNarration, claude_path=claude_path, model=model,
                  backend=backend, api_key=api_key, retries=3)
     # visual_query'leri GERÇEK footage sorgularına sabitle (LLM'in ürettiğini yok say).
     from short_bot.reel_models import ReelBeat

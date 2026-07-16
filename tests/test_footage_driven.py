@@ -84,6 +84,38 @@ def test_prompt_bos_tarif_isaretlenir_ve_olay_yasagi(monkeypatch):
     assert "must be ABOUT the creature/subject in CLIP" in p  # beat i = klip i öznesi
 
 
+def test_bos_visual_query_fd_modda_uretimi_dusurmez(monkeypatch):
+    # GERÇEK HATA (çeşitleme reçetesi sonrası koşu): model 3 denemede de visual_query
+    # alanlarını BOŞ döndürdü → ReelBeat(min_length=2) doğrulaması üretimi düşürdü.
+    # Oysa görüntü-önce modda bu alanlar zaten YOK SAYILIP gerçek footage sorgularına
+    # sabitleniyor — hiç gerekmeyen alan için üretim düşürülemez. FD ayrıştırma şeması
+    # boş visual_query kabul etmeli; sabitleme sonrası sonuç yine dolu olmalı.
+    from short_bot.reel_models import FDDraftNarration
+    yakalanan = {}
+
+    def fake(prompt, schema, **k):
+        yakalanan["schema"] = schema
+        # Modelin gerçek hatalı çıktısı: visual_query'ler boş — şema bunu KABUL etmeli
+        return schema.model_validate({
+            "hook": "hook cümlesi burada", "cover_title": "MANŞET",
+            "beats": [{"text": "beat sıfır metni burada", "visual_query": "", "keyword": "K0"},
+                      {"text": "beat bir metni burada", "visual_query": "", "keyword": "K1"},
+                      {"text": "beat iki metni burada", "visual_query": "", "keyword": "K2"}],
+            "close": "hook cümlesi kapanış", "mood": "upbeat"})
+
+    monkeypatch.setattr(RN, "run_json", fake)
+    n = RN.write_footage_driven_narration(
+        "şempanze", ["chimp a", "chimp b", "chimp c"],
+        ["chimpanzee eating", "chimpanzee running", "chimpanzee walking"],
+        channel=_kanal())
+    assert yakalanan["schema"] is FDDraftNarration        # gevşek FD şeması kullanılıyor
+    assert [b.visual_query for b in n.beats] == \
+        ["chimpanzee eating", "chimpanzee running", "chimpanzee walking"]  # sabitlendi
+    # Dönen nihai nesne yine KATI ReelNarration (script-first güvencesi bozulmaz)
+    from short_bot.reel_models import ReelNarration
+    assert type(n) is ReelNarration
+
+
 def test_prompt_seo_title_ister(monkeypatch):
     # Görüntü-önce prompt kısa SEO başlığı (title) istemeli — dosya adı + YouTube
     # başlığı bundan gelir (uzun konu cümlesi yerine).
