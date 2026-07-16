@@ -545,7 +545,15 @@ def build_footage_driven_prompt(topic: str, clip_descriptions: list[str], *,
     lo_s, hi_s = channel.reel.target_duration_s
     lang = _language_name(channel.language)
     n = len(clip_descriptions)
-    listing = "\n".join(f"  GÖRÜNTÜ {i}: {d}" for i, d in enumerate(clip_descriptions))
+
+    def _desc(d: str) -> str:
+        # Vision tarifi alınamamış klip (boş) → LLM'e AÇIKÇA bildir. Boş bırakırsan
+        # o beat için konudan spesifik bir olay UYDURUR (gerçek hata: tarif JSON'u
+        # patladı → 'balık' beat'i bir KAPLUMBAĞA klibinin üstüne düştü).
+        return d.strip() or ("(no description available — vision failed for this clip; "
+                             "narrate it ONLY generically around the topic's main "
+                             "subject, invent NO specific object, creature or event)")
+    listing = "\n".join(f"  GÖRÜNTÜ {i}: {_desc(d)}" for i, d in enumerate(clip_descriptions))
     return f"""You are writing a {lo_s}-{hi_s}s vertical humor short — with a DIFFERENT
 method: the script is written to MATCH THE REAL FOOTAGE we already have in hand.
 
@@ -562,6 +570,14 @@ RULES:
   ordinary (the animal just stands or walks), YOU make it funny with the framing and
   street-talk — but the on-screen SUBJECT stays exactly what the clip shows. This is
   the whole point: the viewer sees precisely what you are saying.
+- Beat i must be ABOUT the creature/subject in CLIP i's description — nothing else.
+  If clip i shows fish, beat i is about those fish; if it shows a resting turtle, beat i
+  is about that turtle. NEVER put a creature in a beat that its own clip does not show.
+- Do NOT narrate an ACTION or EVENT (hunting, catching, ambushing, snatching, a lure or
+  trick, a fight, a chase, "in one move he grabs it") UNLESS that clip's description
+  explicitly states the action is happening. Resting/floating/swimming/standing stays
+  exactly that — make it funny with FRAMING and street-talk, not an invented event the
+  viewer cannot see on screen.
 - Narration in {lang}.
 - Leave every beat's "visual_query" as "" (empty) — the real footage query is bound
   by the code afterward.
@@ -628,10 +644,15 @@ Give exactly {n} simple ENGLISH stock-footage search queries for this topic, so 
 can download clips BEFORE writing the script.
 
 RULES:
-- Each query is 1-3 words: the concrete SUBJECT (species/object name) + optionally an
-  ACTION word (running, fighting, hunting, swimming, chasing) so the footage MOVES.
-- Query 0 is the bare subject name (e.g. "chimpanzee"). The rest add a motion word or
-  a SECOND subject that the topic actually implies.
+- EVERY query MUST contain the SAME main subject (the one species/object the topic is
+  about). Vary the queries by ACTION / POSE / ANGLE (underwater, mouth open, close up,
+  running, fighting, swimming) so the footage MOVES — NOT by switching to a different
+  animal. This keeps the on-screen subject CONSISTENT across every clip.
+- Query 0 is the bare subject name (e.g. "chimpanzee"). Queries 1..{n} add a motion or
+  pose word to that SAME subject (e.g. "chimpanzee running", "chimpanzee fighting").
+- Only if the topic is INHERENTLY about two creatures interacting in the SAME shot (a
+  predator AND its prey together) may AT MOST ONE query name the second creature —
+  otherwise every query stays on the main subject.
 - ENGLISH only, no {src_lang} words, no punctuation. Real searchable nouns/verbs that
   exist on Pexels/Pixabay.
 Output JSON: {{"queries": [...]}} with exactly {n} strings."""

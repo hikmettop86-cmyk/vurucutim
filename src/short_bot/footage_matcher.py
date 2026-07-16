@@ -215,10 +215,15 @@ def _describe_image_file(path: Path, *, vision_call) -> str:
             im.convert("RGB").save(path, "JPEG")
         except Exception:
             pass
+        # retries=2: vision (gemini) arada bir KESİK/bozuk JSON döndürüyor
+        # ('Unterminated string' — char 12'de kesilmiş, timeout değil transient). Tek
+        # deneme boş tarif bırakıyordu; görüntü-öncelikli modda boş tarif = grounding
+        # kaybı → beat konudan uyduruluyor. Bir deneme daha çoğu hatayı kurtarır;
+        # başarılı çağrıda (norm) ek maliyet yok.
         v = run_json(_DESCRIBE_PROMPT, _FootageDescription,
                      claude_path=vision_call.claude_path, model=vision_call.model,
                      backend=vision_call.backend, api_key=vision_call.api_key,
-                     image_path=path, retries=1, timeout_s=45)
+                     image_path=path, retries=2, timeout_s=45)
         return (v.content or "").strip()
     except Exception as e:
         log.warning(f"footage describe hatası: {e}")

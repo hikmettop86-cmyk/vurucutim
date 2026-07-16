@@ -28,6 +28,9 @@ def test_konudan_n_ingilizce_sorgu(monkeypatch):
     assert "şempanze kavgası" in yakalanan["prompt"]
     assert "3" in yakalanan["prompt"]
     assert "ENGLISH" in yakalanan["prompt"]
+    # TEK-ÖZNE yanlılığı: sorgular ana özneye sabit, farklı türe kaymasın (gerçek
+    # üretimde 'fish swimming'/'turtle eating' farklı türler getirip özneyi kaydırdı).
+    assert "SAME main subject" in yakalanan["prompt"]
 
 
 def test_bos_sorgular_temizlenir_ve_hata(monkeypatch):

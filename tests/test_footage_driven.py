@@ -64,3 +64,21 @@ def test_footage_yoksa_hata():
     import pytest
     with pytest.raises(ValueError, match="footage tarifi yok"):
         RN.write_footage_driven_narration("x", [], [], channel=_kanal())
+
+
+def test_prompt_bos_tarif_isaretlenir_ve_olay_yasagi(monkeypatch):
+    # Vision tarifi BOŞ klip → prompt LLM'e açıkça 'tarif yok, uydurma' der; yoksa o
+    # beat konudan spesifik olay uydurur (gerçek üretim hatası: 'balık' beat'i bir
+    # kaplumbağa klibinin üstüne düştü). Ayrıca klip-dışı OLAY anlatımı yasak.
+    yakalanan = {}
+    monkeypatch.setattr(RN, "run_json",
+                        lambda p, s, **k: (yakalanan.__setitem__("p", p),
+                                           _fake_narration())[1])
+    RN.write_footage_driven_narration(
+        "kartal", ["eagle soaring", "", "eagle landing"],   # ortadaki tarif BOŞ
+        ["q0", "q1", "q2"], channel=_kanal())
+    p = yakalanan["p"]
+    assert "no description available" in p          # boş tarif açıkça işaretli
+    assert "invent NO specific" in p                # uydurma yasağı
+    assert "Do NOT narrate an ACTION or EVENT" in p # klip-dışı olay anlatımı yasak
+    assert "must be ABOUT the creature/subject in CLIP" in p  # beat i = klip i öznesi
