@@ -30,19 +30,6 @@ def test_tr_paketi_GECERLI():
 
 # --- EKRANA BASILAN --------------------------------------------------------
 
-def test_cta_metinleri_BIREBIR():
-    assert PACK.cta_texts == [
-        "Her gün yeni — ABONE OL",
-        "Yarın devamı — ABONE OL",
-        "Seri sürüyor — ABONE OL",
-        "Devamı yarın — ABONE OL",
-    ]
-
-
-def test_trade_cta_BIREBIR():
-    assert PACK.trade_cta.format(no=48) == "#48 yarın — ABONE OL"
-
-
 def test_varsayilan_seri_basligi():
     assert PACK.default_series_title == "İlginç Bilgiler"
 

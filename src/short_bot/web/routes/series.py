@@ -21,8 +21,7 @@ from short_bot.config import load_channel
 from short_bot.db import (active_arc, approve_arc, arc_history, create_arc,
                           discard_arc, draft_arc, episode_history, init_db,
                           last_episode)
-from short_bot.reel_series import (clean_open_loop, episode_badge, plan_episode,
-                                   trade_cta)
+from short_bot.reel_series import clean_open_loop, episode_badge, plan_episode
 
 bp = Blueprint("series", __name__)
 _LOG = logging.getLogger(__name__)
@@ -96,7 +95,6 @@ def page(slug):
     sonraki = {
         "episode_no": plan.episode_no,
         "badge": episode_badge(baslik, plan.episode_no, pack=pack),
-        "cta": trade_cta(plan.next_no, pack=pack),
         "topic": konu, "source": kaynak,
         "arc_pos": arc_pos, "arc_total": arc_total,
     }

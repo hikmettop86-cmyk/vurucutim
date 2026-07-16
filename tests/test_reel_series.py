@@ -7,8 +7,7 @@ bir kapı bırakır ve o kapı bir sonraki BÖLÜMÜN KONU TOHUMUDUR.
 import pytest
 
 from short_bot.reel_series import (BADGE_MAX_CHARS, DEFAULT_ARC_MAX, EpisodePlan,
-                                   episode_badge, plan_episode, series_directive,
-                                   trade_cta)
+                                   episode_badge, plan_episode, series_directive)
 
 # Metinler artık DİL PAKETİNDE (tr.json = eski sabitlerin birebir kopyası;
 # bkz. test_lang_pack_tr_golden.py). Beklentiler DEĞİŞMEDİ.
@@ -84,17 +83,6 @@ def test_uzun_baslikta_NUMARA_asla_atilmaz():
 def test_baslik_yoksa_yalniz_numara():
     assert episode_badge("", 9, pack=TR) == "#9"
     assert episode_badge("   ", 9, pack=TR) == "#9"
-
-
-# --- TAKAS CTA ------------------------------------------------------------
-
-def test_cta_bir_sonraki_bolumu_ADIYLA_vaat_eder():
-    """'Daha fazlası için abone ol' beyaz gürültüdür — numara veren istek somuttur."""
-    from short_bot.reel_subscribe import CTA_MAX_CHARS
-    c = trade_cta(48, pack=TR)
-    assert "48" in c and "ABONE" in c
-    assert len(c) <= CTA_MAX_CHARS, f"çip kadraja sığmaz ({len(c)} karakter): {c!r}"
-    assert "daha fazla" not in c.lower()
 
 
 # --- YÖNERGE --------------------------------------------------------------

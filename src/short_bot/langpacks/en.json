@@ -1,12 +1,5 @@
 {
   "lang": "en",
-  "cta_texts": [
-    "New daily — SUBSCRIBE",
-    "More tomorrow — SUB",
-    "Series runs — SUBSCRIBE",
-    "Part 2 tomorrow — SUB"
-  ],
-  "trade_cta": "#{no} tomorrow — SUB",
   "default_series_title": "Strange Facts",
   "comment_styles": [
     "BINARY QUESTION: ask a question comparing two things from the video, answerable with a single letter (A/B). Pattern: 'Which is crazier: A or B? Just type the letter.'",

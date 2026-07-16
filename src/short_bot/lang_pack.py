@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field
 from short_bot.locale import SUPPORTED_LANGUAGES
 
 # EKRAN KISITLARI KODDAN gelir, paketten değil — paket bunlara UYMAK zorunda.
-CTA_MAX_CHARS = 24      # 1080px'e sığan tek satır abone çipi
+# (CTA_MAX_CHARS kaldırıldı: beğeni/abone çipleri 2026-07-16'da silindi.)
 BADGE_MAX_CHARS = 28    # kare-sıfır feed rozeti
 TITLE_MAX_CHARS = BADGE_MAX_CHARS - len(" #47")   # rozette numaraya yer kalmalı
 
@@ -64,9 +64,8 @@ class SeriesDirectives(BaseModel):
 
 class LangPack(BaseModel):
     lang: str
-    # EKRANA BASILAN
-    cta_texts: list[str]
-    trade_cta: str
+    # EKRANA BASILAN (beğeni/abone çipleri 2026-07-16'da kaldırıldı; eski
+    # paketlerdeki cta_texts/trade_cta anahtarları pydantic extra-ignore ile atlanır)
     default_series_title: str
     # LLM YÖNERGELERİ
     comment_styles: list[str]
@@ -89,8 +88,8 @@ def _placeholders(tmpl: str) -> set[str]:
 def validate_pack(pack: LangPack) -> list[str]:
     """Hataların listesi (boş = geçerli). ÜRETİM ANINDA koşar, çalışma anında DEĞİL.
 
-    Çalışma anında "düzeltmek" kabul edilemez: kırpılmış bir abone çipi ekranda
-    "ABONNIE" yazar, eksik yer tutucu üretimin tam ortasında KeyError fırlatır.
+    Çalışma anında "düzeltmek" kabul edilemez: kırpılmış bir rozet özensiz görünür,
+    eksik yer tutucu üretimin tam ortasında KeyError fırlatır.
     """
     h: list[str] = []
 
@@ -98,25 +97,6 @@ def validate_pack(pack: LangPack) -> list[str]:
         h.append(f"desteklenmeyen dil: {pack.lang!r}")
 
     # --- ekrana basılan
-    if len(pack.cta_texts) != 4:
-        h.append(f"cta_texts tam 4 olmalı, {len(pack.cta_texts)} geldi")
-    if len(set(pack.cta_texts)) != len(pack.cta_texts):
-        h.append("cta_texts tekrarlı metin içeriyor")
-    for c in pack.cta_texts:
-        if not c.strip():
-            h.append("cta_texts boş metin içeriyor")
-        elif len(c) > CTA_MAX_CHARS:
-            h.append(f"CTA {len(c)} karakter, en fazla {CTA_MAX_CHARS}: {c!r}")
-
-    if "{no}" not in pack.trade_cta:
-        h.append("trade_cta '{no}' yer tutucusu içermeli")
-    else:
-        # HAM uzunluk değil, RENDER edilmiş uzunluk ölçülür.
-        render = pack.trade_cta.replace("{no}", "48")
-        if len(render) > CTA_MAX_CHARS:
-            h.append(f"trade_cta render edilince {len(render)} karakter, en fazla "
-                     f"{CTA_MAX_CHARS}: {render!r}")
-
     if not pack.default_series_title.strip():
         h.append("default_series_title boş")
     elif len(pack.default_series_title) > TITLE_MAX_CHARS:

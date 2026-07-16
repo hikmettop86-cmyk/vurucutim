@@ -41,7 +41,6 @@ def _make_reel_channel(c, cfg_dir, slug_name="Reel Kanal"):
             "name": slug_name, "language": "tr",
             "topic": "uzay ve gezegenler hakkında ilginç bilgiler",
             "voice_id": "Q2IX97JeHBY3vNGzgM5s", "highlight_color": "#38bdf8",
-            "cta_enabled": "on",
         })
 
 
@@ -104,8 +103,9 @@ def test_edit_reel_full_page_tabs_and_values(tmp_path):
     assert 'name="schedule_cron"' in body
     assert 'name="handle"' in body
     assert 'name="language"' in body
-    # varyasyon/abone + youtube form adları
-    assert 'name="reel_cta_enabled"' in body
+    # varyasyon/etkileşim + youtube form adları (beğeni/abone çipi alanı KALKTI)
+    assert 'name="reel_cta_enabled"' not in body
+    assert 'name="reel_comment_question"' in body
     assert 'name="reel_hook_angle_vary"' in body
     assert 'name="yt_privacy_status"' in body
     # niş bulucu + önizleme

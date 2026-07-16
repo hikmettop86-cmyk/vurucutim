@@ -18,7 +18,7 @@ class _Ch:
     slug = "c"; language = "tr"; handle = "@t"
     colors = {"primary": "#0ea5e9", "accent": "#facc15", "bg_gradient": ["#0f172a", "#020617"]}
     reel = ReelConfig(enabled=True, voice_id="v", target_duration_s=(25, 45),
-                      cta_enabled=True, comment_question=True,
+                      comment_question=True,
                       series_enabled=True, series_title="Tuhaf Gerçekler")
 
 
@@ -34,7 +34,7 @@ def _deps(rec):
         probe_duration_s=lambda p, **kw: 30.0,
         transcribe_words=lambda p, **kw: [],
         match_beat_clip=match,
-        render_reel_overlay_frames=lambda tl, out, **kw: (rec.update(cta=kw.get("cta_text")), 900)[1],
+        render_reel_overlay_frames=lambda tl, out, **kw: (rec.update(badge=kw.get("badge", "")), 900)[1],
         assemble_reel=lambda **kw: kw["out_path"],
     )
 
@@ -47,4 +47,4 @@ def test_subscribe_bits_wired(tmp_path):
         ai33_api_key="k", pexels_api_key="pk", seed=1, deps=_deps(rec))
     assert "Tuhaf Gerçekler" in (rec["series"] or "")
     assert rec["comment"]         # yorum sorusu dolu
-    assert rec["cta"]             # cta metni dolu
+    assert "cta_text" not in rec  # beğeni/abone çipi kablosu KALKTI (2026-07-16)

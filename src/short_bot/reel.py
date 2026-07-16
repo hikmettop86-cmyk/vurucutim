@@ -1076,15 +1076,15 @@ def produce_reel_video(
         log.info(f"  reel: {len(markers)} belirteç, {len(todo)} konum ölçümü, "
                  f"{_time.perf_counter() - _mk_t0:.1f}s")
 
-    # TEPE ANI: en büyük reveal'in bittiği saniye. Beğeni tetiği ve abone isteği
-    # BURADAN SONRA yerleşir — izleyici değeri daha yeni yaşadı, istek nedensel
-    # olarak haklı çıkar. Sonda istemek en kötü slottu (dopamin harcanmış + loop ölür).
+    # TEPE ANI: en büyük reveal'in bittiği saniye. Riser/impact sesi, koordineli
+    # kesintiler ve punch-in zamanlaması buradan türer. (Beğeni/abone çipleri
+    # 2026-07-16'da kaldırıldı — kullanıcı kararı; tepe artık yalnız ritim çıpası.)
     peak_seg = narration.peak_segment()
     peak_end_s = None
     if 0 <= peak_seg < len(timeline.seg_spans):
         peak_end_s = timeline.seg_spans[peak_seg][1]
         log.info(f"  reel: tepe = beat {narration.peak_beat} "
-                 f"(segment {peak_seg}, {peak_end_s:.1f}s) → beğeni+abone oradan sonra")
+                 f"(segment {peak_seg}, {peak_end_s:.1f}s) → riser/impact çıpası")
     if not narration.close_echoes_hook():
         log.warning("  reel: kapanış hook'un sözcüklerini GERİ ÇAĞIRMIYOR → "
                     "video 'biter', izleyici döngüye girmez (loop kaybı)")
@@ -1113,13 +1113,11 @@ def produce_reel_video(
         highlight_color=profile.accent, arrow_color=reel.arrow_color,
         arrow_frequency=reel.arrow_frequency if reel.arrows_enabled else "off",
         cut_effect=profile.cut_effect, handle=channel.handle,
-        cta_text=bits.cta_text,
         badge=bits.badge,
         lang=channel.language,
         font=reel.font,
         markers=markers,
         numbers=numbers,
-        peak_end_s=peak_end_s,
         interrupts=interrupts,
     )
     _phase("overlay-render")

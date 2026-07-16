@@ -142,8 +142,10 @@ _LINE_PROBE = """()=>{
   for(const w of ws) w.classList.remove('vis');
   return {satir:enKotu, punto:parseFloat(getComputedStyle(cap).fontSize)};}"""
 
-# Abone çipinin alt kenarı (şablon: #cta bottom:760 → y 1080-1160)
-CTA_BOTTOM_Y = 1160
+# Altyazı bandının üst sınırı (tarihçe: abone çipi y 1080-1160'ta dururdu; çip
+# 2026-07-16'da kaldırıldı ama altyazının 1160 altına inmeme kuralı TASARIM olarak
+# kalır — üstteki hook/numpop bandıyla çakışmasın)
+CAP_BAND_TOP_Y = 1160
 
 _CAP_TOP = """()=>{
   const cap=document.querySelector('.cap');
@@ -162,8 +164,7 @@ _CAP_TOP = """()=>{
 def _cap_olc(browser, layout, probe=_LINE_PROBE):
     pg = browser.new_page(viewport={"width": W, "height": H})
     tl = _tl(KISA_HOOK, "Bir kilogramlık bir kedi çok daha fazla kalori yakabilir.")
-    pg.set_content(build_reel_overlay_html(tl, handle="@t", layout=layout,
-                                           cta_text="ABONE OL"),
+    pg.set_content(build_reel_overlay_html(tl, handle="@t", layout=layout),
                    wait_until="networkidle", timeout=8000)
     pg.evaluate("()=>document.fonts&&document.fonts.ready")
     once = pg.evaluate(probe)
@@ -181,12 +182,12 @@ def test_dar_yerlesimde_obek_3_satira_bolunmez(browser):
     assert sonra["punto"] < once["punto"], "sığdırma hiç devreye girmemiş"
 
 
-def test_sigdirilmis_altyazi_ABONE_CIPINE_binmiyor(browser):
-    """2 satır sınırının GEREKÇESİ: 3 satırlık altyazı çipin üstüne biniyordu."""
+def test_sigdirilmis_altyazi_BANDINDA_kaliyor(browser):
+    """2 satır sınırının GEREKÇESİ: 3 satırlık altyazı üst banda taşıyordu."""
     once, sonra = _cap_olc(browser, "lower_left", probe=_CAP_TOP)
-    assert once < CTA_BOTTOM_Y, "çakışma yoksa sınırın gerekçesi çürür"
-    assert sonra >= CTA_BOTTOM_Y, (
-        f"altyazının üstü y={sonra:.0f} → abone çipine ({CTA_BOTTOM_Y}) biniyor")
+    assert once < CAP_BAND_TOP_Y, "çakışma yoksa sınırın gerekçesi çürür"
+    assert sonra >= CAP_BAND_TOP_Y, (
+        f"altyazının üstü y={sonra:.0f} → bandın ({CAP_BAND_TOP_Y}) üstüne taşıyor")
 
 
 def test_genis_yerlesimde_gereksiz_kuculme_yok(browser):
@@ -199,7 +200,7 @@ def test_genis_yerlesimde_gereksiz_kuculme_yok(browser):
 # GERÇEK HATA (short 801, gartengeheimnisse, Almanca, lower_left): öbek 3 kelimede
 # SABİTTİ ve sığdırma yalnız FONTU küçültüyordu. Almanca bileşik kelimelerde
 # ("jahrzehntelang", "Blütenblätter") bu çöktü: font TABANA (48px) indi ve altyazı
-# YİNE 3 satır sardı — hem okunmaz, hem 3. satır abone çipine bindi.
+# YİNE 3 satır sardı — hem okunmaz, hem 3. satır üst banda taşıyordu.
 #
 # Telefonda okunabilirliği belirleyen şey PUNTO; kelime sayısı pazarlık edilebilir.
 # Bu yüzden sıra tersine çevrildi: önce öbeği (3→2→1) küçült, fontu koru.
@@ -235,8 +236,7 @@ IYI_PUNTO = TABAN_PUNTO * 0.85
 def _obek_olc(browser, beat, layout, lang):
     pg = browser.new_page(viewport={"width": W, "height": H})
     pg.set_content(build_reel_overlay_html(_tl(KISA_HOOK, beat), handle="@t",
-                                           layout=layout, lang=lang,
-                                           cta_text="ABONE OL"),
+                                           layout=layout, lang=lang),
                    wait_until="networkidle", timeout=8000)
     pg.evaluate("()=>document.fonts&&document.fonts.ready")
     once = pg.evaluate(_OBEK_PROBE)

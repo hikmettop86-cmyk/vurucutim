@@ -55,19 +55,19 @@ def test_edit_shows_subscribe_fields(app):
     body = app.test_client().get("/channels/test-reel/edit-reel").data.decode("utf-8")
     assert 'name="reel_series_enabled"' in body
     assert 'name="reel_series_title"' in body
-    assert 'name="reel_cta_enabled"' in body
     assert 'name="reel_comment_question"' in body
+    # Beğeni/abone çipi alanları KALKTI (2026-07-16, kullanıcı kararı)
+    assert 'name="reel_cta_enabled"' not in body
+    assert 'name="reel_cta_text_custom"' not in body
 
 
 def test_post_sets_subscribe(app):
     path = _path(app)
     app.test_client().post("/channels/test-reel/edit-reel", data=_form(
         reel_series_enabled="on", reel_series_title="Doğanın Sırları",
-        reel_cta_enabled="on", reel_cta_text_custom="TAKİP ET",
         reel_comment_question="on"))
     cfg = load_channel(path)
     assert cfg.reel.series_enabled is True
     assert cfg.reel.series_title == "Doğanın Sırları"
-    assert cfg.reel.cta_enabled is True
-    assert cfg.reel.cta_text_custom == "TAKİP ET"
     assert cfg.reel.comment_question is True
+    assert not hasattr(cfg.reel, "cta_enabled")   # alan tamamen kalktı

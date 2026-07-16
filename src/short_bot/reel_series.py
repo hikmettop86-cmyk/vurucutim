@@ -1,30 +1,26 @@
-"""SERİ / CLIFFHANGER MİMARİSİ — aboneliği bir RİCA olmaktan çıkarıp TAKASA çevirir.
+"""SERİ / CLIFFHANGER MİMARİSİ — merakı bölümler arasında taşıyan İÇERİK yapısı.
 
-TEŞHİS (çalışma belgesi, §3.1): "kendi kendine yeten video = abone olmak için sebep
-yok". Videomuz tam cevabı veriyor, izleyici bilgiyi alıyor, merak KAPANIYOR — geriye
-abonelikle çözülecek KARŞILANMAMIŞ bir ihtiyaç kalmıyor. Daha iyi bilgi bunu çözmez;
-bu bir YAPI sorunudur.
+ÇÖZÜM — ÖDENMİŞ TEPE + AÇIK KAPI. Video kendi vaadini TUTAR (tepe gelir, duygusal
+boşalma yaşanır). Tepeden HEMEN SONRA yeni ve SPESİFİK bir kapı açılır — ve o
+kapının cevabı bir sonraki BÖLÜMDEDİR. İzleyici DÖNMEK için bir sebep taşır.
 
-ÇÖZÜM — ÖDENMİŞ TEPE + AÇIK KAPI. Video kendi vaadini TUTAR (tepe gelir, beğeni
-tetiklenir: beğeni bir karar değil duygusal boşalmadır, boşalacak tepe yoksa beğeni
-de yok). Tepeden HEMEN SONRA yeni ve SPESİFİK bir kapı açılır — ve o kapının cevabı
-bir sonraki BÖLÜMDEDİR. Abone isteği artık "daha fazlası için abone ol" değil, bir
-TAKAS: söz verilen cevap karşılığında abone.
+Tepeyi ALIKOYMAK (videoyu tam ödeme anında kesmek) izleyiciyi kandırılmış hissettirir;
+ödenmiş tepe + açık kapı ikisini birden verir.
 
-Tepeyi ALIKOYMAK (videoyu tam ödeme anında kesmek) daha sert bir takas olurdu ama
-videoyu sakatlar: tepe yoksa beğeni gelmez ve izleyici kandırıldığını hisseder.
-Ödenmiş tepe + açık kapı, ikisini birden verir.
+NOT (2026-07-16, kullanıcı kararı): abone İSTEMİ tamamen kaldırıldı ("kullanıcı
+gerçekten içinden gelirse abone olur"). Seri mimarisi bir istem DEĞİL, içerik
+yapısıdır: rozet feed kimliği, cliffhanger merak taşıyıcısıdır — o yüzden kalır.
+Eski takas-CTA çipi ("#48 yarın — ABONE OL") silindi.
 
 ARK: açılan kapı (``open_loop``) yalnız bir cümle değil, BİR SONRAKİ BÖLÜMÜN KONU
 TOHUMUDUR. Konu planlaması böylece video düzeyinden ARK düzeyine çıkar. Ark sonsuza
 kadar zincirlenmez — ``arc_max`` bölümden sonra kesilir ve konu bankasından taze bir
 konu alınır (yoksa zincir kendi nişinden uzaklaşıp sürüklenir).
 
-ZAMANLAMA (belge §3.3): cliffhanger cümlesi TEPEDEN HEMEN SONRA konuşulmalı — abone
-çipinin ateşlendiği an (t≈peak+1.3sn) tam orasıdır. Sonda söylenirse istek, sözü
-duyulmadan önce ekrana gelir ve takas çöker. Bu yüzden LLM'e cliffhanger'ı tepeden
-SONRAKİ beat'in içine dokutuyoruz; ayrı bir segment açmıyoruz (segment indeksleri
-tüm zincirde varsayım — hook=0, beat'ler=1..N, close=N+1).
+ZAMANLAMA (belge §3.3): cliffhanger cümlesi TEPEDEN HEMEN SONRA konuşulmalı — merak
+en taze o anda. Bu yüzden LLM'e cliffhanger'ı tepeden SONRAKİ beat'in içine
+dokutuyoruz; ayrı bir segment açmıyoruz (segment indeksleri tüm zincirde varsayım —
+hook=0, beat'ler=1..N, close=N+1).
 """
 from __future__ import annotations
 
@@ -92,7 +88,7 @@ def episode_badge(series_title: str, episode_no: int, *, pack) -> str:
 
     Faceless kanalda FORMAT YÜZDÜR — izleyici seni yüzünden değil, feed'de tanıdığı
     biçimden hatırlar. Numara ayrıca serinin GERÇEK olduğunu kanıtlar: 47. bölüm
-    varsa 48. de gelecektir, yani abonelik bir şey satın alır.
+    varsa 48. de gelecektir — seri gerçek, dönmeye değer.
     """
     # locale_upper ŞART. Türkçede: Python'un .upper()'ı 'i' → 'I' yapar, oysa 'i'nin
     # büyüğü 'İ'dir; "BILINMEYEN TARIH" yazan bir marka rozeti, taşıması gereken özenin
@@ -109,26 +105,13 @@ def episode_badge(series_title: str, episode_no: int, *, pack) -> str:
     return t[:max(1, BADGE_MAX_CHARS - len(kuyruk))].rstrip() + kuyruk
 
 
-def trade_cta(next_no: int, *, pack) -> str:
-    """Abone isteği bir TAKASTIR: söz verilen cevap karşılığında abone.
-
-    "Daha fazlası için abone ol" araştırmanın adıyla andığı ölü ifadedir (izleyicinin
-    beyni onu YouTube beyaz gürültüsü olarak filtreliyor). Numara veren bir istek ise
-    somut bir şey vaat eder ve ne zaman geleceğini söyler.
-
-    Şablon dil paketinden gelir ve ÜRETİM ANINDA doğrulanmıştır (render edilmiş hâli
-    ≤ CTA_MAX_CHARS) — burada kırpma yapılmaz.
-    """
-    return pack.trade_cta.format(no=next_no)
-
-
 def series_directive(plan: EpisodePlan, series_title: str, *, pack) -> str:
     """Senaryo LLM'ine geçen seri yönergesi.
 
     İki iş yaptırır:
       1. Bu bölüm, önceki bölümün açtığı kapıyı ÖDEMELİ (ark sürüyorsa).
       2. Bu bölüm YENİ bir kapı açmalı (open_loop) ve o cümleyi TEPEDEN SONRAKİ
-         beat'in içine dokumalı — abone çipi tam orada ateşleniyor.
+         beat'in içine dokumalı — merak en taze o anda.
 
     Yönerge METİNLERİ dil paketinde. Almanca kanalın anlatım LLM'ine Türkçe talimat ve
     Türkçe örnek cümle vermek dil sızıntısı davetiyesidir; pedagoji (ödenmiş tepe +
@@ -144,9 +127,8 @@ def series_directive(plan: EpisodePlan, series_title: str, *, pack) -> str:
         satirlar.append(s.paying_promise.format(promise=plan.continue_from,
                                                 no=plan.episode_no))
 
-    # PLANLI ARKIN İLK BÖLÜMÜ SERİYİ İLAN EDER. İzleyici bir VİDEOYA abone olmaz, bir
-    # SERİYE abone olur: "3 bölümlük bir seri" demek, tek adımlık bir vaatten çok daha
-    # güçlü bir abone sebebidir.
+    # PLANLI ARKIN İLK BÖLÜMÜ SERİYİ İLAN EDER: "3 bölümlük bir seri" demek, tek
+    # adımlık bir vaatten çok daha güçlü bir dönme sebebidir.
     if plan.is_planned and plan.is_new_arc:
         satirlar.append(s.announce_arc.format(arc_title=plan.arc_title,
                                               arc_total=plan.arc_total,

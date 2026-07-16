@@ -16,9 +16,6 @@ from short_bot.lang_pack_gen import generate_pack
 
 GECERLI = {
     "lang": "de",
-    "cta_texts": ["Täglich neu — ABONNIEREN", "Morgen mehr — ABO",
-                  "Serie läuft — ABO", "Teil 2 morgen — ABO"],
-    "trade_cta": "#{no} morgen — ABO",
     "default_series_title": "Kuriose Fakten",
     "comment_styles": [f"Y{i}" for i in range(4)],
     "connective_styles": [f"S{i}" for i in range(8)],
@@ -80,8 +77,8 @@ def test_TURKCE_paket_PROMPTA_referans_verilir():
 
     generate_pack("de", invoke=_invoke)
     p = gorulen["prompt"]
-    assert "ABONE OL" in p, "Türkçe paket referans olarak verilmedi"
-    assert "24" in p, "CTA karakter sınırı prompt'ta söylenmedi"
+    assert "Bilinmeyen" in p or "İLGİNÇ" in p or '"tr"' in p or "yarın" in p,         "Türkçe paket referans olarak verilmedi"
+    assert "24" in p, "rozet başlığı karakter sınırı prompt'ta söylenmedi"
     assert "Deutsch" in p
 
 
@@ -101,7 +98,7 @@ def test_prompt_KELIME_SIRASI_tuzagini_soyler():
 
 def test_GECERSIZ_paket_HATALARLA_yeniden_denenir():
     """Doğrulama hataları prompt'a GERİ VERİLİR ve bir kez daha denenir."""
-    uzun = dict(GECERLI, cta_texts=["A" * 30, "b", "c", "d"])
+    uzun = dict(GECERLI, default_series_title="A" * 30)   # rozet sınırı 24'ü aşar
     promptlar = []
 
     def _invoke(prompt, **kw):
@@ -117,7 +114,7 @@ def test_GECERSIZ_paket_HATALARLA_yeniden_denenir():
 
 def test_IKI_deneme_de_duserse_RUNTIME_ERROR():
     """SESSİZ KABUL YOK. Geçersiz paket kaydedilirse Almanca kanal bozuk çalışır."""
-    uzun = dict(GECERLI, cta_texts=["A" * 30, "b", "c", "d"])
+    uzun = dict(GECERLI, default_series_title="A" * 30)   # rozet sınırı 24'ü aşar
 
     def _invoke(prompt, **kw):
         return json.dumps(uzun, ensure_ascii=False)

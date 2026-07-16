@@ -1,12 +1,5 @@
 {
   "lang": "de",
-  "cta_texts": [
-    "Täglich neu — ABONNIEREN",
-    "Morgen mehr — ABO",
-    "Serie läuft — ABO",
-    "Teil 2 morgen — ABO"
-  ],
-  "trade_cta": "#{no} morgen — ABO",
   "default_series_title": "Kuriose Fakten",
   "comment_styles": [
     "ENTWEDER-ODER-FRAGE: stelle eine Frage, die zwei Dinge aus dem Video vergleicht und mit einem einzigen Buchstaben (A/B) beantwortet werden kann. Muster: 'Was ist verrückter: A oder B? Schreib nur den Buchstaben.'",

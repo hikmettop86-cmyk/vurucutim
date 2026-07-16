@@ -150,7 +150,6 @@ def create():
             hook_angle_vary=variation_on,
             accent_vary=variation_on,
             transition_vary=variation_on,
-            cta_enabled=request.form.get("cta_enabled") == "on",
             comment_question=request.form.get("comment_question") == "on",
             series_enabled=request.form.get("series_enabled") == "on",
         )

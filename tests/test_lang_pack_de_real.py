@@ -6,23 +6,15 @@ Bu dosya Sonnet 5'in GERÇEK ÇIKTISINI sınar: de.json.
 KALİTE KAPISI. Bu testler düşerse paket yeniden üretilmeli (prompt düzeltilerek).
 Testi zayıflatarak geçirme — Almanca kanal sessizce bozuk çalışır.
 """
-from short_bot.lang_pack import CTA_MAX_CHARS, load_pack, validate_pack
+from short_bot.lang_pack import load_pack, validate_pack
 from short_bot.reel_phrases import find_overused
-from short_bot.reel_series import clean_open_loop, episode_badge, trade_cta
+from short_bot.reel_series import clean_open_loop, episode_badge
 
 DE = load_pack("de")
 
 
 def test_uretilen_paket_GECERLI():
     assert validate_pack(DE) == []
-
-
-def test_CTA_ALMANCA_ve_kadraja_sigar():
-    for c in DE.cta_texts:
-        assert len(c) <= CTA_MAX_CHARS, f"{len(c)}: {c!r}"
-    assert len(trade_cta(48, pack=DE)) <= CTA_MAX_CHARS
-    birlesik = (" ".join(DE.cta_texts) + DE.trade_cta).upper()
-    assert "ABONNIER" in birlesik, "Almanca abone kelimesi yok"
 
 
 def test_TURKCE_sizintisi_YOK():

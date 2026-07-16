@@ -127,8 +127,6 @@ def save_reel(slug):
                                       old.arc_mode if old else "planned"),
             identity_lock=request.form.get("reel_identity_lock") == "on",
             sting_enabled=request.form.get("reel_sting_enabled") == "on",
-            cta_enabled=request.form.get("reel_cta_enabled") == "on",
-            cta_text_custom=request.form.get("reel_cta_text_custom", old.cta_text_custom if old else ""),
             comment_question=request.form.get("reel_comment_question") == "on",
             music_volume=_form_float("reel_music_volume",
                                      old.music_volume if old else 0.30),

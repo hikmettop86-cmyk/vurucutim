@@ -1,12 +1,5 @@
 {
   "lang": "tr",
-  "cta_texts": [
-    "Her gün yeni — ABONE OL",
-    "Yarın devamı — ABONE OL",
-    "Seri sürüyor — ABONE OL",
-    "Devamı yarın — ABONE OL"
-  ],
-  "trade_cta": "#{no} yarın — ABONE OL",
   "default_series_title": "İlginç Bilgiler",
   "comment_styles": [
     "İKİLİ SORU: videodaki iki şıkkı karşılaştıran, tek harfle (A/B) cevaplanabilecek bir soru sor. Örnek kalıp: 'Sence hangisi daha çılgın: A mı, B mi? Tek harf yaz.'",

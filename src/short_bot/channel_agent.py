@@ -339,7 +339,6 @@ def apply_plan(plan: ChannelPlan, *, channels_dir, templates_dir, db_path,
         enabled=True,
         voice_id=plan.voice.voice_id,
         highlight_color=plan.highlight_color,
-        cta_enabled=True,
         comment_question=True,
         series_enabled=False,      # kullanıcı açar
         persona=plan.persona,      # mizah niyeti algılandıysa "vahsi_mizah"

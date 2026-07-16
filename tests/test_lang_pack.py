@@ -30,9 +30,6 @@ def _seri(**kw):
 def _pack(**kw):
     d = dict(
         lang="de",
-        cta_texts=["Täglich neu — ABONNIEREN", "Morgen mehr — ABO",
-                   "Serie läuft — ABO", "Teil 2 morgen — ABO"],
-        trade_cta="#{no} morgen — ABONNIEREN",
         default_series_title="Kuriose Fakten",
         comment_styles=["A", "B", "C", "D"],
         connective_styles=[f"S{i}" for i in range(8)],
@@ -58,43 +55,10 @@ def test_gecerli_paket_KABUL_edilir():
 
 # --- EKRAN KISITLARI -------------------------------------------------------
 
-def test_24_karakterlik_CTA_KABUL():
-    cta = "Täglich neu — ABONNIEREN"
-    assert len(cta) == 24
-    assert validate_pack(_pack(cta_texts=[cta, "a", "b", "c"])) == []
-
-
-def test_25_karakterlik_CTA_RED():
-    """SINIR TESTİ. Kırpılan çip ekranda 'ABONNIE' yazar."""
-    uzun = "Täglich neue — ABONNIEREN"
-    assert len(uzun) == 25, len(uzun)
-    hatalar = validate_pack(_pack(cta_texts=[uzun, "a", "b", "c"]))
-    assert any("24" in h for h in hatalar), hatalar
-
-
-def test_trade_cta_RENDER_EDILINCE_olculur():
-    """'#{no} ...' şablonu HAM hâlde kısa görünüp, no=48 ile taşabilir."""
-    hatalar = validate_pack(_pack(trade_cta="#{no} morgen — JETZT ABONNIEREN"))
-    assert hatalar, "render edilmiş uzunluk ölçülmedi"
-
-
-def test_trade_cta_no_yer_tutucusu_ZORUNLU():
-    hatalar = validate_pack(_pack(trade_cta="morgen — ABONNIEREN"))
-    assert any("{no}" in h for h in hatalar), hatalar
-
-
 def test_seri_basligi_ROZETE_sigmali():
     # Rozet "BASLIK #47" ≤ 28 karakter → başlık ≤ 24
     assert validate_pack(_pack(default_series_title="A" * 25))
     assert validate_pack(_pack(default_series_title="A" * 24)) == []
-
-
-def test_BOS_CTA_RED():
-    assert validate_pack(_pack(cta_texts=["", "b", "c", "d"]))
-
-
-def test_TEKRARLI_CTA_RED():
-    assert validate_pack(_pack(cta_texts=["a", "a", "c", "d"]))
 
 
 # --- SAYILAR (seed rotasyonu bunlara dayanıyor) ----------------------------

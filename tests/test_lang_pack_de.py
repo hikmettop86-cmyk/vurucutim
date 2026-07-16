@@ -5,14 +5,11 @@
 yasaklı-kalıp listesi bile ölü doğardı. Bu dosya o zinciri baştan sona kanıtlıyor:
 paket → normalleştirme → denetçi → ekran metni.
 """
-from short_bot.lang_pack import CTA_MAX_CHARS, LangPack, validate_pack
+from short_bot.lang_pack import LangPack, validate_pack
 from short_bot.reel_phrases import find_overused, pick_styles
 
 DE = LangPack.model_validate({
     "lang": "de",
-    "cta_texts": ["Täglich neu — ABONNIEREN", "Morgen mehr — ABO",
-                  "Serie läuft — ABO", "Teil 2 morgen — ABO"],
-    "trade_cta": "#{no} morgen — ABO",
     "default_series_title": "Kuriose Fakten",
     "comment_styles": [f"Y{i}" for i in range(4)],
     "connective_styles": [f"S{i}" for i in range(8)],
@@ -111,17 +108,6 @@ def test_almanca_rozet_NOKTASIZ_I():
     assert episode_badge("Bier Garten", 47, pack=DE) == "BIER GARTEN #47"
 
 
-def test_almanca_trade_cta():
-    from short_bot.reel_series import trade_cta
-    assert trade_cta(48, pack=DE) == "#48 morgen — ABO"
-
-
-def test_almanca_CTA_24_karaktere_sigar():
-    for c in DE.cta_texts:
-        assert len(c) <= CTA_MAX_CHARS, f"{len(c)}: {c!r}"
-    assert len(DE.trade_cta.format(no=48)) <= CTA_MAX_CHARS
-
-
 # --- SERİ YÖNERGESİ + META TEMİZLİĞİ ---------------------------------------
 
 def test_almanca_seri_yonergesi_ALMANCA():
@@ -157,8 +143,6 @@ def test_almanca_abone_bitleri_ALMANCA(monkeypatch):
     class _Reel:
         series_enabled = False
         comment_question = True
-        cta_enabled = True
-        cta_text_custom = ""
         series_title = ""
 
     class _Ch:
@@ -167,6 +151,5 @@ def test_almanca_abone_bitleri_ALMANCA(monkeypatch):
 
     monkeypatch.setattr("short_bot.reel_subscribe.load_pack", lambda lang: DE)
     bits = build_subscribe_bits(_Ch(), seed=3)
-    assert bits.cta_text in DE.cta_texts
-    assert "ABONE OL" not in bits.cta_text, "Türkçe çip Almanca kanalda"
     assert bits.comment_line in DE.comment_styles
+    assert "şaşırttı" not in bits.comment_line, "Türkçe yönerge Almanca kanalda"

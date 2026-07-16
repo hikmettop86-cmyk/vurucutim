@@ -19,7 +19,7 @@ from __future__ import annotations
 import logging
 
 from short_bot.claude_cli import AIBackendError
-from short_bot.lang_pack import CTA_MAX_CHARS, LangPack, load_pack, validate_pack
+from short_bot.lang_pack import LangPack, load_pack, validate_pack
 from short_bot.llm_sonnet import SONNET_OR, TIMEOUT_S, sonnet_json
 from short_bot.locale import LANGUAGE_NAMES, SUPPORTED_LANGUAGES
 
@@ -56,11 +56,6 @@ DİKKAT — kalıp eşleşmesi NOKTALAMASIZ metinde yapılır: kesme işaretleri
 `meta_tail_pattern` ise HAM metne uygulanır (noktalama durur).
 
 SERT KISITLAR — uymayan paket REDDEDİLİR:
-  • cta_texts: TAM 4 metin, her biri EN FAZLA {CTA_MAX_CHARS} KARAKTER. Bu bir ekran
-    çipi ve 1080 piksele sığmak zorunda; taşarsa kırpılır ve ekranda yarım kelime
-    yazar. ({ad} dilinin "abone ol" kelimesi uzunsa metni KISALT.)
-  • trade_cta: "{{no}}" yer tutucusu ZORUNLU; no=48 ile render edilince EN FAZLA
-    {CTA_MAX_CHARS} KARAKTER.
   • default_series_title: EN FAZLA 24 KARAKTER (rozette " #47" için yer kalmalı).
   • comment_styles: TAM 4.   connective_styles: TAM 8.
   • overused: EN AZ 5.       overused_patterns: EN AZ 4 (regex DERLENEBİLİR olmalı).

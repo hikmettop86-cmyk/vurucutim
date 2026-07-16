@@ -12,13 +12,9 @@ from short_bot.reel_models import ReelTimeline
 
 log = logging.getLogger(__name__)
 
-# --- CTA / BEĞENİ YERLEŞİMİ ------------------------------------------------
-# Beğeni bir KARAR değil, DUYGUSAL BOŞALMADIR: dalganın üstünde ateşlenmeli, ondan
-# önce değil. Abone isteği ise izleyicinin değeri DAHA YENİ yaşadığı anda gelmeli.
-LIKE_AFTER_PEAK_S = 0.3   # tepe biter bitmez
-LIKE_DUR_S = 1.2
-CTA_AFTER_PEAK_S = 1.3    # beğeniden hemen sonra
-CTA_DUR_S = 3.0           # 3 saniyeyi aşarsa payoff'u ve loop'u ezer
+# BEĞENİ/ABONE ÇİPİ YOK (2026-07-16, kullanıcı kararı): "kullanıcı gerçekten
+# içinden gelirse abone veya beğenme yapar" — ekranda hiçbir beğeni/abone istemi
+# gösterilmez. (Eski mekanik: tepe-sonrası beğeni nabzı + abone çipi.)
 
 WIDTH, HEIGHT = 1080, 1920
 
@@ -40,13 +36,12 @@ def build_reel_overlay_html(
     highlight_color: str = "#ffd400",
     arrow_color: str = "#ff2d2d", arrow_frequency: str = "beats",
     flash: bool = True, cut_effect: str = "flash",
-    handle: str = "", cta_text: str = "",
+    handle: str = "",
     badge: str = "",              # feed kimliği rozeti ("BİLİNMEYEN TARİH #47")
     lang: str = "tr",             # CSS uppercase DİLE DUYARLI — lang'sız 'i' → 'I'
     font: str = "Montserrat",
     markers: list | None = None,
     numbers: list | None = None,
-    peak_end_s: float | None = None,
     interrupts: list | None = None,   # koordineli kesinti anları (bkz. reel_interrupt)
     templates_dir: Path | None = None,
 ) -> str:
@@ -79,30 +74,14 @@ def build_reel_overlay_html(
     else:
         arrow_segs = beat_segs
 
-    # CTA/BEĞENİ ZAMANLAMASI — tepeden SONRA, sonda değil.
-    # Eskiden abone çipi son 2.5 saniyede gösteriliyordu: çizelgedeki en kötü slot.
-    # Tepe geçmiş, dopamin harcanmış, üstelik sondaki çip TEKRAR DÖNGÜSÜNÜ yok ediyor.
-    # En çok dönüşen slot en büyük reveal'in HEMEN ARDIDIR — istek, izleyicinin daha
-    # yeni yaşadığı değerle nedensel olarak haklı çıkar.
-    dur = timeline.duration_s
-    if peak_end_s and 0 < peak_end_s < dur:
-        like_at = min(peak_end_s + LIKE_AFTER_PEAK_S, dur - LIKE_DUR_S)
-        cta_at = min(peak_end_s + CTA_AFTER_PEAK_S, dur - CTA_DUR_S)
-    else:
-        # Tepe bilinmiyorsa (eski çağıranlar) eski davranış: sondaki slot.
-        cta_at = max(0.0, dur - CTA_DUR_S)
-        like_at = max(0.0, cta_at - LIKE_DUR_S)
-
     return tpl.render(
-        cta_at=f"{max(0.0, cta_at):.3f}", cta_dur=f"{CTA_DUR_S:.3f}",
-        like_at=f"{max(0.0, like_at):.3f}", like_dur=f"{LIKE_DUR_S:.3f}",
         layout=layout,
         highlight_color=highlight_color, arrow_color=arrow_color,
         chip_text=contrast_text(highlight_color),
         hot_color=ensure_bright(highlight_color),
         hook=timeline.hook, close=timeline.close, handle=handle,
         cover_title=getattr(timeline, "cover_title", "") or "",
-        cta_text=cta_text, badge=badge, lang=lang,
+        badge=badge, lang=lang,
         font=font, font_import=_FONT_IMPORTS.get(font, _FONT_IMPORTS["Montserrat"]),
         words=words, cards=cards, duration_s=f"{timeline.duration_s:.3f}",
         last_seg=last_seg, cuts=json.dumps(cuts),

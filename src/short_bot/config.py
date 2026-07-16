@@ -226,14 +226,14 @@ class ReelConfig(BaseModel):
     hook_angle_vary: bool = True
     accent_vary: bool = True
     transition_vary: bool = True
-    # Faz 3 abone mekanikleri (reel_subscribe üzerinden aktif)
+    # Etkileşim mekanikleri (reel_subscribe üzerinden aktif). Beğeni/abone çipleri
+    # 2026-07-16'da KALDIRILDI (kullanıcı kararı) — cta_enabled/cta_text_custom
+    # alanları yok; eski YAML'lardaki anahtarlar pydantic extra-ignore ile atlanır.
     series_enabled: bool = False
     series_title: str = ""
-    cta_enabled: bool = True
     comment_question: bool = True
-    cta_text_custom: str = ""
-    # SERİ / CLIFFHANGER MİMARİSİ (bkz. reel_series). Bölüm numarası + açık kapı +
-    # takas CTA. Ark bu kadar bölümden sonra kesilir ve konu bankasından taze konu
+    # SERİ / CLIFFHANGER MİMARİSİ (bkz. reel_series). Bölüm numarası + açık kapı.
+    # Ark bu kadar bölümden sonra kesilir ve konu bankasından taze konu
     # gelir — zincir uzadıkça konu kanalın nişinden sürüklenir (sapma birikimli).
     series_arc_length: int = 3
     # ARK MODU (bkz. reel_arc):
@@ -625,9 +625,7 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
             "arc_mode": cfg.reel.arc_mode,
             "identity_lock": cfg.reel.identity_lock,
             "sting_enabled": cfg.reel.sting_enabled,
-            "cta_enabled": cfg.reel.cta_enabled,
             "comment_question": cfg.reel.comment_question,
-            "cta_text_custom": cfg.reel.cta_text_custom,
             "persona": cfg.reel.persona,
             "mascot_name": cfg.reel.mascot_name,
             "mascot_animal": cfg.reel.mascot_animal,
