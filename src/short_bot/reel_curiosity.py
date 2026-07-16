@@ -196,9 +196,12 @@ def write_curious_narration(topic: str, clip_descriptions: list[str],
     """
     from short_bot.claude_cli import run_json
     from short_bot.reel_narration import _pin_queries
+    # timeout_s=75: CLI hang'i HIZLI yakala → OR'a düşmeden tekrar dene (rate penceresi
+    # temizlensin). Varsayılan 180sn her hang'de 180sn yakıyordu; meşru merak çağrısı
+    # (~4-60sn) 75'e sığar, gerçek hang (dakikalarca CLI-içi backoff) 75'te kesilip retry olur.
     inv = invoke or (lambda p, s: run_json(
         p, s, claude_path=claude_path, model=model, backend=backend,
-        api_key=api_key, retries=2))
+        api_key=api_key, retries=2, timeout_s=75))
 
     adaylar = write_candidates(topic, clip_descriptions, channel=channel,
                                seed=seed, invoke=inv, target_duration_s=target_duration_s)
