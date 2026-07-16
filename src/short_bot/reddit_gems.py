@@ -12,6 +12,7 @@ import logging
 import time
 
 import requests
+from pydantic import BaseModel
 
 log = logging.getLogger(__name__)
 
@@ -46,6 +47,19 @@ def _unwrap(post: dict) -> dict:
     """Crosspost ise asıl gönderiye in (video/medya orada)."""
     parents = post.get("crosspost_parent_list") or []
     return parents[0] if parents else post
+
+
+def _thumb_of(post: dict) -> str:
+    """Önizleme thumbnail'ı (vision temizlik/alaka kontrolü için; indirmeden ucuz)."""
+    import html
+    p = _unwrap(post)
+    imgs = ((p.get("preview") or {}).get("images") or [])
+    if imgs:
+        u = (imgs[0].get("source") or {}).get("url", "")
+        if u:
+            return html.unescape(u)
+    th = p.get("thumbnail", "")
+    return th if th.startswith("http") else ""
 
 
 def _video_of(post: dict):
@@ -115,9 +129,80 @@ def find_gems(client_id: str, client_secret: str, *, subreddits=None,
                 "duration": dur, "width": w, "height": h,
                 "orient": ("DİKEY" if (h and w and h > w) else "yatay" if w else "?"),
                 "video_url": url,
+                "thumb": _thumb_of(p),
                 "permalink": "https://www.reddit.com" + p.get("permalink", ""),
                 "over18": p.get("over_18", False),
             })
         time.sleep(0.3)
     gems.sort(key=lambda g: -g["ups"])
     return gems
+
+
+# ── Vision eleme: hayvan mı + temiz mi (baked-in yazı/logo yok) ───────────────
+class GemScreen(BaseModel):
+    """Thumbnail vision yargısı — kürasyon ön-elemesi."""
+    is_animal: bool = False        # ana özne hayvan mı (persona hayvan-odaklı)
+    has_overlay_text: bool = False  # baked-in yazı/altyazı/logo/watermark VAR mı
+    appealing: bool = False        # ilgi çekici/komik/tatmin edici bir an mı
+    note: str = ""                 # kısa İngilizce tarif
+
+
+_SCREEN_PROMPT = (
+    "Bu, kısa bir video klibinin thumbnail'ı. Kürasyon için üç şeyi değerlendir:\n"
+    "1) is_animal: ana ÖZNE bir HAYVAN mı? (insan/manzara/nesne ana özneyse false)\n"
+    "2) has_overlay_text: görüntüye SONRADAN BİNDİRİLMİŞ yazı/altyazı/logo/watermark "
+    "VAR mı? (doğal sahne yazısı değil — editörün eklediği metin/kaynak logosu). Emin "
+    "değilsen true.\n"
+    "3) appealing: ilgi çekici, komik ya da tatmin edici GÖRÜNEN bir an mı?\n"
+    'SADECE JSON: {"is_animal": <bool>, "has_overlay_text": <bool>, '
+    '"appealing": <bool>, "note": "<short English>"}'
+)
+
+
+def screen_gem(gem: dict, *, vision_call, timeout_s: int = 45):
+    """Bir cevherin thumbnail'ını vision'la ele. Döner GemScreen ya da None (thumb yok/hata)."""
+    import tempfile
+    from pathlib import Path
+
+    from short_bot.claude_cli import run_json
+    url = gem.get("thumb", "")
+    if not url:
+        return None
+    try:
+        r = requests.get(url, headers={"User-Agent": _UA}, timeout=20)
+        if r.status_code != 200 or not r.content:
+            return None
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tf:
+            tf.write(r.content)
+            thumb = Path(tf.name)
+    except Exception:  # noqa: BLE001
+        return None
+    try:
+        return run_json(_SCREEN_PROMPT, GemScreen, claude_path=vision_call.claude_path,
+                        model=vision_call.model, backend=vision_call.backend,
+                        api_key=vision_call.api_key, image_path=thumb,
+                        retries=1, timeout_s=timeout_s)
+    except Exception as e:  # noqa: BLE001
+        log.info(f"  cevher eleme vision hatası: {e}")
+        return None
+    finally:
+        thumb.unlink(missing_ok=True)
+
+
+def screen_gems(gems: list[dict], *, vision_call, max_check: int = 40,
+                workers: int = 8) -> list[dict]:
+    """Top-N cevheri paralel vision'la eler; HAYVAN + TEMİZ (yazısız) olanları döndürür.
+
+    Her cevhere 'screen' alanı eklenir (GemScreen). Sıralama upvote korunur."""
+    from concurrent.futures import ThreadPoolExecutor
+    head = gems[:max_check]
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        screens = list(ex.map(lambda g: screen_gem(g, vision_call=vision_call), head))
+    out = []
+    for g, s in zip(head, screens):
+        if s is None:
+            continue
+        g = {**g, "screen": s}
+        if s.is_animal and not s.has_overlay_text:
+            out.append(g)
+    return out
