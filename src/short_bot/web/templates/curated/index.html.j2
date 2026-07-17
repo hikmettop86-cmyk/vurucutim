@@ -5,8 +5,8 @@
     <h1 class="text-2xl font-bold">Cevher — Kürate Klip Keşfi</h1>
     <p class="text-sm text-claude-muted mt-1">
       Reddit'te topluluğun ZATEN onayladığı (upvote) gerçek viral klipleri bul; persona
-      ile GERÇEK hikâyesini yeniden anlat. Adaylar kanalın subreddit listesinden gelir —
-      niş = subreddit listesi + persona.
+      ile GERÇEK hikâyesini yeniden anlat. Kategori seç (ya da kanal ayarını kullan);
+      sonuçlar bize uygun sıraya (dikey + upvote + süre) dizilir, üretilmiş olanlar işaretlenir.
     </p>
   </div>
 
@@ -19,8 +19,7 @@
 
   {% if not channels %}
   <div class="p-4 rounded-lg bg-claude-surface-alt text-sm text-claude-muted">
-    Reel etkin kanal yok. Önce persona'lı bir reel kanalı oluştur; subreddit listesini
-    kanal ayarlarından gireceksin.
+    Reel etkin kanal yok. Önce persona'lı bir reel kanalı oluştur.
   </div>
   {% else %}
   <form hx-post="/curated/fetch" hx-target="#curated-results" hx-swap="innerHTML"
@@ -29,7 +28,17 @@
       <span class="block text-xs text-claude-muted mb-1">Kanal</span>
       <select name="channel_slug"
               class="border border-claude-border rounded-lg px-3 py-2 text-sm bg-white">
-        {% for c in channels %}<option value="{{ c.slug }}">{{ c.name }}</option>{% endfor %}
+        {% for c in channels %}<option value="{{ c.slug }}"
+          {% if c.slug == last_slug %}selected{% endif %}>{{ c.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <label class="text-sm">
+      <span class="block text-xs text-claude-muted mb-1">Kategori</span>
+      <select name="category"
+              class="border border-claude-border rounded-lg px-3 py-2 text-sm bg-white">
+        <option value="">Kanal ayarı</option>
+        {% for cat in categories %}<option value="{{ cat }}"
+          {% if cat == last_category %}selected{% endif %}>{{ cat }}</option>{% endfor %}
       </select>
     </label>
     <label class="text-sm">
@@ -52,7 +61,13 @@
       Cevher Bul
     </button>
   </form>
-  <div id="curated-results"></div>
+  <div id="curated-results">
+    {% if last_gems %}
+    {% with status="cached", gems=last_gems, slug=last_slug, job_id="", error=None %}
+      {% include "curated/_results.html.j2" %}
+    {% endwith %}
+    {% endif %}
+  </div>
   {% endif %}
 </div>
 {% endblock %}

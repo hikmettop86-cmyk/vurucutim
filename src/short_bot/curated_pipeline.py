@@ -110,6 +110,7 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
         "body_paragraph": narration.full_text(),
         "title": seo,
         "source_permalink": gem.get("permalink", ""),
+        "source_video_url": video_url,   # dedup: aynı klip iki kez üretilmesin
     }, ensure_ascii=False)
     eng = init_db(db_path)
     short_id = record_short(

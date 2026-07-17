@@ -13,6 +13,7 @@ def launch_pipeline(*, channel, settings, db_path: Path,
                     cache_dir: Path, lock_dir: Path, logs_dir: Path,
                     trigger: str = "manual",
                     preselected_item=None,
+                    curated_gem=None,
                     forced_topic: str | None = None) -> threading.Thread:
     """Start pipeline in a daemon thread. Returns the thread object.
 
@@ -39,6 +40,7 @@ def launch_pipeline(*, channel, settings, db_path: Path,
                 cache_dir=cache_dir, lock_dir=lock_dir,
                 logs_dir=logs_dir, trigger=trigger,
                 preselected_item=preselected_item,
+                curated_gem=curated_gem,
                 forced_topic=forced_topic,
                 defer_upload=autopilot_acik,
             )

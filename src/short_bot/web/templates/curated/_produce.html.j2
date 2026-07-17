@@ -1,15 +1,9 @@
-{% if status == "running" %}
-{# Üretim uzun (~2dk): indir → vision → senaryo → montaj. 4sn'de bir durum çek. #}
-<div hx-get="/curated/produce-status/{{ job_id }}" hx-trigger="load delay:4s" hx-swap="outerHTML"
-     class="p-3 rounded-lg bg-claude-accent-soft ring-1 ring-claude-border text-sm flex items-center gap-2">
-  <span class="inline-block w-4 h-4 border-2 border-claude-accent border-t-transparent rounded-full animate-spin"></span>
-  “{{ title }}” üretiliyor… (indir → vision → yeniden-senaryo → montaj, ~2 dk)
-</div>
-{% elif status == "error" %}
-<div class="p-3 rounded-lg bg-red-100 text-red-800 text-sm">Üretim hatası: {{ error }}</div>
+{% if status == "error" %}
+<div class="p-3 rounded-lg bg-red-100 text-red-800 text-sm">Üretim başlatılamadı: {{ error }}</div>
 {% else %}
 <div class="p-3 rounded-lg bg-claude-success/10 ring-1 ring-claude-success/30 text-sm text-claude-success">
-  ✓ Hazır: “{{ title }}” üretildi{% if out_name %} ({{ out_name }}){% endif %}.
-  <a href="/shorts" class="underline font-medium">Shorts'ta gör →</a>
+  ✓ “{{ title }}” üretimi başladı (~2 dk: indir → temizle → vision → senaryo → montaj).
+  Canlı ilerlemeyi <a href="/activity" class="underline font-medium">Akış'ta izle →</a>,
+  bitince <a href="/shorts" class="underline font-medium">Shorts'ta</a> görünür + yüklenebilir.
 </div>
 {% endif %}

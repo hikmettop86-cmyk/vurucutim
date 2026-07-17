@@ -551,6 +551,7 @@ def _run_pipeline_inner(
     lock_dir: Path | None = None,
     trigger: str = "cli",
     preselected_item=None,   # NewsItem | None — manuel feed seciminde dolu
+    curated_gem=None,        # dict | None — kürate klip onayında dolu (SP3, bkz. curated_pipeline)
     forced_topic: str | None = None,   # panelden secilen baslik (yeniden uret / konu bankasi)
     # AUTOPILOT: yüklemeyi autopilot yapacak (gizli + publishAt, slot saatine).
     # True iken pipeline HİÇBİR koşulda yüklemez — yoksa ÇİFTE YÜKLEME olur.
@@ -593,6 +594,22 @@ def _run_pipeline_inner(
                         finish_run(eng, run_id, status="no_candidates",
                                    short_id=None, error=res.error)
                     return res
+                if curated_gem is not None:
+                    # KÜRATE: seçilen Reddit klibini üret (indir→temizle→vision→senaryo→
+                    # montaj→Short). Run/log/Akış makinesi burada; üretim mantığı ayrı.
+                    log.info(f"  kürate cevher: {(curated_gem.get('title') or '')[:80]}")
+                    from short_bot.curated_pipeline import produce_curated
+                    secrets_path = (Path(eng.url.database).parent / "secrets.yaml"
+                                    if eng.url.database else Path("data/secrets.yaml"))
+                    short_id, out_path = produce_curated(
+                        curated_gem, channel, settings=settings,
+                        secrets=_load_secrets(secrets_path), db_path=db_path,
+                        output_root=Path(channel.output_dir).parent,
+                        music_root=music_root, templates_dir=templates_dir, log=log)
+                    finish_run(eng, run_id, status="success", short_id=short_id,
+                               error=None)
+                    return RunResult(run_id=run_id, status="success",
+                                     short_path=out_path, short_id=short_id, error=None)
                 if channel.content_source == "generator":
                     return _run_generator(
                         channel=channel, run_id=run_id, log=log, eng=eng,

@@ -5,6 +5,17 @@ import time
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _clear_curated_cache():
+    # _last_search modül-globali → testler arası sızmasın (cache özelliği eklendi).
+    from short_bot.web.routes import curated
+    with curated._last_lock:
+        curated._last_search.clear()
+    yield
+    with curated._last_lock:
+        curated._last_search.clear()
+
+
 def _client(tmp_path):
     cfg_dir = tmp_path / "config"
     (cfg_dir / "channels").mkdir(parents=True)
@@ -123,24 +134,79 @@ def test_curated_produce_requires_selection(tmp_path):
     assert "Kanal ya da klip seçili değil" in r.data.decode("utf-8")
 
 
-def test_curated_produce_launches_job(tmp_path, monkeypatch):
-    from pathlib import Path
+def test_curated_produce_launches_pipeline(tmp_path, monkeypatch):
     c, cfg_dir = _client(tmp_path)
     _make_curated_channel(cfg_dir)
-    # produce_curated'ı mock'la (ağ/render yok) — route iş başlatma + poll akışı test edilir.
-    monkeypatch.setattr("short_bot.curated_pipeline.produce_curated",
-                        lambda gem, channel, **k: (884, Path("output/x/vid.mp4")))
+    # produce artık run_pipeline üzerinden (Akış'ta görünsün) → launch_pipeline'ı mock'la.
+    captured = {}
+    monkeypatch.setattr("short_bot.web.routes.curated.launch_pipeline",
+                        lambda **k: captured.update(k))
     r = c.post("/curated/produce", data={
         "channel_slug": "cevherkanal", "video_url": "https://v.redd.it/x/DASH.mp4",
         "title": "Test klip", "permalink": "https://www.reddit.com/x"})
     body = r.data.decode("utf-8")
-    m = re.search(r"/curated/produce-status/([0-9a-f]+)", body)
-    assert m, "produce poll job_id render edilmedi"
-    job_id = m.group(1)
-    done = ""
-    for _ in range(80):
-        done = c.get(f"/curated/produce-status/{job_id}").data.decode("utf-8")
-        if "Shorts'ta gör" in done:
+    assert "üretimi başladı" in body and "Akış" in body     # Akış'a yönlendirir
+    assert captured["curated_gem"]["video_url"] == "https://v.redd.it/x/DASH.mp4"
+    assert captured["trigger"] == "manual_curated"
+
+
+def test_curated_fetch_uses_category_subreddits(tmp_path, monkeypatch):
+    c, cfg_dir = _client(tmp_path)
+    _make_curated_channel(cfg_dir)
+    monkeypatch.setattr("short_bot.web.routes.curated._secrets",
+                        lambda: {"reddit_client_id": "x", "reddit_client_secret": "y"})
+    captured = {}
+    monkeypatch.setattr("short_bot.reddit_gems.find_gems",
+                        lambda cid, csec, *, subreddits, **k: captured.update(
+                            subreddits=subreddits) or [])
+    from short_bot.web.routes.curated import CATEGORIES
+    c.post("/curated/fetch", data={"channel_slug": "cevherkanal",
+                                   "category": "Hayvanlar", "t": "week"})
+    # kategori subreddit'leri kanal ayarını (['likeus']) EZDİ
+    assert captured["subreddits"] == CATEGORIES["Hayvanlar"]
+
+
+def test_decorate_sorts_vertical_first_and_marks_produced(tmp_path):
+    from short_bot.web.routes.curated import _decorate
+    gems = [
+        {"permalink": "p1", "ups": 1000, "orient": "yatay", "duration": 20},
+        {"permalink": "p2", "ups": 900, "orient": "DİKEY", "duration": 20},
+    ]
+    out = _decorate(gems, tmp_path / "nodb.sqlite")   # boş DB → hiçbiri üretilmemiş
+    assert out[0]["permalink"] == "p2"                # dikey öne (skor ×2.5)
+    assert all(not g["produced"] for g in out)
+
+
+def test_decorate_marks_produced_by_video_id(tmp_path):
+    # Aynı klibin FARKLI varyantı/permalinki bile 'üretildi' işaretlenmeli (video-ID dedup).
+    import json
+    from short_bot.db import init_db, record_short
+    from short_bot.web.routes.curated import _decorate, _clip_key
+    assert _clip_key("https://v.redd.it/xyz789/CMAF_1080.mp4?a=1") == "vreddit:xyz789"
+    dbp = tmp_path / "db.sqlite"
+    eng = init_db(dbp)
+    record_short(eng, channel="c", rss_item_guid=None, title="t", file_path="x.mp4",
+                 duration_s=10, render_ms=0,
+                 script_json=json.dumps({"source_video_url":
+                                         "https://v.redd.it/xyz789/DASH_720.mp4"}))
+    gems = [{"permalink": "baska", "video_url": "https://v.redd.it/xyz789/CMAF_1080.mp4?a=1",
+             "ups": 500, "orient": "DİKEY", "duration": 15}]
+    out = _decorate(gems, dbp)
+    assert out[0]["produced"] is True      # video-ID (vreddit:xyz789) eşleşti
+
+
+def test_curated_cache_persists_last_search(tmp_path, monkeypatch):
+    # Sekme değişip geri gelince (yeni GET /curated) son arama cache'ten gelmeli.
+    c, cfg_dir = _client(tmp_path)
+    _make_curated_channel(cfg_dir)
+    monkeypatch.setattr("short_bot.web.routes.curated._secrets",
+                        lambda: {"reddit_client_id": "x", "reddit_client_secret": "y"})
+    monkeypatch.setattr("short_bot.reddit_gems.find_gems", lambda *a, **k: [_GEM])
+    r = c.post("/curated/fetch", data={"channel_slug": "cevherkanal", "t": "week"})
+    job_id = re.search(r"/curated/status/([0-9a-f]+)", r.data.decode()).group(1)
+    for _ in range(60):
+        if "Zıplayan örümcek" in c.get(f"/curated/status/{job_id}").data.decode():
             break
         time.sleep(0.05)
-    assert "Shorts'ta gör" in done          # üretim bitti, panele link
+    idx = c.get("/curated").data.decode("utf-8")   # yeni sekme / geri dönüş
+    assert "Zıplayan örümcek" in idx               # cache'ten geldi (kaybolmadı)

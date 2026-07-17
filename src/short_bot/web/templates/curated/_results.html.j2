@@ -14,11 +14,13 @@
     Bu kriterlerde cevher bulunamadı — zaman penceresini genişlet ya da min upvote'u düşür.
   </div>
   {% else %}
-  <div class="text-xs text-claude-muted uppercase tracking-wide mb-2">{{ gems|length }} cevher — birini seç</div>
+  <div class="text-xs text-claude-muted uppercase tracking-wide mb-2">
+    {{ gems|length }} cevher — bize uygun sıraya dizildi (dikey + upvote); birini seç
+  </div>
   <div id="produce-status" class="mb-3"></div>
   <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
     {% for g in gems %}
-    <div class="rounded-lg border border-claude-border bg-white overflow-hidden flex flex-col">
+    <div class="rounded-lg border {% if g.produced %}border-claude-success/40 opacity-60{% else %}border-claude-border{% endif %} bg-white overflow-hidden flex flex-col">
       <div class="relative bg-black aspect-[9/16] flex items-center justify-center">
         {% if g.thumb %}
         <img src="{{ g.thumb }}" alt="" loading="lazy" class="max-h-full max-w-full object-contain">
@@ -28,6 +30,9 @@
         <span class="absolute top-1 left-1 text-[10px] px-1.5 py-0.5 rounded bg-black/70 text-white">
           {{ g.orient }}{% if g.duration %} · {{ g.duration }}s{% endif %}
         </span>
+        {% if g.produced %}
+        <span class="absolute top-1 right-1 text-[10px] px-1.5 py-0.5 rounded bg-claude-success text-white font-medium">✓ üretildi</span>
+        {% endif %}
       </div>
       <div class="p-2 flex flex-col gap-1 flex-1">
         <div class="text-xs font-medium line-clamp-2" title="{{ g.title }}">{{ g.title }}</div>
@@ -35,6 +40,9 @@
         <div class="mt-auto flex items-center gap-2 pt-1">
           <a href="{{ g.permalink }}" target="_blank" rel="noopener"
              class="text-[11px] text-claude-accent hover:underline">Reddit'te izle ↗</a>
+          {% if g.produced %}
+          <span class="ml-auto text-[11px] text-claude-success">✓ üretildi</span>
+          {% else %}
           <form hx-post="/curated/produce" hx-target="#produce-status" hx-swap="innerHTML"
                 class="ml-auto">
             <input type="hidden" name="channel_slug" value="{{ slug }}">
@@ -46,6 +54,7 @@
               Bu klibi üret
             </button>
           </form>
+          {% endif %}
         </div>
       </div>
     </div>
