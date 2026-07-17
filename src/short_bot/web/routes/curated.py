@@ -355,8 +355,21 @@ def edit_curated(slug):
         personas = list((load_pack("tr").personas or {}).keys())
     except Exception:  # noqa: BLE001
         personas = []
+    # YouTube bağlantı context'i — generic /channels/<slug>/youtube/* route'ları
+    # (connect/disconnect/reset/upload-secrets) her kanal slug'ı için çalışır.
+    from short_bot.youtube import auth as _yt_auth
+    yt_root = current_app.config.get("SHORTBOT_YT_CREDS_DIR")
+    yt_connected = bool(yt_root and _yt_auth.has_credentials(yt_root, slug))
+    yt_info = (_yt_auth.load_channel_info(yt_root, slug)
+               if yt_root and yt_connected else None)
+    yt_secrets_path = (yt_root / slug / "client_secrets.json") if yt_root else None
+    yt_has_secrets = bool(yt_secrets_path and yt_secrets_path.is_file())
     return render_template("channels/edit_curated.html.j2", ch=ch,
-                           personas=personas, categories=list(CATEGORIES))
+                           personas=personas, categories=list(CATEGORIES),
+                           yt_connected=yt_connected, yt_info=yt_info,
+                           yt_has_secrets=yt_has_secrets,
+                           yt_secrets_abs=(str((yt_root / slug).resolve())
+                                           if yt_root else ""))
 
 
 @bp.route("/channels/<slug>/edit-curated", methods=["POST"])
