@@ -20,12 +20,12 @@ def test_clean_clip_skips_when_absent():
 
 def test_clean_clip_skips_heavy_cover():
     # Yazı özneyi kaplıyorsa temizleme artefakt bırakır → dokunma.
-    d = WatermarkDetect(present=True, region="top-right", covers_subject=True)
+    d = WatermarkDetect(present=True, regions=["top-right"], covers_subject=True)
     assert clean_clip("x.mp4", d, out_path="o.mp4") is None
 
 
 def test_clean_clip_skips_unknown_region():
-    d = WatermarkDetect(present=True, region="none", covers_subject=False)
+    d = WatermarkDetect(present=True, regions=["none"], covers_subject=False)
     assert clean_clip("x.mp4", d, out_path="o.mp4") is None
 
 
@@ -38,7 +38,7 @@ def test_clean_clip_delogo_runs(tmp_path):
     src = tmp_path / "src.mp4"
     _make_clip(src)
     out = tmp_path / "clean.mp4"
-    d = WatermarkDetect(present=True, region="top-right", covers_subject=False)
+    d = WatermarkDetect(present=True, regions=["top-right"], covers_subject=False)
     res = clean_clip(src, d, out_path=out)
     assert res == out and out.exists()
     # geçerli, oynatılabilir video mü (delogo bozmadı)
@@ -46,3 +46,18 @@ def test_clean_clip_delogo_runs(tmp_path):
                         "-of", "csv=p=0", str(out)],
                        capture_output=True, text=True, timeout=20)
     assert float((p.stdout or "0").strip()) > 1.0
+
+
+def test_watermark_uncleanable_moving_vs_static():
+    from short_bot.curated_clean import watermark_uncleanable
+    # tek SABİT köşe → temizlenebilir
+    assert not watermark_uncleanable(WatermarkDetect(present=True, regions=["top-right"]))
+    # HAREKETLİ (birden çok bölge, TikTok) → temizlenemez
+    assert watermark_uncleanable(WatermarkDetect(present=True,
+        regions=["bottom-left", "bottom-right", "center"]))
+    # köşe-DIŞI kenar strip → temizlenemez
+    assert watermark_uncleanable(WatermarkDetect(present=True, regions=["mid-left"]))
+    # özneyi KAPLAYAN → temizlenemez
+    assert watermark_uncleanable(WatermarkDetect(present=True, regions=["top-right"],
+                                                 covers_subject=True))
+    assert not watermark_uncleanable(WatermarkDetect(present=False))

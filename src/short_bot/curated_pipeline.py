@@ -17,6 +17,11 @@ from pathlib import Path
 log = logging.getLogger(__name__)
 
 
+class CuratedWatermarkError(RuntimeError):
+    """Klipte temizlenemeyen (hareketli TikTok / özneyi kaplayan) watermark var — bu klip
+    kullanılamaz. Manuel seçimde kullanıcıya net hata; oto-seçimde sıradaki adaya geçilir."""
+
+
 def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
                     output_root, music_root, templates_dir, cache_dir=None,
                     seed: int = 0, log=log) -> tuple[int, Path]:
@@ -72,13 +77,18 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
         # TEMİZLİK (SP4): hafif/kenar watermark → delogo (yazılı klip de kullanılabilir);
         # ağır kaplama temizlenmez. Kanal flag'i kapalıysa atlanır.
         if getattr(reel, "curated_clean", True) and vision is not None:
-            from short_bot.curated_clean import clean_if_needed
+            from short_bot.curated_clean import clean_if_needed, watermark_uncleanable
             clip, _wm = clean_if_needed(clip, vision_call=vision,
                                         ffmpeg_path=settings.ffmpeg_path,
                                         out_path=td / "clean.mp4")
             if _wm is not None and _wm.present:
-                log.info(f"  kürate: watermark '{_wm.region}' "
-                         f"(kaplıyor={_wm.covers_subject})")
+                log.info(f"  kürate: watermark {_wm.regions} (kaplıyor={_wm.covers_subject})")
+                # Temizlenemeyen (hareketli TikTok / kaplayan) → bu klip WATERMARK'LI
+                # kalır; kullanma. Manuel: net hata. Oto: çağıran sıradaki adaya geçer.
+                if watermark_uncleanable(_wm):
+                    raise CuratedWatermarkError(
+                        "Bu klipte temizlenemeyen (hareketli TikTok / kaplayan) watermark "
+                        "var — watermark'sız bir klip seç.")
         clip_dur = _clip_duration_s(clip, settings.ffmpeg_path)
 
         log.info("  kürate: vision ile GERÇEK aksiyon okunuyor…")
@@ -212,9 +222,17 @@ def auto_produce_curated(channel, *, settings, secrets, db_path, output_root,
         log.warning("  kürate[oto]: taze cevher yok (hepsi üretilmiş ya da havuz boş)")
         return None, None
     fresh.sort(key=lambda g: -_gem_rank(g))
-    gem = fresh[0]
-    log.info(f"  kürate[oto]: seçildi ⬆{gem.get('ups')} {gem.get('orient')} "
-             f"r/{gem.get('sub')} — {gem.get('title', '')[:60]}")
-    return produce_curated(gem, channel, settings=settings, secrets=secrets,
-                           db_path=db_path, output_root=output_root,
-                           music_root=music_root, templates_dir=templates_dir, log=log)
+    # En iyi adayları sırayla dene; WATERMARK'LI (temizlenemeyen) olanı ATLA → temiz video.
+    for gem in fresh[:8]:
+        log.info(f"  kürate[oto]: deneniyor ⬆{gem.get('ups')} {gem.get('orient')} "
+                 f"r/{gem.get('sub')} — {gem.get('title', '')[:60]}")
+        try:
+            return produce_curated(
+                gem, channel, settings=settings, secrets=secrets, db_path=db_path,
+                output_root=output_root, music_root=music_root,
+                templates_dir=templates_dir, log=log)
+        except CuratedWatermarkError as e:
+            log.info(f"  kürate[oto]: watermark'lı → atlandı ({e})")
+            continue
+    log.warning("  kürate[oto]: denenen adayların hepsi watermark'lı → temiz cevher yok")
+    return None, None

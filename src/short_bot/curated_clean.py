@@ -1,10 +1,10 @@
-"""Kürate klip TEMİZLEME (SP4): hafif/kenar watermark/logo/kaynak-etiketini vision ile
-tespit edip ffmpeg `delogo` ile siler → yazılı klipler de kullanılabilir (arz büyür).
+"""Kürate klip TEMİZLEME (SP4, geliştirildi): watermark/logo/kaynak-etiketi tespit +
+ffmpeg `delogo` ile silme. TikTok watermark'ları HAREKETLİ (ekranda gezer) olduğu için
+tek kareyle tek bölge silmek YETMEZ (kullanıcı: 'tiktoktan alınmış, temizlik çalışmıyor').
 
-Kullanıcı 3. sorusu (2026-07-17): "logolu veya üzerinde az kalıntı olanlar için temizleme".
-Karar: hafif/kenar logo → delogo (çevreden doldur); ağır KAPLAYAN yazı → temizleme artefakt
-bırakır → TEMİZLENMEZ (çağıran reddeder/olduğu gibi kullanır). Öznenin üstündeki yazıya
-dokunulmaz.
+Çözüm: klipten STORYBOARD (zaman-sıralı 6 kare, tek ızgara) çıkar → tek vision çağrısında
+watermark'ın gezdiği TÜM bölgeleri topla → hepsini delogo'la. Ağır KAPLAYAN (özneyi örten)
+yazı temizlenmez (artefakt). Çok fazla bölge (watermark her yerde) → temizlenmez.
 """
 from __future__ import annotations
 
@@ -17,43 +17,50 @@ from pydantic import BaseModel
 
 log = logging.getLogger(__name__)
 
-# region → (x, y, w, h) normalize (0-1) delogo kutusu. Kenar şeritleri tam-genişlik,
-# köşeler ~%35 genişlik × %12 yükseklik (tipik kaynak-etiketi/kullanıcı-adı).
+# Bölge → (x, y, w, h) normalize (0-1) delogo kutusu. Köşeler + kenar şeritleri +
+# orta-kenarlar (TikTok watermark'ı sol-orta / sağ-alt gibi gezer).
 _REGION_BOX = {
-    "top-left":     (0.00, 0.00, 0.38, 0.12),
-    "top-right":    (0.62, 0.00, 0.38, 0.12),
-    "bottom-left":  (0.00, 0.88, 0.38, 0.12),
-    "bottom-right": (0.62, 0.88, 0.38, 0.12),
-    "top":          (0.00, 0.00, 1.00, 0.12),
+    "top-left":     (0.00, 0.00, 0.42, 0.14),
+    "top-right":    (0.58, 0.00, 0.42, 0.14),
+    "top":          (0.00, 0.00, 1.00, 0.14),
+    "bottom-left":  (0.00, 0.86, 0.42, 0.14),
+    "bottom-right": (0.58, 0.86, 0.42, 0.14),
     "bottom":       (0.00, 0.86, 1.00, 0.14),
+    "mid-left":     (0.00, 0.38, 0.34, 0.24),
+    "mid-right":    (0.66, 0.38, 0.34, 0.24),
+    "left":         (0.00, 0.08, 0.24, 0.84),   # sol kenar boyunca gezen watermark
+    "right":        (0.76, 0.08, 0.24, 0.84),   # sağ kenar boyunca gezen watermark
+    "center":       (0.30, 0.40, 0.40, 0.20),
 }
+_MAX_REGIONS = 4   # bundan fazla bölge = watermark her yerde → temizlenmez (aşırı blur)
 
 
 class WatermarkDetect(BaseModel):
-    """Vision watermark yargısı."""
+    """Storyboard vision yargısı — watermark tüm karelerde nerelerde görünüyor."""
     present: bool = False
-    # köşe/kenar konumu: top-left/top-right/bottom-left/bottom-right/top/bottom/none
-    region: str = "none"
-    # yazı ana ÖZNEYİ mi kaplıyor (ağır → temizlenemez) yoksa köşe/kenarda mı (hafif)
+    # watermark'ın GÖRÜNDÜĞÜ TÜM bölgeler (hareketliyse birden çok): _REGION_BOX etiketleri
+    regions: list[str] = []
+    # yazı ana ÖZNEYİ mi kaplıyor (ağır → temizlenemez) yoksa kenar/köşede mi
     covers_subject: bool = False
     note: str = ""
 
 
 _DETECT_PROMPT = (
-    "Bu bir video karesi. Görüntüye SONRADAN BİNDİRİLMİŞ watermark / logo / kaynak-etiketi "
-    "/ kullanıcı-adı / altyazı şeridi var mı? (doğal sahne yazısı — tabela, ürün etiketi — "
-    "DEĞİL; editörün/platformun eklediği katman).\n"
+    "Bu bir kısa video klibinin STORYBOARD'ı (zaman-sıralı 6 kare, tek ızgara). Görüntüye "
+    "SONRADAN BİNDİRİLMİŞ watermark / logo / kaynak-etiketi (TikTok, Instagram, "
+    "kullanıcı-adı @...) var mı? (doğal sahne yazısı DEĞİL — platform/editör katmanı).\n"
+    "ÖNEMLİ: TikTok watermark'ı HAREKETLİDİR — karelerde FARKLI köşe/kenarlarda görünebilir. "
+    "Karelerin HEPSİNE bak ve watermark'ın göründüğü TÜM konumları listele.\n"
     "- present: böyle bir katman VAR mı?\n"
-    "- region: nerede? top-left / top-right / bottom-left / bottom-right / top / bottom / none\n"
-    "- covers_subject: bu katman ana ÖZNENİN ÜSTÜNÜ mü kaplıyor (true=ağır, silinince "
-    "artefakt kalır) yoksa köşe/kenarda mı duruyor (false=hafif, silinebilir)?\n"
-    'SADECE JSON: {"present": <bool>, "region": "<...>", "covers_subject": <bool>, '
+    "- regions: göründüğü TÜM bölgeler (şunlardan): top-left, top-right, top, bottom-left, "
+    "bottom-right, bottom, mid-left, mid-right, left, right, center. Hareketliyse birden çok yaz.\n"
+    "- covers_subject: katman ana ÖZNENİN ÜSTÜNÜ mü kaplıyor (true=ağır) yoksa kenar/köşede mi (false)?\n"
+    'SADECE JSON: {"present": <bool>, "regions": ["<...>", ...], "covers_subject": <bool>, '
     '"note": "<short English>"}'
 )
 
 
 def _dims(clip, ffmpeg_path: str = "ffmpeg") -> tuple[int, int]:
-    """(width, height) — okunamazsa (0, 0)."""
     probe = "ffprobe" if ffmpeg_path in ("ffmpeg", "") else ffmpeg_path.replace("ffmpeg", "ffprobe")
     try:
         out = subprocess.run(
@@ -67,59 +74,78 @@ def _dims(clip, ffmpeg_path: str = "ffmpeg") -> tuple[int, int]:
 
 
 def detect_watermark(clip, *, vision_call, ffmpeg_path: str = "ffmpeg"):
-    """Klibin ORTASINDAN bir kare alıp vision'la watermark tespiti. Döner WatermarkDetect
-    ya da None (kare/vision hatası → çağıran temizlemez, fail-open)."""
+    """Storyboard (6 zaman-sıralı kare) → tek vision çağrısı: watermark'ın gezdiği TÜM
+    bölgeler. Döner WatermarkDetect ya da None (kare/vision hatası → temizlenmez)."""
     from short_bot.claude_cli import run_json
-    from short_bot.reel import _clip_duration_s
-    dur = _clip_duration_s(clip, ffmpeg_path)
-    t = max(0.5, dur / 2) if dur > 0 else 1.0
+    from short_bot.reel import _storyboard_frames
     try:
         with tempfile.TemporaryDirectory() as td:
-            frame = Path(td) / "wm.jpg"
-            subprocess.run([ffmpeg_path, "-v", "error", "-y", "-ss", f"{t:.2f}",
-                            "-i", str(clip), "-frames:v", "1", "-vf", "scale=480:-1",
-                            str(frame)], capture_output=True, timeout=30)
-            if not frame.exists() or frame.stat().st_size == 0:
+            board = Path(td) / "wm_board.jpg"
+            if not _storyboard_frames(clip, board, ffmpeg_path, cols=3, rows=2):
+                # storyboard kurulamazsa tek kareye düş (klibin ortası)
+                from short_bot.reel import _clip_duration_s
+                dur = _clip_duration_s(clip, ffmpeg_path)
+                t = max(0.5, dur / 2) if dur > 0 else 1.0
+                board = Path(td) / "wm.jpg"
+                subprocess.run([ffmpeg_path, "-v", "error", "-y", "-ss", f"{t:.2f}",
+                                "-i", str(clip), "-frames:v", "1", "-vf", "scale=480:-1",
+                                str(board)], capture_output=True, timeout=30)
+            if not board.exists() or board.stat().st_size == 0:
                 return None
             return run_json(_DETECT_PROMPT, WatermarkDetect,
                             claude_path=vision_call.claude_path, model=vision_call.model,
                             backend=vision_call.backend, api_key=vision_call.api_key,
-                            image_path=frame, retries=1, timeout_s=45)
+                            image_path=board, retries=1, timeout_s=45)
     except Exception as e:  # noqa: BLE001
         log.info(f"  kürate[temizlik]: watermark tespiti hatası ({e})")
         return None
 
 
-def clean_clip(clip, detection, *, ffmpeg_path: str = "ffmpeg", out_path):
-    """Hafif/kenar watermark'ı delogo ile sil. Döner temizlenmiş klip yolu, ya da None
-    (temizlenecek şey yok / ağır kaplama / hata → çağıran orijinali kullanır)."""
+# delogo YALNIZ tek SABİT KÖŞE watermark'ında temiz sonuç verir. TikTok gibi HAREKETLİ
+# (birden çok bölge) watermark'ta delogo çirkin blur bırakır + watermark yine kalır →
+# hiç dokunma; o klip SEÇİMDE elenmeli (bkz. watermark_uncleanable + auto_produce_curated).
+_CORNERS = {"top-left", "top-right", "bottom-left", "bottom-right"}
+
+
+def watermark_uncleanable(detection) -> bool:
+    """Bu watermark delogo ile TEMİZ silinemez mi? (hareketli = birden çok bölge, ya da
+    özneyi kaplıyor). True ise klip ideal değildir — seçimde elenmeli."""
     if detection is None or not detection.present:
-        return None
+        return False
     if detection.covers_subject:
-        log.info("  kürate[temizlik]: yazı özneyi KAPLIYOR → temizlenmez (artefakt riski)")
+        return True
+    regions = {r.lower() for r in (detection.regions or []) if (r or "").lower() in _REGION_BOX}
+    # Tek sabit köşe → temizlenebilir; birden çok bölge / köşe-dışı kenar-strip → hareketli.
+    return not (len(regions) == 1 and next(iter(regions)) in _CORNERS)
+
+
+def clean_clip(clip, detection, *, ffmpeg_path: str = "ffmpeg", out_path):
+    """YALNIZ tek SABİT KÖŞE watermark'ını delogo ile sil (temiz sonuç). Hareketli
+    (birden çok bölge) / özneyi kaplayan / köşe-dışı → None (delogo bozar, dokunma)."""
+    if watermark_uncleanable(detection):
+        log.info(f"  kürate[temizlik]: watermark temizlenemez (hareketli/kaplayan: "
+                 f"{getattr(detection, 'regions', None)}) → dokunulmuyor (klip ideal değil)")
         return None
-    box = _REGION_BOX.get((detection.region or "").lower())
-    if box is None:
+    regions = {r.lower() for r in (detection.regions or []) if (r or "").lower() in _REGION_BOX}
+    if len(regions) != 1:
         return None
+    r = next(iter(regions))
     w, h = _dims(clip, ffmpeg_path)
     if w <= 0 or h <= 0:
         return None
-    fx, fy, fw, fh = box
-    # piksel kutusu; delogo kenara değmemeli (x,y>=1, kutu çerçeve içinde).
+    fx, fy, fw, fh = _REGION_BOX[r]
     x = max(1, int(fx * w)); y = max(1, int(fy * h))
-    bw = int(fw * w); bh = int(fh * h)
-    bw = min(bw, w - x - 1); bh = min(bh, h - y - 1)
+    bw = min(int(fw * w), w - x - 1); bh = min(int(fh * h), h - y - 1)
     if bw < 8 or bh < 8:
         return None
     out_path = Path(out_path)
     try:
         subprocess.run([ffmpeg_path, "-v", "error", "-y", "-i", str(clip),
-                        "-vf", f"delogo=x={x}:y={y}:w={bw}:h={bh}",
-                        "-an", "-preset", "veryfast", str(out_path)],
+                        "-vf", f"delogo=x={x}:y={y}:w={bw}:h={bh}", "-an",
+                        "-preset", "veryfast", str(out_path)],
                        capture_output=True, timeout=180)
         if out_path.exists() and out_path.stat().st_size > 0:
-            log.info(f"  kürate[temizlik]: '{detection.region}' watermark'ı silindi "
-                     f"(delogo {bw}x{bh}@{x},{y})")
+            log.info(f"  kürate[temizlik]: '{r}' sabit köşe watermark'ı delogo ile silindi")
             return out_path
     except Exception as e:  # noqa: BLE001
         log.info(f"  kürate[temizlik]: delogo hatası ({e}) → orijinal kullanılıyor")
@@ -127,7 +153,7 @@ def clean_clip(clip, detection, *, ffmpeg_path: str = "ffmpeg", out_path):
 
 
 def clean_if_needed(clip, *, vision_call, ffmpeg_path: str = "ffmpeg", out_path):
-    """Tespit + temizle tek adımda. Watermark yoksa/ağırsa/hatada orijinal klibi döndürür."""
+    """Tespit + temizle tek adımda. Watermark yoksa/ağırsa/hatada orijinal klip döner."""
     det = detect_watermark(clip, vision_call=vision_call, ffmpeg_path=ffmpeg_path)
     if det is None or not det.present:
         return clip, det
