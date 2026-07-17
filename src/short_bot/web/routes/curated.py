@@ -185,6 +185,10 @@ def fetch():
     # Kategori seçildiyse onun subreddit'leri kanal ayarını EZER.
     if category in CATEGORIES:
         subreddits = CATEGORIES[category]
+    # DUYGU kanalı + kendi sub/kategori yoksa → kurtarma/kahramanlık havuzu (derp değil).
+    if not subreddits and tone == "duygu":
+        from short_bot.reddit_gems import DEFAULT_DUYGU_SUBS
+        subreddits = list(DEFAULT_DUYGU_SUBS)
     form_min = (request.form.get("min_ups") or "").strip()
     if form_min:
         try:

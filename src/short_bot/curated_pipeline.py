@@ -16,6 +16,10 @@ from pathlib import Path
 
 log = logging.getLogger(__name__)
 
+# DUYGU modu klip-seçim kapıları (short 934 dersi: 11sn'lik derp klibi zorlama çıktı).
+CURATED_DUYGU_MIN_S = 18   # bundan kısa klip mikro-dramı taşımaz → oto-seçimde elenir
+DUYGU_MIN_SCORE = 7        # emotion skoru bunun altındaysa oto-üretim ATLANIR (zayıfı zorlama)
+
 
 class CuratedWatermarkError(RuntimeError):
     """Klipte temizlenemeyen (hareketli TikTok / özneyi kaplayan) watermark var — bu klip
@@ -232,23 +236,31 @@ def auto_produce_curated(channel, *, settings, secrets, db_path, output_root,
     en iyi) + üret. Cron/autopilot/'Şimdi üret' bunu kullanır (Cevher onayı gerekmez).
 
     Döner (short_id, out_path); taze cevher yoksa (None, None)."""
-    from short_bot.reddit_gems import DEFAULT_SUBS, find_gems
+    from short_bot.reddit_gems import DEFAULT_DUYGU_SUBS, DEFAULT_SUBS, find_gems
     reel = channel.reel
     cid = secrets.get("reddit_client_id")
     csec = secrets.get("reddit_client_secret")
     if not (cid and csec):
         raise RuntimeError("kürate: Reddit kimliği yok (data/secrets.yaml: "
                            "reddit_client_id / reddit_client_secret)")
-    subs = list(getattr(reel, "subreddits", []) or []) or DEFAULT_SUBS
+    tone = getattr(reel, "curated_tone", "mizah")
+    # HAVUZ: kanal kendi subreddit'ini vermediyse tona göre varsayılan — DUYGU kanalı
+    # kurtarma/kahramanlık suları (derp değil; short 934'te derp klibi zorlama çıkmıştı).
+    subs = list(getattr(reel, "subreddits", []) or []) or (
+        DEFAULT_DUYGU_SUBS if tone == "duygu" else DEFAULT_SUBS)
     t = getattr(reel, "curated_time", "week")
-    log.info(f"  kürate[oto]: {len(subs)} subreddit taranıyor (t={t})")
+    log.info(f"  kürate[oto]: {len(subs)} subreddit taranıyor (t={t}, ton={tone})")
     gems = find_gems(cid, csec, subreddits=subs, t=t,
                      min_ups=getattr(reel, "curated_min_ups", 500),
                      max_duration=getattr(reel, "curated_max_duration", 90))
     produced = _produced_clip_keys(db_path)
     fresh = [g for g in gems if not _gem_produced(g, produced)]
+    if tone == "duygu":
+        # DUYGU: kısa klip mikro-dramı taşımaz (~30-40sn ister) → bilinen-kısa klibi ELE.
+        fresh = [g for g in fresh
+                 if not (0 < (g.get("duration") or 0) < CURATED_DUYGU_MIN_S)]
     if not fresh:
-        log.warning("  kürate[oto]: taze cevher yok (hepsi üretilmiş ya da havuz boş)")
+        log.warning("  kürate[oto]: taze cevher yok (hepsi üretilmiş / havuz boş / kısa)")
         return None, None
     fresh.sort(key=lambda g: -_gem_rank(g))
     # TONA-DUYARLI SEÇİM: en iyi adayları vision ile kanalın tonuna göre skorla — mizah
@@ -257,10 +269,18 @@ def auto_produce_curated(channel, *, settings, secrets, db_path, output_root,
         from short_bot.curated_rank import score_curiosity
         from short_bot.pipeline import resolve_ai_call
         _vis = resolve_ai_call(settings, secrets, "vision")
-        fresh = score_curiosity(fresh, vision_call=_vis, top_n=12,
-                                tone=getattr(reel, "curated_tone", "mizah"), log=log)
+        fresh = score_curiosity(fresh, vision_call=_vis, top_n=12, tone=tone, log=log)
     except Exception as e:  # noqa: BLE001 — skor düşerse engagement sırası (fail-open)
         log.info(f"  kürate[oto]: ton-skoru atlandı ({e})")
+    if tone == "duygu":
+        # EŞİK: güçlü duygusal klip yoksa ÜRETME (zayıf derp'i zorlama — short 934 dersi).
+        _strong = [g for g in fresh if (g.get("curiosity") or 0) >= DUYGU_MIN_SCORE]
+        if not _strong:
+            best = max((g.get("curiosity") or 0) for g in fresh) if fresh else 0
+            log.warning(f"  kürate[oto]: yeterince güçlü duygusal klip yok (en iyi skor "
+                        f"{best}<{DUYGU_MIN_SCORE}) → üretim atlandı")
+            return None, None
+        fresh = _strong
     # En iyi adayları sırayla dene; WATERMARK'LI (temizlenemeyen) olanı ATLA → temiz video.
     for gem in fresh[:8]:
         log.info(f"  kürate[oto]: deneniyor ⬆{gem.get('ups')} {gem.get('orient')} "

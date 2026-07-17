@@ -30,6 +30,13 @@ DEFAULT_SUBS = [
     "AbruptChaos", "maybemaybemaybe", "interestingasfuck",
 ]
 
+# DUYGU kanalı havuzu (curated_tone='duygu'): kahramanlık/kurtarma/sadakat/dokunaklı —
+# derp/komik değil (doğrulandı 2026-07-18: video-zengin duygusal anlar). @NedenHayvan şeridi.
+DEFAULT_DUYGU_SUBS = [
+    "MadeMeSmile", "HumansBeingBros", "AnimalsBeingBros", "likeus",
+    "AnimalsBeingGeniuses", "rarepuppers",
+]
+
 # İndirilebilir video kaynakları (yt-dlp bunları çözer).
 _VIDEO_DOMAINS = ("v.redd.it", "redgifs.com", "gfycat.com", "streamable.com",
                   "i.imgur.com")
