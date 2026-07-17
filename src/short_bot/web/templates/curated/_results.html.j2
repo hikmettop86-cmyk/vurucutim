@@ -32,11 +32,14 @@
         </span>
         {% if g.produced %}
         <span class="absolute top-1 right-1 text-[10px] px-1.5 py-0.5 rounded bg-claude-success text-white font-medium">✓ üretildi</span>
+        {% elif g.curiosity %}
+        <span class="absolute top-1 right-1 text-[10px] px-1.5 py-0.5 rounded font-bold text-white {% if g.curiosity >= 8 %}bg-claude-accent{% elif g.curiosity >= 6 %}bg-amber-500{% else %}bg-black/50{% endif %}"
+              title="Vision merak/gülme skoru (1-10)">🔥 {{ g.curiosity }}</span>
         {% endif %}
       </div>
       <div class="p-2 flex flex-col gap-1 flex-1">
         <div class="text-xs font-medium line-clamp-2" title="{{ g.title }}">{{ g.title }}</div>
-        <div class="text-[11px] text-claude-muted">⬆ {{ '{:,}'.format(g.ups) }} · 💬 {{ g.comments }} · r/{{ g.sub }}</div>
+        <div class="text-[11px] text-claude-muted">⬆ {{ '{:,}'.format(g.ups) }} · 💬 {{ g.comments }} · r/{{ g.sub }}{% if g.curiosity %} · 🔥{{ g.curiosity }}/10{% endif %}</div>
         <div class="mt-auto flex items-center gap-2 pt-1">
           <a href="{{ g.permalink }}" target="_blank" rel="noopener"
              class="text-[11px] text-claude-accent hover:underline">Reddit'te izle ↗</a>

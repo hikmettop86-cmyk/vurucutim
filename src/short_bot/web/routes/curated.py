@@ -66,17 +66,12 @@ def _secrets() -> dict:
 
 
 def _rank_score(gem: dict) -> float:
-    """'Bize uygun en iyi' skoru: DİKEY (Shorts için ideal) + upvote + makul süre."""
-    s = float(gem.get("ups", 0) or 0)
-    orient = gem.get("orient")
-    if orient == "DİKEY":
-        s *= 2.5                       # dikey klip 9:16'ya tam oturur
-    elif orient == "yatay":
-        s *= 0.7                       # yatay kırpılınca içerik kaybı
-    d = gem.get("duration") or 0
-    if d and not (5 <= d <= 60):
-        s *= 0.6                       # çok kısa/uzun (loop ya da sıkışma riski)
-    return s
+    """Sıralama skoru: vision MERAK skoru işlendiyse final_score (engagement×merak),
+    yoksa engagement (upvote + yorum-etkileşimi + yön + süre). Bkz. curated_rank."""
+    if gem.get("final_score") is not None:
+        return float(gem["final_score"])
+    from short_bot.curated_rank import engagement_score
+    return engagement_score(gem)
 
 
 def _clip_key(video_url: str) -> str:
@@ -125,11 +120,15 @@ def _decorate(gems: list, db_path) -> list:
 
 
 def _run_fetch_job(job_id: str, *, client_id, client_secret, subreddits, t,
-                   min_ups, max_duration, slug, category) -> None:
+                   min_ups, max_duration, slug, category, vision_call=None) -> None:
+    from short_bot.curated_rank import score_curiosity
     from short_bot.reddit_gems import find_gems
     try:
         gems = find_gems(client_id, client_secret, subreddits=subreddits or None,
                          t=t, min_ups=min_ups, max_duration=max_duration)
+        # MERAK SKORU: en iyi adayların başlık+kapağını vision ile skorla → sıradan
+        # değil, gerçekten izletici klipler öne çıkar (google_studio ücretsiz havuz).
+        gems = score_curiosity(gems, vision_call=vision_call)
         _set_job(job_id, status="done", gems=gems)
         with _last_lock:                        # sekme değişince kaybolmasın
             _last_search.clear()
@@ -192,12 +191,19 @@ def fetch():
                                error="Reddit API kimliği yok (data/secrets.yaml: "
                                      "reddit_client_id / reddit_client_secret).",
                                slug=slug)
+    # VISION (merak skoru için): hibrit backend'de google_studio ücretsiz havuz.
+    vision_call = None
+    try:
+        from short_bot.pipeline import resolve_ai_call
+        vision_call = resolve_ai_call(current_app.config["SHORTBOT_SETTINGS"], sec, "vision")
+    except Exception:  # noqa: BLE001 — vision yoksa engagement sırası (fail-open)
+        vision_call = None
     _set_job(job_id, status="running", gems=None, error=None, slug=slug)
     threading.Thread(
         target=_run_fetch_job, args=(job_id,),
         kwargs=dict(client_id=cid, client_secret=csec, subreddits=subreddits,
                     t=t, min_ups=min_ups, max_duration=max_duration, slug=slug,
-                    category=category),
+                    category=category, vision_call=vision_call),
         daemon=True).start()
     return render_template("curated/_results.html.j2", job_id=job_id,
                            status="running", gems=None, error=None, slug=slug)

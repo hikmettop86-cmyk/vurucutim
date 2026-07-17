@@ -104,6 +104,9 @@ def test_curated_fetch_lists_gems(tmp_path, monkeypatch):
                         max_duration=max_duration)
         return [_GEM]
     monkeypatch.setattr("short_bot.reddit_gems.find_gems", fake_find_gems)
+    # Merak skoru (vision) fetch job'a eklendi → testte ağsız passthrough (engagement sırası).
+    monkeypatch.setattr("short_bot.curated_rank.score_curiosity",
+                        lambda gems, **kw: gems)
 
     r = c.post("/curated/fetch", data={"channel_slug": "cevherkanal", "t": "month"})
     body = r.data.decode("utf-8")
@@ -202,6 +205,8 @@ def test_curated_cache_persists_last_search(tmp_path, monkeypatch):
     monkeypatch.setattr("short_bot.web.routes.curated._secrets",
                         lambda: {"reddit_client_id": "x", "reddit_client_secret": "y"})
     monkeypatch.setattr("short_bot.reddit_gems.find_gems", lambda *a, **k: [_GEM])
+    monkeypatch.setattr("short_bot.curated_rank.score_curiosity",
+                        lambda gems, **kw: gems)
     r = c.post("/curated/fetch", data={"channel_slug": "cevherkanal", "t": "week"})
     job_id = re.search(r"/curated/status/([0-9a-f]+)", r.data.decode()).group(1)
     for _ in range(60):

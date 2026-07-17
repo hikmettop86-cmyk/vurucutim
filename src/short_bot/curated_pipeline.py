@@ -213,17 +213,10 @@ def _gem_produced(gem: dict, keys: set) -> bool:
 
 
 def _gem_rank(gem: dict) -> float:
-    """'Bize uygun' skoru: DİKEY (9:16 ideal) + upvote + makul süre."""
-    s = float(gem.get("ups", 0) or 0)
-    o = gem.get("orient")
-    if o == "DİKEY":
-        s *= 2.5
-    elif o == "yatay":
-        s *= 0.7
-    d = gem.get("duration") or 0
-    if d and not (5 <= d <= 60):
-        s *= 0.6
-    return s
+    """Autopilot 'bize uygun' skoru: upvote + yorum-etkileşimi + yumuşak yön/süre.
+    Panel'deki manuel sıralamayla (curated_rank.engagement_score) TUTARLI."""
+    from short_bot.curated_rank import engagement_score
+    return engagement_score(gem)
 
 
 def auto_produce_curated(channel, *, settings, secrets, db_path, output_root,
