@@ -59,10 +59,11 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
 
     vision = resolve_ai_call(settings, secrets, "vision")
     llm = resolve_ai_call(settings, secrets, "script")
-    # SENARYO komedi çekirdeği. Varsayılan HIZLI model (script=gemini, ~4sn). Daha çok
-    # mizah nüansı için 'dna' (Sonnet 5) kullanılabilir ama ÇOK YAVAŞ (~30sn/çağrı) →
-    # üretimi geciktirir; kalite>hız isteniyorsa buradan yükseltilir (opsiyon).
-    narr_llm = llm
+    # SENARYO komedi ÇEKİRDEĞİ → EN GÜÇLÜ yazar (dna rolü = Sonnet 5). Kullanıcı: gemini-lite
+    # 'tatmin edici değil' (klişe + ozan sızıntısı); Sonnet spesifik/zeki/kültüre oturan mizah
+    # yazıyor. Tek kısa çağrı/video (~30sn, video zaten ~2dk); görsel/kurgu/metadata hızlı
+    # backend'de kalır → maliyet düşük. Hız>kalite istenirse 'script'e çevrilir.
+    narr_llm = resolve_ai_call(settings, secrets, "dna")
     ai33_key = resolve_ai33_api_key(secrets)
 
     out_dir = Path(output_root) / channel.slug

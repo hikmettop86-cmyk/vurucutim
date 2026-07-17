@@ -722,7 +722,7 @@ _BARD_RE = re.compile(
     r"^\s*(?:a[şs][iıİ]k[^.;:!?]{0,25}|ozan)\s*der\s*ki\s*[:;,\-–—]?\s*",
     re.IGNORECASE)
 _BARD_TAIL_RE = re.compile(
-    r"[,;:—–-]\s*(?:a[şs][iıİ]k|ozan)\b.*$", re.IGNORECASE | re.DOTALL)
+    r"[.,;:—–-]\s*(?:a[şs][iıİ]k|ozan)\b.*$", re.IGNORECASE | re.DOTALL)
 
 
 def _strip_bard(close: str) -> str:

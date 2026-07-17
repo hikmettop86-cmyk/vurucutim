@@ -57,6 +57,7 @@ def test_strip_bard_removes_ozan_leading_and_trailing():
     assert _strip_bard("Ozan der ki; saray dediğin makine içiymiş!") == "Saray dediğin makine içiymiş!"
     assert _strip_bard("Bu rahatlık vergiye tabi olmalı, Ozan yazdı.") == "Bu rahatlık vergiye tabi olmalı."
     assert _strip_bard("Aşık Kedi der ki: sıcak köşeyi bulan kazanır") == "Sıcak köşeyi bulan kazanır."
+    assert _strip_bard("Tapu onda. Ozan der ki; krallar beklenir.") == "Tapu onda."   # nokta-sonrası
     # ozan yok → dokunma
     assert _strip_bard("Çamaşır yıkanır, amca uyanmaz.") == "Çamaşır yıkanır, amca uyanmaz."
 
