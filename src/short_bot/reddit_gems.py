@@ -249,6 +249,44 @@ def fetch_post(url_or_permalink: str, client_id: str, client_secret: str,
     }
 
 
+def fetch_top_comments(url_or_permalink: str, client_id: str, client_secret: str,
+                       *, limit: int = 4, user_agent: str = _UA) -> list[str]:
+    """Gönderinin EN ÜST yorumlarının metnini döndürür — izleyiciler videoyu AÇIKLAR.
+
+    Vision tek storyboard'da aleti/olayı kaçırabiliyor (short 923: pipeti görmedi,
+    'parmakla' dedi). Başlık + bu 'kalabalık açıklaması' olayın NE olduğunu anlamak için
+    vision'a ALTERNATİF/tamamlayıcı gerçek sinyaldir. Hata/boşsa [] (fail-open)."""
+    from urllib.parse import urlparse
+    try:
+        token = get_token(client_id, client_secret, user_agent=user_agent)
+        path = urlparse(url_or_permalink).path if url_or_permalink.startswith("http") \
+            else url_or_permalink
+        path = "/" + path.strip("/")
+        r = requests.get(f"{_API}{path}",
+                         params={"raw_json": 1, "sort": "top", "limit": 20},
+                         headers={"Authorization": f"bearer {token}",
+                                  "User-Agent": user_agent}, timeout=20)
+        r.raise_for_status()
+        data = r.json()
+        if not isinstance(data, list) or len(data) < 2:
+            return []
+        out: list[str] = []
+        for c in data[1]["data"]["children"]:
+            if c.get("kind") != "t1":                 # yalnız yorum (t1), 'more' değil
+                continue
+            body = (c.get("data", {}).get("body") or "").strip()
+            if (not body or body in ("[deleted]", "[removed]")
+                    or len(body) < 15 or len(body) > 240):   # çok kısa/uzun ele
+                continue
+            out.append(" ".join(body.split()))         # newline/whitespace normalize
+            if len(out) >= limit:
+                break
+        return out
+    except Exception as e:  # noqa: BLE001 — yorum yoksa üretim sürsün
+        log.info(f"  cevher: yorum çekilemedi ({e})")
+        return []
+
+
 def download_clip(video_url: str, out_path, *, user_agent: str = _UA) -> "Path":
     """Kürate klibi indir. v.redd.it fallback = doğrudan mp4 (video-only; orijinal ses
     zaten atılacak, Türkçe TTS basılacak). redgifs/streamable/gifv → yt-dlp.

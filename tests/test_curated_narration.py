@@ -52,6 +52,19 @@ def test_write_curated_narration_single_call_deterministic_budget(monkeypatch):
     assert len(n.beats) == 3           # deterministik kısaltma MIN_BEATS'e indirdi (5→3)
 
 
+def test_curated_prompt_includes_crowd_comments():
+    # Üst Reddit yorumları prompt'a 'WHAT THE CROWD SAYS' bloğu olarak girer (vision'a
+    # alternatif olay-bağlamı). Boş yorumda blok YAZILMAZ.
+    from short_bot.reel_narration import build_curated_prompt
+    ch = SimpleNamespace(language="tr",
+                         reel=ReelConfig(enabled=True, voice_id="v", persona=""))
+    p = build_curated_prompt("t", "d", channel=ch,
+                             comments=["he inserted it into the trachea", "poor turtle"])
+    assert "WHAT THE CROWD SAYS" in p and "trachea" in p
+    assert "WHAT THE CROWD SAYS" not in build_curated_prompt("t", "d", channel=ch,
+                                                             comments=[])
+
+
 def test_strip_bard_removes_ozan_leading_and_trailing():
     from short_bot.reel_narration import _strip_bard
     assert _strip_bard("Ozan der ki; saray dediğin makine içiymiş!") == "Saray dediğin makine içiymiş!"

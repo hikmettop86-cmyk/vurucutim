@@ -594,16 +594,25 @@ class _CuratedDraft(_BaseModel):
 
 
 def build_curated_prompt(title: str, clip_description: str, *, channel,
-                         target_duration_s=None, scene_split: float | None = None) -> str:
+                         target_duration_s=None, scene_split: float | None = None,
+                         comments=None) -> str:
     """Tek GERÇEK klip için persona senaryosu prompt'u (uydurma yasağı).
 
     ``scene_split``: klip 2 sahneliyse İLK sahnenin bittiği oran (0-1, vision tespiti).
-    Verilirse anlatım TEMPOSU klibin sahne dağılımına uydurulur — ikinci sahneye dair
-    sözler görüntü o sahneye geçmeden söylenmesin (ses görüntünün önüne geçmesin)."""
+    ``comments``: üst Reddit yorumları — olayı anlamak için vision'a ALTERNATİF gerçek
+    sinyal (vision aleti/olayı kaçırırsa başlık+yorum yakalar)."""
     td = tuple(target_duration_s) if target_duration_s else channel.reel.target_duration_s
     lo_s, hi_s = td
     lo_w, hi_w = reel_word_budget(td)
     lang = _language_name(channel.language)
+    # KALABALIK BAĞLAMI: başlık + üst yorumlar olayın NE olduğunu anlatır (vision tek
+    # storyboard'dan aleti/olayı kaçırabilir — short 923: pipeti görmeyip 'parmak' dedi).
+    crowd = ""
+    _cl = [str(c).strip() for c in (comments or []) if str(c).strip()][:4]
+    if _cl:
+        _joined = "\n".join(f"  • {c}" for c in _cl)
+        crowd = (f"\nWHAT THE CROWD SAYS (top comments — real viewers explaining the clip; "
+                 f"these EXPLAIN what is happening and often name the key object/tool):\n{_joined}\n")
     scene_rule = ""
     if scene_split is not None and 0.0 < scene_split < 1.0:
         s1 = round(scene_split * 100)
@@ -621,13 +630,18 @@ def build_curated_prompt(title: str, clip_description: str, *, channel,
 
 REAL CONTEXT (the clip's own caption/title): {title}
 WHAT IS ACTUALLY ON SCREEN (vision of the real clip): {clip_description}
-
+{crowd}
 This is a KÜRATE clip — the audience already loved this REAL moment. Narrate the REAL
 story with the channel's persona. Do NOT invent a new story.
 
 RULES:
-- Narrate WHAT IS ACTUALLY ON SCREEN + the real title context. Invent NOTHING that the
-  clip does not show (no hidden object, no event, no second animal that isn't there).{scene_rule}
+- NE OLDUĞUNU önce BAŞLIK + YORUMLARdan anla: Başlık (poster'ın kendi tarifi) ve yorumlar
+  olayın GERÇEĞİDİR — anahtar nesne/aleti ve NE olduğunu onlar söyler. Vision tek kareden
+  bir aleti/olayı KAÇIRABİLİR; başlık/yorum bir şeyi ('straw/pipet', 'nefes borusuna soktu')
+  söylüyor ama vision görmediyse, BAŞLIK+YORUMA GÜVEN — 'parmakla' gibi yanlış ikame UYDURMA.
+  Vision görsel detay (renk, poz, ortam) için; olayın ÖZÜ başlık+yorumdan gelir.
+- Bunların ÜÇÜNÜN (başlık + yorum + vision) BİLDİRDİĞİ dışında bir şey UYDURMA (olmayan
+  ikinci hayvan, gizli olay yok). Ama üçünden BİRİ net söylüyorsa o GERÇEKTİR, kullan.{scene_rule}
 - GÜLDÜR — ama GERÇEK, ANLAMLI mizahla (aşağıdaki EN ÖNCELİKLİ MİZAH KURALI'na uy).
   Ekrandaki GERÇEK özneyi/aksiyonu KORU; yapay/resmi/belgesel dil YASAK.
 - HARD WORD BUDGET: the whole spoken script (hook + 3 beats + close) must be {lo_w}-{hi_w}
@@ -670,18 +684,20 @@ def write_curated_narration(title: str, clip_description: str, *, channel,
                             claude_path: str = "claude", model: str = "default",
                             backend: str = "claude_cli", api_key: str | None = None,
                             seed: int = 0, target_duration_s=None,
-                            scene_split: float | None = None) -> ReelNarration:
+                            scene_split: float | None = None,
+                            comments=None) -> ReelNarration:
     """GERÇEK klibin başlığı + vision aksiyonundan persona senaryosu. visual_query'ler
     tek hazır klibe bağlı olduğu için ``subject``e sabitlenir (footage aranmaz).
 
-    ``scene_split``: klip 2 sahneliyse geçiş oranı → anlatım temposu sahneye uydurulur
-    (ses görüntünün önüne geçmesin; bkz. build_curated_prompt)."""
+    ``scene_split``: klip 2 sahneliyse geçiş oranı → anlatım temposu sahneye uydurulur.
+    ``comments``: üst Reddit yorumları — olayı anlamak için vision'a ALTERNATİF gerçek
+    sinyal (vision aleti/olayı kaçırırsa başlık+yorum yakalar; bkz. build_curated_prompt)."""
     reel = getattr(channel, "reel", None)
     if reel is None:
         raise ValueError("write_curated_narration: channel.reel yok")
     prompt = build_curated_prompt(title, clip_description, channel=channel,
                                   target_duration_s=target_duration_s,
-                                  scene_split=scene_split)
+                                  scene_split=scene_split, comments=comments)
     persona = load_persona(getattr(reel, "persona", ""), language=channel.language)
     if persona:
         prompt += "\n\n" + persona_block(persona, seed=seed)

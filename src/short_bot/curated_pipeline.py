@@ -106,6 +106,18 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
             raise RuntimeError("kürate: vision klibi tarif edemedi (backend kapalı?)")
         log.info(f"  kürate: vision → {desc}")
 
+        # KALABALIK BAĞLAMI (vision'a ALTERNATİF): vision tek storyboard'dan aleti/olayı
+        # kaçırabiliyor (short 923: pipeti görmedi, 'parmakla çöp çıkarıyor' dedi — oysa
+        # başlık 'using a straw', yorumlar 'nefes borusuna soktu' diyor). Başlık + üst
+        # yorumlar olayın NE olduğunu anlatır → anlatıma gerçek sinyal, vision'a yenilmesin.
+        comments: list[str] = []
+        _cid, _csec = secrets.get("reddit_client_id"), secrets.get("reddit_client_secret")
+        if _cid and _csec and gem.get("permalink"):
+            from short_bot.reddit_gems import fetch_top_comments
+            comments = fetch_top_comments(gem["permalink"], _cid, _csec, limit=4)
+            if comments:
+                log.info(f"  kürate: {len(comments)} üst yorum bağlam olarak eklendi")
+
         # SAHNE-SENKRON: klip 2 sahneliyse (poster→banyo gibi) geçiş oranını tespit et →
         # anlatım temposu sahneye uydurulur (ses görüntünün önüne geçmesin; kullanıcı
         # yakaladı: "banyoda" banyo görünmeden ~3sn önce söyleniyordu). Tek sahne → None.
@@ -124,7 +136,8 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
             title_seed, desc, channel=channel, subject="clip",
             claude_path=narr_llm.claude_path, model=narr_llm.model,
             backend=narr_llm.backend, api_key=narr_llm.api_key,
-            seed=seed, target_duration_s=target, scene_split=scene_split)
+            seed=seed, target_duration_s=target, scene_split=scene_split,
+            comments=comments)
         log.info(f"  kürate: senaryo {narration.word_count()} kelime | "
                  f"başlık='{narration.title}' kapak='{narration.cover_title}'")
 
