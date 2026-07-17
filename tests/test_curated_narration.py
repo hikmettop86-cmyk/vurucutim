@@ -7,8 +7,8 @@ from short_bot.reel_narration import (_CuratedDraft, curated_target,
 
 
 def test_curated_target_derives_from_clip_length():
-    assert curated_target(6, (30, 45)) == (8, 12)      # kısa klip → en çok ~2x loop
-    assert curated_target(20, (30, 45)) == (16, 20)    # yeterince uzun → loop YOK
+    assert curated_target(6, (30, 45)) == (12, 16)     # kısa → ~klip×2.6 (yavaşlatma kapsar)
+    assert curated_target(20, (30, 45)) == (16, 20)    # yeterince uzun → ~klip boyu
     assert curated_target(60, (30, 45)) == (41, 45)    # kanal üstüyle capped
     assert curated_target(0, (30, 45)) == (30, 45)     # okunamadı → kanal hedefi
 

@@ -243,6 +243,36 @@ def _clip_duration_s(clip, ffmpeg_path: str) -> float:
         return 0.0
 
 
+# KÜRATE yavaşlatma: kısa klip videodan kısaysa LOOP yerine YAVAŞLATILIR (setpts) →
+# tek uzun oynatım (kullanıcı: "loopa girince kötü oluyor"). En çok bu kat; daha
+# kısa klipte kalan boşluk yine loop'lanır (2.5x'ten fazla yavaşlatma tuhaf görünür).
+CURATED_MAX_SLOWDOWN = 2.7
+
+
+def _slow_clip_to(clip, target_s: float, ffmpeg_path: str, out_path):
+    """Klibi setpts ile ~target_s'ye YAVAŞLAT (video-only; loop yerine tek oynatım).
+
+    Döner yeni klip yolu, ya da None (klip zaten yeterince uzun / okunamadı /
+    ffmpeg hatası → çağıran orijinali loop'lar, fail-open)."""
+    import subprocess
+    dur = _clip_duration_s(clip, ffmpeg_path)
+    if dur <= 0:
+        return None
+    factor = min(CURATED_MAX_SLOWDOWN, target_s / dur)
+    if factor <= 1.05:
+        return None                       # klip zaten videoyu tek oynatımda dolduruyor
+    try:
+        subprocess.run([ffmpeg_path, "-v", "error", "-y", "-i", str(clip),
+                        "-filter:v", f"setpts={factor:.3f}*PTS", "-an", "-r", "30",
+                        "-preset", "veryfast", str(out_path)],
+                       capture_output=True, timeout=180)
+        if Path(out_path).exists() and Path(out_path).stat().st_size > 0:
+            return out_path
+    except Exception as e:  # noqa: BLE001 — yavaşlatma başarısızsa loop'a düş
+        log.info(f"  kürate: klip yavaşlatılamadı ({e}) → loop'a düşülüyor")
+    return None
+
+
 def _storyboard_frames(clip, out_path, ffmpeg_path: str, *, cols: int = 3, rows: int = 2) -> bool:
     """Klipten cols×rows kareyi ZAMAN-eşit örnekleyip tek ızgara görsele diz (PIL).
 
@@ -726,11 +756,20 @@ def produce_reel_video(
     # bütçe onlara gidince YENİ adaylara hiç sıra gelmiyordu.
     seen_verdicts: dict = {}
     # KÜRATE-KLİP: tek hazır klip TÜM segmentlere atanır → footage arama döngüsü
-    # atlanır (order boşaltılır). Alt-kesim ofsetleri klibin farklı saniyelerini
-    # gösterir (klip-içi çeşitlilik); montaj gerekirse loop'lar.
+    # atlanır (order boşaltılır). Klip videodan KISAYSA loop yerine YAVAŞLATILIR
+    # (tek uzun oynatım); yeterince uzun klip olduğu gibi kullanılır (loop yok).
     if curated_clip is not None:
+        _cc = Path(curated_clip)
+        _orig_d = _clip_duration_s(_cc, ffmpeg_path)
+        _slow = _slow_clip_to(_cc, duration_s + 0.4, ffmpeg_path,
+                              work_dir / "curated_slow.mp4")
+        if _slow is not None:
+            log.info(f"  kürate: klip {_orig_d:.1f}s → yavaşlatıldı "
+                     f"{_clip_duration_s(Path(_slow), ffmpeg_path):.1f}s "
+                     f"(video {duration_s:.1f}s, loop önleme)")
+            _cc = Path(_slow)
         for si in range(n_segs):
-            clips_by_seg[si] = [Path(curated_clip)]
+            clips_by_seg[si] = [_cc]
         order = []
     for si in order:
         query = timeline.seg_queries[si]

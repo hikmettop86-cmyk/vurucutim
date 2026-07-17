@@ -548,11 +548,12 @@ def _ensure_open_loop(n: ReelNarration, prompt: str, *, claude_path, model, back
 from pydantic import BaseModel as _BaseModel  # noqa: E402
 from pydantic import Field as _Field  # noqa: E402
 
-# Kürate video süresi KLİP UZUNLUĞUNDAN türer → AĞIR LOOP YOK (kullanıcı: "loopa
-# girince kötü oluyor"). Klip yeterince uzunsa (>= CURATED_MIN_S) video ~klip boyu
-# (tek oynatım, loop yok); kısa klip en çok CURATED_MAX_LOOP kez tekrarlanır. Her
-# durumda kanal üst süresini AŞMAZ.
-CURATED_MAX_LOOP = 2.0
+# Kürate video süresi KLİP UZUNLUĞUNDAN türer → LOOP YOK (kullanıcı: "loopa girince
+# kötü oluyor" → çözüm: kısa klip loop yerine YAVAŞLATILIR, bkz. reel._slow_clip_to).
+# Klip yeterince uzunsa (>= CURATED_MIN_S) video ~klip boyu (tek oynatım); kısa klip
+# ~klip×CURATED_MAX_LOOP'a UZATILIR (yavaşlatma bunu tek oynatımda doldurur, loop yok)
+# → senaryo nefes alır (persona sıkışmaz). Kanal üst süresini AŞMAZ.
+CURATED_MAX_LOOP = 2.6
 CURATED_MIN_S = 8
 # Bütçe kısaltma döngüsü: taşan senaryo klibi gerip loop'latır → hedefin altına
 # inene kadar (en çok bu kadar tur) gemini ile kısaltılır (eski _fd_enforce_budget dersi).
@@ -597,7 +598,6 @@ def build_curated_prompt(title: str, clip_description: str, *, channel,
     td = tuple(target_duration_s) if target_duration_s else channel.reel.target_duration_s
     lo_s, hi_s = td
     lo_w, hi_w = reel_word_budget(td)
-    per_w = max(4, hi_w // 5)          # hook + 3 beat + close = 5 segment
     lang = _language_name(channel.language)
     return f"""You are writing narration for a REAL short video clip we are RE-TELLING.
 
@@ -615,7 +615,8 @@ RULES:
 - HARD WORD BUDGET: the whole spoken script (hook + 3 beats + close) must be {lo_w}-{hi_w}
   words TOTAL and MUST NOT exceed {hi_w}. TTS reads ~1.95 words/s, so this is what keeps
   the clip from LOOPING (video lands in {lo_s}-{hi_s}s). Count your words.
-- Write EXACTLY 3 beats. Keep EVERY line SHORT — about {per_w} words each. Narration in {lang}.
+- Write EXACTLY 3 beats, each a FULL natural sentence (not clipped telegram-style). Aim
+  for the MIDDLE of the {lo_w}-{hi_w} word range — rich persona voice, not terse. In {lang}.
 - Also write "title" (YouTube/SEO: subject keyword FIRST + short hook, no period) and
   "cover_title" (3-6 word on-screen headline).
 - mood: one of upbeat / neutral / calm.
