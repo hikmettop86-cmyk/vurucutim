@@ -60,9 +60,11 @@ def test_curated_prompt_includes_crowd_comments():
                          reel=ReelConfig(enabled=True, voice_id="v", persona=""))
     p = build_curated_prompt("t", "d", channel=ch,
                              comments=["he inserted it into the trachea", "poor turtle"])
-    assert "WHAT THE CROWD SAYS" in p and "trachea" in p
-    assert "WHAT THE CROWD SAYS" not in build_curated_prompt("t", "d", channel=ch,
-                                                             comments=[])
+    assert "ARKA-PLAN BAĞLAMI" in p and "trachea" in p
+    # yorumlar bağlam; anlatıma META olarak sokulmaması UYARISI da olmalı
+    assert "SOKMA" in p
+    assert "ARKA-PLAN BAĞLAMI" not in build_curated_prompt("t", "d", channel=ch,
+                                                           comments=[])
 
 
 def test_strip_bard_removes_ozan_leading_and_trailing():

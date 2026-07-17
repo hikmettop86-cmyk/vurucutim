@@ -611,8 +611,11 @@ def build_curated_prompt(title: str, clip_description: str, *, channel,
     _cl = [str(c).strip() for c in (comments or []) if str(c).strip()][:4]
     if _cl:
         _joined = "\n".join(f"  • {c}" for c in _cl)
-        crowd = (f"\nWHAT THE CROWD SAYS (top comments — real viewers explaining the clip; "
-                 f"these EXPLAIN what is happening and often name the key object/tool):\n{_joined}\n")
+        crowd = (f"\nARKA-PLAN BAĞLAMI (üst yorumlar — SADECE olayı/aleti ANLAMAN için; "
+                 f"anahtar nesneyi ve ne olduğunu açıklarlar):\n{_joined}\n"
+                 f"UYARI: Bu yorumlar yalnız SENİN anlaman için. Anlatıma 'yorumlar', "
+                 f"'millet', 'izleyici', 'Reddit' DİYE SOKMA — sanki olayı sen görmüşsün "
+                 f"gibi anlat.\n")
     scene_rule = ""
     if scene_split is not None and 0.0 < scene_split < 1.0:
         s1 = round(scene_split * 100)
@@ -636,12 +639,21 @@ story with the channel's persona. Do NOT invent a new story.
 
 RULES:
 - NE OLDUĞUNU önce BAŞLIK + YORUMLARdan anla: Başlık (poster'ın kendi tarifi) ve yorumlar
-  olayın GERÇEĞİDİR — anahtar nesne/aleti ve NE olduğunu onlar söyler. Vision tek kareden
-  bir aleti/olayı KAÇIRABİLİR; başlık/yorum bir şeyi ('straw/pipet', 'nefes borusuna soktu')
-  söylüyor ama vision görmediyse, BAŞLIK+YORUMA GÜVEN — 'parmakla' gibi yanlış ikame UYDURMA.
-  Vision görsel detay (renk, poz, ortam) için; olayın ÖZÜ başlık+yorumdan gelir.
+  olayın GERÇEĞİDİR — anahtar nesne/aleti, EYLEMİ ve AMACINI onlar söyler. Vision tek kareden
+  aleti/yönü KAÇIRABİLİR ya da TERS okuyabilir; başlık/yorum bir şeyi ('using a straw' =
+  aleti KULLANIYOR, 'inserted/resuscitating' = SOKUP hava veriyor) söylüyorsa, vision
+  'removes/çıkarıyor' dese BİLE başlık+yoruma GÜVEN — eylemi/yönü TERS çevirme, 'parmakla'
+  gibi yanlış ikame UYDURMA. Örn. 'saves a turtle using a straw' = balıkçı pipeti KURTARMAK
+  için kullanır (pipeti burundan çıkarmak DEĞİL). Vision görsel detay (renk, poz, ortam)
+  için; olayın ÖZÜ + AMACI başlık+yorumdan gelir.
 - Bunların ÜÇÜNÜN (başlık + yorum + vision) BİLDİRDİĞİ dışında bir şey UYDURMA (olmayan
   ikinci hayvan, gizli olay yok). Ama üçünden BİRİ net söylüyorsa o GERÇEKTİR, kullan.{scene_rule}
+- KENDİ İÇİNDE HİKÂYE — META YOK: Anlatım, olayı GÖREN birinin ağzından akan tek bir
+  hikâyedir. 'Yorumlarda millet', 'izleyici', 'Reddit', 'video' gibi DIŞ referans SOKMA;
+  dördüncü duvarı KIRMA. (Yorumlar sana bağlam; metne değil.)
+- ZORLAMA METAFOR YASAK: Sahneyle ALAKASIZ, rastgele benzetme kullanma ('sanki davulla
+  köye gönderiyor' gibi — deniz/kaplumbağayla ilgisiz). Benzetme kullanacaksan sahneden
+  ÇIKMALI ve ANLAMLI olmalı; olmuyorsa düz ve komik anlat, zorlama.
 - GÜLDÜR — ama GERÇEK, ANLAMLI mizahla (aşağıdaki EN ÖNCELİKLİ MİZAH KURALI'na uy).
   Ekrandaki GERÇEK özneyi/aksiyonu KORU; yapay/resmi/belgesel dil YASAK.
 - HARD WORD BUDGET: the whole spoken script (hook + 3 beats + close) must be {lo_w}-{hi_w}
