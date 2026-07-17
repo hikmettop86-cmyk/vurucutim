@@ -594,12 +594,29 @@ class _CuratedDraft(_BaseModel):
 
 
 def build_curated_prompt(title: str, clip_description: str, *, channel,
-                         target_duration_s=None) -> str:
-    """Tek GERÇEK klip için persona senaryosu prompt'u (uydurma yasağı)."""
+                         target_duration_s=None, scene_split: float | None = None) -> str:
+    """Tek GERÇEK klip için persona senaryosu prompt'u (uydurma yasağı).
+
+    ``scene_split``: klip 2 sahneliyse İLK sahnenin bittiği oran (0-1, vision tespiti).
+    Verilirse anlatım TEMPOSU klibin sahne dağılımına uydurulur — ikinci sahneye dair
+    sözler görüntü o sahneye geçmeden söylenmesin (ses görüntünün önüne geçmesin)."""
     td = tuple(target_duration_s) if target_duration_s else channel.reel.target_duration_s
     lo_s, hi_s = td
     lo_w, hi_w = reel_word_budget(td)
     lang = _language_name(channel.language)
+    scene_rule = ""
+    if scene_split is not None and 0.0 < scene_split < 1.0:
+        s1 = round(scene_split * 100)
+        s2 = 100 - s1
+        s1_words = max(2, round(scene_split * hi_w))
+        scene_rule = (
+            f"\n- ⏱ SAHNE-SENKRON (ÇOK ÖNEMLİ — ses görüntüyle uyumlu olmalı): Bu klip "
+            f"~%{s1} noktasında YENİ bir sahneye/mekâna geçiyor (İLK sahne klibin ~%{s1}'i, "
+            f"İKİNCİ sahne son ~%{s2}'si). Anlatımı buna göre TEMPOLA: sözlerinin ilk ~%{s1}'i "
+            f"(~{s1_words} kelime) SADECE ilk sahneyi anlatsın; ikinci sahneye ('sonra', "
+            f"'ardından', yeni mekân adı) ANCAK sözlerinin son ~%{s2}'sinde GEÇ. İkinci "
+            f"sahneyi ERKEN anlatırsan izleyici onu HENÜZ görmüyor — ses görüntünün önüne "
+            f"geçer, senkron bozulur. İlk sahneyi doyur, geçişi tam yerinde yap.")
     return f"""You are writing narration for a REAL short video clip we are RE-TELLING.
 
 REAL CONTEXT (the clip's own caption/title): {title}
@@ -610,7 +627,7 @@ story with the channel's persona. Do NOT invent a new story.
 
 RULES:
 - Narrate WHAT IS ACTUALLY ON SCREEN + the real title context. Invent NOTHING that the
-  clip does not show (no hidden object, no event, no second animal that isn't there).
+  clip does not show (no hidden object, no event, no second animal that isn't there).{scene_rule}
 - GÜLDÜR — ama GERÇEK, ANLAMLI mizahla (aşağıdaki EN ÖNCELİKLİ MİZAH KURALI'na uy).
   Ekrandaki GERÇEK özneyi/aksiyonu KORU; yapay/resmi/belgesel dil YASAK.
 - HARD WORD BUDGET: the whole spoken script (hook + 3 beats + close) must be {lo_w}-{hi_w}
@@ -652,14 +669,19 @@ def write_curated_narration(title: str, clip_description: str, *, channel,
                             subject: str = "scene",
                             claude_path: str = "claude", model: str = "default",
                             backend: str = "claude_cli", api_key: str | None = None,
-                            seed: int = 0, target_duration_s=None) -> ReelNarration:
+                            seed: int = 0, target_duration_s=None,
+                            scene_split: float | None = None) -> ReelNarration:
     """GERÇEK klibin başlığı + vision aksiyonundan persona senaryosu. visual_query'ler
-    tek hazır klibe bağlı olduğu için ``subject``e sabitlenir (footage aranmaz)."""
+    tek hazır klibe bağlı olduğu için ``subject``e sabitlenir (footage aranmaz).
+
+    ``scene_split``: klip 2 sahneliyse geçiş oranı → anlatım temposu sahneye uydurulur
+    (ses görüntünün önüne geçmesin; bkz. build_curated_prompt)."""
     reel = getattr(channel, "reel", None)
     if reel is None:
         raise ValueError("write_curated_narration: channel.reel yok")
     prompt = build_curated_prompt(title, clip_description, channel=channel,
-                                  target_duration_s=target_duration_s)
+                                  target_duration_s=target_duration_s,
+                                  scene_split=scene_split)
     persona = load_persona(getattr(reel, "persona", ""), language=channel.language)
     if persona:
         prompt += "\n\n" + persona_block(persona, seed=seed)

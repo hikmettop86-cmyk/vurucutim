@@ -159,3 +159,60 @@ def clean_if_needed(clip, *, vision_call, ffmpeg_path: str = "ffmpeg", out_path)
         return clip, det
     cleaned = clean_clip(clip, det, ffmpeg_path=ffmpeg_path, out_path=out_path)
     return (cleaned or clip), det
+
+
+# ── SAHNE-BÖLÜNME (ses-görüntü senkron) ──────────────────────────────────────
+# Kürate montajı tek klibi baştan sona oynatır; anlatım TTS hızıyla bağımsız akar.
+# Klip 2 sahneli (örn. poster odası → banyo) ve sahne dağılımı eşit değilse (poster
+# %70, banyo %30), anlatım hikâyeyi eşit böldüğü için "banyoda" kelimeleri görüntü
+# banyoya geçmeden ~3sn önce söyleniyordu (kullanıcı yakaladı). Çözüm: klibin sahne
+# geçişini vision ile tespit et → anlatım prompt'una "sahne1 klibin %X'i, kelimeleri
+# ona göre dağıt" bilgisini ver (bkz. build_curated_prompt scene_split).
+class SceneSplit(BaseModel):
+    """Storyboard vision yargısı — klip belirgin bir ikinci sahneye geçiyor mu, nerede."""
+    multi_scene: bool = False
+    # yeni sahnenin İLK göründüğü kare (1..N); tek sahneyse 0
+    transition_frame: int = 0
+
+
+_SCENE_SPLIT_PROMPT = (
+    "Bu bir kısa video klibinin STORYBOARD'ı (zaman-sıralı {n} kare, soldan sağa, "
+    "sonra alt sıra). Klip BELİRGİN biçimde YENİ bir sahneye/mekâna geçiyor mu "
+    "(arka plan/ortam TAMAMEN değişiyor mu — örn. odadan banyoya)?\n"
+    "ÖNEMLİ: Küçük kamera hareketi, zoom, ya da öznenin aynı ortamda yer değiştirmesi "
+    "SAHNE DEĞİŞİMİ DEĞİLDİR. Yalnız net mekân/kurulum değişimini say.\n"
+    "- multi_scene: net bir İKİNCİ sahne (farklı mekân) var mı?\n"
+    "- transition_frame: yeni sahnenin İLK göründüğü kare numarası (1-{n}); tek sahneyse 0.\n"
+    'SADECE JSON: {{"multi_scene": <bool>, "transition_frame": <int>}}'
+)
+
+
+def detect_scene_split(clip, *, vision_call, ffmpeg_path: str = "ffmpeg",
+                       cols: int = 3, rows: int = 2):
+    """Storyboard (zaman-sıralı kare) → vision: klip yeni bir sahneye geçiyor mu ve
+    kaçıncı karede? Döner: geçiş ORANI (0-1, İLK sahnenin bittiği klip oranı) ya da
+    None (tek sahne / tespit hatası → özel tempo yok, mevcut davranış)."""
+    from short_bot.claude_cli import run_json
+    from short_bot.reel import _storyboard_frames
+    n = cols * rows
+    try:
+        with tempfile.TemporaryDirectory() as td:
+            board = Path(td) / "scene_board.jpg"
+            if not _storyboard_frames(clip, board, ffmpeg_path, cols=cols, rows=rows):
+                return None
+            if not board.exists() or board.stat().st_size == 0:
+                return None
+            res = run_json(_SCENE_SPLIT_PROMPT.format(n=n), SceneSplit,
+                           claude_path=vision_call.claude_path, model=vision_call.model,
+                           backend=vision_call.backend, api_key=vision_call.api_key,
+                           image_path=board, retries=1, timeout_s=45)
+    except Exception as e:  # noqa: BLE001
+        log.info(f"  kürate[sahne]: sahne-bölünme tespiti hatası ({e})")
+        return None
+    tf = res.transition_frame
+    if not res.multi_scene or tf < 2 or tf > n:
+        return None
+    # Kare k'da yeni sahne İLK görünüyorsa geçiş ~ (k-0.5)/n oranında olmuştur; İLK
+    # sahne klibin bu kadarını kaplar. [0.15, 0.85]'e sıkıştır (uç değer tempoyu bozmasın).
+    frac = (tf - 0.5) / n
+    return max(0.15, min(0.85, frac))

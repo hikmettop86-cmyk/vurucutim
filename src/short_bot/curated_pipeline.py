@@ -102,13 +102,25 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
             raise RuntimeError("kürate: vision klibi tarif edemedi (backend kapalı?)")
         log.info(f"  kürate: vision → {desc}")
 
+        # SAHNE-SENKRON: klip 2 sahneliyse (poster→banyo gibi) geçiş oranını tespit et →
+        # anlatım temposu sahneye uydurulur (ses görüntünün önüne geçmesin; kullanıcı
+        # yakaladı: "banyoda" banyo görünmeden ~3sn önce söyleniyordu). Tek sahne → None.
+        scene_split = None
+        if vision is not None:
+            from short_bot.curated_clean import detect_scene_split
+            scene_split = detect_scene_split(clip, vision_call=vision,
+                                             ffmpeg_path=settings.ffmpeg_path)
+            if scene_split is not None:
+                log.info(f"  kürate: 2 sahneli klip → geçiş ~%{round(scene_split*100)} "
+                         f"(anlatım tempolanacak)")
+
         target = curated_target(clip_dur, reel.target_duration_s)
         log.info(f"  kürate: klip {clip_dur:.1f}s → video hedefi {target} (loop önleme)")
         narration = write_curated_narration(
             title_seed, desc, channel=channel, subject="clip",
             claude_path=narr_llm.claude_path, model=narr_llm.model,
             backend=narr_llm.backend, api_key=narr_llm.api_key,
-            seed=seed, target_duration_s=target)
+            seed=seed, target_duration_s=target, scene_split=scene_split)
         log.info(f"  kürate: senaryo {narration.word_count()} kelime | "
                  f"başlık='{narration.title}' kapak='{narration.cover_title}'")
 
