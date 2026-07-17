@@ -165,10 +165,20 @@ def run_auto_upload(*, eng, short_id: int, channel, credentials,
     status = build_status(privacy_status=yt.privacy_status, ai_content=yt.ai_content,
                           publish_at=publish_at)
 
+    # İNGİLİZCE ÇOK-DİLLİ BAŞLIK: kürate senaryosu title_en ürettiyse YouTube localizations
+    # ekle → İngilizce Shorts akışında İngilizce başlık görünür (küresel erişim; incelenen
+    # kanalların 100M+ izlenme sırrı bu). Yoksa yalnız TR başlık (geriye uyum).
+    _title_en = (script.get("title_en") or "").strip()
+    localizations = None
+    if _title_en:
+        localizations = {"en": {"title": _title_en[:100],
+                                "description": snippet.get("description", "")[:5000]}}
+
     try:
         video_id = upload_video(
             credentials=credentials, file_path=Path(row.file_path),
             snippet=snippet, status=status, http=http,
+            localizations=localizations,
         )
         url = f"https://youtu.be/{video_id}"
         record_youtube_upload(

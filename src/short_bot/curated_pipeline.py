@@ -168,6 +168,8 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
         "header_bottom": "",
         "body_paragraph": narration.full_text(),
         "title": seo,
+        # İngilizce başlık → YouTube çok-dilli başlık (küresel Shorts akışı). Boşsa yok sayılır.
+        "title_en": (getattr(narration, "title_en", "") or "")[:100],
         "source_permalink": gem.get("permalink", ""),
         "source_video_url": video_url,   # dedup: aynı klip iki kez üretilmesin
     }, ensure_ascii=False)

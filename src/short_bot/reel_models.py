@@ -115,6 +115,9 @@ class ReelNarration(BaseModel):
     # bu ise ÖZNE anahtar-kelimesi ÖNDE (aramada bulunsun) + kısa mahalle vuruşu.
     # Boşsa çağıran uzun konu metnine düşer (geriye uyum, sıfır regresyon).
     title: str = Field(default="", max_length=TITLE_MAX_CHARS)
+    # İNGİLİZCE BAŞLIK (kürate): YouTube çok-dilli başlık → küresel Shorts akışı (240 ülke).
+    # Boşsa yalnız TR başlık kullanılır (geriye uyum).
+    title_en: str = Field(default="", max_length=TITLE_MAX_CHARS)
     # AÇIK KAPI: bu bölümün tepesi ödendikten SONRA açılan yeni, spesifik soru.
     # Bir sonraki bölümün KONU TOHUMUDUR (bkz. reel_series) — abone isteğini bir
     # ricadan TAKASA çeviren şey budur. Cümlenin kendisi tepe-sonrası beat'in

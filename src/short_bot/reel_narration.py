@@ -590,6 +590,7 @@ class _CuratedDraft(_BaseModel):
     close: str = _Field(min_length=3, max_length=120)
     mood: str = "upbeat"
     title: str = ""
+    title_en: str = ""      # İngilizce başlık (YouTube çok-dilli → küresel Shorts akışı)
     cover_title: str = ""
 
 
@@ -654,6 +655,14 @@ RULES:
 - ZORLAMA METAFOR YASAK: Sahneyle ALAKASIZ, rastgele benzetme kullanma ('sanki davulla
   köye gönderiyor' gibi — deniz/kaplumbağayla ilgisiz). Benzetme kullanacaksan sahneden
   ÇIKMALI ve ANLAMLI olmalı; olmuyorsa düz ve komik anlat, zorlama.
+- 🎣 KANCA & MERAK YAPISI (RETENTION — tutan Türk Shorts kanallarının ORTAK formülü):
+  * HOOK (ilk cümle) bir MERAK BOŞLUĞU açar: şaşırtan bir iddia/soru — ama SONUCU/açıklamayı
+    ELE VERMEZ. Kalıp: "Şu [özneye] bak, [şaşırtan/absürt iddia]…" ya da "Bu [özne] …
+    ama [terslik/soru]". İzleyici 'ne olacak / neden?' diye MERAKTA kalmalı, cevabı beklemeli.
+  * BEAT'lerde gerilimi/merakı TIRMANDIR, açıklamayı ERTELE. Orta beat'e bir merak-RESET
+    koy ('ama işin asıl kısmı burada' / 'ama olay burada bitmiyor') — sayaç sıfırlanır.
+  * ÖDÜL — asıl 'aa!' anı ya da en komik vuruş — SON beat + close'ta gelir; BAŞTAN ele verme.
+    Payoff sona saklanır ki izleyici sonuna kadar kalsın (loop mantığı).
 - GÜLDÜR — ama GERÇEK, ANLAMLI mizahla (aşağıdaki EN ÖNCELİKLİ MİZAH KURALI'na uy).
   Ekrandaki GERÇEK özneyi/aksiyonu KORU; yapay/resmi/belgesel dil YASAK.
 - HARD WORD BUDGET: the whole spoken script (hook + 3 beats + close) must be {lo_w}-{hi_w}
@@ -661,12 +670,18 @@ RULES:
   the clip from LOOPING (video lands in {lo_s}-{hi_s}s). Count your words.
 - Write EXACTLY 3 beats, each a FULL natural sentence (not clipped telegram-style). Aim
   for the MIDDLE of the {lo_w}-{hi_w} word range — rich persona voice, not terse. In {lang}.
-- Also write "title" (YouTube/SEO: subject keyword FIRST + short hook, no period) and
-  "cover_title" (3-6 word on-screen headline).
-- KAPANIŞ ('close'): güldüren, KAFİYESİZ mahalle mizahı. SAKIN 'Ozan der ki', 'Aşık ... der ki' ya da beyit/şair kalıbı YAZMA — ozan YASAK.
+- "title" (YouTube başlığı): MERAK BOŞLUĞU başlığı — sonucu SPOILER YAPMA, merak uyandır +
+  SONUNA 1 emoji (😳/😱/🤯/🥹/😲). Kalıp: "[Özne] [şaşırtan eylem]… 😳". Eski düz SEO-spoiler
+  başlık ('Kaplumbağa Boğuluyor Balıkçı Kurtarıyor') YASAK — cevabı verme, sordur.
+- "title_en": AYNI başlığın İngilizcesi (aynı merak, aynı emoji) — küresel Shorts akışı için
+  (YouTube çok-dilli başlık; 240 ülkeye açar). Örn: "Watch what this fisherman does… 😳".
+- "cover_title" (3-6 kelime ekran manşeti).
+- KAPANIŞ ('close'): SON komik/duygusal vuruş (payoff) + ARDINDAN kısa bir YORUM-YEMİ: izleyiciye
+  doğal bir soru/kışkırtma ('Sen olsan ne yapardın?' / 'Bu kadarına pes mi?' gibi — persona
+  sesiyle, zorlama değil). SAKIN 'Ozan der ki', beyit/şair kalıbı YAZMA — ozan YASAK.
 - mood: one of upbeat / neutral / calm.
 Output JSON ONLY: {{"hook": "...", "beats": ["...", "...", "..."], "close": "...",
-  "mood": "upbeat", "title": "...", "cover_title": "..."}}
+  "mood": "upbeat", "title": "...", "title_en": "...", "cover_title": "..."}}
 """
 
 
@@ -737,8 +752,8 @@ def write_curated_narration(title: str, clip_description: str, *, channel,
     beats = [ReelBeat(text=t, visual_query=subj, keyword="") for t in draft.beats]
     narration = ReelNarration(
         hook=draft.hook, beats=beats, close=_strip_bard(draft.close),
-        mood=draft.mood, title=draft.title, cover_title=draft.cover_title,
-        hook_visual=subj, close_visual=subj)
+        mood=draft.mood, title=draft.title, title_en=getattr(draft, "title_en", ""),
+        cover_title=draft.cover_title, hook_visual=subj, close_visual=subj)
     # BÜTÇE: taşarsa deterministik sığdır (SONDAN beat at, hook/tepe/close korunur).
     td2 = tuple(target_duration_s) if target_duration_s else channel.reel.target_duration_s
     lo_w, hi_w = reel_word_budget(td2)
