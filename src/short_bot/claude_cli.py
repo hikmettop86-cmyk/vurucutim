@@ -198,9 +198,18 @@ def _invoke_primary(prompt: str, *, backend: str, model: str,
         f"@{Path(image_path).absolute().as_posix()}\n\n{prompt}"
         if image_path is not None else prompt
     )
-    cmd = [resolved_path, "-p", "--output-format", "text"]
+    # LEAN çağrı: `claude -p` normalde HER çağrıda tüm Claude Code ortamını bootstrap eder
+    # (MCP sunucuları — NexLev 80+ araç, Chrome, Gmail; CLAUDE.md/skills/plugins/hooks; built-in
+    # araçlar). Bizim kullanım saf metin→JSON üretimi; HİÇBİRİNE ihtiyaç yok. Bu bootstrap
+    # 6-100sn boşa startup + timeout/varyans kaynağıydı (ölçüldü: MCP'siz ~10sn→4sn). Aşağıdaki
+    # bayraklar startup'ı keser → çağrı hızlanır, tek-denemede-geçme oranı artar. Auth ayrı
+    # saklandığı için etkilenmez (ölçüldü: --setting-sources '' ile de rc=0).
+    cmd = [resolved_path, "-p", "--output-format", "text",
+           "--strict-mcp-config",       # MCP sunucularını yükleme (--mcp-config yok → sıfır sunucu)
+           "--setting-sources", ""]     # user/project/local ayar (CLAUDE.md/skills/hooks) yükleme
     if model != "default":
         cmd += ["--model", model]
+    cmd += ["--tools", ""]              # built-in araçları devre dışı (variadic → EN SONA)
     # Serileştir: eşzamanlı `claude -p` takılıyor (bkz. _CLI_LOCK notu). Kilit yalnız
     # subprocess boyunca tutulur; timeout süresi kadar (nadiren) diğer CLI çağrıları bekler.
     with _CLI_LOCK:
