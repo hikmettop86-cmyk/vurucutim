@@ -25,7 +25,7 @@ _UA = "shortbot-gemfinder/0.1"
 DEFAULT_SUBS = [
     "AnimalsBeingJerks", "AnimalsBeingDerps", "likeus", "AnimalsBeingBros",
     "NatureIsFuckingLit", "Unexpected", "nextfuckinglevel", "holdmycatnip",
-    "AnimalsBeingConfused", "sweatystartup",  # placeholder; kullanıcı listeyi düzenler
+    "AnimalsBeingConfused", "AnimalsBeingGeniuses",
 ]
 
 # İndirilebilir video kaynakları (yt-dlp bunları çözer).

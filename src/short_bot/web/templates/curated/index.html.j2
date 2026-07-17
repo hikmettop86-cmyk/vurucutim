@@ -1,0 +1,58 @@
+{% extends "base.html.j2" %}
+{% block content %}
+<div class="space-y-6">
+  <div>
+    <h1 class="text-2xl font-bold">Cevher — Kürate Klip Keşfi</h1>
+    <p class="text-sm text-claude-muted mt-1">
+      Reddit'te topluluğun ZATEN onayladığı (upvote) gerçek viral klipleri bul; persona
+      ile GERÇEK hikâyesini yeniden anlat. Adaylar kanalın subreddit listesinden gelir —
+      niş = subreddit listesi + persona.
+    </p>
+  </div>
+
+  {% if not have_creds %}
+  <div class="p-4 rounded-lg bg-yellow-50 ring-1 ring-yellow-200 text-yellow-800 text-sm">
+    ⚠ Reddit API kimliği tanımlı değil. <code>data/secrets.yaml</code> içine
+    <code>reddit_client_id</code> ve <code>reddit_client_secret</code> ekle.
+  </div>
+  {% endif %}
+
+  {% if not channels %}
+  <div class="p-4 rounded-lg bg-claude-surface-alt text-sm text-claude-muted">
+    Reel etkin kanal yok. Önce persona'lı bir reel kanalı oluştur; subreddit listesini
+    kanal ayarlarından gireceksin.
+  </div>
+  {% else %}
+  <form hx-post="/curated/fetch" hx-target="#curated-results" hx-swap="innerHTML"
+        class="flex flex-wrap items-end gap-3 p-4 rounded-lg bg-white border border-claude-border">
+    <label class="text-sm">
+      <span class="block text-xs text-claude-muted mb-1">Kanal</span>
+      <select name="channel_slug"
+              class="border border-claude-border rounded-lg px-3 py-2 text-sm bg-white">
+        {% for c in channels %}<option value="{{ c.slug }}">{{ c.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <label class="text-sm">
+      <span class="block text-xs text-claude-muted mb-1">Zaman penceresi</span>
+      <select name="t" class="border border-claude-border rounded-lg px-3 py-2 text-sm bg-white">
+        <option value="day">Gün</option>
+        <option value="week" selected>Hafta</option>
+        <option value="month">Ay</option>
+        <option value="year">Yıl</option>
+        <option value="all">Tüm zamanlar</option>
+      </select>
+    </label>
+    <label class="text-sm">
+      <span class="block text-xs text-claude-muted mb-1">Min upvote</span>
+      <input type="number" name="min_ups" placeholder="kanal ayarı"
+             class="border border-claude-border rounded-lg px-3 py-2 text-sm w-32 bg-white">
+    </label>
+    <button type="submit"
+            class="bg-claude-accent hover:bg-claude-accent-hover text-white text-sm px-4 py-2 rounded-lg">
+      Cevher Bul
+    </button>
+  </form>
+  <div id="curated-results"></div>
+  {% endif %}
+</div>
+{% endblock %}

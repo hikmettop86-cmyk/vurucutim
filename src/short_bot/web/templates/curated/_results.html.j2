@@ -1,0 +1,54 @@
+{% if status == "running" %}
+{# Kendi kendini yenileyen poll: 3sn sonra durum endpoint'ini çekip yerine geçer. #}
+<div hx-get="/curated/status/{{ job_id }}" hx-trigger="load delay:3s" hx-swap="outerHTML"
+     class="mt-4 p-4 rounded-lg bg-claude-surface-alt text-sm text-claude-muted flex items-center gap-2">
+  <span class="inline-block w-4 h-4 border-2 border-claude-accent border-t-transparent rounded-full animate-spin"></span>
+  Reddit cevherleri taranıyor…
+</div>
+{% elif status == "error" %}
+<div class="mt-4 p-4 rounded-lg bg-red-100 text-red-800 text-sm">Cevher bulunamadı: {{ error }}</div>
+{% else %}
+<div class="mt-4">
+  {% if not gems %}
+  <div class="p-4 rounded-lg bg-claude-surface-alt text-sm text-claude-muted">
+    Bu kriterlerde cevher bulunamadı — zaman penceresini genişlet ya da min upvote'u düşür.
+  </div>
+  {% else %}
+  <div class="text-xs text-claude-muted uppercase tracking-wide mb-2">{{ gems|length }} cevher — birini seç</div>
+  <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+    {% for g in gems %}
+    <div class="rounded-lg border border-claude-border bg-white overflow-hidden flex flex-col">
+      <div class="relative bg-black aspect-[9/16] flex items-center justify-center">
+        {% if g.thumb %}
+        <img src="{{ g.thumb }}" alt="" loading="lazy" class="max-h-full max-w-full object-contain">
+        {% else %}
+        <span class="text-claude-muted text-xs">önizleme yok</span>
+        {% endif %}
+        <span class="absolute top-1 left-1 text-[10px] px-1.5 py-0.5 rounded bg-black/70 text-white">
+          {{ g.orient }}{% if g.duration %} · {{ g.duration }}s{% endif %}
+        </span>
+      </div>
+      <div class="p-2 flex flex-col gap-1 flex-1">
+        <div class="text-xs font-medium line-clamp-2" title="{{ g.title }}">{{ g.title }}</div>
+        <div class="text-[11px] text-claude-muted">⬆ {{ '{:,}'.format(g.ups) }} · 💬 {{ g.comments }} · r/{{ g.sub }}</div>
+        <div class="mt-auto flex items-center gap-2 pt-1">
+          <a href="{{ g.permalink }}" target="_blank" rel="noopener"
+             class="text-[11px] text-claude-accent hover:underline">Reddit'te izle ↗</a>
+          <form action="/curated/produce" method="post" class="ml-auto">
+            <input type="hidden" name="channel_slug" value="{{ slug }}">
+            <input type="hidden" name="video_url" value="{{ g.video_url }}">
+            <input type="hidden" name="title" value="{{ g.title }}">
+            <input type="hidden" name="permalink" value="{{ g.permalink }}">
+            <button type="submit"
+                    class="text-[11px] bg-claude-accent hover:bg-claude-accent-hover text-white px-2 py-1 rounded">
+              Bu klibi üret
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endif %}
