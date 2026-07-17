@@ -673,46 +673,30 @@ def write_curated_narration(title: str, clip_description: str, *, channel,
     # (kullanıcı: 'belirli kalıp değil, anlamsız atasözü değil, saçma espri değil').
     prompt += "\n\n" + _curated_humor_override(getattr(reel, "humor_style", ""))
 
-    def _inv(p):
-        return run_json(p, _CuratedDraft, claude_path=claude_path, model=model,
-                        backend=backend, api_key=api_key, retries=3)
-
-    draft = _inv(prompt)
-    # BÜTÇE ZORLAMA: taşan senaryo klibi gerip LOOP'latır → hedefin altına inene kadar
-    # (en çok _CURATED_BUDGET_ROUNDS) gemini ile kısalt; 3 beat + persona/ozan korunur.
-    td2 = tuple(target_duration_s) if target_duration_s else channel.reel.target_duration_s
-    lo_w, hi_w = reel_word_budget(td2)
-    limit = hi_w * _CURATED_BUDGET_TOL
-    for tur in range(1, _CURATED_BUDGET_ROUNDS + 1):
-        cur = _curated_wc(draft)
-        if cur <= limit:
-            break
-        log.info(f"  kürate[bütçe]: {cur} kelime > {hi_w} → kısaltma turu {tur}")
-        tprompt = (
-            f"Bu kısa video senaryosu {cur} kelime — ZORUNLU KISALT: toplam "
-            f"(hook + 3 beat + close) {hi_w} kelimeyi KESİNLİKLE AŞMASIN (şu an "
-            f"{cur - hi_w} fazla). Her satırı SERTÇE kısalt, yan cümleleri at, tek EN "
-            f"İYİ espriyi koru. 3 beat KALSIN, persona/ozan kapanışını KORU. "
-            f"mood/title/cover_title'a dokunma.\n\nSENARYO (JSON):\n"
-            f"{draft.model_dump_json()}\n\nKısaltılmışı AYNI ŞEMADA, SADECE JSON döndür.")
-        try:
-            nd = _inv(tprompt)
-        except Exception as e:  # noqa: BLE001
-            log.warning(f"  kürate[bütçe]: kısaltma çöktü ({e}) → mevcutla kalınıyor")
-            break
-        if len(nd.beats) < 3 or _curated_wc(nd) >= cur:
-            log.warning("  kürate[bütçe]: tur kısaltmadı/beat bozdu → mevcutla kalınıyor")
-            break
-        log.info(f"  kürate[bütçe]: {cur} → {_curated_wc(nd)} kelime")
-        draft = nd
+    # TEK LLM ÇAĞRISI: kürate anlatımı Claude CLI Sonnet 5 ile yazılır (Max aboneliği →
+    # ÜCRETSİZ, OpenRouter parası yok). Ama CLI Sonnet ~50sn/çağrı: eski çok-turlu LLM
+    # bütçe kısaltması (draft + N kısaltma turu) toplam >2dk sürüp timeout'a giriyordu.
+    # Çözüm: TEK çağrı (retries=2 sadece JSON parse hatasına karşı) + taşarsa LLM yerine
+    # DETERMİNİSTİK kısaltma (fit_word_budget beat atar, ekstra çağrı YOK). Sonnet zaten
+    # kelime sınırına iyi uyduğu için fit_word_budget nadiren tetiklenir.
+    draft = run_json(prompt, _CuratedDraft, claude_path=claude_path, model=model,
+                     backend=backend, api_key=api_key, retries=2)
 
     from short_bot.reel_models import ReelBeat
     subj = (subject or "scene").strip() or "scene"
     beats = [ReelBeat(text=t, visual_query=subj, keyword="") for t in draft.beats]
-    return ReelNarration(
+    narration = ReelNarration(
         hook=draft.hook, beats=beats, close=_strip_bard(draft.close),
         mood=draft.mood, title=draft.title, cover_title=draft.cover_title,
         hook_visual=subj, close_visual=subj)
+    # BÜTÇE: taşarsa deterministik sığdır (SONDAN beat at, hook/tepe/close korunur).
+    td2 = tuple(target_duration_s) if target_duration_s else channel.reel.target_duration_s
+    lo_w, hi_w = reel_word_budget(td2)
+    if narration.word_count() > hi_w:
+        log.info(f"  kürate[bütçe]: {narration.word_count()} kelime > {hi_w} → "
+                 f"deterministik kısaltma")
+        narration = fit_word_budget(narration, lo_w=lo_w, hi_w=hi_w)
+    return narration
 
 
 # Ozan/âşık imzası — kullanıcı ozanı İSTEMİYOR ama model arada prompt'u delip yazıyor.

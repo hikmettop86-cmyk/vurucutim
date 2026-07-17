@@ -59,11 +59,15 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
 
     vision = resolve_ai_call(settings, secrets, "vision")
     llm = resolve_ai_call(settings, secrets, "script")
-    # SENARYO komedi ÇEKİRDEĞİ → EN GÜÇLÜ yazar (dna rolü = Sonnet 5). Kullanıcı: gemini-lite
+    # SENARYO komedi ÇEKİRDEĞİ → EN GÜÇLÜ yazar: Claude CLI Sonnet 5. Kullanıcı: gemini-lite
     # 'tatmin edici değil' (klişe + ozan sızıntısı); Sonnet spesifik/zeki/kültüre oturan mizah
-    # yazıyor. Tek kısa çağrı/video (~30sn, video zaten ~2dk); görsel/kurgu/metadata hızlı
-    # backend'de kalır → maliyet düşük. Hız>kalite istenirse 'script'e çevrilir.
-    narr_llm = resolve_ai_call(settings, secrets, "dna")
+    # yazıyor. CLI backend = Max aboneliği → ÜCRETSİZ (OpenRouter dna rolü ~$0.02/video
+    # harcardı; kullanıcı: 'boşa para yazmasın openrouterda'). Tek kısa çağrı/video (~50sn;
+    # video zaten ~2dk arka planda üretiliyor) → BURST YOK, eski 7-çağrı Max-plan rate-limit
+    # thrash'i geçerli değil. Görsel/kurgu/metadata hızlı OpenRouter backend'inde kalır.
+    from short_bot.config import AICall
+    narr_llm = AICall(backend="claude_cli", model="sonnet", api_key=None,
+                      claude_path=settings.claude_cli_path)
     ai33_key = resolve_ai33_api_key(secrets)
 
     out_dir = Path(output_root) / channel.slug

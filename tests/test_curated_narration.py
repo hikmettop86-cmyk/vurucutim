@@ -31,25 +31,25 @@ def test_write_curated_narration_faithful_build(monkeypatch):
     assert n.cover_title == "EN RAHAT TIP"
 
 
-def test_write_curated_narration_enforces_budget(monkeypatch):
-    # Taşan senaryo → kısaltma turu tetiklenir (klip gerilip loop'lamasın).
-    long_beats = ["kelime " * 20, "kelime " * 20, "kelime " * 20]
+def test_write_curated_narration_single_call_deterministic_budget(monkeypatch):
+    # CLI Sonnet ~50sn/çağrı → TEK LLM çağrısı (burst yok, maliyet yok). Taşan senaryo
+    # LLM YERİNE deterministik (fit_word_budget) kısaltılır: SONDAN beat atar, MIN_BEATS'e
+    # (3) sığdırır. Böylece klip gerilip loop'lamaz ve ekstra çağrı yapılmaz.
+    long_beats = ["kelime " * 20 for _ in range(5)]   # 5 taşkın beat
     over = _CuratedDraft(hook="cok uzun bir hook cumlesi buraya", beats=long_beats,
                          close="cok uzun bir kapanis cumlesi", mood="upbeat")
-    short = _CuratedDraft(hook="Kisa hook", close="Kisa kapanis", mood="upbeat",
-                          beats=["Bir kisacik", "Iki kisacik", "Uc kisacik"])
     calls = {"n": 0}
 
     def fake(*a, **k):
         calls["n"] += 1
-        return over if calls["n"] == 1 else short   # ilk taslak taşkın, sonra kısa
+        return over
     monkeypatch.setattr("short_bot.reel_narration.run_json", fake)
     ch = SimpleNamespace(language="tr",
                          reel=ReelConfig(enabled=True, voice_id="v", persona=""))
     n = write_curated_narration("t", "d", channel=ch, subject="cat",
                                 target_duration_s=(8, 12))
-    assert calls["n"] >= 2                    # kısaltma turu çağrıldı
-    assert n.beats[0].text == "Bir kisacik"   # kısaltılmış sürüm kullanıldı
+    assert calls["n"] == 1              # TEK çağrı (CLI Sonnet: burst yok, ücret yok)
+    assert len(n.beats) == 3           # deterministik kısaltma MIN_BEATS'e indirdi (5→3)
 
 
 def test_strip_bard_removes_ozan_leading_and_trailing():
