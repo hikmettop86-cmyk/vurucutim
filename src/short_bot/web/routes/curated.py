@@ -128,15 +128,16 @@ def _decorate(gems: list, db_path) -> list:
 
 
 def _run_fetch_job(job_id: str, *, client_id, client_secret, subreddits, t,
-                   min_ups, max_duration, slug, category, vision_call=None) -> None:
+                   min_ups, max_duration, slug, category, vision_call=None,
+                   tone: str = "mizah") -> None:
     from short_bot.curated_rank import score_curiosity
     from short_bot.reddit_gems import find_gems
     try:
         gems = find_gems(client_id, client_secret, subreddits=subreddits or None,
                          t=t, min_ups=min_ups, max_duration=max_duration)
-        # MERAK SKORU: en iyi adayların başlık+kapağını vision ile skorla → sıradan
-        # değil, gerçekten izletici klipler öne çıkar (google_studio ücretsiz havuz).
-        gems = score_curiosity(gems, vision_call=vision_call)
+        # TONA-DUYARLI SKOR: mizah kanalı → merak/gülme; DUYGU kanalı → kahramanlık/kurtarma
+        # potansiyeli. Kanalın tonuna uygun klip öne çıkar (@NedenHayvan formülü).
+        gems = score_curiosity(gems, vision_call=vision_call, tone=tone)
         _set_job(job_id, status="done", gems=gems)
         with _last_lock:                        # sekme değişince kaybolmasın
             _last_search.clear()
@@ -173,13 +174,14 @@ def fetch():
 
     cfg_dir = current_app.config["SHORTBOT_CONFIG_DIR"]
     channel_path = cfg_dir / "channels" / f"{slug}.yaml"
-    subreddits, max_duration, min_ups = [], 90, 500
+    subreddits, max_duration, min_ups, tone = [], 90, 500, "mizah"
     if slug and channel_path.exists():
         ch = load_channel(channel_path)
         if getattr(ch, "reel", None):
             subreddits = list(ch.reel.subreddits)
             max_duration = ch.reel.curated_max_duration
             min_ups = ch.reel.curated_min_ups
+            tone = getattr(ch.reel, "curated_tone", "mizah")   # duygu kanalı → duygu skoru
     # Kategori seçildiyse onun subreddit'leri kanal ayarını EZER.
     if category in CATEGORIES:
         subreddits = CATEGORIES[category]
@@ -211,7 +213,7 @@ def fetch():
         target=_run_fetch_job, args=(job_id,),
         kwargs=dict(client_id=cid, client_secret=csec, subreddits=subreddits,
                     t=t, min_ups=min_ups, max_duration=max_duration, slug=slug,
-                    category=category, vision_call=vision_call),
+                    category=category, vision_call=vision_call, tone=tone),
         daemon=True).start()
     return render_template("curated/_results.html.j2", job_id=job_id,
                            status="running", gems=None, error=None, slug=slug)

@@ -62,6 +62,20 @@ def _curiosity_prompt(title: str) -> str:
     )
 
 
+def _emotion_prompt(title: str) -> str:
+    """DUYGU kanalı için skorlama — kahramanlık/kurtarma/sadakat potansiyeli (@NedenHayvan)."""
+    return (
+        "Bu bir kısa video klibinin BAŞLIĞI ve KAPAK KARESİ (thumbnail).\n"
+        f"BAŞLIK: {title or '(başlık yok)'}\n\n"
+        "Bu klip GÜÇLÜ bir DUYGUSAL mikro-dramaya dönüşebilir mi? Kahramanlık, kurtarma, "
+        "sadakat, fedakârlık, kavuşma, koruma, ölüm-kalım anı = YÜKSEK. (Bir hayvanın/insanın "
+        "birini KURTARDIĞI, koruduğu, beklediği, canını riske attığı, kavuştuğu anlar.)\n"
+        "Sadece SEVİMLİ/KOMİK ama duygusal bahsi olmayan, ya da duygusuz-teknik = DÜŞÜK.\n"
+        "1-10 puanla (10 = güçlü duygusal kahramanlık/kurtarma, 1 = duygusuz/sıradan).\n"
+        'SADECE JSON: {"score": <1-10>, "reason": "<çok kısa>"}'
+    )
+
+
 def _download_thumb(url: str, dest: Path) -> Path | None:
     if not url or not url.startswith("http"):
         return None
@@ -76,13 +90,15 @@ def _download_thumb(url: str, dest: Path) -> Path | None:
 
 
 def score_curiosity(gems: list[dict], *, vision_call, top_n: int = 24,
-                    workers: int = 6, log=log) -> list[dict]:
-    """Etkileşimle en iyi ``top_n`` adayı vision ile merak-skorla → final sıra.
+                    workers: int = 6, tone: str = "mizah", log=log) -> list[dict]:
+    """Etkileşimle en iyi ``top_n`` adayı vision ile skorla → final sıra.
 
-    Her gem'e ``curiosity`` (1-10 ya da None) ve ``final_score`` yazar. Kuyruk (top_n
-    dışı) yalnız engagement ile skorlanır (vision harcamamak için). Vision yoksa/hata →
-    engagement sırası korunur (fail-open)."""
+    ``tone``: 'mizah' → merak/gülme/şaşkınlık skoru; 'duygu' → kahramanlık/kurtarma/sadakat
+    (duygusal potansiyel) skoru. Kanalın tonuna uygun klip seçilir (@NedenHayvan formülü).
+    Her gem'e ``curiosity`` (1-10 ya da None) ve ``final_score`` yazar. Kuyruk yalnız
+    engagement ile; vision yoksa/hata → engagement sırası (fail-open)."""
     from short_bot.claude_cli import run_json
+    _prompt_fn = _emotion_prompt if tone == "duygu" else _curiosity_prompt
 
     ranked = sorted(gems, key=lambda g: -engagement_score(g))
     head = ranked[:top_n]
@@ -102,7 +118,7 @@ def score_curiosity(gems: list[dict], *, vision_call, top_n: int = 24,
             try:
                 img = _download_thumb(gem.get("thumb", ""), td / f"t{idx}.jpg")
                 res = run_json(
-                    _curiosity_prompt(gem.get("title", "")), CuriosityScore,
+                    _prompt_fn(gem.get("title", "")), CuriosityScore,
                     claude_path=vision_call.claude_path, model=vision_call.model,
                     backend=vision_call.backend, api_key=vision_call.api_key,
                     image_path=img, retries=1, timeout_s=30)
