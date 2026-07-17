@@ -48,6 +48,27 @@ def test_clean_clip_delogo_runs(tmp_path):
     assert float((p.stdout or "0").strip()) > 1.0
 
 
+def test_brighten_dark_clip(tmp_path):
+    from short_bot.curated_clean import brighten_if_dark
+    src = tmp_path / "dark.mp4"
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i",
+                    "color=c=0x1a1a1a:size=320x568:rate=10:duration=1",
+                    "-pix_fmt", "yuv420p", str(src)], check=True, timeout=60)
+    out = tmp_path / "bright.mp4"
+    res = brighten_if_dark(src, out_path=out)
+    assert res == out and out.exists()   # karanlık → aydınlatıldı
+
+
+def test_brighten_skips_well_lit(tmp_path):
+    from short_bot.curated_clean import brighten_if_dark
+    src = tmp_path / "lit.mp4"
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i",
+                    "color=c=0xf0f0f0:size=320x568:rate=10:duration=1",
+                    "-pix_fmt", "yuv420p", str(src)], check=True, timeout=60)
+    out = tmp_path / "o.mp4"
+    assert brighten_if_dark(src, out_path=out) is None   # iyi-aydınlık → dokunma
+
+
 def test_watermark_uncleanable_moving_vs_static():
     from short_bot.curated_clean import watermark_uncleanable
     # tek SABİT köşe → temizlenebilir
