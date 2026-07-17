@@ -1,127 +1,247 @@
 {% extends "base.html.j2" %}
 {% block title %}Vurucu TİM — {{ ch.name }} (Kürate){% endblock %}
 {% block content %}
-<div class="max-w-2xl">
-  <div class="flex items-center justify-between mb-1 mt-2">
-    <h1 class="font-serif text-3xl font-bold">{{ ch.name }}</h1>
-    <span class="text-xs px-2 py-1 rounded-full bg-claude-accent-soft text-claude-accent">💎 Kürate kanal</span>
+<div x-data="curatedEditWizard()" class="max-w-6xl mx-auto">
+
+  <div class="flex items-center gap-3 mb-1">
+    <h1 class="font-serif text-3xl font-bold">💎 {{ ch.name }} — Kürate Düzenle</h1>
+    <span class="bg-claude-accent-soft text-claude-accent text-xs font-semibold px-3 py-1 rounded-full">kürate viral klip</span>
   </div>
-  <p class="text-sm text-claude-muted mb-6">
-    Klip seçimi <a href="/curated" class="text-claude-accent hover:underline">Cevher</a>'den.
-    Cron/autopilot açıksa otomatik en iyi cevheri seçip üretir.
+  <p class="text-claude-muted mb-6">
+    Reddit'ten kürate viral klipleri persona ile yeniden anlatan <strong>Kürate kanal</strong>.
+    Klip seçimi <a href="/curated" class="text-claude-accent hover:underline">Cevher</a>'den;
+    cron/autopilot açıksa en iyi cevheri (🔥 merak skoru) otomatik seçer.
   </p>
 
-  <form method="post" action="/channels/{{ ch.slug }}/edit-curated" class="space-y-5">
-    <div class="grid grid-cols-2 gap-4">
-      <div>
-        <label class="block text-sm font-medium mb-1">Kanal adı</label>
-        <input type="text" name="name" value="{{ ch.name }}"
-               class="w-full border border-claude-border rounded-lg px-3 py-2 text-sm">
+  <div class="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6 items-start">
+
+    {# ── Sol: canlı önizleme (highlight + name'e bağlı) ──────────────────── #}
+    <aside class="lg:sticky lg:top-6 space-y-3">
+      <div class="bg-claude-surface border border-claude-border rounded-xl p-4 text-center">
+        <div class="text-xs text-claude-muted uppercase tracking-wide mb-3">Canlı önizleme</div>
+        <div class="mx-auto rounded-2xl overflow-hidden relative" style="width:200px;height:356px;background:linear-gradient(160deg,#1c1917,#0c0a09)">
+          <div class="absolute top-6 left-3 right-3 text-[11px] font-black text-white uppercase leading-tight" style="text-shadow:0 2px 6px #000">
+            MAHALLENİN <span :style="`color:${highlight}`">RACONU</span>
+          </div>
+          <div class="absolute left-0 right-0 px-3 font-black text-white text-base" style="bottom:70px;text-shadow:0 2px 6px #000">
+            bu işi <span :style="`color:${highlight}`">bilen bilir</span>
+          </div>
+          <div class="absolute left-0 right-0 text-[11px] text-slate-200" style="bottom:26px" x-text="'@' + slug()"></div>
+        </div>
+        <p class="text-xs text-claude-muted mt-3">Marka (persona, ses, renk) sabit; klip her videoda değişir.</p>
       </div>
-      <div>
-        <label class="block text-sm font-medium mb-1">Ses (ai33 voice_id)</label>
-        <input type="text" name="voice_id" value="{{ ch.reel.voice_id }}"
-               class="w-full border border-claude-border rounded-lg px-3 py-2 text-sm">
+      <a href="/curated" class="block text-center text-sm bg-claude-accent-soft text-claude-accent rounded-xl py-2 hover:bg-claude-accent hover:text-white transition">💎 Cevher'e git →</a>
+    </aside>
+
+    {# ── Sağ: sekmeli form ──────────────────────────────────────────────── #}
+    <form method="post" action="/channels/{{ ch.slug }}/edit-curated" class="space-y-4">
+
+      {# Sekme çubuğu #}
+      <div class="flex flex-wrap gap-1 bg-claude-surface border border-claude-border rounded-xl p-1">
+        <button type="button" @click="currentTab = 'kimlik'"
+                :class="currentTab === 'kimlik' ? 'bg-claude-accent text-white' : 'text-claude-text hover:bg-claude-surface-alt'"
+                class="flex-1 px-3 py-2 rounded-lg text-sm font-medium">Kimlik</button>
+        <button type="button" @click="currentTab = 'cevher'"
+                :class="currentTab === 'cevher' ? 'bg-claude-accent text-white' : 'text-claude-text hover:bg-claude-surface-alt'"
+                class="flex-1 px-3 py-2 rounded-lg text-sm font-medium">Cevher kaynağı</button>
+        <button type="button" @click="currentTab = 'efekt'"
+                :class="currentTab === 'efekt' ? 'bg-claude-accent text-white' : 'text-claude-text hover:bg-claude-surface-alt'"
+                class="flex-1 px-3 py-2 rounded-lg text-sm font-medium">Efekt &amp; Varyasyon</button>
+        <button type="button" @click="currentTab = 'yayin'"
+                :class="currentTab === 'yayin' ? 'bg-claude-accent text-white' : 'text-claude-text hover:bg-claude-surface-alt'"
+                class="flex-1 px-3 py-2 rounded-lg text-sm font-medium">Yayın &amp; YouTube</button>
       </div>
-    </div>
 
-    <div>
-      <label class="block text-sm font-medium mb-1">Persona</label>
-      <select name="persona" class="w-full border border-claude-border rounded-lg px-3 py-2 text-sm bg-white">
-        <option value="" {% if not ch.reel.persona %}selected{% endif %}>Kişiliksiz (düz anlatım)</option>
-        {% for p in personas %}<option value="{{ p }}" {% if p == ch.reel.persona %}selected{% endif %}>{{ p }}</option>{% endfor %}
-      </select>
-    </div>
+      {# ── TAB: Kimlik ──────────────────────────────────────────────────── #}
+      <section x-show="currentTab === 'kimlik'" x-cloak
+               class="bg-claude-surface border border-claude-border rounded-xl p-5 space-y-4">
+        <h2 class="font-semibold text-claude-accent">Kimlik</h2>
+        <div class="grid grid-cols-2 gap-4">
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase tracking-wide">Kanal adı</span>
+            <input type="text" name="name" x-model="name" value="{{ ch.name }}"
+                   class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+          </label>
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase tracking-wide">Ses (ai33 voice_id)</span>
+            <input type="text" name="voice_id" value="{{ ch.reel.voice_id }}"
+                   class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+          </label>
+        </div>
+        <label class="block">
+          <span class="text-xs text-claude-muted uppercase tracking-wide">Persona</span>
+          <select name="persona" class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+            <option value="" {% if not ch.reel.persona %}selected{% endif %}>Kişiliksiz (düz anlatım)</option>
+            {% for p in personas %}<option value="{{ p }}" {% if p == ch.reel.persona %}selected{% endif %}>{{ p }}</option>{% endfor %}
+          </select>
+        </label>
+        <label class="block">
+          <span class="text-xs text-claude-muted uppercase tracking-wide">Kanalın kendi mizah sesi</span>
+          <textarea name="humor_style" rows="2" placeholder="ör. sakin ama sinsi ironi; abartmadan, gözlemci"
+                    class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">{{ ch.reel.humor_style }}</textarea>
+          <span class="text-xs text-claude-muted">Bu kanala ÖZGÜ komik ton (kalıpsız, GERÇEK). Boşsa: klibe özgü gözlem mizahı.</span>
+        </label>
+        <label class="block">
+          <span class="text-xs text-claude-muted uppercase tracking-wide">Vurgu rengi (altyazı vurgusu)</span>
+          <input type="color" name="highlight_color" x-model="highlight" value="{{ ch.reel.highlight_color }}"
+                 class="mt-1 w-24 h-10 border border-claude-border rounded-lg">
+        </label>
+        <fieldset class="border border-claude-border rounded-lg p-4">
+          <legend class="text-xs text-claude-muted px-1">Maskot (opsiyonel — tekrar eden ana karakter)</legend>
+          <div class="grid grid-cols-3 gap-3">
+            <input type="text" name="mascot_name" value="{{ ch.reel.mascot_name }}" placeholder="isim"
+                   class="bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+            <input type="text" name="mascot_animal" value="{{ ch.reel.mascot_animal }}" placeholder="hayvan"
+                   class="bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+            <input type="text" name="mascot_trait" value="{{ ch.reel.mascot_trait }}" placeholder="özellik"
+                   class="bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+          </div>
+        </fieldset>
+      </section>
 
-    <div>
-      <label class="block text-sm font-medium mb-1">Kanalın kendi mizah sesi</label>
-      <textarea name="humor_style" rows="2" placeholder="ör. sakin ama sinsi ironi; abartmadan, gözlemci"
-                class="w-full border border-claude-border rounded-lg px-3 py-2 text-sm">{{ ch.reel.humor_style }}</textarea>
-      <p class="text-xs text-claude-muted mt-1">Bu kanala ÖZGÜ komik ton (kalıpsız, GERÇEK). Boşsa: klibe özgü gözlem mizahı.</p>
-    </div>
+      {# ── TAB: Cevher kaynağı ──────────────────────────────────────────── #}
+      <section x-show="currentTab === 'cevher'" x-cloak
+               class="bg-claude-surface border border-claude-border rounded-xl p-5 space-y-4">
+        <h2 class="font-semibold text-claude-accent">Cevher kaynağı (Reddit)</h2>
+        <label class="block">
+          <span class="text-xs text-claude-muted uppercase tracking-wide">Kategori (subreddit listesini değiştirir)</span>
+          <select name="category" class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+            <option value="">— Aşağıdaki listeyi koru —</option>
+            {% for cat in categories %}<option value="{{ cat }}">{{ cat }}</option>{% endfor %}
+          </select>
+        </label>
+        <label class="block">
+          <span class="text-xs text-claude-muted uppercase tracking-wide">Subreddit listesi</span>
+          <textarea name="subreddits" rows="2"
+                    class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">{{ ch.reel.subreddits | join(', ') }}</textarea>
+        </label>
+        <div class="grid grid-cols-3 gap-4">
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase tracking-wide">Min upvote</span>
+            <input type="number" name="curated_min_ups" value="{{ ch.reel.curated_min_ups }}"
+                   class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+          </label>
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase tracking-wide">Zaman penceresi</span>
+            <select name="curated_time" class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+              {% for tw in ['day','week','month','year','all'] %}<option value="{{ tw }}" {% if tw == ch.reel.curated_time %}selected{% endif %}>{{ tw }}</option>{% endfor %}
+            </select>
+          </label>
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase tracking-wide">Müzik ruh hali</span>
+            <select name="music_mood" class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+              {% for m in ['upbeat','calm','neutral'] %}<option value="{{ m }}" {% if m == ch.reel.music_mood %}selected{% endif %}>{{ m }}</option>{% endfor %}
+            </select>
+          </label>
+        </div>
+        <label class="flex items-center gap-2 text-sm">
+          <input type="checkbox" name="curated_clean" {% if ch.reel.curated_clean %}checked{% endif %}>
+          Watermark temizle (kenar/köşe logosu delogo ile silinir)
+        </label>
+      </section>
 
-    <fieldset class="border border-claude-border rounded-lg p-4">
-      <legend class="text-xs text-claude-muted px-1">Maskot (opsiyonel)</legend>
-      <div class="grid grid-cols-3 gap-3">
-        <input type="text" name="mascot_name" value="{{ ch.reel.mascot_name }}" placeholder="isim"
-               class="border border-claude-border rounded-lg px-3 py-2 text-sm">
-        <input type="text" name="mascot_animal" value="{{ ch.reel.mascot_animal }}" placeholder="hayvan"
-               class="border border-claude-border rounded-lg px-3 py-2 text-sm">
-        <input type="text" name="mascot_trait" value="{{ ch.reel.mascot_trait }}" placeholder="özellik"
-               class="border border-claude-border rounded-lg px-3 py-2 text-sm">
+      {# ── TAB: Efekt & Varyasyon ───────────────────────────────────────── #}
+      <section x-show="currentTab === 'efekt'" x-cloak
+               class="bg-claude-surface border border-claude-border rounded-xl p-5 space-y-4">
+        <h2 class="font-semibold text-claude-accent">Efekt &amp; Varyasyon <span class="text-xs font-normal text-claude-muted">— her video benzersiz görünsün</span></h2>
+
+        <div>
+          <span class="text-xs text-claude-muted uppercase tracking-wide">Kurgu efektleri</span>
+          <div class="flex flex-wrap gap-x-5 gap-y-2 text-sm mt-2">
+            <label class="flex items-center gap-2" title="Anlatımı okur; tempo, kesme efekti, SFX ve müzik ruh halini İÇERİĞE göre seçer"><input type="checkbox" name="ai_director" {% if ch.reel.ai_director %}checked{% endif %}> AI kurgucu</label>
+            <label class="flex items-center gap-2"><input type="checkbox" name="fast_cuts" {% if ch.reel.fast_cuts %}checked{% endif %}> Hızlı kesim</label>
+            <label class="flex items-center gap-2"><input type="checkbox" name="flash" {% if ch.reel.transitions_flash %}checked{% endif %}> Flash geçiş</label>
+            <label class="flex items-center gap-2"><input type="checkbox" name="whoosh" {% if ch.reel.transitions_whoosh %}checked{% endif %}> Whoosh SFX</label>
+            <label class="flex items-center gap-2"><input type="checkbox" name="zoom" {% if ch.reel.transitions_zoom %}checked{% endif %}> Zoom-punch</label>
+          </div>
+        </div>
+
+        <div>
+          <span class="text-xs text-claude-muted uppercase tracking-wide">Her video farklı görünsün (seed ile döner)</span>
+          <div class="flex flex-wrap gap-x-5 gap-y-2 text-sm mt-2">
+            <label class="flex items-center gap-2"><input type="checkbox" name="hook_angle_vary" {% if ch.reel.hook_angle_vary %}checked{% endif %}> Kanca açısı</label>
+            <label class="flex items-center gap-2"><input type="checkbox" name="accent_vary" {% if ch.reel.accent_vary %}checked{% endif %}> Vurgu rengi</label>
+            <label class="flex items-center gap-2"><input type="checkbox" name="transition_vary" {% if ch.reel.transition_vary %}checked{% endif %}> Geçiş stili</label>
+          </div>
+        </div>
+
+        <div class="border-t border-claude-border pt-4">
+          <div class="grid grid-cols-3 gap-3 items-end">
+            <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="arrows_enabled" {% if ch.reel.arrows_enabled %}checked{% endif %}> Oklar (işaretçi)</label>
+            <label class="block">
+              <span class="text-xs text-claude-muted uppercase tracking-wide">Ok rengi</span>
+              <input type="color" name="arrow_color" value="{{ ch.reel.arrow_color }}" class="mt-1 w-full h-9 border border-claude-border rounded-lg">
+            </label>
+            <label class="block">
+              <span class="text-xs text-claude-muted uppercase tracking-wide">Ok sıklığı</span>
+              <select name="arrow_frequency" class="mt-1 w-full bg-white border border-claude-border rounded-lg px-2 py-1.5 text-sm">
+                {% for f in ['off','reveal','beats'] %}<option value="{{ f }}" {% if ch.reel.arrow_frequency == f %}selected{% endif %}>{{ f }}</option>{% endfor %}
+              </select>
+            </label>
+          </div>
+          <p class="text-[11px] text-claude-muted mt-2">⚠ Oklar segment başına SABİT konuma çizilir; HAREKETLİ özneli kliplerde kayabilir (kürate klipleri sık hareketli). Sabit sahnede iyi — emin değilsen kapalı bırak.</p>
+        </div>
+
+        <label class="block max-w-xs">
+          <span class="text-xs text-claude-muted uppercase tracking-wide">SFX sesi (0–1)</span>
+          <input type="number" name="sfx_volume" step="0.01" min="0" max="1" value="{{ '%.2f'|format(ch.reel.sfx_volume) }}"
+                 class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+        </label>
+      </section>
+
+      {# ── TAB: Yayın & YouTube ─────────────────────────────────────────── #}
+      <section x-show="currentTab === 'yayin'" x-cloak
+               class="bg-claude-surface border border-claude-border rounded-xl p-5 space-y-4">
+        <h2 class="font-semibold text-claude-accent">Yayın</h2>
+        <div class="grid grid-cols-2 gap-4">
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase tracking-wide">Zamanlama (cron)</span>
+            <input type="text" name="schedule_cron" value="{{ ch.schedule_cron }}" placeholder="0 10 * * *"
+                   class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+          </label>
+          <label class="flex items-center gap-2 text-sm mt-6">
+            <input type="checkbox" name="enabled" {% if ch.enabled %}checked{% endif %}> Kanal etkin
+          </label>
+        </div>
+
+        {# YouTube bağlantısı — partial c.slug bekler; generic /channels/<slug>/youtube/* #}
+        {% set c = ch %}
+        <fieldset class="border border-claude-border rounded-lg p-4">
+          <legend class="text-xs text-claude-muted px-1 flex items-center gap-1"><span class="text-lg opacity-70">▶</span> YouTube bağlantısı</legend>
+          {% include "_partials/youtube_connect.html.j2" %}
+        </fieldset>
+        <label class="flex items-center gap-2 text-sm">
+          <input type="checkbox" name="auto_upload" {% if ch.youtube and ch.youtube.auto_upload %}checked{% endif %}>
+          YouTube otomatik yükle (üretilen videolar YouTube'a çıksın)
+        </label>
+      </section>
+
+      {# ── Kaydet ───────────────────────────────────────────────────────── #}
+      <div class="sticky bottom-0 bg-claude-bg/95 backdrop-blur border-t border-claude-border pt-3 pb-3 -mx-1 px-1 z-20 flex items-center gap-3">
+        <button type="submit"
+                class="flex-1 bg-claude-accent hover:bg-claude-accent-hover text-white font-semibold py-3 rounded-lg shadow-soft">💾 Kaydet</button>
+        <a href="/channels" class="text-sm text-claude-muted hover:text-claude-text">Kanallar</a>
       </div>
-    </fieldset>
-
-    <div>
-      <label class="block text-sm font-medium mb-1">Kategori (subreddit listesini değiştirir)</label>
-      <select name="category" class="w-full border border-claude-border rounded-lg px-3 py-2 text-sm bg-white">
-        <option value="">— Aşağıdaki listeyi koru —</option>
-        {% for cat in categories %}<option value="{{ cat }}">{{ cat }}</option>{% endfor %}
-      </select>
-      <label class="block text-xs text-claude-muted mt-2 mb-1">Subreddit listesi</label>
-      <textarea name="subreddits" rows="2"
-                class="w-full border border-claude-border rounded-lg px-3 py-2 text-sm">{{ ch.reel.subreddits | join(', ') }}</textarea>
-    </div>
-
-    <div class="grid grid-cols-3 gap-4">
-      <div>
-        <label class="block text-sm font-medium mb-1">Min upvote</label>
-        <input type="number" name="curated_min_ups" value="{{ ch.reel.curated_min_ups }}"
-               class="w-full border border-claude-border rounded-lg px-3 py-2 text-sm">
-      </div>
-      <div>
-        <label class="block text-sm font-medium mb-1">Zaman penceresi</label>
-        <select name="curated_time" class="w-full border border-claude-border rounded-lg px-3 py-2 text-sm bg-white">
-          {% for tw in ['day','week','month','year','all'] %}<option value="{{ tw }}" {% if tw == ch.reel.curated_time %}selected{% endif %}>{{ tw }}</option>{% endfor %}
-        </select>
-      </div>
-      <div>
-        <label class="block text-sm font-medium mb-1">Müzik</label>
-        <select name="music_mood" class="w-full border border-claude-border rounded-lg px-3 py-2 text-sm bg-white">
-          {% for m in ['upbeat','calm','neutral'] %}<option value="{{ m }}" {% if m == ch.reel.music_mood %}selected{% endif %}>{{ m }}</option>{% endfor %}
-        </select>
-      </div>
-    </div>
-
-    <div class="grid grid-cols-2 gap-4">
-      <div>
-        <label class="block text-sm font-medium mb-1">Vurgu rengi</label>
-        <input type="color" name="highlight_color" value="{{ ch.reel.highlight_color }}"
-               class="w-full h-10 border border-claude-border rounded-lg">
-      </div>
-      <div>
-        <label class="block text-sm font-medium mb-1">Zamanlama (cron)</label>
-        <input type="text" name="schedule_cron" value="{{ ch.schedule_cron }}" placeholder="0 10 * * *"
-               class="w-full border border-claude-border rounded-lg px-3 py-2 text-sm">
-      </div>
-    </div>
-
-    {# YouTube bağlantısı — partial c.slug bekler (bu kanal); connect/disconnect/reset
-       generic /channels/<slug>/youtube/* route'larına gider. Gizli formlar form DIŞINDA. #}
-    {% set c = ch %}
-    <fieldset class="border border-claude-border rounded-lg p-4">
-      <legend class="text-xs text-claude-muted px-1 flex items-center gap-1">
-        <span class="text-lg opacity-70">▶</span> YouTube bağlantısı
-      </legend>
-      {% include "_partials/youtube_connect.html.j2" %}
-    </fieldset>
-
-    <div class="flex flex-wrap gap-5 pt-1">
-      <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="enabled" {% if ch.enabled %}checked{% endif %}> Kanal etkin</label>
-      <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="curated_clean" {% if ch.reel.curated_clean %}checked{% endif %}> Watermark temizle</label>
-      <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="auto_upload" {% if ch.youtube and ch.youtube.auto_upload %}checked{% endif %}> YouTube otomatik yükle</label>
-    </div>
-
-    <div class="flex items-center gap-3 pt-2">
-      <button type="submit"
-              class="bg-claude-accent hover:bg-claude-accent-hover text-white px-5 py-2.5 rounded-lg font-semibold text-sm">
-        Kaydet
-      </button>
-      <a href="/curated" class="text-sm text-claude-accent hover:underline">Cevher'e git →</a>
-      <a href="/channels" class="text-sm text-claude-muted hover:text-claude-text">Kanallar</a>
-    </div>
-  </form>
-  {# YouTube aksiyon formları — ana kaydet formunun DIŞINDA (HTML5 iç içe form yasak) #}
-  {% include "_partials/youtube_hidden_forms.html.j2" %}
+    </form>
+  </div>
 </div>
+
+<script>
+function curatedEditWizard() {
+  return {
+    currentTab: 'kimlik',
+    name: {{ ch.name|tojson }},
+    highlight: {{ (ch.reel.highlight_color or '#38bdf8')|tojson }},
+    slug() {
+      return (this.name || 'kanal').toLowerCase()
+        .normalize('NFKD').replace(/[̀-ͯ]/g, '')
+        .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'kanal';
+    }
+  };
+}
+</script>
+
+{# YouTube aksiyon formları — ana kaydet formunun DIŞINDA (iç içe form yasak) #}
+{% set c = ch %}
+{% include "_partials/youtube_hidden_forms.html.j2" %}
 {% endblock %}

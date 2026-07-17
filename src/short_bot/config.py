@@ -607,6 +607,7 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
             "transitions_zoom": cfg.reel.transitions_zoom,
             "music_mood": cfg.reel.music_mood,
             "music_volume": cfg.reel.music_volume,
+            "sfx_volume": cfg.reel.sfx_volume,
             "font": cfg.reel.font,
             "verify_footage": cfg.reel.verify_footage,
             "fast_cuts": cfg.reel.fast_cuts,

@@ -706,11 +706,10 @@ def produce_reel_video(
     # Belirteç-uygun segmentleri ÖNCE hesapla → yalnız onlarda vision konum çağır
     # (hook/close ve 'off'/kapalı durumda gereksiz vision maliyeti yok).
     n_segs = len(timeline.seg_queries)
-    # KÜRATE: ok/işaretçiler footage-reel özelliği (özneyi işaret eder). Tek GERÇEK kürate
-    # klibinde özne HAREKET ettiği için sabit-konumlu ok YANLIŞ yeri gösteriyor (short 920:
-    # ok boş kayada) + gereksiz (klip kendini anlatıyor). subject_xs KIRPMA için hesaplanmaya
-    # devam eder; yalnız OK ÇİZİMİ kapatılır. color_grade ile aynı mantık.
-    _arrows_on = reel.arrows_enabled and curated_clip is None
+    # OKLAR: artık config-güdümlü (kürate kartında da toggle var). NOT: ok konumu segment
+    # başına SABİT subject_x'e çizilir; HAREKETLİ özneli kürate klibinde kayabilir (short
+    # 920) — o yüzden kürate kanallarında varsayılan KAPALI, isteyen açar (kartta uyarı var).
+    _arrows_on = reel.arrows_enabled
     worthy = (set(_marker_worthy_segs(n_segs, reel.arrow_frequency))
               if _arrows_on else set())
     # SIRA: önce BEAT'ler, sonra hook + close. Böylece hook'un kendi sorgusu

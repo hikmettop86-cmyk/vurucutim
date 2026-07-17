@@ -330,7 +330,11 @@ def new_create():
             subreddits=subreddits,
             humor_style=(request.form.get("humor_style") or "").strip(),
             highlight_color=(request.form.get("highlight_color") or "#38bdf8").strip(),
-            music_mood=(request.form.get("music_mood") or "upbeat").strip())
+            music_mood=(request.form.get("music_mood") or "upbeat").strip(),
+            # Kürate klipleri sık HAREKETLİ özneli → sabit-konumlu ok kayabilir (short 920);
+            # yeni kürate kanalda ok VARSAYILAN KAPALI (kartta açılabilir). Diğer efekt/
+            # varyasyonlar (geçiş/zoom/SFX/AI-kurgucu) ReelConfig varsayılanıyla AÇIK kalır.
+            arrows_enabled=False)
     except ValidationError as e:
         flash(f"Reel ayarları geçersiz: {e}", "error")
         return redirect(url_for("curated.new_form"))
@@ -404,6 +408,12 @@ def edit_curated_save(slug):
         except ValueError:
             return default
 
+    def _float(field, default):
+        try:
+            return max(0.0, min(1.0, float(request.form.get(field) or default)))
+        except ValueError:
+            return default
+
     reel = ch.reel.model_copy(update=dict(
         voice_id=(request.form.get("voice_id") or ch.reel.voice_id).strip(),
         persona=(request.form.get("persona") or "").strip(),
@@ -417,6 +427,19 @@ def edit_curated_save(slug):
         curated_min_ups=_int("curated_min_ups", ch.reel.curated_min_ups),
         curated_time=(request.form.get("curated_time") or ch.reel.curated_time).strip(),
         curated_clean=(request.form.get("curated_clean") == "on"),
+        # EFEKT & VARYASYON (her video benzersiz) — eski reel kartından geri getirildi.
+        ai_director=(request.form.get("ai_director") == "on"),
+        fast_cuts=(request.form.get("fast_cuts") == "on"),
+        transitions_flash=(request.form.get("flash") == "on"),
+        transitions_whoosh=(request.form.get("whoosh") == "on"),
+        transitions_zoom=(request.form.get("zoom") == "on"),
+        hook_angle_vary=(request.form.get("hook_angle_vary") == "on"),
+        accent_vary=(request.form.get("accent_vary") == "on"),
+        transition_vary=(request.form.get("transition_vary") == "on"),
+        arrows_enabled=(request.form.get("arrows_enabled") == "on"),
+        arrow_color=(request.form.get("arrow_color") or ch.reel.arrow_color).strip(),
+        arrow_frequency=(request.form.get("arrow_frequency") or ch.reel.arrow_frequency).strip(),
+        sfx_volume=_float("sfx_volume", ch.reel.sfx_volume),
     ))
     yt = (ch.youtube or YoutubeChannelConfig()).model_copy(
         update=dict(auto_upload=(request.form.get("auto_upload") == "on")))
