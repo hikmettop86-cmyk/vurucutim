@@ -58,7 +58,9 @@ def _thumb_of(post: dict) -> str:
         u = (imgs[0].get("source") or {}).get("url", "")
         if u:
             return html.unescape(u)
-    th = p.get("thumbnail", "")
+    # .get(k, "") anahtar None DEĞERİYLE varsa None döner (default devreye girmez) →
+    # None.startswith çöker. Reddit thumbnail'ı çoğu zaman None/'default'/'nsfw' olur.
+    th = p.get("thumbnail") or ""
     return th if th.startswith("http") else ""
 
 
@@ -72,7 +74,7 @@ def _video_of(post: dict):
                 rv.get("width"), rv.get("height"))
     # external (redgifs/gfycat/streamable/imgur-gifv) — yt-dlp indirir
     dom = (p.get("domain") or "").lower()
-    url = p.get("url", "")
+    url = p.get("url") or ""      # None-güvenli (bkz. _thumb_of)
     if any(dom.endswith(d) for d in _VIDEO_DOMAINS) or url.endswith(".gifv"):
         return (url, 0, None, None)
     if p.get("post_hint") in ("hosted:video", "rich:video"):
