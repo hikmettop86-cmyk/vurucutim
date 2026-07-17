@@ -27,14 +27,22 @@ _TIME_WINDOWS = ("hour", "day", "week", "month", "year", "all")
 CATEGORIES: dict[str, list[str]] = {
     "Hayvanlar": ["AnimalsBeingJerks", "AnimalsBeingDerps", "likeus",
                   "AnimalsBeingBros", "holdmycatnip", "AnimalsBeingConfused",
-                  "AnimalsBeingGeniuses", "funnycats", "IllegallySmolCats"],
+                  "AnimalsBeingGeniuses", "funnycats", "IllegallySmolCats",
+                  "humansbeingbros"],
+    # YÜKSEK-MERAK (doğrulandı: video-zengin + yüksek upvote 2026-07-17). 'Bunu
+    # izlemeliyim' dedirten beklenmedik/gerilim anları — merak skorunu besler.
+    "Kaos / beklenmedik": ["AbruptChaos", "maybemaybemaybe", "nonononoyes",
+                           "Unexpected", "holdmyredbull", "nevertellmetheodds"],
+    "Kahkaha / komik": ["contagiouslaughter", "therewasanattempt", "funnycats",
+                        "instant_regret", "facepalm"],
     "Tatmin edici": ["oddlysatisfying", "Satisfyingasfuck", "nevertellmetheodds"],
     "İnanılmaz": ["nextfuckinglevel", "BeAmazed", "interestingasfuck",
-                  "Damnthatsinteresting"],
+                  "Damnthatsinteresting", "blackmagicfuckery", "toptalent"],
     "Fail / komik": ["Whatcouldgowrong", "instant_regret", "Wellthatsucks",
-                     "facepalm"],
+                     "facepalm", "therewasanattempt"],
     "Doğa": ["NatureIsFuckingLit", "natureismetal", "BeAmazed"],
-    "Şaşırtıcı anlar": ["Unexpected", "unexpected", "holdmyredbull"],
+    "Şaşırtıcı anlar": ["Unexpected", "holdmyredbull", "AbruptChaos",
+                        "maybemaybemaybe", "nonononoyes"],
 }
 
 # Bellek-içi iş kaydı + son arama cache'i (tek kullanıcılı panel).

@@ -26,6 +26,8 @@ DEFAULT_SUBS = [
     "AnimalsBeingJerks", "AnimalsBeingDerps", "likeus", "AnimalsBeingBros",
     "NatureIsFuckingLit", "Unexpected", "nextfuckinglevel", "holdmycatnip",
     "AnimalsBeingConfused", "AnimalsBeingGeniuses",
+    # YÜKSEK-MERAK (doğrulandı 2026-07-17: video-zengin, beklenmedik/gerilim anları).
+    "AbruptChaos", "maybemaybemaybe", "interestingasfuck",
 ]
 
 # İndirilebilir video kaynakları (yt-dlp bunları çözer).
