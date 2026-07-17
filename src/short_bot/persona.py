@@ -18,24 +18,28 @@ class Persona(BaseModel):
     humor_check: bool = True
 
 
-# KAPANIŞ İMZASI STİLLERİ (kullanıcı geri bildirimi: her video aynı 'Aşık X der ki'
-# ozan kalıbıyla bitince FORMÜLLEŞİYOR). İmza kalır — kanalın markası — ama STİL DÖNER.
-# seed'e göre (per-video deterministik, bkz. build_variation_profile deseni) seçilir;
-# ardışık videolar farklı stil alır → imza hissi korunur, tekrar hissi azalır.
-# Sıra ÖNEMLİ: index 0 = OZAN (eski varsayılan davranış → seed=0'da geriye uyum).
+# KAPANIŞ STİLLERİ. OZAN/BEYİT TAMAMEN KALDIRILDI (kullanıcı: 'ozanı hep kaldır —
+# sonunda ozan sözü saçma sapan'): zorlama kafiye anlamsız mısralar üretiyordu
+# ('daha ay', 'yalan huzur'). Kapanış artık HEP kafiyesiz, GÜLDÜREN Türk sokak/mahalle
+# mizahı. 'Aşık ... der ki' kalıbı HİÇBİR stilde KULLANILMAZ. seed'e göre döner
+# (formülleşme kırılır — ardışık videolar farklı kapanış alır).
 SIGNATURE_STYLES: list[tuple[str, str]] = [
-    ("OZAN İMZASI",
-     "'close' alanı 'Aşık [Hayvan/İsim] der ki:' ile başlasın; KAFİYELİ 2 mısralık "
-     "halk-ozanı beyti (örn. 'Aşık Porsuki der ki: psuğum ben yolum dar, korku bilmem "
-     "zerre kadar.')."),
     ("MAHALLE ÖZLÜ SÖZÜ",
-     "'close' bir MAHALLE ÖZLÜ SÖZÜ / atasözü tadında olsun — kısa, vurucu, sokak "
-     "bilgeliği ('Bu mahallede kural bir: ...' ya da '... eden, ... bulur.' gibi). "
-     "'Aşık ... der ki' KALIBINI KULLANMA — bu videonun imzası ozan DEĞİL, özlü söz."),
+     "'close' bir MAHALLE ÖZLÜ SÖZÜ / atasözü BÜKÜMÜ olsun — kısa, vurucu, sokak "
+     "bilgeliği ama GÜLDÜREN bir çarpıtmayla ('Bu mahallede kural bir: ...' ya da "
+     "'... eden, ... bulur.' gibi). Kafiye YOK, 'Aşık ... der ki' YOK."),
     ("RACON LAFI",
      "'close' kahramanın mikrofonu bırakırcasına attığı KISA bir RACON lafı olsun — "
      "bir-iki cümle, kabadayı ağzı, kesip atan ('Mahalle böyle bir yer koçum; anladıysan "
-     "anladın.'). Kafiye ŞART DEĞİL. 'Aşık ... der ki' KALIBINI KULLANMA."),
+     "anladın.'). Kafiye YOK, 'Aşık ... der ki' YOK."),
+    ("PUNCHLINE ESPRİSİ",
+     "'close' seyirciyi GÜLDÜREN vurucu bir kapanış esprisi olsun — beklenmedik bir "
+     "abartı ya da benzetmeyle bitir ('resmen ... gibi', 'valla ...' tadında), 'ya bu "
+     "ne ya' dedirt. Kafiye YOK, ozan YOK."),
+    ("İZLEYİCİYE MUHABBET",
+     "'close' izleyiciye dönük sıcak, komik bir laf olsun ('sen de tanırsın böyle bir "
+     "tip koçum', 'bizim mahallede de vardı böyle biri' tadında) — güldüren mahalle "
+     "muhabbeti. Kafiye YOK, ozan YOK."),
 ]
 
 
@@ -178,7 +182,7 @@ def mascot_block(name: str, animal: str, trait: str) -> str:
         f"KIYASLAR — o hayvanın yanına gitmez (coğrafi tutarlılık). Örnek: 'bu penguen "
         f"çakıl çalıyormuş; bizim {name} görse taşı da alırdı sahibini de'.\n"
         f"Manşet ve kapanış imzası {name}'ın ismini taşıyabilir (imza stili döner: "
-        f"ozan beyti / mahalle özlü sözü / racon lafı — sana bu videonunki verilir).\n")
+        f"mahalle özlü sözü / racon lafı / güldüren punchline — sana bu videonunki verilir).\n")
 
 
 def topic_guidance(persona: Persona | None) -> str:
@@ -362,9 +366,10 @@ def persona_block(persona: Persona, *, seed: int = 0) -> str:
         "kullan. Örnek: karga 'kırmızı tişörtlü cimrinin teki geçti' der. Yanıt "
         "SADECE geçerli JSON olsun, markdown kod bloğu ekleme.\n\n"
         "KAPANIŞ (close) = MAHALLE İMZASI, ZORUNLU (kanalın markası — atlanamaz). Her\n"
-        "video bir imzayla biter AMA STİL DÖNER (hep aynı ozan kalıbı = formül, yapay\n"
+        "video bir imzayla biter AMA STİL DÖNER (hep aynı kalıp = formül, yapay\n"
         f"durur). BU VİDEONUN İMZA STİLİ → {imza_etiket}: {imza_talimat}\n"
         "HANGİ STİL OLURSA OLSUN: 'close' EN FAZLA 120 KARAKTER, hook'un bir sözcüğünü\n"
         "içersin (loop callback), düz özet cümlesi ('işte bu yüzden ... gibisi yok')\n"
-        "imza SAYILMAZ. Yukarıdaki few-shot örneği ozan stilini gösterebilir ama SEN bu\n"
-        "videonun stilini uygula. Yorum sorusunu close'a KOYMA, 'comment' alanına yaz.\n")
+        "imza SAYILMAZ. Kapanış HEP kafiyesiz, güldüren mahalle mizahı — 'Aşık ... der ki'\n"
+        "ya da ozan beyti YAZMA (kafiye zorlaması saçma çıkıyor). Yorum sorusunu close'a\n"
+        "KOYMA, 'comment' alanına yaz.\n")

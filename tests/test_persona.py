@@ -40,28 +40,25 @@ def test_persona_block_few_shot_ve_kurallari_icerir():
 
 
 def test_signature_style_seed_ile_doner():
-    # İmza kalır ama STİL DÖNER (her video aynı ozan kalıbı = formül). seed%3.
+    # Kapanış STİLİ DÖNER (formülleşme kırılır). OZAN KALDIRILDI → hepsi kafiyesiz.
     from short_bot.persona import signature_style, SIGNATURE_STYLES
-    assert len(SIGNATURE_STYLES) == 3
-    etiketler = {signature_style(s)[0] for s in range(3)}
-    assert len(etiketler) == 3                        # 3 FARKLI stil
-    assert signature_style(3) == signature_style(0)   # döngüsel (deterministik)
-    assert signature_style(4) == signature_style(1)
-    assert signature_style(0)[0] == "OZAN İMZASI"     # varsayılan = eski davranış
+    n = len(SIGNATURE_STYLES)
+    assert n == 4                                     # 4 kafiyesiz güldüren stil
+    etiketler = {signature_style(s)[0] for s in range(n)}
+    assert len(etiketler) == n                        # hepsi FARKLI
+    assert signature_style(n) == signature_style(0)   # döngüsel (deterministik)
+    assert all("OZAN" not in e for e, _ in SIGNATURE_STYLES)   # ozan yok
 
 
 def test_persona_block_imza_stili_seed_ile_degisir():
-    from short_bot.persona import load_persona, persona_block, signature_style
+    from short_bot.persona import load_persona, persona_block, signature_style, SIGNATURE_STYLES
     p = load_persona("vahsi_mizah", language="tr")
+    n = len(SIGNATURE_STYLES)
     # Seçilen stilin etiketi bloğa GERÇEKTEN enjekte edilmeli (stil dönüyor)
-    for seed in range(3):
-        etiket, _ = signature_style(seed)
-        assert etiket in persona_block(p, seed=seed)
-    # Ozan-DIŞI stillerde 'Aşık ... der ki' kalıbını KULLANMA talimatı olmalı
-    for seed in [s for s in range(3) if signature_style(s)[0] != "OZAN İMZASI"]:
-        assert "KULLANMA" in persona_block(p, seed=seed)
-    # seed=0 (varsayılan) ozan → 'Aşık' geçer (geriye uyum)
-    assert "Aşık" in persona_block(p, seed=0)
+    for seed in range(n):
+        assert signature_style(seed)[0] in persona_block(p, seed=seed)
+    # Ozan kaldırıldı: blok her seed'de ozan/beyit yazmayı YASAKLAR
+    assert "ozan beyti YAZMA" in persona_block(p, seed=0)
 
 
 # --- SENARYO ÇEŞİTLEME EKSENLERİ (kullanıcı: 'senaryo hep aynı kalıp') --------

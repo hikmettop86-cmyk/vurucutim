@@ -314,6 +314,7 @@ def new_create():
             mascot_animal=(request.form.get("mascot_animal") or "").strip(),
             mascot_trait=(request.form.get("mascot_trait") or "").strip(),
             subreddits=subreddits,
+            humor_style=(request.form.get("humor_style") or "").strip(),
             highlight_color=(request.form.get("highlight_color") or "#38bdf8").strip(),
             music_mood=(request.form.get("music_mood") or "upbeat").strip())
     except ValidationError as e:
@@ -383,6 +384,7 @@ def edit_curated_save(slug):
         mascot_animal=(request.form.get("mascot_animal") or "").strip(),
         mascot_trait=(request.form.get("mascot_trait") or "").strip(),
         subreddits=subreddits,
+        humor_style=(request.form.get("humor_style") or "").strip(),
         highlight_color=(request.form.get("highlight_color") or ch.reel.highlight_color).strip(),
         music_mood=(request.form.get("music_mood") or ch.reel.music_mood).strip(),
         curated_min_ups=_int("curated_min_ups", ch.reel.curated_min_ups),

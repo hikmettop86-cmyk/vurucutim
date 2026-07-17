@@ -6,6 +6,7 @@ Seslendirme metni kanal dilinde, her beat için SOMUT İngilizce görsel sorgu
 from __future__ import annotations
 
 import logging
+import re
 
 from short_bot.claude_cli import run_json
 from short_bot.reel_models import ReelNarration
@@ -610,8 +611,8 @@ story with the channel's persona. Do NOT invent a new story.
 RULES:
 - Narrate WHAT IS ACTUALLY ON SCREEN + the real title context. Invent NOTHING that the
   clip does not show (no hidden object, no event, no second animal that isn't there).
-- Make it FUNNY with the persona's voice and framing — but the on-screen subject and
-  what it does stay EXACTLY what the clip shows.
+- GÜLDÜR — ama GERÇEK, ANLAMLI mizahla (aşağıdaki EN ÖNCELİKLİ MİZAH KURALI'na uy).
+  Ekrandaki GERÇEK özneyi/aksiyonu KORU; yapay/resmi/belgesel dil YASAK.
 - HARD WORD BUDGET: the whole spoken script (hook + 3 beats + close) must be {lo_w}-{hi_w}
   words TOTAL and MUST NOT exceed {hi_w}. TTS reads ~1.95 words/s, so this is what keeps
   the clip from LOOPING (video lands in {lo_s}-{hi_s}s). Count your words.
@@ -619,10 +620,32 @@ RULES:
   for the MIDDLE of the {lo_w}-{hi_w} word range — rich persona voice, not terse. In {lang}.
 - Also write "title" (YouTube/SEO: subject keyword FIRST + short hook, no period) and
   "cover_title" (3-6 word on-screen headline).
+- KAPANIŞ ('close'): güldüren, KAFİYESİZ mahalle mizahı. SAKIN 'Ozan der ki', 'Aşık ... der ki' ya da beyit/şair kalıbı YAZMA — ozan YASAK.
 - mood: one of upbeat / neutral / calm.
 Output JSON ONLY: {{"hook": "...", "beats": ["...", "...", "..."], "close": "...",
   "mood": "upbeat", "title": "...", "cover_title": "..."}}
 """
+
+
+def _curated_humor_override(humor_style: str = "") -> str:
+    """EN ÖNCELİKLİ mizah katmanı (persona formülünü bile ezer). GERÇEK, klibe özgü,
+    ANLAMLI mizah — kalıp/atasözü/saçma espri YASAK. Kanalın humor_style'ı varsa o ses."""
+    voice = (humor_style or "").strip()
+    voice_line = (f"BU KANALIN KENDİ MİZAH SESİ: {voice}\nBu sesle, bu tonla güldür.\n"
+                  if voice else "")
+    return (
+        "=== EN ÖNCELİKLİ MİZAH KURALI (YUKARIDAKİ HER ŞEYİ, PERSONA FORMÜLÜNÜ DE EZER) ===\n"
+        + voice_line +
+        "Mizah GERÇEK ve ANLAMLI olacak. Ekrandaki BU ANA dair KESKİN, ÖZGÜN bir gözlemden "
+        "güldür — zeki bir arkadaşın o anı görüp attığı laf gibi. Komik olan, bu klibe ÖZGÜ "
+        "gerçek detaydır (uyumsuzluk, insani paralel, beklenmedik köşe); HAZIR KALIP DEĞİL.\n"
+        "KESİN YASAK: anlamsız atasözü/özlü söz, zorlama kafiye, uydurma-saçma espri, hazır "
+        "kalıp ('resmen ... gibi', '... der ki', 'valla ...'), formül uygulamak. Bir satır "
+        "GERÇEKTEN komik VE anlamlı değilse onu SADE ama gerçek yaz — saçmalamaktansa "
+        "düz-ama-doğru yeğdir.\n"
+        "KAPANIŞ (close): bu klibe oturan DOĞAL, komik bir son cümle — atasözü/ozan/kalıp "
+        "DEĞİL; yoksa klibin en komik gerçek detayını tekrar vuran sade bir cümle."
+    )
 
 
 def write_curated_narration(title: str, clip_description: str, *, channel,
@@ -646,6 +669,10 @@ def write_curated_narration(title: str, clip_description: str, *, channel,
                              getattr(reel, "mascot_trait", ""))
         if mblok:
             prompt += "\n\n" + mblok
+    # EN SON KATMAN → EN ÖNCELİKLİ: gerçek/anlamlı mizah, persona formülünü de EZER
+    # (kullanıcı: 'belirli kalıp değil, anlamsız atasözü değil, saçma espri değil').
+    prompt += "\n\n" + _curated_humor_override(getattr(reel, "humor_style", ""))
+
     def _inv(p):
         return run_json(p, _CuratedDraft, claude_path=claude_path, model=model,
                         backend=backend, api_key=api_key, retries=3)
@@ -683,6 +710,27 @@ def write_curated_narration(title: str, clip_description: str, *, channel,
     subj = (subject or "scene").strip() or "scene"
     beats = [ReelBeat(text=t, visual_query=subj, keyword="") for t in draft.beats]
     return ReelNarration(
-        hook=draft.hook, beats=beats, close=draft.close, mood=draft.mood,
-        title=draft.title, cover_title=draft.cover_title,
+        hook=draft.hook, beats=beats, close=_strip_bard(draft.close),
+        mood=draft.mood, title=draft.title, cover_title=draft.cover_title,
         hook_visual=subj, close_visual=subj)
+
+
+# Ozan/âşık imzası — kullanıcı ozanı İSTEMİYOR ama model arada prompt'u delip yazıyor.
+# Deterministik SÖK: hem BAŞTAKİ 'Ozan der ki:' / 'Aşık Kedi der ki:' öneki, hem SONDAKİ
+# ', Ozan yazdı' / '— Aşık Kedi' bylline'ı gider; arkasındaki ANLAMLI espri kalır.
+_BARD_RE = re.compile(
+    r"^\s*(?:a[şs][iıİ]k[^.;:!?]{0,25}|ozan)\s*der\s*ki\s*[:;,\-–—]?\s*",
+    re.IGNORECASE)
+_BARD_TAIL_RE = re.compile(
+    r"[,;:—–-]\s*(?:a[şs][iıİ]k|ozan)\b.*$", re.IGNORECASE | re.DOTALL)
+
+
+def _strip_bard(close: str) -> str:
+    if not isinstance(close, str):
+        return close
+    s = _BARD_TAIL_RE.sub("", _BARD_RE.sub("", close)).strip().rstrip(",;:—–- ")
+    if not s:
+        return close
+    if s[-1] not in ".!?":
+        s += "."
+    return s[0].upper() + s[1:]

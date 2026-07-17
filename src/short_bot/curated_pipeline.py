@@ -42,8 +42,22 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
         raise ValueError("produce_curated: cevherde video_url yok")
     title_seed = (gem.get("title") or "kürate klip").strip()
 
+    # KLİP-BAŞINA VARYANT SEED (kullanıcı: 'senaryo hep aynı kalıp'). persona_block
+    # açılış/anlatıcı-ses/benzetme-dünyası/kapanış-imzası stillerini SEED'e göre döndürür;
+    # kürate hep seed=0 kullanınca hepsi index 0'a (ozan beyti + 'Şu X'e bak') kilitleniyordu.
+    # Video-ID hash'i → her klip farklı stil (aynı klip → aynı, deterministik). Görsel
+    # varyasyon profili de bu seed'den türer (kesim/marker/tempo da çeşitlenir).
+    if not seed:
+        import hashlib
+        _k = (video_url or gem.get("permalink") or title_seed or "x").encode("utf-8")
+        seed = int(hashlib.sha1(_k).hexdigest()[:8], 16)
+
     vision = resolve_ai_call(settings, secrets, "vision")
     llm = resolve_ai_call(settings, secrets, "script")
+    # SENARYO komedi çekirdeği. Varsayılan HIZLI model (script=gemini, ~4sn). Daha çok
+    # mizah nüansı için 'dna' (Sonnet 5) kullanılabilir ama ÇOK YAVAŞ (~30sn/çağrı) →
+    # üretimi geciktirir; kalite>hız isteniyorsa buradan yükseltilir (opsiyon).
+    narr_llm = llm
     ai33_key = resolve_ai33_api_key(secrets)
 
     out_dir = Path(output_root) / channel.slug
@@ -77,8 +91,9 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
         log.info(f"  kürate: klip {clip_dur:.1f}s → video hedefi {target} (loop önleme)")
         narration = write_curated_narration(
             title_seed, desc, channel=channel, subject="clip",
-            claude_path=llm.claude_path, model=llm.model, backend=llm.backend,
-            api_key=llm.api_key, seed=seed, target_duration_s=target)
+            claude_path=narr_llm.claude_path, model=narr_llm.model,
+            backend=narr_llm.backend, api_key=narr_llm.api_key,
+            seed=seed, target_duration_s=target)
         log.info(f"  kürate: senaryo {narration.word_count()} kelime | "
                  f"başlık='{narration.title}' kapak='{narration.cover_title}'")
 

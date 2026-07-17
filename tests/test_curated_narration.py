@@ -50,3 +50,17 @@ def test_write_curated_narration_enforces_budget(monkeypatch):
                                 target_duration_s=(8, 12))
     assert calls["n"] >= 2                    # kısaltma turu çağrıldı
     assert n.beats[0].text == "Bir kisacik"   # kısaltılmış sürüm kullanıldı
+
+
+def test_strip_bard_removes_ozan_leading_and_trailing():
+    from short_bot.reel_narration import _strip_bard
+    assert _strip_bard("Ozan der ki; saray dediğin makine içiymiş!") == "Saray dediğin makine içiymiş!"
+    assert _strip_bard("Bu rahatlık vergiye tabi olmalı, Ozan yazdı.") == "Bu rahatlık vergiye tabi olmalı."
+    assert _strip_bard("Aşık Kedi der ki: sıcak köşeyi bulan kazanır") == "Sıcak köşeyi bulan kazanır."
+    # ozan yok → dokunma
+    assert _strip_bard("Çamaşır yıkanır, amca uyanmaz.") == "Çamaşır yıkanır, amca uyanmaz."
+
+
+def test_humor_style_config_round_trips(tmp_path):
+    from short_bot.config import ReelConfig
+    assert ReelConfig(enabled=False).humor_style == ""      # varsayılan boş

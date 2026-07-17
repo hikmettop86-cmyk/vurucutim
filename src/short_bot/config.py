@@ -276,6 +276,11 @@ class ReelConfig(BaseModel):
     # Hafif/kenar watermark'ı vision+delogo ile temizle (yazılı klip de kullanılabilir);
     # ağır kaplayan yazı temizlenmez (bkz. curated_clean). Kapatılırsa klip olduğu gibi.
     curated_clean: bool = True
+    # KANALIN KENDİ HAS MİZAH SESİ (kullanıcı: 'her kanalın kendi mizahı olacak, belirli
+    # kalıp değil'). Serbest metin — bu kanalın komik tonunu tarif eder (ör. 'sakin,
+    # ironik, gözlemci' ya da 'coşkulu, abartısız gündelik'). Boşsa: gerçek, klibe özgü
+    # gözlem mizahı (kalıpsız). persona'dan AYRI — persona ağzı/karakteri, bu tonu verir.
+    humor_style: str = ""
 
     @field_validator("target_duration_s", mode="before")
     @classmethod
@@ -627,6 +632,7 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
             "curated_time": cfg.reel.curated_time,
             "curated_max_duration": cfg.reel.curated_max_duration,
             "curated_clean": cfg.reel.curated_clean,
+            "humor_style": cfg.reel.humor_style,
         }
     if cfg.dna is not None:
         # mode='json' → tuple becomes list, ready for YAML round-trip
