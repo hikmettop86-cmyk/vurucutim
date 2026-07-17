@@ -11,8 +11,8 @@ import threading
 import uuid
 from pathlib import Path
 
-from flask import (Blueprint, current_app, flash, redirect, render_template,
-                   request, url_for)
+from flask import (Blueprint, abort, current_app, flash, redirect,
+                   render_template, request, url_for)
 
 from short_bot.config import list_channels, load_channel
 from short_bot.pexels import load_secrets as _load_secrets
@@ -333,4 +333,68 @@ def new_create():
         language=language, dna=None, content_source="curated", reel=reel)
     save_channel(channels_dir / f"{slug}.yaml", cfg)
     flash(f"'{name}' kürate kanalı oluşturuldu. Cevher'den klip seçip üret.", "success")
-    return redirect(url_for("reel_edit.edit_reel", slug=slug))
+    return redirect(url_for("curated.edit_curated", slug=slug))
+
+
+# ── Kürate kanal DÜZENLEME (temiz — eski konu/seri/niş/footage baggage YOK) ───
+@bp.route("/channels/<slug>/edit-curated")
+def edit_curated(slug):
+    from short_bot.lang_pack import load_pack
+    path = current_app.config["SHORTBOT_CONFIG_DIR"] / "channels" / f"{slug}.yaml"
+    if not path.exists():
+        abort(404)
+    ch = load_channel(path)
+    try:
+        personas = list((load_pack("tr").personas or {}).keys())
+    except Exception:  # noqa: BLE001
+        personas = []
+    return render_template("channels/edit_curated.html.j2", ch=ch,
+                           personas=personas, categories=list(CATEGORIES))
+
+
+@bp.route("/channels/<slug>/edit-curated", methods=["POST"])
+def edit_curated_save(slug):
+    import dataclasses
+
+    from short_bot.config import YoutubeChannelConfig, save_channel
+    path = current_app.config["SHORTBOT_CONFIG_DIR"] / "channels" / f"{slug}.yaml"
+    if not path.exists():
+        abort(404)
+    ch = load_channel(path)
+
+    category = (request.form.get("category") or "").strip()
+    if category in CATEGORIES:
+        subreddits = list(CATEGORIES[category])
+    else:
+        subreddits = [s.strip().removeprefix("r/").strip()
+                      for s in re.split(r"[\s,]+", request.form.get("subreddits") or "")
+                      if s.strip()]
+
+    def _int(field, default):
+        try:
+            return int(request.form.get(field) or default)
+        except ValueError:
+            return default
+
+    reel = ch.reel.model_copy(update=dict(
+        voice_id=(request.form.get("voice_id") or ch.reel.voice_id).strip(),
+        persona=(request.form.get("persona") or "").strip(),
+        mascot_name=(request.form.get("mascot_name") or "").strip(),
+        mascot_animal=(request.form.get("mascot_animal") or "").strip(),
+        mascot_trait=(request.form.get("mascot_trait") or "").strip(),
+        subreddits=subreddits,
+        highlight_color=(request.form.get("highlight_color") or ch.reel.highlight_color).strip(),
+        music_mood=(request.form.get("music_mood") or ch.reel.music_mood).strip(),
+        curated_min_ups=_int("curated_min_ups", ch.reel.curated_min_ups),
+        curated_time=(request.form.get("curated_time") or ch.reel.curated_time).strip(),
+        curated_clean=(request.form.get("curated_clean") == "on"),
+    ))
+    yt = (ch.youtube or YoutubeChannelConfig()).model_copy(
+        update=dict(auto_upload=(request.form.get("auto_upload") == "on")))
+    ch = dataclasses.replace(
+        ch, name=(request.form.get("name") or ch.name).strip(),
+        schedule_cron=(request.form.get("schedule_cron") or ch.schedule_cron).strip(),
+        enabled=(request.form.get("enabled") == "on"), reel=reel, youtube=yt)
+    save_channel(path, ch)
+    flash(f"'{ch.name}' kürate kanalı güncellendi.", "success")
+    return redirect(url_for("curated.edit_curated", slug=slug))

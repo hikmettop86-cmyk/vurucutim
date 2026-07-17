@@ -610,6 +610,27 @@ def _run_pipeline_inner(
                                error=None)
                     return RunResult(run_id=run_id, status="success",
                                      short_path=out_path, short_id=short_id, error=None)
+                if channel.content_source == "curated":
+                    # Kürate kanalı CEVHERSİZ çalıştı (cron/autopilot/'Şimdi üret') →
+                    # en iyi ÜRETİLMEMİŞ cevheri otomatik seç + üret. (Eskiden buraya
+                    # düşünce _run_rss'e gidip 'keywords boş olamaz' veriyordu.)
+                    log.info("  kürate kanalı: cevher otomatik seçiliyor")
+                    from short_bot.curated_pipeline import auto_produce_curated
+                    secrets_path = (Path(eng.url.database).parent / "secrets.yaml"
+                                    if eng.url.database else Path("data/secrets.yaml"))
+                    short_id, out_path = auto_produce_curated(
+                        channel, settings=settings, secrets=_load_secrets(secrets_path),
+                        db_path=db_path, output_root=Path(channel.output_dir).parent,
+                        music_root=music_root, templates_dir=templates_dir, log=log)
+                    if short_id is None:
+                        finish_run(eng, run_id, status="no_candidates", short_id=None,
+                                   error="Taze kürate cevheri yok (hepsi üretilmiş).")
+                        return RunResult(run_id=run_id, status="no_candidates",
+                                         short_path=None, error="taze cevher yok")
+                    finish_run(eng, run_id, status="success", short_id=short_id,
+                               error=None)
+                    return RunResult(run_id=run_id, status="success",
+                                     short_path=out_path, short_id=short_id, error=None)
                 if channel.content_source == "generator":
                     return _run_generator(
                         channel=channel, run_id=run_id, log=log, eng=eng,

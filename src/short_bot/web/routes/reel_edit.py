@@ -42,6 +42,9 @@ def edit_reel(slug):
     cfg = load_channel(path)
     if not _is_reel(cfg):
         return redirect(url_for("channel_edit.edit", slug=slug))
+    # KÜRATE kanalı: eski konu/seri/niş baggage'lı edit_reel yerine TEMİZ kürate edit.
+    if cfg.content_source == "curated":
+        return redirect(url_for("curated.edit_curated", slug=slug))
 
     secrets_path = current_app.config.get("SHORTBOT_SECRETS_PATH")
     pexels_key_set = False
@@ -82,6 +85,8 @@ def save_reel(slug):
     cfg = load_channel(path)
     if not _is_reel(cfg):
         return redirect(url_for("channel_edit.edit", slug=slug))
+    if cfg.content_source == "curated":
+        return redirect(url_for("curated.edit_curated", slug=slug))
 
     r_id = (request.form.get("reel_voice_id") or "").strip()
     if not r_id:

@@ -1,0 +1,108 @@
+{% extends "base.html.j2" %}
+{% block title %}Vurucu TİM — {{ ch.name }} (Kürate){% endblock %}
+{% block content %}
+<div class="max-w-2xl">
+  <div class="flex items-center justify-between mb-1 mt-2">
+    <h1 class="font-serif text-3xl font-bold">{{ ch.name }}</h1>
+    <span class="text-xs px-2 py-1 rounded-full bg-claude-accent-soft text-claude-accent">💎 Kürate kanal</span>
+  </div>
+  <p class="text-sm text-claude-muted mb-6">
+    Klip seçimi <a href="/curated" class="text-claude-accent hover:underline">Cevher</a>'den.
+    Cron/autopilot açıksa otomatik en iyi cevheri seçip üretir.
+  </p>
+
+  <form method="post" action="/channels/{{ ch.slug }}/edit-curated" class="space-y-5">
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm font-medium mb-1">Kanal adı</label>
+        <input type="text" name="name" value="{{ ch.name }}"
+               class="w-full border border-claude-border rounded-lg px-3 py-2 text-sm">
+      </div>
+      <div>
+        <label class="block text-sm font-medium mb-1">Ses (ai33 voice_id)</label>
+        <input type="text" name="voice_id" value="{{ ch.reel.voice_id }}"
+               class="w-full border border-claude-border rounded-lg px-3 py-2 text-sm">
+      </div>
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium mb-1">Persona</label>
+      <select name="persona" class="w-full border border-claude-border rounded-lg px-3 py-2 text-sm bg-white">
+        <option value="" {% if not ch.reel.persona %}selected{% endif %}>Kişiliksiz (düz anlatım)</option>
+        {% for p in personas %}<option value="{{ p }}" {% if p == ch.reel.persona %}selected{% endif %}>{{ p }}</option>{% endfor %}
+      </select>
+    </div>
+
+    <fieldset class="border border-claude-border rounded-lg p-4">
+      <legend class="text-xs text-claude-muted px-1">Maskot (opsiyonel)</legend>
+      <div class="grid grid-cols-3 gap-3">
+        <input type="text" name="mascot_name" value="{{ ch.reel.mascot_name }}" placeholder="isim"
+               class="border border-claude-border rounded-lg px-3 py-2 text-sm">
+        <input type="text" name="mascot_animal" value="{{ ch.reel.mascot_animal }}" placeholder="hayvan"
+               class="border border-claude-border rounded-lg px-3 py-2 text-sm">
+        <input type="text" name="mascot_trait" value="{{ ch.reel.mascot_trait }}" placeholder="özellik"
+               class="border border-claude-border rounded-lg px-3 py-2 text-sm">
+      </div>
+    </fieldset>
+
+    <div>
+      <label class="block text-sm font-medium mb-1">Kategori (subreddit listesini değiştirir)</label>
+      <select name="category" class="w-full border border-claude-border rounded-lg px-3 py-2 text-sm bg-white">
+        <option value="">— Aşağıdaki listeyi koru —</option>
+        {% for cat in categories %}<option value="{{ cat }}">{{ cat }}</option>{% endfor %}
+      </select>
+      <label class="block text-xs text-claude-muted mt-2 mb-1">Subreddit listesi</label>
+      <textarea name="subreddits" rows="2"
+                class="w-full border border-claude-border rounded-lg px-3 py-2 text-sm">{{ ch.reel.subreddits | join(', ') }}</textarea>
+    </div>
+
+    <div class="grid grid-cols-3 gap-4">
+      <div>
+        <label class="block text-sm font-medium mb-1">Min upvote</label>
+        <input type="number" name="curated_min_ups" value="{{ ch.reel.curated_min_ups }}"
+               class="w-full border border-claude-border rounded-lg px-3 py-2 text-sm">
+      </div>
+      <div>
+        <label class="block text-sm font-medium mb-1">Zaman penceresi</label>
+        <select name="curated_time" class="w-full border border-claude-border rounded-lg px-3 py-2 text-sm bg-white">
+          {% for tw in ['day','week','month','year','all'] %}<option value="{{ tw }}" {% if tw == ch.reel.curated_time %}selected{% endif %}>{{ tw }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium mb-1">Müzik</label>
+        <select name="music_mood" class="w-full border border-claude-border rounded-lg px-3 py-2 text-sm bg-white">
+          {% for m in ['upbeat','calm','neutral'] %}<option value="{{ m }}" {% if m == ch.reel.music_mood %}selected{% endif %}>{{ m }}</option>{% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm font-medium mb-1">Vurgu rengi</label>
+        <input type="color" name="highlight_color" value="{{ ch.reel.highlight_color }}"
+               class="w-full h-10 border border-claude-border rounded-lg">
+      </div>
+      <div>
+        <label class="block text-sm font-medium mb-1">Zamanlama (cron)</label>
+        <input type="text" name="schedule_cron" value="{{ ch.schedule_cron }}" placeholder="0 10 * * *"
+               class="w-full border border-claude-border rounded-lg px-3 py-2 text-sm">
+      </div>
+    </div>
+
+    <div class="flex flex-wrap gap-5 pt-1">
+      <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="enabled" {% if ch.enabled %}checked{% endif %}> Kanal etkin</label>
+      <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="curated_clean" {% if ch.reel.curated_clean %}checked{% endif %}> Watermark temizle</label>
+      <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="auto_upload" {% if ch.youtube and ch.youtube.auto_upload %}checked{% endif %}> YouTube otomatik yükle</label>
+    </div>
+
+    <div class="flex items-center gap-3 pt-2">
+      <button type="submit"
+              class="bg-claude-accent hover:bg-claude-accent-hover text-white px-5 py-2.5 rounded-lg font-semibold text-sm">
+        Kaydet
+      </button>
+      <a href="/curated" class="text-sm text-claude-accent hover:underline">Cevher'e git →</a>
+      <a href="/channels" class="text-sm text-claude-muted hover:text-claude-text">Kanallar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -119,3 +119,87 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
         script_json=script_json, render_ms=render_ms)
     log.info(f"  kürate: Short kaydedildi id={short_id} → {out_path.name}")
     return short_id, out_path
+
+
+def _produced_clip_keys(db_path) -> set:
+    """Üretilmiş kliplerin dedup anahtarları (video-ID + permalink) — otomatik seçimde
+    aynı klip iki kez üretilmesin."""
+    import re
+    from sqlalchemy import select
+
+    from short_bot.db import init_db, shorts
+    keys: set = set()
+    try:
+        eng = init_db(db_path)
+        with eng.connect() as c:
+            for r in c.execute(select(shorts.c.script_json)):
+                try:
+                    d = json.loads(r.script_json or "{}")
+                except Exception:  # noqa: BLE001
+                    continue
+                vu = (d.get("source_video_url") or "").split("?")[0]
+                m = re.search(r"v\.redd\.it/([a-z0-9]+)", vu)
+                if m:
+                    keys.add("vreddit:" + m.group(1))
+                elif vu:
+                    keys.add(vu)
+                if d.get("source_permalink"):
+                    keys.add(d["source_permalink"])
+    except Exception:  # noqa: BLE001
+        pass
+    return keys
+
+
+def _gem_produced(gem: dict, keys: set) -> bool:
+    import re
+    vu = (gem.get("video_url") or "").split("?")[0]
+    m = re.search(r"v\.redd\.it/([a-z0-9]+)", vu)
+    k = "vreddit:" + m.group(1) if m else vu
+    return k in keys or gem.get("permalink") in keys
+
+
+def _gem_rank(gem: dict) -> float:
+    """'Bize uygun' skoru: DİKEY (9:16 ideal) + upvote + makul süre."""
+    s = float(gem.get("ups", 0) or 0)
+    o = gem.get("orient")
+    if o == "DİKEY":
+        s *= 2.5
+    elif o == "yatay":
+        s *= 0.7
+    d = gem.get("duration") or 0
+    if d and not (5 <= d <= 60):
+        s *= 0.6
+    return s
+
+
+def auto_produce_curated(channel, *, settings, secrets, db_path, output_root,
+                         music_root, templates_dir, log=log):
+    """Kürate kanalı için cevheri OTOMATİK seç (kanal subreddit'leri → üretilmemiş →
+    en iyi) + üret. Cron/autopilot/'Şimdi üret' bunu kullanır (Cevher onayı gerekmez).
+
+    Döner (short_id, out_path); taze cevher yoksa (None, None)."""
+    from short_bot.reddit_gems import DEFAULT_SUBS, find_gems
+    reel = channel.reel
+    cid = secrets.get("reddit_client_id")
+    csec = secrets.get("reddit_client_secret")
+    if not (cid and csec):
+        raise RuntimeError("kürate: Reddit kimliği yok (data/secrets.yaml: "
+                           "reddit_client_id / reddit_client_secret)")
+    subs = list(getattr(reel, "subreddits", []) or []) or DEFAULT_SUBS
+    t = getattr(reel, "curated_time", "week")
+    log.info(f"  kürate[oto]: {len(subs)} subreddit taranıyor (t={t})")
+    gems = find_gems(cid, csec, subreddits=subs, t=t,
+                     min_ups=getattr(reel, "curated_min_ups", 500),
+                     max_duration=getattr(reel, "curated_max_duration", 90))
+    produced = _produced_clip_keys(db_path)
+    fresh = [g for g in gems if not _gem_produced(g, produced)]
+    if not fresh:
+        log.warning("  kürate[oto]: taze cevher yok (hepsi üretilmiş ya da havuz boş)")
+        return None, None
+    fresh.sort(key=lambda g: -_gem_rank(g))
+    gem = fresh[0]
+    log.info(f"  kürate[oto]: seçildi ⬆{gem.get('ups')} {gem.get('orient')} "
+             f"r/{gem.get('sub')} — {gem.get('title', '')[:60]}")
+    return produce_curated(gem, channel, settings=settings, secrets=secrets,
+                           db_path=db_path, output_root=output_root,
+                           music_root=music_root, templates_dir=templates_dir, log=log)

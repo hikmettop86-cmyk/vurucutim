@@ -251,13 +251,38 @@ def test_new_curated_creates_channel(tmp_path, monkeypatch):
     assert ch.dna is None                              # kürate DNA gerektirmez
 
 
-def test_curated_channel_edit_reel_renders(tmp_path, monkeypatch):
-    # dna=None kürate kanalının edit sayfası (yönlendirme hedefi) açılmalı.
+def test_curated_channel_uses_clean_edit(tmp_path, monkeypatch):
+    # Kürate kanalı eski konu/seri/niş baggage'lı edit_reel yerine TEMİZ kürate edit'e gider.
     _fake_pack = lambda lang: object()          # noqa: E731
-    _fake_pack.cache_clear = lambda: None        # create_app'in set_user_dir'ı çağırır
+    _fake_pack.cache_clear = lambda: None
     monkeypatch.setattr("short_bot.lang_pack.load_pack", _fake_pack)
     c, cfg_dir = _client(tmp_path)
     c.post("/channels/new-curated", data={
         "name": "Kedi Nis", "voice_id": "V1", "category": "Hayvanlar"})
     r = c.get("/channels/kedi-nis/edit-reel")
-    assert r.status_code == 200
+    assert r.status_code == 302 and "/edit-curated" in r.headers["Location"]
+    body = c.get("/channels/kedi-nis/edit-curated").data.decode("utf-8")
+    assert "Kürate kanal" in body and 'name="voice_id"' in body
+    assert "Niş Bulucu" not in body                # eski niş-bulucu baggage YOK
+    assert 'name="generator_topic"' not in body    # eski konu baggage YOK
+
+
+def test_edit_curated_save_updates(tmp_path, monkeypatch):
+    _fake_pack = lambda lang: object()          # noqa: E731
+    _fake_pack.cache_clear = lambda: None
+    monkeypatch.setattr("short_bot.lang_pack.load_pack", _fake_pack)
+    c, cfg_dir = _client(tmp_path)
+    c.post("/channels/new-curated", data={
+        "name": "Kedi Nis", "voice_id": "V1", "category": "Hayvanlar"})
+    from short_bot.config import load_channel
+    r = c.post("/channels/kedi-nis/edit-curated", data={
+        "name": "Kedi Nis 2", "voice_id": "V2", "persona": "vahsi_mizah",
+        "subreddits": "likeus, funnycats", "curated_time": "month",
+        "curated_min_ups": "800", "enabled": "on"})
+    assert r.status_code == 302
+    ch = load_channel(cfg_dir / "channels" / "kedi-nis.yaml")
+    assert ch.name == "Kedi Nis 2" and ch.reel.voice_id == "V2"
+    assert ch.reel.persona == "vahsi_mizah"
+    assert ch.reel.subreddits == ["likeus", "funnycats"]
+    assert ch.reel.curated_time == "month" and ch.reel.curated_min_ups == 800
+    assert ch.content_source == "curated"          # korundu
