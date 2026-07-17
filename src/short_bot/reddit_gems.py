@@ -208,3 +208,70 @@ def screen_gems(gems: list[dict], *, vision_call, max_check: int = 40,
         if s.is_animal and not s.has_overlay_text:
             out.append(g)
     return out
+
+
+# ── Tek post çekme + klip indirme (SP3: onay → üretim) ──────────────────────
+def fetch_post(url_or_permalink: str, client_id: str, client_secret: str,
+               *, user_agent: str = _UA) -> dict | None:
+    """Tek bir Reddit gönderisini permalink/URL'den çeker → gem dict (find_gems şeması).
+
+    Kürate onayında kullanıcı bir permalink verdiğinde (ya da ızgaradan seçtiğinde)
+    o postun güncel medya URL'sini + başlığını almak için. Video yoksa None."""
+    from urllib.parse import urlparse
+    token = get_token(client_id, client_secret, user_agent=user_agent)
+    path = urlparse(url_or_permalink).path if url_or_permalink.startswith("http") \
+        else url_or_permalink
+    path = "/" + path.strip("/")
+    r = requests.get(f"{_API}{path}", params={"raw_json": 1},
+                     headers={"Authorization": f"bearer {token}",
+                              "User-Agent": user_agent}, timeout=20)
+    r.raise_for_status()
+    data = r.json()
+    children = (data[0] if isinstance(data, list) else data)["data"]["children"]
+    if not children:
+        return None
+    post = children[0]["data"]
+    p = _unwrap(post)
+    vid = _video_of(post)
+    if vid is None:
+        return None
+    url, dur, w, h = vid
+    return {
+        "sub": p.get("subreddit", ""), "ups": p.get("ups", 0),
+        "comments": p.get("num_comments", 0), "title": (p.get("title") or "").strip(),
+        "duration": dur, "width": w, "height": h,
+        "orient": ("DİKEY" if (h and w and h > w) else "yatay" if w else "?"),
+        "video_url": url, "thumb": _thumb_of(post),
+        "permalink": "https://www.reddit.com" + p.get("permalink", ""),
+        "over18": p.get("over_18", False),
+    }
+
+
+def download_clip(video_url: str, out_path, *, user_agent: str = _UA) -> "Path":
+    """Kürate klibi indir. v.redd.it fallback = doğrudan mp4 (video-only; orijinal ses
+    zaten atılacak, Türkçe TTS basılacak). redgifs/streamable/gifv → yt-dlp.
+
+    Döner out_path (Path). İndirilemezse RuntimeError (sessiz fallback yok)."""
+    from pathlib import Path
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    if "v.redd.it" in video_url or video_url.split("?")[0].endswith(".mp4"):
+        r = requests.get(video_url, headers={"User-Agent": user_agent}, timeout=120)
+        r.raise_for_status()
+        if not r.content:
+            raise RuntimeError(f"kürate: klip indirilemedi (boş yanıt): {video_url}")
+        out_path.write_bytes(r.content)
+        return out_path
+    # external (redgifs/gfycat/streamable/imgur-gifv) → yt-dlp
+    import subprocess
+    try:
+        subprocess.run(["yt-dlp", "-q", "-o", str(out_path), "-f",
+                        "mp4/bestvideo+bestaudio/best", video_url],
+                       capture_output=True, timeout=180, check=True)
+    except FileNotFoundError as e:
+        raise RuntimeError("kürate: yt-dlp kurulu değil (external klip indirilemez)") from e
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"kürate: yt-dlp indirme başarısız: {e}") from e
+    if not out_path.exists() or out_path.stat().st_size == 0:
+        raise RuntimeError(f"kürate: klip indirilemedi: {video_url}")
+    return out_path

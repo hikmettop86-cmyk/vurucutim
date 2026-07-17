@@ -116,11 +116,31 @@ def test_curated_fetch_lists_gems(tmp_path, monkeypatch):
     assert captured["min_ups"] == 300
 
 
-def test_curated_produce_flashes_and_redirects(tmp_path):
+def test_curated_produce_requires_selection(tmp_path):
     c, cfg_dir = _client(tmp_path)
     _make_curated_channel(cfg_dir)
+    r = c.post("/curated/produce", data={"channel_slug": "", "video_url": ""})
+    assert "Kanal ya da klip seçili değil" in r.data.decode("utf-8")
+
+
+def test_curated_produce_launches_job(tmp_path, monkeypatch):
+    from pathlib import Path
+    c, cfg_dir = _client(tmp_path)
+    _make_curated_channel(cfg_dir)
+    # produce_curated'ı mock'la (ağ/render yok) — route iş başlatma + poll akışı test edilir.
+    monkeypatch.setattr("short_bot.curated_pipeline.produce_curated",
+                        lambda gem, channel, **k: (884, Path("output/x/vid.mp4")))
     r = c.post("/curated/produce", data={
-        "channel_slug": "cevherkanal", "title": "Zıplayan örümcek",
-        "video_url": "https://v.redd.it/abc/DASH_1080.mp4"})
-    assert r.status_code == 302
-    assert "/curated" in r.headers["Location"]
+        "channel_slug": "cevherkanal", "video_url": "https://v.redd.it/x/DASH.mp4",
+        "title": "Test klip", "permalink": "https://www.reddit.com/x"})
+    body = r.data.decode("utf-8")
+    m = re.search(r"/curated/produce-status/([0-9a-f]+)", body)
+    assert m, "produce poll job_id render edilmedi"
+    job_id = m.group(1)
+    done = ""
+    for _ in range(80):
+        done = c.get(f"/curated/produce-status/{job_id}").data.decode("utf-8")
+        if "Shorts'ta gör" in done:
+            break
+        time.sleep(0.05)
+    assert "Shorts'ta gör" in done          # üretim bitti, panele link

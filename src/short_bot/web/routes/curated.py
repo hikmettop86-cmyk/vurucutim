@@ -10,8 +10,7 @@ import threading
 import uuid
 from pathlib import Path
 
-from flask import (Blueprint, current_app, flash, redirect, render_template,
-                   request, url_for)
+from flask import Blueprint, current_app, render_template, request
 
 from short_bot.config import list_channels, load_channel
 from short_bot.pexels import load_secrets as _load_secrets
@@ -128,15 +127,57 @@ def status(job_id):
                            error=job.get("error"), slug=job.get("slug", ""))
 
 
+def _run_produce_job(job_id: str, *, gem, channel, settings, secrets, db_path,
+                     output_root, music_root, templates_dir) -> None:
+    from short_bot.curated_pipeline import produce_curated
+    try:
+        short_id, out_path = produce_curated(
+            gem, channel, settings=settings, secrets=secrets, db_path=db_path,
+            output_root=output_root, music_root=music_root,
+            templates_dir=templates_dir)
+        _set_job(job_id, status="done", short_id=short_id, out_name=out_path.name)
+    except Exception as e:  # noqa: BLE001 — hata mesajı kullanıcıya gösterilir
+        _set_job(job_id, status="error", error=str(e))
+
+
 @bp.route("/curated/produce", methods=["POST"])
 def produce():
-    # SP2: seçim alınır ve doğrulanır; ÜRETİM hattına bağlama SP3'te (indir →
-    # vision-anla → yeniden-senaryo → montaj). Burada henüz launch_pipeline yok.
+    # SP3: seçilen cevheri arka planda uçtan uca üret (indir → vision → yeniden-senaryo
+    # → montaj → Short kaydı). Uzun sürer (~2dk) → arka-plan iş + HTMX poll.
     slug = (request.form.get("channel_slug") or "").strip()
-    title = (request.form.get("title") or "").strip()[:80]
-    if not slug:
-        flash("Kanal seçili değil.", "error")
-    else:
-        flash(f"Cevher seçildi: “{title}” → {slug}. Üretim hattı SP3'te bağlanacak.",
-              "success")
-    return redirect(url_for("curated.index"))
+    video_url = (request.form.get("video_url") or "").strip()
+    title = (request.form.get("title") or "").strip()
+    permalink = (request.form.get("permalink") or "").strip()
+    cfg = current_app.config
+    channel_path = cfg["SHORTBOT_CONFIG_DIR"] / "channels" / f"{slug}.yaml"
+    job_id = uuid.uuid4().hex
+    if not slug or not channel_path.exists() or not video_url:
+        return render_template("curated/_produce.html.j2", job_id=job_id,
+                               status="error", title=title,
+                               error="Kanal ya da klip seçili değil.")
+    channel = load_channel(channel_path)
+    gem = {"video_url": video_url, "title": title, "permalink": permalink}
+    _set_job(job_id, status="running", title=title)
+    threading.Thread(
+        target=_run_produce_job, args=(job_id,),
+        kwargs=dict(gem=gem, channel=channel, settings=cfg["SHORTBOT_SETTINGS"],
+                    secrets=_secrets(), db_path=cfg["SHORTBOT_DB_PATH"],
+                    output_root=cfg["SHORTBOT_OUTPUT_ROOT"],
+                    music_root=cfg["SHORTBOT_MUSIC_ROOT"],
+                    templates_dir=cfg["SHORTBOT_TEMPLATES_DIR"]),
+        daemon=True).start()
+    return render_template("curated/_produce.html.j2", job_id=job_id,
+                           status="running", title=title)
+
+
+@bp.route("/curated/produce-status/<job_id>")
+def produce_status(job_id):
+    job = _get_job(job_id)
+    if not job:
+        return render_template("curated/_produce.html.j2", job_id=job_id,
+                               status="error", title="",
+                               error="Üretim işi bulunamadı.")
+    return render_template("curated/_produce.html.j2", job_id=job_id,
+                           status=job.get("status"), title=job.get("title", ""),
+                           error=job.get("error"), short_id=job.get("short_id"),
+                           out_name=job.get("out_name"))

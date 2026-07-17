@@ -15,6 +15,7 @@
   </div>
   {% else %}
   <div class="text-xs text-claude-muted uppercase tracking-wide mb-2">{{ gems|length }} cevher — birini seç</div>
+  <div id="produce-status" class="mb-3"></div>
   <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
     {% for g in gems %}
     <div class="rounded-lg border border-claude-border bg-white overflow-hidden flex flex-col">
@@ -34,7 +35,8 @@
         <div class="mt-auto flex items-center gap-2 pt-1">
           <a href="{{ g.permalink }}" target="_blank" rel="noopener"
              class="text-[11px] text-claude-accent hover:underline">Reddit'te izle ↗</a>
-          <form action="/curated/produce" method="post" class="ml-auto">
+          <form hx-post="/curated/produce" hx-target="#produce-status" hx-swap="innerHTML"
+                class="ml-auto">
             <input type="hidden" name="channel_slug" value="{{ slug }}">
             <input type="hidden" name="video_url" value="{{ g.video_url }}">
             <input type="hidden" name="title" value="{{ g.title }}">
