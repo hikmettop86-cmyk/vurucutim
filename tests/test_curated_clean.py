@@ -48,6 +48,37 @@ def test_clean_clip_delogo_runs(tmp_path):
     assert float((p.stdout or "0").strip()) > 1.0
 
 
+def test_crop_source_banner_edges_only(tmp_path):
+    """Kaynak yazı-bandı: ÜST/ALT kenara yapışık şerit kırpılır; ORTADA yüzen atlanır."""
+    from short_bot.curated_clean import SourceBanner, crop_source_banner
+    src = tmp_path / "src.mp4"
+    _make_clip(src)
+    # ÜST kenar (tepede) → kırpılır, süre korunur
+    top = crop_source_banner(src, SourceBanner(present=True, y_center=0.05, frac=0.08),
+                             out_path=tmp_path / "top.mp4")
+    assert top is not None and top.exists()
+    # ALT kenar (dipte) → kırpılır
+    bot = crop_source_banner(src, SourceBanner(present=True, y_center=0.95, frac=0.08),
+                             out_path=tmp_path / "bot.mp4")
+    assert bot is not None and bot.exists()
+    # ORTADA yüzen bant → temiz kırpılamaz → None (dokunma, içerik koru)
+    mid = crop_source_banner(src, SourceBanner(present=True, y_center=0.48, frac=0.08),
+                             out_path=tmp_path / "mid.mp4")
+    assert mid is None
+    # yok / ihmal edilebilir ince → None
+    assert crop_source_banner(src, SourceBanner(present=False),
+                              out_path=tmp_path / "n.mp4") is None
+    assert crop_source_banner(src, SourceBanner(present=True, y_center=0.02, frac=0.02),
+                              out_path=tmp_path / "n2.mp4") is None
+    # kırpılan üst şerit gerçekten daha kısa (yükseklik azaldı)
+    def _h(p):
+        r = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0",
+                            "-show_entries", "stream=height", "-of", "csv=p=0", str(p)],
+                           capture_output=True, text=True, timeout=20)
+        return int((r.stdout or "0").strip())
+    assert _h(top) < _h(src)
+
+
 def test_watermark_uncleanable_moving_vs_static():
     from short_bot.curated_clean import watermark_uncleanable
     # tek SABİT köşe → temizlenebilir

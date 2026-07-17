@@ -216,3 +216,97 @@ def detect_scene_split(clip, *, vision_call, ffmpeg_path: str = "ffmpeg",
     # sahne klibin bu kadarını kaplar. [0.15, 0.85]'e sıkıştır (uç değer tempoyu bozmasın).
     frac = (tf - 0.5) / n
     return max(0.15, min(0.85, frac))
+
+
+# ── KAYNAK YAZI-BANDI (repost başlığı) KIRPMA ────────────────────────────────
+# Reddit/TikTok repost klipleri sık sık üstte/altta gömülü bir BAŞLIK ŞERİDİ taşır
+# (örn. 'The way her mom said thank you… 🥺'). Watermark değil; delogo silmez. Bizim
+# Türkçe altyazımızla üst üste binip kalabalık yapar → o şeridi KIRP (crop). Köşe
+# logosu/hareketli watermark için detect_watermark ayrı (bkz. yukarı).
+class SourceBanner(BaseModel):
+    """Storyboard vision yargısı — kaynağın gömülü yazı-bandı var mı, DİKEY nerede, ne kadar."""
+    present: bool = False
+    y_center: float = 0.5    # bandın DİKEY merkezi (0.0=en üst, 1.0=en alt)
+    frac: float = 0.0        # bandın kapladığı YÜKSEKLİK oranı (0-1)
+
+
+_BANNER_PROMPT = (
+    "Bu bir kısa video klibinin STORYBOARD'ı (zaman-sıralı 6 kare, tek ızgara). Görüntüye "
+    "SONRADAN BİNDİRİLMİŞ, videonun kendi içeriğinden OLMAYAN bir YAZI BANDI / BAŞLIK ŞERİDİ "
+    "var mı? (Reddit/TikTok repost başlığı gibi bir metin kutusu. Doğal sahne yazısı, tabela "
+    "ya da köşe watermark'ı DEĞİL.)\n"
+    "- present: böyle bir başlık/metin kutusu VAR mı?\n"
+    "- y_center: DİKEY merkezi (0.0=karenin en ÜSTÜ, 0.5=tam ORTA, 1.0=en ALTI). DİKKATLİ ölç.\n"
+    "- frac: kapladığı YÜKSEKLİK oranı, kabaca (0.05-0.25).\n"
+    'SADECE JSON: {"present": <bool>, "y_center": <0.0-1.0>, "frac": <0.05-0.25>}'
+)
+
+
+def detect_source_banner(clip, *, vision_call, ffmpeg_path: str = "ffmpeg",
+                         cols: int = 3, rows: int = 2):
+    """Storyboard → vision: kaynağın gömülü üst/alt yazı-bandı. Döner SourceBanner ya da
+    None (kare/vision hatası → dokunma, fail-open)."""
+    from short_bot.claude_cli import run_json
+    from short_bot.reel import _storyboard_frames
+    try:
+        with tempfile.TemporaryDirectory() as td:
+            board = Path(td) / "banner_board.jpg"
+            if not _storyboard_frames(clip, board, ffmpeg_path, cols=cols, rows=rows):
+                return None
+            if not board.exists() or board.stat().st_size == 0:
+                return None
+            return run_json(_BANNER_PROMPT, SourceBanner,
+                            claude_path=vision_call.claude_path, model=vision_call.model,
+                            backend=vision_call.backend, api_key=vision_call.api_key,
+                            image_path=board, retries=1, timeout_s=45)
+    except Exception as e:  # noqa: BLE001
+        log.info(f"  kürate[bant]: yazı-bandı tespiti hatası ({e})")
+        return None
+
+
+# Bandı YALNIZ kenara yapışıksa kır — üst/alt kenardan bu kadar içeri girmiş olabilir.
+# Ortada yüzen/kayan başlık (bkz. short 935 tembel-hayvan: y_center≈0.48) temiz
+# kırpılamaz (içerik kaybettirir) → dokunma, orijinali kullan.
+_BANNER_EDGE_GAP = 0.06   # kenara yapışıklık toleransı
+_BANNER_MAX_CUT = 0.22    # tek seferde en çok bu kadar kırp (içerik koru)
+
+
+def crop_source_banner(clip, banner, *, ffmpeg_path: str = "ffmpeg", out_path):
+    """Kaynağın gömülü yazı-bandını KIRP — SADECE üst ya da alt kenara yapışıksa (temiz
+    strip). Ortada yüzen banda dokunmaz (None). Blur değil, crop (temiz)."""
+    if banner is None or not banner.present:
+        return None
+    yc = float(banner.y_center or 0.5)
+    f = max(0.0, min(0.30, float(banner.frac or 0.0)))
+    if f < 0.05:
+        return None                       # ihmal edilebilir — kırpmaya değmez
+    top_edge = yc - f / 2.0                # bandın üst sınırı (0-1)
+    bot_edge = yc + f / 2.0                # bandın alt sınırı (0-1)
+    # ÜST kenara yapışık (bandın tepesi ~0'da) → üstten bot_edge kadar at.
+    if top_edge <= _BANNER_EDGE_GAP and bot_edge <= 0.40:
+        cut = min(_BANNER_MAX_CUT, bot_edge + 0.02)
+        vf = f"crop=iw:trunc(ih*(1-{cut:.3f})/2)*2:0:trunc(ih*{cut:.3f}/2)*2"
+        where = "üst"
+    # ALT kenara yapışık (bandın dibi ~1'de) → alttan (1-top_edge) kadar at.
+    elif bot_edge >= (1.0 - _BANNER_EDGE_GAP) and top_edge >= 0.60:
+        cut = min(_BANNER_MAX_CUT, (1.0 - top_edge) + 0.02)
+        vf = f"crop=iw:trunc(ih*(1-{cut:.3f})/2)*2:0:0"
+        where = "alt"
+    else:
+        log.info(f"  kürate[bant]: banda dokunulmadı (ortada yüzüyor, "
+                 f"y_center≈{yc:.2f}) — temiz kırpılamaz")
+        return None
+    out_path = Path(out_path)
+    try:
+        subprocess.run(
+            [ffmpeg_path, "-v", "error", "-y", "-i", str(clip), "-vf", vf,
+             "-an", "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
+             str(out_path)],
+            capture_output=True, timeout=180)
+        if out_path.exists() and out_path.stat().st_size > 0:
+            log.info(f"  kürate[bant]: kaynak yazı-bandı ({where} kenar, "
+                     f"%{round(cut * 100)}) kırpıldı")
+            return out_path
+    except Exception as e:  # noqa: BLE001
+        log.info(f"  kürate[bant]: kırpma hatası ({e}) → orijinal klip")
+    return None

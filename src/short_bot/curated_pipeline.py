@@ -98,6 +98,18 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
                     raise CuratedWatermarkError(
                         "Bu klipte temizlenemeyen (hareketli TikTok / kaplayan) watermark "
                         "var — watermark'sız bir klip seç.")
+            # KAYNAK YAZI-BANDI: repost başlığı (gömülü metin kutusu) Türkçe altyazımızla
+            # çakışır. ÜST/ALT kenara yapışık şerit → temiz KIRP. Ortada yüzen bant (bkz.
+            # short 935 tembel-hayvan, y≈0.48) temiz kırpılamaz (delogo=smear, crop=içerik
+            # kaybı) → dokunulmaz, olduğu gibi kalır.
+            from short_bot.curated_clean import (crop_source_banner,
+                                                 detect_source_banner)
+            _banner = detect_source_banner(clip, vision_call=vision,
+                                           ffmpeg_path=settings.ffmpeg_path)
+            _nb = crop_source_banner(clip, _banner, ffmpeg_path=settings.ffmpeg_path,
+                                     out_path=td / "nobanner.mp4")
+            if _nb is not None:
+                clip = _nb
         # NOT: Kürate klibi renk grade'i (reel_assembler, GRADE_TARGET_LUMA≈0.45'e normalize
         # + vignette) diğer kanallarla AYNI uygulanır. Bir ara gölge-kaldıran ön-aydınlatma
         # (brighten_if_dark) eklenmiş + grade kapatılmıştı ama çıktı FAZLA açık/yıkanmış
