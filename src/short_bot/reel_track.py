@@ -19,6 +19,48 @@ from pathlib import Path
 log = logging.getLogger(__name__)
 
 
+def _motion_seed(frames):
+    """Ardışık kare-farklarının HAREKET-ağırlıklı merkezi = 'aksiyonun' olduğu yer.
+
+    locate_subject (tek kare + generic sorgu) özneyi bazen yanlış yere koyuyor (short
+    926: turtle/pipet üst-ortada ama ok kola/alta düştü). Hareketli klipte 'ilginç olan'
+    = HAREKET EDEN şeydir; kare-farkı ağırlık merkezi onu yakalar. Dönüş: (x, y, güç)
+    normalize, ya da None (opencv yok / hareket yok → çağıran vision konumunda kalır)."""
+    try:
+        import cv2
+    except Exception:  # noqa: BLE001
+        return None
+    acc = None
+    prev = None
+    diffs = 0
+    for f in frames:
+        im = cv2.imread(str(f))
+        if im is None:
+            continue
+        g = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
+        if prev is not None:
+            d = cv2.absdiff(g, prev).astype("float32")
+            acc = d if acc is None else acc + d
+            diffs += 1
+        prev = g
+    if acc is None or diffs == 0:
+        return None
+    strength = float(acc.mean()) / diffs        # kare-başı ortalama piksel hareketi
+    m = cv2.moments(acc)
+    if m["m00"] == 0:
+        return None
+    h, w = acc.shape
+    x = min(0.92, max(0.08, m["m10"] / m["m00"] / w))
+    y = min(0.92, max(0.08, m["m01"] / m["m00"] / h))
+    return (x, y, strength)
+
+
+# Hareket bu eşiğin üstündeyse özne 'hareketli' sayılır → tracker VISION yerine hareket
+# merkezinden tohumlanır. Altında (durağan/hafif) vision konumu korunur (ölçüldü: turtle
+# ~4-8, durağan iç-mekân <2). Muhafazakâr: yanlış-pozitif riski küçük.
+_MOTION_SEED_MIN = 2.5
+
+
 def _new_tracker(cv2):
     """En iyi mevcut cv2 tracker'ı (CSRT tercih, KCF yedek). Yoksa None."""
     for path in ("legacy.TrackerCSRT_create", "TrackerCSRT_create",
@@ -60,6 +102,11 @@ def track_subject(clip, start_s: float, dur_s: float, x0: float, y0: float, *,
             if f0 is None:
                 return None
             h, w = f0.shape[:2]
+            # BAŞLANGIÇ İSABETİ: hareketliyse tracker'ı VISION konumu yerine HAREKET
+            # merkezinden (aksiyon) tohumla — vision özneyi yanlış yere koyduysa düzeltir.
+            seed = _motion_seed(frames)
+            if seed is not None and seed[2] >= _MOTION_SEED_MIN:
+                x0, y0 = seed[0], seed[1]
             bw, bh = max(24, int(0.22 * w)), max(24, int(0.22 * h))
             bx = max(0, min(w - bw, int(x0 * w - bw / 2)))
             by = max(0, min(h - bh, int(y0 * h - bh / 2)))
