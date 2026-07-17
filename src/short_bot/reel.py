@@ -706,8 +706,13 @@ def produce_reel_video(
     # Belirteç-uygun segmentleri ÖNCE hesapla → yalnız onlarda vision konum çağır
     # (hook/close ve 'off'/kapalı durumda gereksiz vision maliyeti yok).
     n_segs = len(timeline.seg_queries)
+    # KÜRATE: ok/işaretçiler footage-reel özelliği (özneyi işaret eder). Tek GERÇEK kürate
+    # klibinde özne HAREKET ettiği için sabit-konumlu ok YANLIŞ yeri gösteriyor (short 920:
+    # ok boş kayada) + gereksiz (klip kendini anlatıyor). subject_xs KIRPMA için hesaplanmaya
+    # devam eder; yalnız OK ÇİZİMİ kapatılır. color_grade ile aynı mantık.
+    _arrows_on = reel.arrows_enabled and curated_clip is None
     worthy = (set(_marker_worthy_segs(n_segs, reel.arrow_frequency))
-              if reel.arrows_enabled else set())
+              if _arrows_on else set())
     # SIRA: önce BEAT'ler, sonra hook + close. Böylece hook'un kendi sorgusu
     # kapıdan geçemezse konudaki bir beat klibine düşer — çıpa-çöpüne değil
     # (gerçek şikâyet: "ilk girişteki görüntü alakasız" → tablo pazarı).
@@ -896,7 +901,7 @@ def produce_reel_video(
     markers = []
     subject_xs: list = [None] * len(subcuts)
     want_frame = getattr(reel, "subject_framing", True) and vision_call is not None
-    want_marks = reel.arrows_enabled and bool(worthy)
+    want_marks = _arrows_on and bool(worthy)
     if want_frame or want_marks:
         _mk_t0 = _time.perf_counter()
 
@@ -987,7 +992,7 @@ def produce_reel_video(
         timeline, frames_dir, fps=fps, browser=browser, templates_dir=templates_dir,
         layout=profile.layout,
         highlight_color=profile.accent, arrow_color=reel.arrow_color,
-        arrow_frequency=reel.arrow_frequency if reel.arrows_enabled else "off",
+        arrow_frequency=reel.arrow_frequency if _arrows_on else "off",
         cut_effect=profile.cut_effect, handle=channel.handle,
         badge=bits.badge,
         question_text=_question_text,
