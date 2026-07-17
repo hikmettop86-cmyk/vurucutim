@@ -36,12 +36,23 @@ def _fake_dna():
 
 
 def _make_reel_channel(c, cfg_dir, slug_name="Reel Kanal"):
-    with patch("short_bot.web.routes.reel_new.generate_dna", return_value=_fake_dna()):
-        c.post("/channels/new-reel", data={
-            "name": slug_name, "language": "tr",
-            "topic": "uzay ve gezegenler hakkında ilginç bilgiler",
-            "voice_id": "Q2IX97JeHBY3vNGzgM5s", "highlight_color": "#38bdf8",
-        })
+    # Eski /channels/new-reel sihirbazı kaldırıldı → kanalı doğrudan kur (edit testi için).
+    from short_bot.config import (ChannelConfig, GeneratorConfig, ReelConfig,
+                                  save_channel)
+    from short_bot.web.routes.reel_new import _slug_from_name
+    slug = _slug_from_name(slug_name)
+    cfg = ChannelConfig(
+        slug=slug, name=slug_name, keywords=[], rss_locale="",
+        schedule_cron="0 10 * * *", duration_s=40, min_score=7.0,
+        max_candidates_per_run=3, template="stat-hero",
+        colors={"primary": "#000000", "accent": "#38bdf8",
+                "bg_gradient": ["#000000", "#111111"]},
+        handle=f"@{slug}", output_dir=f"output/{slug}", enabled=True, language="tr",
+        dna=_fake_dna(), content_source="generator",
+        generator=GeneratorConfig(topic="uzay ve gezegenler hakkında ilginç bilgiler"),
+        reel=ReelConfig(enabled=True, voice_id="Q2IX97JeHBY3vNGzgM5s",
+                        highlight_color="#38bdf8"))
+    save_channel(cfg_dir / "channels" / f"{slug}.yaml", cfg)
 
 
 def _make_news_channel(cfg_dir):

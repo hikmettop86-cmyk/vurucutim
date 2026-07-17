@@ -6,11 +6,13 @@ son aramayı cache'ler (sekme değişince kaybolmaz). Onaylanan klip run_pipelin
 üretilir → Akış'ta canlı görünür + /shorts'ta durur + yüklenebilir.
 """
 import json
+import re
 import threading
 import uuid
 from pathlib import Path
 
-from flask import Blueprint, current_app, render_template, request
+from flask import (Blueprint, current_app, flash, redirect, render_template,
+                   request, url_for)
 
 from short_bot.config import list_channels, load_channel
 from short_bot.pexels import load_secrets as _load_secrets
@@ -238,3 +240,97 @@ def produce():
         lock_dir=cfg["SHORTBOT_LOCK_DIR"], logs_dir=cfg["SHORTBOT_LOGS_DIR"],
         trigger="manual_curated", curated_gem=gem)
     return render_template("curated/_produce.html.j2", status="started", title=title)
+
+
+# ── Kürate kanal OLUŞTURMA (eski footage-sürüklü reel sihirbazının yerine) ────
+def _slug_from_name(name: str) -> str:
+    from short_bot.text_normalize import strip_non_turkish_diacritics
+    s = strip_non_turkish_diacritics(name).lower()
+    s = (s.replace("ç", "c").replace("ğ", "g").replace("ı", "i").replace("ö", "o")
+         .replace("ş", "s").replace("ü", "u"))
+    s = re.sub(r"[^a-z0-9]+", "-", s).strip("-")
+    return s or "kanal"
+
+
+def _unique_slug(base: str, channels_dir: Path) -> str:
+    slug, i = base, 2
+    while (channels_dir / f"{slug}.yaml").exists():
+        slug, i = f"{base}-{i}", i + 1
+    return slug
+
+
+@bp.route("/channels/new-curated")
+def new_form():
+    from short_bot.lang_pack import load_pack
+    try:
+        personas = list((load_pack("tr").personas or {}).keys())
+    except Exception:  # noqa: BLE001
+        personas = []
+    return render_template("channels/new_curated.html.j2",
+                           personas=personas, categories=list(CATEGORIES))
+
+
+@bp.route("/channels/new-curated", methods=["POST"])
+def new_create():
+    from pydantic import ValidationError
+
+    from short_bot.config import ChannelConfig, ReelConfig, save_channel
+    from short_bot.lang_pack import load_pack
+    name = (request.form.get("name") or "").strip()
+    voice_id = (request.form.get("voice_id") or "").strip()
+    language = (request.form.get("language") or "tr").strip()
+    persona = (request.form.get("persona") or "").strip()
+    category = (request.form.get("category") or "").strip()
+    subs_raw = (request.form.get("subreddits") or "").strip()
+
+    if not name:
+        flash("Kanal adı gerekli.", "error")
+        return redirect(url_for("curated.new_form"))
+    if not voice_id:
+        flash("Kürate kanalı için bir ses seç (voice_id boş).", "error")
+        return redirect(url_for("curated.new_form"))
+    # Dil paketi ŞART (persona + altyazı doğru dilde basılsın).
+    try:
+        load_pack(language)
+    except RuntimeError:
+        flash(f"'{language}' dil paketi henüz üretilmedi — Diller sayfasından üret.",
+              "error")
+        return redirect(url_for("curated.new_form"))
+
+    # Subreddit listesi: kategori seçildiyse onun listesi, yoksa textarea ayrıştırılır.
+    if category in CATEGORIES:
+        subreddits = list(CATEGORIES[category])
+    else:
+        subreddits = [s.strip().removeprefix("r/").strip()
+                      for s in re.split(r"[\s,]+", subs_raw) if s.strip()]
+
+    cfg_dir = current_app.config["SHORTBOT_CONFIG_DIR"]
+    channels_dir = cfg_dir / "channels"
+    slug = _unique_slug(_slug_from_name(name), channels_dir)
+    try:
+        reel = ReelConfig(
+            enabled=True, voice_id=voice_id, persona=persona,
+            mascot_name=(request.form.get("mascot_name") or "").strip(),
+            mascot_animal=(request.form.get("mascot_animal") or "").strip(),
+            mascot_trait=(request.form.get("mascot_trait") or "").strip(),
+            subreddits=subreddits,
+            highlight_color=(request.form.get("highlight_color") or "#38bdf8").strip(),
+            music_mood=(request.form.get("music_mood") or "upbeat").strip())
+    except ValidationError as e:
+        flash(f"Reel ayarları geçersiz: {e}", "error")
+        return redirect(url_for("curated.new_form"))
+
+    # Kürate kanalı: content_source='curated', dna YOK (reel çıktısı kullanmıyor),
+    # generator bloğu YOK (konu Reddit'ten gelir). template placeholder (kürate overlay
+    # kanal template'ini değil reel_overlay'i kullanır).
+    cfg = ChannelConfig(
+        slug=slug, name=name, keywords=[], rss_locale="",
+        schedule_cron="0 10 * * *", duration_s=20, min_score=7.0,
+        max_candidates_per_run=3, template="newscast",
+        colors={"primary": "#0ea5e9", "accent": "#38bdf8",
+                "bg_gradient": ["#0f172a", "#020617"]},
+        handle=f"@{slug}", output_dir=f"output/{slug}", enabled=True,
+        language=language, dna=None, content_source="curated", reel=reel)
+    save_channel(channels_dir / f"{slug}.yaml", cfg)
+    flash(f"'{name}' kürate kanalı oluşturuldu. Cevher'den klip seçip üret.", "success")
+    return redirect(url_for("reel_edit.edit_reel", slug=slug))

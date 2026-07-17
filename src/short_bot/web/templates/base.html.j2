@@ -75,8 +75,7 @@
         <a href="/shorts" class="nav-link hover:text-claude-text {% if p.startswith('/shorts') %}active{% endif %}">Shorts</a>
         <a href="/curated" class="nav-link hover:text-claude-text {% if p.startswith('/curated') %}active{% endif %}">Cevher</a>
         <a href="{{ url_for('feeds.list_view') }}" class="nav-link hover:text-claude-text {% if p.startswith('/feeds') %}active{% endif %}">RSS Havuzu</a>
-        <a href="/channels" class="nav-link hover:text-claude-text {% if p.startswith('/channels') and not p.startswith('/channels/agent') %}active{% endif %}">Kanallar</a>
-        <a href="/channels/agent" class="nav-link hover:text-claude-text {% if p.startswith('/channels/agent') %}active{% endif %}">Ajan</a>
+        <a href="/channels" class="nav-link hover:text-claude-text {% if p.startswith('/channels') %}active{% endif %}">Kanallar</a>
         <a href="/youtube" class="nav-link hover:text-claude-text {% if p.startswith('/youtube') %}active{% endif %}">YouTube</a>
         <a href="/scheduler/timeline" class="nav-link hover:text-claude-text {% if p.startswith('/scheduler') %}active{% endif %}">Cron</a>
         <a href="/lang-packs" class="nav-link hover:text-claude-text {% if p.startswith('/lang-packs') %}active{% endif %}">Diller</a>

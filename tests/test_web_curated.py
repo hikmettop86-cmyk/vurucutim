@@ -210,3 +210,54 @@ def test_curated_cache_persists_last_search(tmp_path, monkeypatch):
         time.sleep(0.05)
     idx = c.get("/curated").data.decode("utf-8")   # yeni sekme / geri dönüş
     assert "Zıplayan örümcek" in idx               # cache'ten geldi (kaybolmadı)
+
+
+def test_ajan_removed(tmp_path):
+    c, cfg_dir = _client(tmp_path)
+    body = c.get("/channels").data.decode("utf-8")
+    assert ">Ajan<" not in body                  # nav'dan kalktı
+    assert c.get("/channels/agent").status_code == 404   # route yok
+
+
+def test_new_curated_form_renders(tmp_path):
+    c, cfg_dir = _client(tmp_path)
+    body = c.get("/channels/new-curated").data.decode("utf-8")
+    assert "Kürate Kanal Oluştur" in body
+    assert 'name="voice_id"' in body and 'name="persona"' in body
+
+
+def test_old_reel_wizard_redirects_to_curated(tmp_path):
+    c, cfg_dir = _client(tmp_path)
+    r = c.get("/channels/new-reel")
+    assert r.status_code == 302 and "/channels/new-curated" in r.headers["Location"]
+
+
+def test_new_curated_creates_channel(tmp_path, monkeypatch):
+    _fake_pack = lambda lang: object()          # noqa: E731
+    _fake_pack.cache_clear = lambda: None        # create_app'in set_user_dir'ı çağırır
+    monkeypatch.setattr("short_bot.lang_pack.load_pack", _fake_pack)
+    c, cfg_dir = _client(tmp_path)
+    r = c.post("/channels/new-curated", data={
+        "name": "Test Kürate", "voice_id": "V1", "language": "tr",
+        "persona": "", "category": "Hayvanlar"})
+    assert r.status_code == 302
+    from short_bot.config import load_channel
+    p = cfg_dir / "channels" / "test-kurate.yaml"
+    assert p.exists()
+    ch = load_channel(p)
+    assert ch.content_source == "curated"
+    assert ch.reel.enabled and ch.reel.voice_id == "V1"
+    assert "AnimalsBeingJerks" in ch.reel.subreddits   # kategori subreddit'leri geçti
+    assert ch.dna is None                              # kürate DNA gerektirmez
+
+
+def test_curated_channel_edit_reel_renders(tmp_path, monkeypatch):
+    # dna=None kürate kanalının edit sayfası (yönlendirme hedefi) açılmalı.
+    _fake_pack = lambda lang: object()          # noqa: E731
+    _fake_pack.cache_clear = lambda: None        # create_app'in set_user_dir'ı çağırır
+    monkeypatch.setattr("short_bot.lang_pack.load_pack", _fake_pack)
+    c, cfg_dir = _client(tmp_path)
+    c.post("/channels/new-curated", data={
+        "name": "Kedi Nis", "voice_id": "V1", "category": "Hayvanlar"})
+    r = c.get("/channels/kedi-nis/edit-reel")
+    assert r.status_code == 200

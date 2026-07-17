@@ -1,0 +1,90 @@
+{% extends "base.html.j2" %}
+{% block title %}Vurucu TİM — Kürate Kanal Oluştur{% endblock %}
+{% block content %}
+<div class="max-w-2xl">
+  <h1 class="font-serif text-3xl font-bold mt-2 mb-1">Kürate Kanal Oluştur</h1>
+  <p class="text-sm text-claude-muted mb-6">
+    Reddit'ten kürate viral klipleri persona ile yeniden anlatan bir kanal. Klip seçimi
+    <a href="/curated" class="text-claude-accent hover:underline">Cevher</a> sayfasından yapılır.
+  </p>
+
+  <form method="post" action="/channels/new-curated" class="space-y-5">
+    <div>
+      <label class="block text-sm font-medium mb-1">Kanal adı *</label>
+      <input type="text" name="name" required placeholder="ör. Mahalle Vahşisi"
+             class="w-full border border-claude-border rounded-lg px-3 py-2 text-sm">
+    </div>
+
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm font-medium mb-1">Dil</label>
+        <select name="language" class="w-full border border-claude-border rounded-lg px-3 py-2 text-sm bg-white">
+          <option value="tr" selected>Türkçe</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium mb-1">Ses (ai33 voice_id) *</label>
+        <input type="text" name="voice_id" required placeholder="ör. OMPrkDOvnYasPecb05Rb"
+               class="w-full border border-claude-border rounded-lg px-3 py-2 text-sm">
+      </div>
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium mb-1">Persona</label>
+      <select name="persona" class="w-full border border-claude-border rounded-lg px-3 py-2 text-sm bg-white">
+        <option value="">Kişiliksiz (düz anlatım)</option>
+        {% for p in personas %}<option value="{{ p }}" {% if p == 'vahsi_mizah' %}selected{% endif %}>{{ p }}</option>{% endfor %}
+      </select>
+      <p class="text-xs text-claude-muted mt-1">Personanın gerçek klibi mahalle ağzıyla yeniden anlatması (uydurma yok).</p>
+    </div>
+
+    <fieldset class="border border-claude-border rounded-lg p-4">
+      <legend class="text-xs text-claude-muted px-1">Maskot (opsiyonel — tekrar eden ana karakter)</legend>
+      <div class="grid grid-cols-3 gap-3">
+        <input type="text" name="mascot_name" placeholder="isim (Deli Kâzım)"
+               class="border border-claude-border rounded-lg px-3 py-2 text-sm">
+        <input type="text" name="mascot_animal" placeholder="hayvan (bal porsuğu)"
+               class="border border-claude-border rounded-lg px-3 py-2 text-sm">
+        <input type="text" name="mascot_trait" placeholder="özellik (korkusuz...)"
+               class="border border-claude-border rounded-lg px-3 py-2 text-sm">
+      </div>
+    </fieldset>
+
+    <div>
+      <label class="block text-sm font-medium mb-1">Kategori (varsayılan cevher kaynağı)</label>
+      <select name="category" class="w-full border border-claude-border rounded-lg px-3 py-2 text-sm bg-white">
+        <option value="">— Kendi subreddit listem —</option>
+        {% for cat in categories %}<option value="{{ cat }}">{{ cat }}</option>{% endfor %}
+      </select>
+      <label class="block text-xs text-claude-muted mt-2 mb-1">Ya da subreddit listesi (kategori seçmezsen)</label>
+      <textarea name="subreddits" rows="2" placeholder="likeus, AnimalsBeingJerks, funnycats"
+                class="w-full border border-claude-border rounded-lg px-3 py-2 text-sm"></textarea>
+      <p class="text-xs text-claude-muted mt-1">Cevher'de her aramada kategori değiştirebilirsin; bu sadece varsayılan.</p>
+    </div>
+
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm font-medium mb-1">Vurgu rengi</label>
+        <input type="color" name="highlight_color" value="#38bdf8"
+               class="w-full h-10 border border-claude-border rounded-lg">
+      </div>
+      <div>
+        <label class="block text-sm font-medium mb-1">Müzik ruh hali</label>
+        <select name="music_mood" class="w-full border border-claude-border rounded-lg px-3 py-2 text-sm bg-white">
+          <option value="upbeat" selected>Enerjik</option>
+          <option value="calm">Sakin</option>
+          <option value="neutral">Nötr</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-3 pt-2">
+      <button type="submit"
+              class="bg-claude-accent hover:bg-claude-accent-hover text-white px-5 py-2.5 rounded-lg font-semibold text-sm">
+        Kürate Kanalı Oluştur
+      </button>
+      <a href="/channels" class="text-sm text-claude-muted hover:text-claude-text">İptal</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
