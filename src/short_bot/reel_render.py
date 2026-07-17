@@ -46,6 +46,8 @@ def build_reel_overlay_html(
     numbers: list | None = None,
     interrupts: list | None = None,   # koordineli kesinti anları (bkz. reel_interrupt)
     templates_dir: Path | None = None,
+    caption_color: str = "#fff",      # altyazı TABAN kelime rengi (kürate=solid sarı)
+    caption_hot: str | None = None,   # aktif kelime rengi (None → hot_color; kürate=beyaz)
 ) -> str:
     if layout not in ("classic", "lower_left", "top_heavy"):
         layout = "classic"
@@ -81,6 +83,8 @@ def build_reel_overlay_html(
         highlight_color=highlight_color, arrow_color=arrow_color,
         chip_text=contrast_text(highlight_color),
         hot_color=ensure_bright(highlight_color),
+        caption_color=caption_color,
+        caption_hot=(caption_hot or ensure_bright(highlight_color)),
         hook=timeline.hook, close=timeline.close, handle=handle,
         cover_title=getattr(timeline, "cover_title", "") or "",
         badge=badge, lang=lang,

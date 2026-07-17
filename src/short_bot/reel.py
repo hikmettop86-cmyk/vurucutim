@@ -991,6 +991,11 @@ def produce_reel_video(
             log.info("  reel: beat sınırına oturan kesim yok → kesinti anı seçilmedi")
 
     # 6) Overlay render
+    # KÜRATE: solid SARI altyazı (başarılı Türk Shorts kanallarının imzası — Acayip Bilgi
+    # vb.); taban kelime sarı, aktif kelime beyaz (kontur zaten siyah). Diğer kanallar
+    # beyaz+vurgu (mevcut davranış — football'a dokunulmaz).
+    _cap_color = "#ffe000" if curated_clip is not None else "#fff"
+    _cap_hot = "#ffffff" if curated_clip is not None else None
     frames_dir = work_dir / "frames"
     d.render_reel_overlay_frames(
         timeline, frames_dir, fps=fps, browser=browser, templates_dir=templates_dir,
@@ -998,6 +1003,7 @@ def produce_reel_video(
         highlight_color=profile.accent, arrow_color=reel.arrow_color,
         arrow_frequency=reel.arrow_frequency if _arrows_on else "off",
         cut_effect=profile.cut_effect, handle=channel.handle,
+        caption_color=_cap_color, caption_hot=_cap_hot,
         badge=bits.badge,
         question_text=_question_text,
         reveal_at_s=_reveal_at_s,

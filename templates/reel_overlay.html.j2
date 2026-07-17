@@ -106,11 +106,11 @@ html,body{width:1080px;height:1920px;overflow:hidden;background:transparent;
 #scrim{position:absolute;left:0;right:0;bottom:0;height:820px;background:linear-gradient(0deg,rgba(0,0,0,.6),rgba(0,0,0,0))}
 .cap{position:absolute;left:0;right:0;bottom:540px;padding:0 60px;text-align:center;font-size:82px;font-weight:900;
   line-height:1.15;letter-spacing:-1px;-webkit-text-stroke:3px #000;paint-order:stroke fill;text-shadow:0 6px 26px rgba(0,0,0,.95)}
-.cap .w{display:none;margin:0 12px;color:#fff}
+.cap .w{display:none;margin:0 12px;color:{{ caption_color | default('#fff') }}}
 /* yalnız otomatik sığdırma ölçümü için: gizli kelimenin genişliği ölçülemez */
 .cap.measure .w{display:inline}
 .cap .w.vis{display:inline}
-.cap .w.hot{color:{{ hot_color }};display:inline-block;transform:scale(1.09)}
+.cap .w.hot{color:{{ caption_hot | default(hot_color) }};display:inline-block;transform:scale(1.09)}
 /* Handle ALTTA kalır. Oynatıcının kanal/başlık satırının altında kalıyor ve çoğu
    zaman görünmüyor — ama izleyici için önemli değil (YouTube zaten kanal adını
    gösteriyor); üst-sağa taşımak kadrajın temiz köşesini harcıyordu. */
