@@ -427,6 +427,7 @@ def edit_curated_save(slug):
         curated_min_ups=_int("curated_min_ups", ch.reel.curated_min_ups),
         curated_time=(request.form.get("curated_time") or ch.reel.curated_time).strip(),
         curated_clean=(request.form.get("curated_clean") == "on"),
+        curated_tone=("duygu" if request.form.get("curated_tone") == "duygu" else "mizah"),
         # EFEKT & VARYASYON (her video benzersiz) — eski reel kartından geri getirildi.
         ai_director=(request.form.get("ai_director") == "on"),
         fast_cuts=(request.form.get("fast_cuts") == "on"),

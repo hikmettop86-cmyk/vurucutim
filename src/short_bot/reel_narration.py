@@ -556,6 +556,10 @@ from pydantic import Field as _Field  # noqa: E402
 # → senaryo nefes alır (persona sıkışmaz). Kanal üst süresini AŞMAZ.
 CURATED_MAX_LOOP = 2.6
 CURATED_MIN_S = 8
+# SÜRE TAVANI (Faz 2): başarılı Türk Shorts kanalları 33-49sn (tatlı nokta ~40); 54sn'lik
+# uzun/dağınık senaryolar retention'ı düşürüyordu. Uzun klip bu süreye kırpılır (payoff
+# genelde erken; tempolu kısa senaryo > dağınık uzun). Kanal hedefi daha düşükse o geçerli.
+CURATED_MAX_S = 45
 # Bütçe kısaltma döngüsü: taşan senaryo klibi gerip loop'latır → hedefin altına
 # inene kadar (en çok bu kadar tur) gemini ile kısaltılır (eski _fd_enforce_budget dersi).
 _CURATED_BUDGET_ROUNDS = 3
@@ -571,7 +575,7 @@ def curated_target(clip_dur_s: float, channel_target) -> tuple:
     if clip_dur_s <= 0:
         return channel_target
     if clip_dur_s >= CURATED_MIN_S:
-        hi = min(int(hi_ch), int(round(clip_dur_s)))            # uzun klip → loop yok
+        hi = min(int(hi_ch), int(round(clip_dur_s)), CURATED_MAX_S)   # uzun klip → ≤45sn
     else:
         hi = min(int(hi_ch), int(round(clip_dur_s * CURATED_MAX_LOOP)))  # kısa → ≤2x
     hi = max(CURATED_MIN_S, hi)
@@ -596,16 +600,31 @@ class _CuratedDraft(_BaseModel):
 
 def build_curated_prompt(title: str, clip_description: str, *, channel,
                          target_duration_s=None, scene_split: float | None = None,
-                         comments=None) -> str:
+                         comments=None, tone: str = "mizah") -> str:
     """Tek GERÇEK klip için persona senaryosu prompt'u (uydurma yasağı).
 
     ``scene_split``: klip 2 sahneliyse İLK sahnenin bittiği oran (0-1, vision tespiti).
-    ``comments``: üst Reddit yorumları — olayı anlamak için vision'a ALTERNATİF gerçek
-    sinyal (vision aleti/olayı kaçırırsa başlık+yorum yakalar)."""
+    ``comments``: üst Reddit yorumları — vision'a ALTERNATİF gerçek sinyal.
+    ``tone``: 'mizah' (mahalle mizahı) | 'duygu' (duygusal mikro-dram — kahramanlık/kurtarma)."""
     td = tuple(target_duration_s) if target_duration_s else channel.reel.target_duration_s
     lo_s, hi_s = td
     lo_w, hi_w = reel_word_budget(td)
     lang = _language_name(channel.language)
+    _duygu = (tone == "duygu")
+    # TON KURALI: mizah → güldür; duygu → gerilim + sıcak çözüm (antropomorfik, @NedenHayvan).
+    if _duygu:
+        tone_rule = (
+            "- 💗 DUYGU VER — bu bir DUYGUSAL MİKRO-DRAM (@NedenHayvan formülü). GÜLDÜRME; "
+            "içten, sinematik anlat. HOOK'ta saniye-1 TEHLİKE/duygusal risk kur ('Bu [özne] "
+            "… üzereydi, ama…'). Hayvana NİYET/kahramanlık/sadakat/şefkat ata (antropomorfik: "
+            "'sanki koruyordu', 'pes etmedi', 'onu asla bırakmadı'). Mahalle-argosu, şaka, "
+            "ironi YASAK. Ton: sıcak + gerilimli; final DUYGUSAL çözüm (kurtuluş/kavuşma/sadakat).")
+        cta_hint = "izleyiciye içten çağrı ('Bu dokunduysa yorumlara bir kalp bırak.')"
+    else:
+        tone_rule = (
+            "- GÜLDÜR — ama GERÇEK, ANLAMLI mizahla (aşağıdaki EN ÖNCELİKLİ MİZAH KURALI'na uy). "
+            "Ekrandaki GERÇEK özneyi/aksiyonu KORU; yapay/resmi/belgesel dil YASAK.")
+        cta_hint = "izleyiciye doğal bir soru/kışkırtma ('Sen olsan ne yapardın?' gibi, persona sesiyle)"
     # KALABALIK BAĞLAMI: başlık + üst yorumlar olayın NE olduğunu anlatır (vision tek
     # storyboard'dan aleti/olayı kaçırabilir — short 923: pipeti görmeyip 'parmak' dedi).
     crowd = ""
@@ -663,8 +682,7 @@ RULES:
     koy ('ama işin asıl kısmı burada' / 'ama olay burada bitmiyor') — sayaç sıfırlanır.
   * ÖDÜL — asıl 'aa!' anı ya da en komik vuruş — SON beat + close'ta gelir; BAŞTAN ele verme.
     Payoff sona saklanır ki izleyici sonuna kadar kalsın (loop mantığı).
-- GÜLDÜR — ama GERÇEK, ANLAMLI mizahla (aşağıdaki EN ÖNCELİKLİ MİZAH KURALI'na uy).
-  Ekrandaki GERÇEK özneyi/aksiyonu KORU; yapay/resmi/belgesel dil YASAK.
+{tone_rule}
 - HARD WORD BUDGET: the whole spoken script (hook + 3 beats + close) must be {lo_w}-{hi_w}
   words TOTAL and MUST NOT exceed {hi_w}. TTS reads ~1.95 words/s, so this is what keeps
   the clip from LOOPING (video lands in {lo_s}-{hi_s}s). Count your words.
@@ -676,9 +694,8 @@ RULES:
 - "title_en": AYNI başlığın İngilizcesi (aynı merak, aynı emoji) — küresel Shorts akışı için
   (YouTube çok-dilli başlık; 240 ülkeye açar). Örn: "Watch what this fisherman does… 😳".
 - "cover_title" (3-6 kelime ekran manşeti).
-- KAPANIŞ ('close'): SON komik/duygusal vuruş (payoff) + ARDINDAN kısa bir YORUM-YEMİ: izleyiciye
-  doğal bir soru/kışkırtma ('Sen olsan ne yapardın?' / 'Bu kadarına pes mi?' gibi — persona
-  sesiyle, zorlama değil). SAKIN 'Ozan der ki', beyit/şair kalıbı YAZMA — ozan YASAK.
+- KAPANIŞ ('close'): SON vuruş (payoff — komik ya da duygusal, tona göre) + ARDINDAN kısa
+  bir YORUM-YEMİ: {cta_hint}. SAKIN 'Ozan der ki', beyit/şair kalıbı YAZMA — ozan YASAK.
 - mood: one of upbeat / neutral / calm.
 Output JSON ONLY: {{"hook": "...", "beats": ["...", "...", "..."], "close": "...",
   "mood": "upbeat", "title": "...", "title_en": "...", "cover_title": "..."}}
@@ -706,6 +723,21 @@ def _curated_humor_override(humor_style: str = "") -> str:
     )
 
 
+def _curated_emotion_override() -> str:
+    """EN ÖNCELİKLİ DUYGU katmanı (persona formülünü de ezer). Gerilim-kurgulu duygusal
+    mikro-dram — @NedenHayvan (437M) formülü: mizah/argo YOK, antropomorfik + sinematik."""
+    return (
+        "=== EN ÖNCELİKLİ TON KURALI (YUKARIDAKİ HER ŞEYİ, PERSONA FORMÜLÜNÜ DE EZER) ===\n"
+        "Bu bir DUYGUSAL mikro-dram. GÜLDÜRME; ironi, şaka, mahalle-argosu YOK. Olayı bir "
+        "tanık gibi GERİLİMLİ ve İÇTEN anlat. Hayvanı KAHRAMAN/insan gibi çerçevele — niyet, "
+        "cesaret, sadakat, şefkat ata ('sanki koruyordu', 'bir an bile bırakmadı', 'pes "
+        "etmeyi reddetti'). HOOK'ta saniye-1 ölüm-kalım/duygusal risk; ORTADA 'ama tehlike "
+        "henüz geçmemişti' ile gerilimi sürdür; FİNALDE sıcak bir çözüm (kurtuluş/kavuşma/"
+        "fedakârlık). Klişe/melodram DEĞİL — bu ANIN GERÇEK duygusundan çık, abartma. Bir "
+        "satır gerçekten duygu vermiyorsa sade ama içten yaz."
+    )
+
+
 def write_curated_narration(title: str, clip_description: str, *, channel,
                             subject: str = "scene",
                             claude_path: str = "claude", model: str = "default",
@@ -722,11 +754,14 @@ def write_curated_narration(title: str, clip_description: str, *, channel,
     reel = getattr(channel, "reel", None)
     if reel is None:
         raise ValueError("write_curated_narration: channel.reel yok")
+    tone = getattr(reel, "curated_tone", "mizah")
     prompt = build_curated_prompt(title, clip_description, channel=channel,
                                   target_duration_s=target_duration_s,
-                                  scene_split=scene_split, comments=comments)
+                                  scene_split=scene_split, comments=comments, tone=tone)
     persona = load_persona(getattr(reel, "persona", ""), language=channel.language)
-    if persona:
+    if persona and tone != "duygu":
+        # DUYGU modunda mahalle-mizahı personası ton'la çelişir → persona bloğu eklenmez
+        # (duygu override tek başına yönetir). Mizahta persona ağzı/karakteri korunur.
         prompt += "\n\n" + persona_block(persona, seed=seed)
         from short_bot.persona import mascot_block
         mblok = mascot_block(getattr(reel, "mascot_name", ""),
@@ -734,9 +769,9 @@ def write_curated_narration(title: str, clip_description: str, *, channel,
                              getattr(reel, "mascot_trait", ""))
         if mblok:
             prompt += "\n\n" + mblok
-    # EN SON KATMAN → EN ÖNCELİKLİ: gerçek/anlamlı mizah, persona formülünü de EZER
-    # (kullanıcı: 'belirli kalıp değil, anlamsız atasözü değil, saçma espri değil').
-    prompt += "\n\n" + _curated_humor_override(getattr(reel, "humor_style", ""))
+    # EN SON KATMAN → EN ÖNCELİKLİ: tona göre humor ya da duygu override (persona formülünü EZER).
+    prompt += "\n\n" + (_curated_emotion_override() if tone == "duygu"
+                        else _curated_humor_override(getattr(reel, "humor_style", "")))
 
     # TEK LLM ÇAĞRISI: kürate anlatımı Claude CLI Sonnet 5 ile yazılır (Max aboneliği →
     # ÜCRETSİZ, OpenRouter parası yok). Ama CLI Sonnet ~50sn/çağrı: eski çok-turlu LLM

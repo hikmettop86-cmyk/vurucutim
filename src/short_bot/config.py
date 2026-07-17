@@ -276,6 +276,10 @@ class ReelConfig(BaseModel):
     # Hafif/kenar watermark'ı vision+delogo ile temizle (yazılı klip de kullanılabilir);
     # ağır kaplayan yazı temizlenmez (bkz. curated_clean). Kapatılırsa klip olduğu gibi.
     curated_clean: bool = True
+    # KÜRATE ANLATIM TONU: 'mizah' (mahalle mizahı, varsayılan) | 'duygu' (gerilim-kurgulu
+    # duygusal mikro-dram — kahramanlık/sadakat/kurtarma, antropomorfik). @NedenHayvan (437M)
+    # kanıtı: hayvan klibinde DUYGU, sevimli-komikten çok daha yüksek tavan veriyor.
+    curated_tone: Literal["mizah", "duygu"] = "mizah"
     # KANALIN KENDİ HAS MİZAH SESİ (kullanıcı: 'her kanalın kendi mizahı olacak, belirli
     # kalıp değil'). Serbest metin — bu kanalın komik tonunu tarif eder (ör. 'sakin,
     # ironik, gözlemci' ya da 'coşkulu, abartısız gündelik'). Boşsa: gerçek, klibe özgü
@@ -633,6 +637,7 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
             "curated_time": cfg.reel.curated_time,
             "curated_max_duration": cfg.reel.curated_max_duration,
             "curated_clean": cfg.reel.curated_clean,
+            "curated_tone": cfg.reel.curated_tone,
             "humor_style": cfg.reel.humor_style,
         }
     if cfg.dna is not None:

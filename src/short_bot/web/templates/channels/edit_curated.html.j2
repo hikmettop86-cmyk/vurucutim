@@ -68,13 +68,24 @@
                    class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
           </label>
         </div>
-        <label class="block">
-          <span class="text-xs text-claude-muted uppercase tracking-wide">Persona</span>
-          <select name="persona" class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
-            <option value="" {% if not ch.reel.persona %}selected{% endif %}>Kişiliksiz (düz anlatım)</option>
-            {% for p in personas %}<option value="{{ p }}" {% if p == ch.reel.persona %}selected{% endif %}>{{ p }}</option>{% endfor %}
-          </select>
-        </label>
+        <div class="grid grid-cols-2 gap-4">
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase tracking-wide">Anlatım tonu</span>
+            <select name="curated_tone" class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+              <option value="mizah" {% if ch.reel.curated_tone != 'duygu' %}selected{% endif %}>😄 Mizah (mahalle mizahı)</option>
+              <option value="duygu" {% if ch.reel.curated_tone == 'duygu' %}selected{% endif %}>💗 Duygu (kahramanlık/kurtarma mikro-dram)</option>
+            </select>
+            <span class="text-xs text-claude-muted">Duygu modu: @NedenHayvan (437M) formülü — hayvan klibinde sevimli-komikten yüksek tavan.</span>
+          </label>
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase tracking-wide">Persona</span>
+            <select name="persona" class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+              <option value="" {% if not ch.reel.persona %}selected{% endif %}>Kişiliksiz (düz anlatım)</option>
+              {% for p in personas %}<option value="{{ p }}" {% if p == ch.reel.persona %}selected{% endif %}>{{ p }}</option>{% endfor %}
+            </select>
+            <span class="text-xs text-claude-muted">Duygu modunda persona ağzı devre dışı (ton yönetir).</span>
+          </label>
+        </div>
         <label class="block">
           <span class="text-xs text-claude-muted uppercase tracking-wide">Kanalın kendi mizah sesi</span>
           <textarea name="humor_style" rows="2" placeholder="ör. sakin ama sinsi ironi; abartmadan, gözlemci"
