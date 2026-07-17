@@ -55,6 +55,16 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
         td = Path(td)
         log.info(f"  kürate: klip indiriliyor ({video_url})")
         clip = download_clip(video_url, td / "src.mp4")
+        # TEMİZLİK (SP4): hafif/kenar watermark → delogo (yazılı klip de kullanılabilir);
+        # ağır kaplama temizlenmez. Kanal flag'i kapalıysa atlanır.
+        if getattr(reel, "curated_clean", True) and vision is not None:
+            from short_bot.curated_clean import clean_if_needed
+            clip, _wm = clean_if_needed(clip, vision_call=vision,
+                                        ffmpeg_path=settings.ffmpeg_path,
+                                        out_path=td / "clean.mp4")
+            if _wm is not None and _wm.present:
+                log.info(f"  kürate: watermark '{_wm.region}' "
+                         f"(kaplıyor={_wm.covers_subject})")
         clip_dur = _clip_duration_s(clip, settings.ffmpeg_path)
 
         log.info("  kürate: vision ile GERÇEK aksiyon okunuyor…")

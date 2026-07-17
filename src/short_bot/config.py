@@ -273,6 +273,9 @@ class ReelConfig(BaseModel):
     curated_min_ups: int = 500       # cevher eşiği (topluluk oyu = kalite sinyali)
     curated_time: str = "week"       # reddit 'top' penceresi: hour/day/week/month/year/all
     curated_max_duration: int = 90   # saniye — daha uzun klipler atlanır
+    # Hafif/kenar watermark'ı vision+delogo ile temizle (yazılı klip de kullanılabilir);
+    # ağır kaplayan yazı temizlenmez (bkz. curated_clean). Kapatılırsa klip olduğu gibi.
+    curated_clean: bool = True
 
     @field_validator("target_duration_s", mode="before")
     @classmethod
@@ -623,6 +626,7 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
             "curated_min_ups": cfg.reel.curated_min_ups,
             "curated_time": cfg.reel.curated_time,
             "curated_max_duration": cfg.reel.curated_max_duration,
+            "curated_clean": cfg.reel.curated_clean,
         }
     if cfg.dna is not None:
         # mode='json' → tuple becomes list, ready for YAML round-trip
