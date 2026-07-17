@@ -538,3 +538,150 @@ def _ensure_open_loop(n: ReelNarration, prompt: str, *, claude_path, model, back
     log.warning("  seri: açık kapı İKİNCİ denemede de kurulamadı → bu bölümün abone "
                 "takası çalışmayacak (çip, söylenmemiş bir vaadin üstüne düşecek)")
     return n2 if n2.open_loop else n
+
+
+# ===========================================================================
+# KÜRATE-KLİP MODU (pivot 2026-07-17, SP3): kitlenin ZATEN onayladığı GERÇEK bir
+# klibi persona ile YENİDEN ANLAT — uydurma değil. Girdi: klibin başlığı (gerçek
+# bağlam) + vision'ın gördüğü GERÇEK aksiyon. Senaryo o gerçeğe sadık kalır.
+# ===========================================================================
+from pydantic import BaseModel as _BaseModel  # noqa: E402
+from pydantic import Field as _Field  # noqa: E402
+
+# Kürate video süresi KLİP UZUNLUĞUNDAN türer → AĞIR LOOP YOK (kullanıcı: "loopa
+# girince kötü oluyor"). Klip yeterince uzunsa (>= CURATED_MIN_S) video ~klip boyu
+# (tek oynatım, loop yok); kısa klip en çok CURATED_MAX_LOOP kez tekrarlanır. Her
+# durumda kanal üst süresini AŞMAZ.
+CURATED_MAX_LOOP = 2.0
+CURATED_MIN_S = 8
+# Bütçe kısaltma döngüsü: taşan senaryo klibi gerip loop'latır → hedefin altına
+# inene kadar (en çok bu kadar tur) gemini ile kısaltılır (eski _fd_enforce_budget dersi).
+_CURATED_BUDGET_ROUNDS = 3
+_CURATED_BUDGET_TOL = 1.12
+
+
+def curated_target(clip_dur_s: float, channel_target) -> tuple:
+    """Kürate video süre penceresi (lo, hi) — KLİP uzunluğundan türer (loop önleme).
+
+    clip >= CURATED_MIN_S → video ~klip boyu (loop YOK); kısa klip → en çok 2x.
+    Kanal üst süresini aşmaz, CURATED_MIN_S'nin altına inmez."""
+    lo_ch, hi_ch = channel_target
+    if clip_dur_s <= 0:
+        return channel_target
+    if clip_dur_s >= CURATED_MIN_S:
+        hi = min(int(hi_ch), int(round(clip_dur_s)))            # uzun klip → loop yok
+    else:
+        hi = min(int(hi_ch), int(round(clip_dur_s * CURATED_MAX_LOOP)))  # kısa → ≤2x
+    hi = max(CURATED_MIN_S, hi)
+    return (max(6, hi - 4), hi)
+
+
+def _curated_wc(d) -> int:
+    return len((d.hook + " " + " ".join(d.beats) + " " + d.close).split())
+
+
+class _CuratedDraft(_BaseModel):
+    """Kürate senaryo GEVŞEK şeması: visual_query yok (tek hazır klip). ReelBeat'in
+    katı doğrulaması yerine sade metin — beat'ler sonradan resmileşir."""
+    hook: str = _Field(min_length=3, max_length=140)
+    beats: list[str] = _Field(min_length=3, max_length=5)
+    close: str = _Field(min_length=3, max_length=120)
+    mood: str = "upbeat"
+    title: str = ""
+    cover_title: str = ""
+
+
+def build_curated_prompt(title: str, clip_description: str, *, channel,
+                         target_duration_s=None) -> str:
+    """Tek GERÇEK klip için persona senaryosu prompt'u (uydurma yasağı)."""
+    td = tuple(target_duration_s) if target_duration_s else channel.reel.target_duration_s
+    lo_s, hi_s = td
+    lo_w, hi_w = reel_word_budget(td)
+    per_w = max(4, hi_w // 5)          # hook + 3 beat + close = 5 segment
+    lang = _language_name(channel.language)
+    return f"""You are writing narration for a REAL short video clip we are RE-TELLING.
+
+REAL CONTEXT (the clip's own caption/title): {title}
+WHAT IS ACTUALLY ON SCREEN (vision of the real clip): {clip_description}
+
+This is a KÜRATE clip — the audience already loved this REAL moment. Narrate the REAL
+story with the channel's persona. Do NOT invent a new story.
+
+RULES:
+- Narrate WHAT IS ACTUALLY ON SCREEN + the real title context. Invent NOTHING that the
+  clip does not show (no hidden object, no event, no second animal that isn't there).
+- Make it FUNNY with the persona's voice and framing — but the on-screen subject and
+  what it does stay EXACTLY what the clip shows.
+- HARD WORD BUDGET: the whole spoken script (hook + 3 beats + close) must be {lo_w}-{hi_w}
+  words TOTAL and MUST NOT exceed {hi_w}. TTS reads ~1.95 words/s, so this is what keeps
+  the clip from LOOPING (video lands in {lo_s}-{hi_s}s). Count your words.
+- Write EXACTLY 3 beats. Keep EVERY line SHORT — about {per_w} words each. Narration in {lang}.
+- Also write "title" (YouTube/SEO: subject keyword FIRST + short hook, no period) and
+  "cover_title" (3-6 word on-screen headline).
+- mood: one of upbeat / neutral / calm.
+Output JSON ONLY: {{"hook": "...", "beats": ["...", "...", "..."], "close": "...",
+  "mood": "upbeat", "title": "...", "cover_title": "..."}}
+"""
+
+
+def write_curated_narration(title: str, clip_description: str, *, channel,
+                            subject: str = "scene",
+                            claude_path: str = "claude", model: str = "default",
+                            backend: str = "claude_cli", api_key: str | None = None,
+                            seed: int = 0, target_duration_s=None) -> ReelNarration:
+    """GERÇEK klibin başlığı + vision aksiyonundan persona senaryosu. visual_query'ler
+    tek hazır klibe bağlı olduğu için ``subject``e sabitlenir (footage aranmaz)."""
+    reel = getattr(channel, "reel", None)
+    if reel is None:
+        raise ValueError("write_curated_narration: channel.reel yok")
+    prompt = build_curated_prompt(title, clip_description, channel=channel,
+                                  target_duration_s=target_duration_s)
+    persona = load_persona(getattr(reel, "persona", ""), language=channel.language)
+    if persona:
+        prompt += "\n\n" + persona_block(persona, seed=seed)
+        from short_bot.persona import mascot_block
+        mblok = mascot_block(getattr(reel, "mascot_name", ""),
+                             getattr(reel, "mascot_animal", ""),
+                             getattr(reel, "mascot_trait", ""))
+        if mblok:
+            prompt += "\n\n" + mblok
+    def _inv(p):
+        return run_json(p, _CuratedDraft, claude_path=claude_path, model=model,
+                        backend=backend, api_key=api_key, retries=3)
+
+    draft = _inv(prompt)
+    # BÜTÇE ZORLAMA: taşan senaryo klibi gerip LOOP'latır → hedefin altına inene kadar
+    # (en çok _CURATED_BUDGET_ROUNDS) gemini ile kısalt; 3 beat + persona/ozan korunur.
+    td2 = tuple(target_duration_s) if target_duration_s else channel.reel.target_duration_s
+    lo_w, hi_w = reel_word_budget(td2)
+    limit = hi_w * _CURATED_BUDGET_TOL
+    for tur in range(1, _CURATED_BUDGET_ROUNDS + 1):
+        cur = _curated_wc(draft)
+        if cur <= limit:
+            break
+        log.info(f"  kürate[bütçe]: {cur} kelime > {hi_w} → kısaltma turu {tur}")
+        tprompt = (
+            f"Bu kısa video senaryosu {cur} kelime — ZORUNLU KISALT: toplam "
+            f"(hook + 3 beat + close) {hi_w} kelimeyi KESİNLİKLE AŞMASIN (şu an "
+            f"{cur - hi_w} fazla). Her satırı SERTÇE kısalt, yan cümleleri at, tek EN "
+            f"İYİ espriyi koru. 3 beat KALSIN, persona/ozan kapanışını KORU. "
+            f"mood/title/cover_title'a dokunma.\n\nSENARYO (JSON):\n"
+            f"{draft.model_dump_json()}\n\nKısaltılmışı AYNI ŞEMADA, SADECE JSON döndür.")
+        try:
+            nd = _inv(tprompt)
+        except Exception as e:  # noqa: BLE001
+            log.warning(f"  kürate[bütçe]: kısaltma çöktü ({e}) → mevcutla kalınıyor")
+            break
+        if len(nd.beats) < 3 or _curated_wc(nd) >= cur:
+            log.warning("  kürate[bütçe]: tur kısaltmadı/beat bozdu → mevcutla kalınıyor")
+            break
+        log.info(f"  kürate[bütçe]: {cur} → {_curated_wc(nd)} kelime")
+        draft = nd
+
+    from short_bot.reel_models import ReelBeat
+    subj = (subject or "scene").strip() or "scene"
+    beats = [ReelBeat(text=t, visual_query=subj, keyword="") for t in draft.beats]
+    return ReelNarration(
+        hook=draft.hook, beats=beats, close=draft.close, mood=draft.mood,
+        title=draft.title, cover_title=draft.cover_title,
+        hook_visual=subj, close_visual=subj)

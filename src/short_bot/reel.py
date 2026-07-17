@@ -395,6 +395,8 @@ def produce_reel_video(
     hook_patterns=None, assets_root: Path | None = None,
     episode=None,        # EpisodePlan — seri/cliffhanger mimarisi (bkz. reel_series)
     on_narration=None,   # callback(narration): açık kapıyı çağırana bildir (ark zinciri)
+    curated_clip=None,        # KÜRATE: hazır indirilmiş tek klip (footage aranmaz)
+    curated_narration=None,   # KÜRATE: dışarıda yazılmış ReelNarration (write_curated_narration)
 ) -> Path:
     reel = getattr(channel, "reel", None)
     if reel is None or not reel.enabled:
@@ -465,14 +467,18 @@ def produce_reel_video(
     log.info("  reel: ai33 preflight healthy")
     _phase("preflight")
 
-    # 2) Senaryo
-    narration = d.write_reel_narration(topic, channel=channel,
-                                       claude_path=llm_claude_path, model=llm_model,
-                                       backend=llm_backend, api_key=llm_api_key,
-                                       hook_angle=profile.hook_angle,
-                                       series_directive=bits.series_directive,
-                                       comment_line=bits.comment_line,
-                                       hook_patterns=hook_patterns, seed=seed)
+    # 2) Senaryo. KÜRATE modda senaryo dışarıda (write_curated_narration) yazılıp
+    # geçilir — gerçek klibin başlığı + vision'ından, uydurma DEĞİL.
+    if curated_narration is not None:
+        narration = curated_narration
+    else:
+        narration = d.write_reel_narration(topic, channel=channel,
+                                           claude_path=llm_claude_path, model=llm_model,
+                                           backend=llm_backend, api_key=llm_api_key,
+                                           hook_angle=profile.hook_angle,
+                                           series_directive=bits.series_directive,
+                                           comment_line=bits.comment_line,
+                                           hook_patterns=hook_patterns, seed=seed)
     log.info(f"  reel: {narration.word_count()} kelime, {len(narration.beats)} beat")
     # Manşet KONUŞULMAZ (senaryo logunda görünmez) ama feed'in küçük resmi ODUR —
     # videonun izlenip izlenmeyeceğine orada karar veriliyor. Loglanmazsa sonradan
@@ -719,6 +725,13 @@ def produce_reel_video(
     # koşuda 67 vision çağrısının çoğu aynı martı/pelikan/kelebek döngüsüydü;
     # bütçe onlara gidince YENİ adaylara hiç sıra gelmiyordu.
     seen_verdicts: dict = {}
+    # KÜRATE-KLİP: tek hazır klip TÜM segmentlere atanır → footage arama döngüsü
+    # atlanır (order boşaltılır). Alt-kesim ofsetleri klibin farklı saniyelerini
+    # gösterir (klip-içi çeşitlilik); montaj gerekirse loop'lar.
+    if curated_clip is not None:
+        for si in range(n_segs):
+            clips_by_seg[si] = [Path(curated_clip)]
+        order = []
     for si in order:
         query = timeline.seg_queries[si]
         if query is None:
@@ -787,7 +800,7 @@ def produce_reel_video(
     # seçilmiş klipleri TOPLUCA görüp yanlış TÜRÜ (great hornbill yerine turaco)
     # render'dan ÖNCE yakala + o klibi YENİDEN SEÇ. Klip-başına vision kapısı
     # 'hornbill'i geçiriyor ama tür-içi tutarlılığı görmüyordu (biri diğerini kilitlemez).
-    if (getattr(reel, "verify_footage", True)
+    if (curated_clip is None and getattr(reel, "verify_footage", True)
             and vision_call is not None and len(clips_by_seg) >= 2):
         try:
             _repair_footage_types(
