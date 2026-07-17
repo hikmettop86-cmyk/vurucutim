@@ -1116,11 +1116,7 @@ def produce_reel_video(
         zoom=(("zoom" in profile.transitions)
               and not getattr(reel, "persona", "")),
         subject_xs=subject_xs,
-        # KÜRATE: tek GERÇEK klip → çok-klip renk-birleştirme grade'i gereksiz VE zararlı.
-        # Grade her klibi 0.45 luma hedefine (±0.12) normalize ediyordu → brighten_if_dark'ın
-        # aydınlattığı klibi (YAVG 150) ~119'a geri çekip vignette ile de karartıyordu (çıktı
-        # hep ~74 kalıyordu). Kürate klibinde grade KAPALI → aydınlatma render'a girer.
-        color_grade=(getattr(reel, "color_grade", True) and curated_clip is None),
+        color_grade=getattr(reel, "color_grade", True),
         seed=seed,
         clip_starts=clip_starts,
         hook_punch=True,

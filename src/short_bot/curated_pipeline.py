@@ -94,18 +94,10 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
                     raise CuratedWatermarkError(
                         "Bu klipte temizlenemeyen (hareketli TikTok / kaplayan) watermark "
                         "var — watermark'sız bir klip seç.")
-
-        # KARANLIK KLİP AYDINLATMA: iç mekân footage sık dim olur → gölge-kaldıran gamma.
-        # Temizlikten SONRA, vision'dan ÖNCE: aydınlık klip hem daha iyi tarif edilir hem
-        # de render'a aydınlık girer (kullanıcı: klip karanlık). İyi-aydınlıksa dokunmaz.
-        from short_bot.curated_clean import brighten_if_dark
-        _bright = brighten_if_dark(clip, ffmpeg_path=settings.ffmpeg_path,
-                                   out_path=td / "bright.mp4")
-        if _bright is not None:
-            clip = _bright
-            # curated_clean logger paneldeki logging setup'ında bastırılıyor → görünür
-            # olsun diye burada (curated_pipeline logger'ı) da bildir.
-            log.info("  kürate: karanlık klip aydınlatıldı (gölge-kaldıran gamma)")
+        # NOT: Kürate klibi renk grade'i (reel_assembler, GRADE_TARGET_LUMA≈0.45'e normalize
+        # + vignette) diğer kanallarla AYNI uygulanır. Bir ara gölge-kaldıran ön-aydınlatma
+        # (brighten_if_dark) eklenmiş + grade kapatılmıştı ama çıktı FAZLA açık/yıkanmış
+        # oluyordu (short 917, YAVG 150) → kullanıcı isteğiyle GERİ ALINDI, eski grade look.
         clip_dur = _clip_duration_s(clip, settings.ffmpeg_path)
 
         log.info("  kürate: vision ile GERÇEK aksiyon okunuyor…")
