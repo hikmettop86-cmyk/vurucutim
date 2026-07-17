@@ -939,6 +939,11 @@ def produce_reel_video(
             markers = build_markers(subcuts, positions,
                                     marker_kit=profile.marker_kit,
                                     frequency=reel.arrow_frequency, seed=seed)
+            # ÖZNE-TAKİBİ: marker'ı üreten klip aralığında özneyi cv2 ile izle → marker
+            # HAREKETLİ özneyi takip eder (sabit kalıp yanlış yeri göstermez; short 920).
+            from short_bot.reel_track import attach_marker_tracks
+            attach_marker_tracks(markers, subcuts, clip_paths, clip_starts,
+                                 ffmpeg_path=ffmpeg_path)
         log.info(f"  reel: {len(markers)} belirteç, {len(todo)} konum ölçümü, "
                  f"{_time.perf_counter() - _mk_t0:.1f}s")
 

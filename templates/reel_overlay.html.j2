@@ -168,6 +168,17 @@ const MARKERS={{ markers }};
 // gösterilen KLİPTEN ölçüldü. Segmente bağlarsak marker, aynı segmentin diğer
 // kliplerinin üstünde de çizilir ve BOŞLUĞU işaretler (gerçek hata).
 function activeMarker(t){for(const m of MARKERS){if(t>=m.t0&&t<m.t1)return m;}return null;}
+// ÖZNE-TAKİBİ: marker'a track ([[t,x,y],...]) eklendiyse konumu zamanla İNTERPOLE et
+// (hareketli özneyi takip etsin; sabit kalıp yanlış yeri göstermesin).
+function mkPosAt(trk,t){
+  if(!trk||!trk.length)return null;
+  if(t<=trk[0][0])return[trk[0][1],trk[0][2]];
+  for(let i=1;i<trk.length;i++){
+    if(t<=trk[i][0]){const a=trk[i-1],b=trk[i],f=(t-a[0])/((b[0]-a[0])||1);
+      return[a[1]+(b[1]-a[1])*f, a[2]+(b[2]-a[2])*f];}
+  }
+  const l=trk[trk.length-1];return[l[1],l[2]];
+}
 // KESİNTİ ANLARI (bkz. reel_interrupt): videoda 3-5 kare. Orada geçiş efekti TAM
 // GÜÇTE ve UZUN patlar, altyazı bloğu bir darbe alır — ve montaj aynı karede vuruş
 // sesi + görüntü punch'ı çalar. Diğer kesimlerde efekt KISIK (CUT_FX_MAX): kontrast
@@ -338,6 +349,7 @@ window.__fit=function(){
 const FLASH=document.getElementById('flash'),MLAYER=document.getElementById('markers');
 const RGB=document.getElementById('rgbsplit'),LEAK=document.getElementById('lightleak'),GLITCH=document.getElementById('glitch');
 let mkSeg='';   // mkSeg: aktif belirtecin kimliği (t0:type)
+let mkX=0,mkY=0;   // aktif marker'ın O ANKİ konumu (takip için kare-kare güncellenir)
 // İlk öbekleme: __fit() çağrılmasa bile (test/önizleme) altyazı çalışsın.
 // fitCap() sığdırma sırasında bunu yeniden hesaplar.
 _rechunk(CHUNK);
@@ -366,6 +378,14 @@ window.__seek=function(tms){
   if(mkey!==mkSeg){
     MLAYER.innerHTML=m?('<div class="mk '+(MCLS[m.type]||'mk-arrow')+'" style="left:'+(m.x*1080)+'px;top:'+(m.y*1920)+'px"></div>'):'';
     mkSeg=mkey;
+  }
+  // TAKİP: marker'a track eklenmişse özneyi kare-kare izlet (konumu HER karede güncelle).
+  mkX=m?m.x:0; mkY=m?m.y:0;
+  if(m&&m.track&&MLAYER.firstChild){
+    const p=mkPosAt(m.track,t);
+    if(p){mkX=p[0];mkY=p[1];
+      MLAYER.firstChild.style.left=(mkX*1080)+'px';
+      MLAYER.firstChild.style.top=(mkY*1920)+'px';}
   }
   const op=fxOp(t);
   // ALTYAZI DARBESİ: kesinti karesinde blok bir tık büyür. Ses vuruşuyla AYNI KAREDE
@@ -411,7 +431,9 @@ window.__sig=function(){
     if(w.classList.contains('hot'))hot=i;
     i++;
   }
-  let s=vis+'|'+hot+'|'+mkSeg+'|'+MLAYER.innerHTML.length+'|';
+  // mkX/mkY imzaya DAHİL: marker özneyi takip edince konum kare-kare değişir; yoksa
+  // kare-dedup hareketi 'aynı kare' sanıp kopyalar ve marker DONAR.
+  let s=vis+'|'+hot+'|'+mkSeg+'|'+MLAYER.innerHTML.length+'|'+Math.round(mkX*200)+':'+Math.round(mkY*200)+'|';
   s+=(HOOK.classList.contains('on')?1:0)+''+(CLOSE.classList.contains('on')?1:0)+'|';
   s+=(BADGE&&BADGE.classList.contains('on')?1:0)+'|';
   s+=(QCHIP?QCHIP.className:'')+'|';
