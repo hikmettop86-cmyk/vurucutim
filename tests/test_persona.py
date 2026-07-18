@@ -126,3 +126,22 @@ def test_persona_block_ula_bak_hele_kalibini_yasaklar():
     blok = persona_block(p, seed=4)
     assert "Ula bak hele" in blok and "YASAK" in blok   # açıkça yasaklanıyor
     assert "bizimki" in blok.lower()                    # 'bizimki' dozu da sınırlı
+
+
+def test_persona_block_curated_subject_agnostik():
+    """curated=True → hayvan-DIŞI özneye de uyar + footage-seçim bloğu atlanır (klip sabit).
+    curated=False (hayvan yolu) footage-sadakat bloğunu KORUR (regresyon)."""
+    from short_bot.persona import load_persona, persona_block
+    p = load_persona("vahsi_mizah", language="tr")
+    anim = persona_block(p, seed=5, curated=False)
+    cur = persona_block(p, seed=5, curated=True)
+    # Hayvan yolu: gepar/ceylan footage-seçim rehberi DURUR
+    assert "gepar CEYLANI" in anim
+    # Kürate yolu: footage-seçim rehberi YOK (klip sabit, footage aranmıyor)
+    assert "gepar CEYLANI" not in cur
+    assert "visual_query" not in cur
+    # Kürate yolu: özne hayvan-DIŞI da olabilir
+    assert "sahnedeki ÖZNE" in cur and "klip SABİT" in cur
+    # İki modda da metafor uyum-öncelikli (zorlama metafor yasağı)
+    for blok in (anim, cur):
+        assert "sahneye UYMAYAN dünyayı ASLA dayatma" in blok

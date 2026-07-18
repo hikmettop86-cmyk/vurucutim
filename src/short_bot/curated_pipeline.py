@@ -19,6 +19,9 @@ log = logging.getLogger(__name__)
 # DUYGU modu klip-seçim kapıları (short 934 dersi: 11sn'lik derp klibi zorlama çıktı).
 CURATED_DUYGU_MIN_S = 18   # bundan kısa klip mikro-dramı taşımaz → oto-seçimde elenir
 DUYGU_MIN_SCORE = 7        # emotion skoru bunun altındaysa oto-üretim ATLANIR (zayıfı zorlama)
+# MİZAH modu min-süre (short 947 dersi: 12sn klip kurulum+tırmanma+punchline'a yer bırakmıyor
+# → narration taşıp klip 3x loop'lanıyor). Kaos/fail snappy olabilir ama iyi espri ~15sn ister.
+CURATED_MIZAH_MIN_S = 15
 
 
 class CuratedWatermarkError(RuntimeError):
@@ -271,6 +274,10 @@ def auto_produce_curated(channel, *, settings, secrets, db_path, output_root,
         # DUYGU: kısa klip mikro-dramı taşımaz (~30-40sn ister) → bilinen-kısa klibi ELE.
         fresh = [g for g in fresh
                  if not (0 < (g.get("duration") or 0) < CURATED_DUYGU_MIN_S)]
+    elif tone == "mizah":
+        # MİZAH: çok kısa klip espri kurulumuna yer bırakmaz (short 947, 12sn) → ELE.
+        fresh = [g for g in fresh
+                 if not (0 < (g.get("duration") or 0) < CURATED_MIZAH_MIN_S)]
     if not fresh:
         log.warning("  kürate[oto]: taze cevher yok (hepsi üretilmiş / havuz boş / kısa)")
         return None, None

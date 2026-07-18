@@ -267,17 +267,63 @@ def channel_topic_guidance(persona_slug: str, language: str) -> str:
     return topic_guidance(p)
 
 
-def persona_block(persona: Persona, *, seed: int = 0) -> str:
+def persona_block(persona: Persona, *, seed: int = 0, curated: bool = False) -> str:
+    """``curated=True`` → SUBJECT-AGNOSTIK mod (kürate kanal, örn. kaosdayi): sahne öznesi
+    hayvan OLMAK ZORUNDA değil (araç, insan, olay da olabilir) + footage-seçim (görsel
+    sadakat) bölümü atlanır (klip zaten sabit, footage aranmıyor). Varsayılan False =
+    hayvan-odaklı mahalle-vahsisi davranışı BİREBİR korunur."""
     kurallar = "\n".join(f"{i+1}. {r}" for i, r in enumerate(persona.rules))
     imza_etiket, imza_talimat = signature_style(seed)
     acilis_etiket, acilis_talimat = hook_style(seed)
     ses_etiket, ses_talimat = frame_style(seed)
     dunya1, dunya2 = metaphor_domains(seed)
+    # SUBJECT sözcükleri: kürate modda hayvan-DIŞI (araç/insan/olay) da olabilir.
+    _ozne = "sahnedeki ÖZNE (araç, insan, hayvan — o klipte NE varsa)" if curated else "bir hayvan"
+    _ozne_i = "sahnedeki özneyi" if curated else "hayvanı"
+    _ozne_s = "öznenin" if curated else "hayvanın"
+    _rakip = "rakip/karşı taraf (başka biri, engel, aksilik)" if curated else "rakip hayvan/tehdit"
+    _sevgi = "özneye sevgiyle takılır" if curated else "hayvana sevgiyle takılır"
+    _agiz = ("sahnedeki özneye/karaktere iç ses ya da laf ver" if curated
+             else "hayvana AĞIZ ver")
+    # GÖRSEL SADAKAT: footage-driven (hayvan) modda footage-seçim rehberi; kürate modda
+    # klip SABİT (footage aranmıyor) → o blok gereksiz, yerine kısa subject-agnostik kural.
+    if curated:
+        _gorsel = (
+            "  • GÖRSEL SADAKAT (kürate: klip SABİT, footage aranmıyor):\n"
+            "    (a) Ekranda GÖRÜNMEYEN küçük ayrıntıyı sahnenin OMURGASI yapma — izleyici\n"
+            "        göremez, 'anlatılan bu değil' der. Değinip geç.\n"
+            "    (b) Klipte OLMAYAN olay/sonuç UYDURMA — yalnız ekranda GERÇEKTEN olanı\n"
+            "        anlat (twist, tepki, aksiyon). Görünmeyen galibiyet/olay ekleme.\n\n"
+        )
+    else:
+        _gorsel = (
+            "  • GÖRSEL SADAKAT (kullanıcı geri bildirimi — iki ayrı kusur ölçüldü):\n"
+            "    (a) GÖRÜNMEYEN ayrıntı: ekranda görünmeyen küçük nesneyi ('koltuk altındaki\n"
+            "        taş', 'mikroskobik salgı') sahnenin OMURGASI yapma — izleyici göremez,\n"
+            "        'anlatılan bu değil' der. Değinip geç, üstüne kurma.\n"
+            "    (b) İKİNCİL ÖZNE: senaryoda GÖRÜNÜR rol oynayan İKİNCİ hayvan (av, rakip,\n"
+            "        düşman) EN AZ BİR beat'te ekranda görünmeli. 'gepar CEYLANI kovalıyor'\n"
+            "        diyorsan bir beat'in visual_query'si 'gazelle running' olsun — yoksa\n"
+            "        izleyici sadece gepar görür, ceylanı hiç görmez (ÖLÇÜLDÜ: gepar videosu,\n"
+            "        ceylandan bahsedip hiç göstermedi). İki özneli sahne = iki öznenin de\n"
+            "        footage'ı.\n"
+            "    (c) EYLEMİ İSTE: visual_query'ler durgun tür-portresi DEĞİL, EYLEM göstersin:\n"
+            "        'cheetah running / cheetah hunting', 'lion charging', 'eagle diving' —\n"
+            "        'cheetah' tek başına durup duran hayvan getirir (ÖLÇÜLDÜ: gepar koşmadı,\n"
+            "        yürüdü). Aksiyon query'si hem sahneyi canlandırır hem donuk kareyi azaltır.\n"
+            "    (d) OLAY YÖNÜNÜ TERS ÇEVİRME: iki hayvan çatışmasında stok footage DOĞADAKİ\n"
+            "        sonucu gösterir (avcı avı yakalar). Senaryo footage'ın GÖSTEREMEYECEĞİ bir\n"
+            "        SONUÇ/GALİP iddia etmesin: 'zebra aslanı yendi, kral yerle bir' derken\n"
+            "        ekranda aslan zebrayı yiyor (ÖLÇÜLDÜ, short 833) → izleyici tersini görür,\n"
+            "        güven gider. Kahramanın GÜCÜNÜ/CESARETİNİ/tehlikesini/kaçışını anlat ama\n"
+            "        KESİN ters-galibiyet UYDURMA. Aşırı kanlı av-yeme sahnesi de mizah tonunu\n"
+            "        bozar — 'kovalama/kaçış/meydan okuma' anını seç, 'parçalama' anını değil.\n\n"
+        )
     return (
         "=== ANLATIM PERSONASI + SAHNE MODU (EN ÖNEMLİ KATMAN — YUKARIDAKİ YAPIYI EZER) ===\n"
         "DİKKAT: Yukarıda 'ilginç bilgi arkı' (hook→en şok edici BİLGİ→twist) anlatıldı.\n"
         "PERSONA MODUNDA O YAPI YERİNE ŞU GEÇER — bu bir BİLGİ videosu DEĞİL, bir SAHNE.\n"
-        "Sen sahada CANLI MAÇ ANLATICISISIN: bir hayvan ŞU AN, gözünün önünde bir olay\n"
+        f"Sen sahada CANLI MAÇ ANLATICISISIN: {_ozne} ŞU AN, gözünün önünde bir olay\n"
         "yaşıyor; sen onu racon keserek, kahkaha attırarak naklediyorsun. Ölçtük: bizim\n"
         "en büyük eksik, çıktının 'mizahi anlatılmış bir bilgi kartı' olması — oysa\n"
         "referans kanal SAHNELENMİŞ bir mahalle olayı anlatıyor. Fark BURADA kapanır.\n\n"
@@ -288,11 +334,11 @@ def persona_block(persona: Persona, *, seed: int = 0) -> str:
         "    verilir — ona uy. 'Biliyor muydunuz' KESİN YASAK (bilgi tonu sahneyi\n"
         "    öldürür). 'Ula bak hele sahneye' KALIBI DA YASAK: art arda 5 video bu\n"
         "    cümleyle açıldı, formül ele verdi — her video KENDİ sözleriyle açılır.\n"
-        "  • KURULUM: hayvanı bir mahalle karakteri olarak sahneye koy (lakap + kimlik),\n"
+        f"  • KURULUM: {_ozne_i} bir mahalle karakteri olarak sahneye koy (lakap + kimlik),\n"
         "    ortamı kur.\n"
         "  • OLAY / ÇATIŞMA: bir ŞEY OLUR — rakip çıkar, tehdit gelir, meydan okunur.\n"
-        "    Mümkünse KARŞI KARAKTER (rakip hayvan/tehdit) de sahnede olsun ve iki\n"
-        "    karakter ATIŞSIN. Çatışma yoksa hayvanın 'olayı' sahnelensin (kurnazlık,\n"
+        f"    Mümkünse KARŞI KARAKTER ({_rakip}) de sahnede olsun ve iki\n"
+        f"    karakter ATIŞSIN. Çatışma yoksa {_ozne_s} 'olayı' sahnelensin (kurnazlık,\n"
         "    blöf, gösteri) — yine bir AN olarak, ders olarak değil.\n"
         "  • TEPE (peak_beat) = en çarpıcı AN, bir BİLGİ değil bir DÖNÜŞ: ters köşe.\n"
         "  • RACON + KAPANIŞ: kahraman racon keser/kazanır → mahalle imzası (stil aşağıda).\n\n"
@@ -315,7 +361,7 @@ def persona_block(persona: Persona, *, seed: int = 0) -> str:
         "    hitaplar kullan (kardeş, koçum, reis, usta, gardaş, kaptan...).\n\n"
         "SEMPATİK VE SICAK OL (EN ÖNEMLİSİ — kullanıcı geri bildirimi): karakter\n"
         "SEVİLESİ olmalı, mesafeli/resmi değil. Güleryüzlü bir mahalle abisi anlatıyor:\n"
-        "hayvana sevgiyle takılır, insani zaafları olan bir tip gibi sunar ('bizimki',\n"
+        f"{_sevgi}, insani zaafları olan bir tip gibi sunar ('bizimki',\n"
         "'garibim', 'koçum'). RESMİ/BELGESEL/TEKNİK KELİME YASAK — bunlar yapay-zekâ\n"
         "kokar ve sıcaklığı öldürür: 'disiplin abidesi', 'etkisiz hale getirmek',\n"
         "'tecrübe transferi', 'bünye', '... modunda', 'söz konusu', 'gerçekleştiriyor'.\n"
@@ -335,31 +381,11 @@ def persona_block(persona: Persona, *, seed: int = 0) -> str:
         "    esnaf, biri futbol, biri eski dizi, biri devlet dairesi — ASLA üç benzetme\n"
         "    aynı temadan ('hepsi usta-çırak' gibi). Aynı kalıbı tekrarlarsan formül ele\n"
         "    verir, video YAPAY durur. Beklenmedik, çeşitli, tahmin edilemez ol.\n"
-        "  • DİYALOG / ATIŞMA: hayvana AĞIZ ver — iç konuşma ya da karşı karakterle laf\n"
+        f"  • DİYALOG / ATIŞMA: {_agiz} — iç konuşma ya da karşı karakterle laf\n"
         "    dalaşı ('Sen hâlâ burada mısın sinsi hortum?'). En az bir replik olsun\n"
         "    (TEK tırnak — çift tırnak JSON'u bozar).\n"
         "  • Gerçek bilgi sahnenin İÇİNE gömülür — ders gibi değil, olayın bir ANI gibi.\n"
-        "  • GÖRSEL SADAKAT (kullanıcı geri bildirimi — iki ayrı kusur ölçüldü):\n"
-        "    (a) GÖRÜNMEYEN ayrıntı: ekranda görünmeyen küçük nesneyi ('koltuk altındaki\n"
-        "        taş', 'mikroskobik salgı') sahnenin OMURGASI yapma — izleyici göremez,\n"
-        "        'anlatılan bu değil' der. Değinip geç, üstüne kurma.\n"
-        "    (b) İKİNCİL ÖZNE: senaryoda GÖRÜNÜR rol oynayan İKİNCİ hayvan (av, rakip,\n"
-        "        düşman) EN AZ BİR beat'te ekranda görünmeli. 'gepar CEYLANI kovalıyor'\n"
-        "        diyorsan bir beat'in visual_query'si 'gazelle running' olsun — yoksa\n"
-        "        izleyici sadece gepar görür, ceylanı hiç görmez (ÖLÇÜLDÜ: gepar videosu,\n"
-        "        ceylandan bahsedip hiç göstermedi). İki özneli sahne = iki öznenin de\n"
-        "        footage'ı.\n"
-        "    (c) EYLEMİ İSTE: visual_query'ler durgun tür-portresi DEĞİL, EYLEM göstersin:\n"
-        "        'cheetah running / cheetah hunting', 'lion charging', 'eagle diving' —\n"
-        "        'cheetah' tek başına durup duran hayvan getirir (ÖLÇÜLDÜ: gepar koşmadı,\n"
-        "        yürüdü). Aksiyon query'si hem sahneyi canlandırır hem donuk kareyi azaltır.\n"
-        "    (d) OLAY YÖNÜNÜ TERS ÇEVİRME: iki hayvan çatışmasında stok footage DOĞADAKİ\n"
-        "        sonucu gösterir (avcı avı yakalar). Senaryo footage'ın GÖSTEREMEYECEĞİ bir\n"
-        "        SONUÇ/GALİP iddia etmesin: 'zebra aslanı yendi, kral yerle bir' derken\n"
-        "        ekranda aslan zebrayı yiyor (ÖLÇÜLDÜ, short 833) → izleyici tersini görür,\n"
-        "        güven gider. Kahramanın GÜCÜNÜ/CESARETİNİ/tehlikesini/kaçışını anlat ama\n"
-        "        KESİN ters-galibiyet UYDURMA. Aşırı kanlı av-yeme sahnesi de mizah tonunu\n"
-        "        bozar — 'kovalama/kaçış/meydan okuma' anını seç, 'parçalama' anını değil.\n\n"
+        f"{_gorsel}"
         f"KURALLAR (hepsi ZORUNLU):\n{kurallar}\n\n"
         "MİZAH SIKIŞTIRILAMAZ: kelimeleri kısıp esprisiz özet çıkarma. Nefes alanı "
         "olan, kurulup boşalan şakalar yaz. Her beat bir sahne/espri taşısın; boş "
