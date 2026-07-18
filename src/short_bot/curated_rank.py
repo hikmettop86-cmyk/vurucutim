@@ -63,15 +63,22 @@ def _curiosity_prompt(title: str) -> str:
 
 
 def _emotion_prompt(title: str) -> str:
-    """DUYGU kanalı için skorlama — kahramanlık/kurtarma/sadakat potansiyeli (@NedenHayvan)."""
+    """DUYGU kanalı skorlaması — duygusal DERİNLİK (@NedenHayvan: kurtarma AMA wholesome/
+    minnet/kavuşma da). Yalnız kurtarmaya kilitlemek kanalı aç bırakıyordu (çoğu wholesome
+    klip 3 puan alıp eleniyordu); sadece SEVİMLİ/KOMİK olan yine düşük (derp-koruması)."""
     return (
         "Bu bir kısa video klibinin BAŞLIĞI ve KAPAK KARESİ (thumbnail).\n"
         f"BAŞLIK: {title or '(başlık yok)'}\n\n"
-        "Bu klip GÜÇLÜ bir DUYGUSAL mikro-dramaya dönüşebilir mi? Kahramanlık, kurtarma, "
-        "sadakat, fedakârlık, kavuşma, koruma, ölüm-kalım anı = YÜKSEK. (Bir hayvanın/insanın "
-        "birini KURTARDIĞI, koruduğu, beklediği, canını riske attığı, kavuştuğu anlar.)\n"
-        "Sadece SEVİMLİ/KOMİK ama duygusal bahsi olmayan, ya da duygusuz-teknik = DÜŞÜK.\n"
-        "1-10 puanla (10 = güçlü duygusal kahramanlık/kurtarma, 1 = duygusuz/sıradan).\n"
+        "Bu klip GÜÇLÜ bir DUYGUSAL/DOKUNAKLI ana dönüşebilir mi — izleyicinin içini "
+        "ısıtan, gözünü dolduran, 'aaa' dedirten bir an? YÜKSEK sayılanlar:\n"
+        "- Kurtarma / kahramanlık / fedakârlık / canını riske atma\n"
+        "- Kavuşma / vefa / sadakat / birini bekleme, koruma\n"
+        "- Şükran / minnet / nezaket (yardım edene teşekkür, karşılıksız iyilik anı)\n"
+        "- Dokunaklı insan anı (kavuşma, mutluluk gözyaşı, sürpriz sevgi, wholesome an)\n"
+        "DÜŞÜK sayılanlar: sadece SEVİMLİ ya da KOMİK ama duygusal derinliği/hikâyesi "
+        "OLMAYAN (bir hayvanın komik düşmesi/zıplaması gibi), ya da duygusuz-teknik.\n"
+        "1-10 puanla (10 = güçlü duygusal/dokunaklı, izleyiciyi duygulandırır; "
+        "1 = duygusuz/sıradan/sadece komik).\n"
         'SADECE JSON: {"score": <1-10>, "reason": "<çok kısa>"}'
     )
 
