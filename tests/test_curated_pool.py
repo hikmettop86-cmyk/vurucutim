@@ -160,3 +160,36 @@ def test_auto_produce_duygu_fail_open_when_vision_down(tmp_path, monkeypatch):
         db_path=tmp_path / "db.sqlite", output_root=tmp_path, music_root=tmp_path,
         templates_dir=tmp_path)
     assert sid == "sid-1" and called   # vision yok AMA fail-open → üretim denendi (None,None DEĞİL)
+
+
+def test_produce_curated_fail_closed_on_unverified_watermark(tmp_path, monkeypatch):
+    """TEMİZLİK FAIL-CLOSED: watermark tespiti DOĞRULANAMAZSA (detect None) klip KULLANILMAZ →
+    CuratedWatermarkError (short 968: None fail-open ile TikTok logolu klip geçmişti)."""
+    from pathlib import Path
+    from types import SimpleNamespace
+
+    import pytest
+
+    import short_bot.curated_clean as cc
+    import short_bot.curated_pipeline as cpl
+    import short_bot.pipeline as pl
+    import short_bot.reddit_gems as rg
+    import short_bot.tts.ai33_client as ai33
+    from short_bot.config import AICall
+
+    fake = AICall(backend="google_studio", model="m", api_key=None, claude_path="")
+    monkeypatch.setattr(pl, "resolve_ai_call", lambda *a, **k: fake)   # vision non-None
+    monkeypatch.setattr(ai33, "resolve_ai33_api_key", lambda *a, **k: "k")
+    monkeypatch.setattr(rg, "download_clip",
+                        lambda url, dest: (Path(dest).write_bytes(b"m"), Path(dest))[1])
+    # detect DOĞRULAYAMADI → clean_if_needed (clip, None) döner
+    monkeypatch.setattr(cc, "clean_if_needed", lambda clip, **k: (clip, None))
+
+    reel = SimpleNamespace(enabled=True, curated_clean=True, persona="", curated_tone="mizah")
+    channel = SimpleNamespace(slug="kaosdayi", language="tr", reel=reel)
+    with pytest.raises(cpl.CuratedWatermarkError):
+        cpl.produce_curated(
+            {"video_url": "https://v.redd.it/x/DASH.mp4", "title": "t"}, channel,
+            settings=SimpleNamespace(ffmpeg_path="ffmpeg", claude_cli_path="claude"),
+            secrets={}, db_path=tmp_path / "db.sqlite", output_root=tmp_path,
+            music_root=tmp_path, templates_dir=tmp_path)

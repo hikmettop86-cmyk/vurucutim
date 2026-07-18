@@ -98,10 +98,20 @@ def detect_watermark(clip, *, vision_call, ffmpeg_path: str = "ffmpeg"):
                                 str(board)], capture_output=True, timeout=30)
             if not board.exists() or board.stat().st_size == 0:
                 return None
-            return run_json(_DETECT_PROMPT, WatermarkDetect,
-                            claude_path=vision_call.claude_path, model=vision_call.model,
-                            backend=vision_call.backend, api_key=vision_call.api_key,
-                            image_path=board, retries=1, timeout_s=45)
+            # TEMİZLİK = GÜVENLİK KAPISI: geçici vision hatası None döndürüp kirli klibi
+            # (TikTok logolu) geçirmesin (short 968). Burst-throttle dalgasına karşı ek tur —
+            # None yalnız GERÇEKTEN doğrulanamadığında dönsün (çağıran fail-CLOSED reddeder).
+            last: Exception | None = None
+            for _ in range(2):
+                try:
+                    return run_json(_DETECT_PROMPT, WatermarkDetect,
+                                    claude_path=vision_call.claude_path, model=vision_call.model,
+                                    backend=vision_call.backend, api_key=vision_call.api_key,
+                                    image_path=board, retries=2, timeout_s=45)
+                except Exception as e:  # noqa: BLE001 — geçici → tekrar dene
+                    last = e
+            log.info(f"  kürate[temizlik]: watermark tespiti doğrulanamadı ({last})")
+            return None
     except Exception as e:  # noqa: BLE001
         log.info(f"  kürate[temizlik]: watermark tespiti hatası ({e})")
         return None

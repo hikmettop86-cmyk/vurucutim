@@ -102,7 +102,15 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
             clip, _wm = clean_if_needed(clip, vision_call=vision,
                                         ffmpeg_path=settings.ffmpeg_path,
                                         out_path=td / "clean.mp4")
-            if _wm is not None and _wm.present:
+            # TEMİZLİK FAIL-CLOSED (short 968: TikTok logolu klip, tespit None dönünce fail-OPEN
+            # ile geçmişti). _wm None = vision temizliği DOĞRULAYAMADI (hata) → klibi KULLANMA
+            # (kirli olabilir). Yalnız vision TEMİZ dedi (_wm.present=False) ya da temiz
+            # kırpıldıysa devam. Oto: çağıran sıradaki adaya geçer; manuel: net hata.
+            if _wm is None:
+                raise CuratedWatermarkError(
+                    "Klip temizliği DOĞRULANAMADI (vision hatası) → atlanıyor (kirli/logolu "
+                    "olabilir; güvenlik için fail-closed).")
+            if _wm.present:
                 log.info(f"  kürate: watermark {_wm.regions} (kaplıyor={_wm.covers_subject})")
                 # Temizlenemeyen (hareketli TikTok / kaplayan) → bu klip WATERMARK'LI
                 # kalır; kullanma. Manuel: net hata. Oto: çağıran sıradaki adaya geçer.
