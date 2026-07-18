@@ -30,11 +30,16 @@ DEFAULT_SUBS = [
     "AbruptChaos", "maybemaybemaybe", "interestingasfuck",
 ]
 
-# DUYGU kanalı havuzu (curated_tone='duygu'): kahramanlık/kurtarma/sadakat/dokunaklı —
-# derp/komik değil (doğrulandı 2026-07-18: video-zengin duygusal anlar). @NedenHayvan şeridi.
+# DUYGU kanalı havuzu (curated_tone='duygu'): kahramanlık/kurtarma/sadakat/dokunaklı +
+# wholesome/minnet/kavuşma — derp/komik değil. @NedenHayvan şeridi. GENİŞLETİLDİ
+# (2026-07-18): 6 sub 'week' penceresinde ~10 videoda tükeniyordu; duygusal içerik
+# EVERGREEN olduğu için havuzu 17 sub'a çıkardık (kanal curated_time='month' ile eşleşir
+# → ~118 klip/pencere, dedup+rubrik sonrası ~60-80 güçlü aday = fiilen tükenmez).
 DEFAULT_DUYGU_SUBS = [
     "MadeMeSmile", "HumansBeingBros", "AnimalsBeingBros", "likeus",
-    "AnimalsBeingGeniuses", "rarepuppers",
+    "AnimalsBeingGeniuses", "rarepuppers", "aww", "Eyebleach", "dogswithjobs",
+    "IllegallySmolCats", "rescuedogs", "rescuecats", "AnimalRescue",
+    "BeforeNAfterAdoption", "wholesomegifs", "OldPeopleWholesome", "MadeMeCry",
 ]
 
 # İndirilebilir video kaynakları (yt-dlp bunları çözer).
