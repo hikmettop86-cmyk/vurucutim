@@ -130,6 +130,47 @@ def test_curated_fetch_lists_gems(tmp_path, monkeypatch):
     assert captured["min_ups"] == 300
 
 
+def test_pool_produce_marks_producing_then_finalizes(tmp_path, monkeypatch):
+    """Havuzdan üretim: cevher önce 'producing' olur (pending'ten çıkar, kaybolmaz); üretim
+    BİTİNCE on_complete ile başarı→'produced'(+short_id), hata→'pending' (eski iyimser
+    'produced' üretim çökerse cevheri SESSİZCE kaybediyordu)."""
+    from types import SimpleNamespace
+
+    from short_bot.curated_pool import get_pool_row
+    from short_bot.db import init_db, pooled_gems, record_short
+
+    c, cfg_dir = _client(tmp_path)
+    _make_curated_channel(cfg_dir)
+    eng = init_db(tmp_path / "db.sqlite")
+    with eng.begin() as conn:
+        ins = conn.execute(pooled_gems.insert().values(
+            channel="cevherkanal", clip_key="vreddit:zzz",
+            video_url="https://v.redd.it/zzz/DASH.mp4", title="Havuz klip",
+            sub="likeus", ups=5000, score=8.0, tone="mizah", status="pending",
+            duration=22))
+        pool_id = ins.inserted_primary_key[0]
+    # gerçek short satırı (FK: pooled_gems.short_id -> shorts.id) — üretimde pipeline üretir
+    real_sid = record_short(eng, channel="cevherkanal", rss_item_guid=None, title="t",
+                            file_path="x.mp4", duration_s=10, render_ms=0, script_json="{}")
+
+    captured = {}
+    monkeypatch.setattr("short_bot.web.routes.curated.launch_pipeline",
+                        lambda **k: captured.update(k))
+    r = c.post("/curated/pool/produce", data={"pool_id": str(pool_id)})
+    assert r.status_code in (200, 302)
+    # launch'tan HEMEN sonra: 'producing' (henüz 'produced' DEĞİL — üretim sürüyor)
+    assert get_pool_row(eng, pool_id)["status"] == "producing"
+
+    on_complete = captured["on_complete"]
+    # BAŞARI → produced + short_id
+    on_complete(SimpleNamespace(status="success", short_id=real_sid))
+    row = get_pool_row(eng, pool_id)
+    assert row["status"] == "produced" and row["short_id"] == real_sid
+    # HATA (çökme, res=None) → pending (geri havuza, kayıp YOK)
+    on_complete(None)
+    assert get_pool_row(eng, pool_id)["status"] == "pending"
+
+
 def test_curated_produce_requires_selection(tmp_path):
     c, cfg_dir = _client(tmp_path)
     _make_curated_channel(cfg_dir)

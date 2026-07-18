@@ -14,7 +14,8 @@ def launch_pipeline(*, channel, settings, db_path: Path,
                     trigger: str = "manual",
                     preselected_item=None,
                     curated_gem=None,
-                    forced_topic: str | None = None) -> threading.Thread:
+                    forced_topic: str | None = None,
+                    on_complete=None) -> threading.Thread:
     """Start pipeline in a daemon thread. Returns the thread object.
 
     OTOMASYON AÇIKSA ELLE ÜRETİM DE SLOTA BAĞLANIR.
@@ -32,6 +33,7 @@ def launch_pipeline(*, channel, settings, db_path: Path,
     autopilot_acik = ap is not None and ap.enabled
 
     def _runner():
+        res = None
         try:
             res = run_pipeline(
                 channel=channel, settings=settings,
@@ -51,6 +53,15 @@ def launch_pipeline(*, channel, settings, db_path: Path,
             # failures. Anything reaching here is a top-level surprise (lock
             # dir missing, init_db failure). Log to console so it isn't lost.
             _log.exception("launch_pipeline thread crashed for %s", channel.slug)
+        finally:
+            # Üretim BİTTİĞİNDE (başarı/hata) çağrılır — res: RunResult ya da None (çökme).
+            # Havuz üretiminde cevheri 'produced'/'pending' olarak KESİNLEŞTİRMEK için (iyimser
+            # işaretleme yerine gerçek sonuç). Callback hatası thread'i düşürmesin.
+            if on_complete is not None:
+                try:
+                    on_complete(res)
+                except Exception:
+                    _log.exception("on_complete callback crashed for %s", channel.slug)
 
     thread = threading.Thread(target=_runner, daemon=True)
     thread.start()

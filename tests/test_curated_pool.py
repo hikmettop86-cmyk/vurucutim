@@ -93,3 +93,70 @@ def test_score_curiosity_drops_text_covers(monkeypatch):
 
     out2 = score_curiosity(gems, vision_call=_V(), tone="mizah", drop_text=False)
     assert {g["title"] for g in out2} == {"TEMIZ klip", "KIRLI yazılı"}  # ikisi de kalır
+
+
+def test_collect_pool_fail_open_when_vision_down(tmp_path, monkeypatch):
+    """Vision skorlanamazsa (resolve çöker → vision None → tüm curiosity None) havuz SESSİZCE
+    boş kalmasın: engagement sırasıyla fail-open aday eklenmeli (kullanıcı: 'no_candidates')."""
+    from types import SimpleNamespace
+
+    import short_bot.curated_pool as cp
+    import short_bot.pipeline as pl
+    import short_bot.reddit_gems as rg
+
+    gems = [
+        {"video_url": f"https://v.redd.it/g{i}/DASH.mp4", "title": f"klip{i}",
+         "permalink": f"https://reddit.com/r/funny/{i}", "sub": "funny",
+         "ups": 3000 - i * 100, "comments": 20, "duration": 20, "width": 1080,
+         "height": 1920, "orient": "DİKEY", "thumb": ""}
+        for i in range(5)
+    ]
+    monkeypatch.setattr(rg, "find_gems", lambda *a, **k: gems)
+    monkeypatch.setattr(rg, "fetch_popular", lambda *a, **k: [])
+    # resolve_ai_call ÇÖKER → vision None → score_curiosity hepsini curiosity=None yapar
+    monkeypatch.setattr(pl, "resolve_ai_call",
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("vision yok")))
+
+    reel = SimpleNamespace(enabled=True, curated_tone="mizah", curated_min_ups=500,
+                           curated_max_duration=90, subreddits=[], curated_time="month",
+                           curated_include_popular=False)
+    channel = SimpleNamespace(slug="kaosdayi", content_source="curated", reel=reel)
+    added = cp.collect_pool(channel, settings=SimpleNamespace(ffmpeg_path="ffmpeg"),
+                            secrets={"reddit_client_id": "x", "reddit_client_secret": "y"},
+                            db_path=tmp_path / "pool.db")
+    assert added > 0   # vision yok AMA fail-open → havuz boş kalmadı (eskiden 0'dı)
+
+
+def test_auto_produce_duygu_fail_open_when_vision_down(tmp_path, monkeypatch):
+    """DUYGU auto-üretim: vision skorlanamazsa (resolve çöker) sert eşik üretimi SESSİZCE
+    engelliyordu (kullanıcı: 'no_candidates'). Fix: skorsuzsa engagement sırasıyla üret."""
+    from types import SimpleNamespace
+
+    import short_bot.curated_pipeline as cpl
+    import short_bot.pipeline as pl
+    import short_bot.reddit_gems as rg
+
+    gems = [{"video_url": f"https://v.redd.it/d{i}/DASH.mp4", "title": f"kurtarma{i}",
+             "permalink": f"https://reddit.com/r/aww/{i}", "sub": "aww",
+             "ups": 5000 - i * 100, "comments": 30, "duration": 60, "orient": "DİKEY"}
+            for i in range(3)]
+    monkeypatch.setattr(rg, "find_gems", lambda *a, **k: gems)
+    monkeypatch.setattr(pl, "resolve_ai_call",
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("vision yok")))
+    called = {}
+
+    def fake_produce(gem, channel, **k):
+        called["gem"] = gem
+        return ("sid-1", tmp_path / "out.mp4")
+
+    monkeypatch.setattr(cpl, "produce_curated", fake_produce)
+
+    reel = SimpleNamespace(curated_tone="duygu", subreddits=[], curated_time="week",
+                           curated_min_ups=500, curated_max_duration=90)
+    channel = SimpleNamespace(slug="dayidiyorki", reel=reel)
+    sid, path = cpl.auto_produce_curated(
+        channel, settings=SimpleNamespace(ffmpeg_path="ffmpeg"),
+        secrets={"reddit_client_id": "x", "reddit_client_secret": "y"},
+        db_path=tmp_path / "db.sqlite", output_root=tmp_path, music_root=tmp_path,
+        templates_dir=tmp_path)
+    assert sid == "sid-1" and called   # vision yok AMA fail-open → üretim denendi (None,None DEĞİL)

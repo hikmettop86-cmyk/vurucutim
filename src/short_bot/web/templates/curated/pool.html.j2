@@ -42,7 +42,9 @@
     </a>
     {% endfor %}
     <span class="ml-2 text-xs text-claude-muted">
-      bekleyen <b>{{ counts.get('pending', 0) }}</b> · üretilen {{ counts.get('produced', 0) }}
+      bekleyen <b>{{ counts.get('pending', 0) }}</b>
+      {% if counts.get('producing') %}· üretiliyor <b>{{ counts.get('producing') }}</b>{% endif %}
+      · üretilen {{ counts.get('produced', 0) }}
       · elenen {{ counts.get('skipped', 0) }}
     </span>
   </div>

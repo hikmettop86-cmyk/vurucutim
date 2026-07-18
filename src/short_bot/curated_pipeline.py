@@ -327,13 +327,20 @@ def auto_produce_curated(channel, *, settings, secrets, db_path, output_root,
         log.info(f"  kürate[oto]: ton-skoru atlandı ({e})")
     if tone == "duygu":
         # EŞİK: güçlü duygusal klip yoksa ÜRETME (zayıf derp'i zorlama — short 934 dersi).
+        # AMA yalnız vision GERÇEKTEN skorladıysa: skorlama çökerse (hepsi curiosity=None) sert
+        # eşik üretimi SESSİZCE engelliyordu (kullanıcı: 'no_candidates') → o zaman fail-open.
+        _scored = any(g.get("curiosity") is not None for g in fresh)
         _strong = [g for g in fresh if (g.get("curiosity") or 0) >= DUYGU_MIN_SCORE]
-        if not _strong:
+        if _strong:
+            fresh = _strong
+        elif _scored:
             best = max((g.get("curiosity") or 0) for g in fresh) if fresh else 0
             log.warning(f"  kürate[oto]: yeterince güçlü duygusal klip yok (en iyi skor "
                         f"{best}<{DUYGU_MIN_SCORE}) → üretim atlandı")
             return None, None
-        fresh = _strong
+        else:
+            log.info("  kürate[oto]: vision skorlanamadı → engagement sırasıyla deneniyor "
+                     "(fail-open, sessiz-boş önlendi)")
     # En iyi adayları sırayla dene; WATERMARK'LI (temizlenemeyen) olanı ATLA → temiz video.
     for gem in fresh[:8]:
         log.info(f"  kürate[oto]: deneniyor ⬆{gem.get('ups')} {gem.get('orient')} "

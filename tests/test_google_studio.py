@@ -5,6 +5,7 @@ sıfırlar), 15 RPM pace eder, 429'u daily/rpm/capacity olarak sınıflar. Tüke
 GoogleStudioExhausted → çağıran OpenRouter gemma'ya düşer.
 """
 import json
+import time
 
 import pytest
 
@@ -146,8 +147,9 @@ def test_generate_tukenince_exhausted(tmp_path, monkeypatch):
     p, clock = _pool(tmp_path, keys=("k1",), cap=0)   # kota sıfır
     monkeypatch.setattr(GS, "_get_pool", lambda: p)
     monkeypatch.setattr(GS, "_http_generate", lambda *a, **k: '{}')
-    with pytest.raises(GS.GoogleStudioExhausted):
+    with pytest.raises(GS.GoogleStudioExhausted) as exc:
         GS.generate("x", model="m", wait_for_slot_s=0)
+    assert "all-keys-exhausted" in str(exc.value)   # GERÇEK tükenme (throttle değil)
 
 
 def test_generate_429_donup_gecerli_keye(tmp_path, monkeypatch):
@@ -168,5 +170,66 @@ def test_generate_bos_yanit_exhausted(tmp_path, monkeypatch):
     p, clock = _pool(tmp_path, keys=("k1",), cap=100)
     monkeypatch.setattr(GS, "_get_pool", lambda: p)
     monkeypatch.setattr(GS, "_http_generate", lambda *a, **k: "")   # güvenlik bloğu
-    with pytest.raises(GS.GoogleStudioExhausted):
+    with pytest.raises(GS.GoogleStudioExhausted) as exc:
         GS.generate("x", model="m", wait_for_slot_s=0)
+    assert "empty-response" in str(exc.value)   # boş yanıt — tükenme DEĞİL
+
+
+# ── Global eşzamanlılık tavanı + capacity 429 sabırlı retry (2026-07-18 fix) ──
+def test_set_max_concurrency(monkeypatch):
+    monkeypatch.setattr(GS, "_SEM_LIMIT", 4, raising=False)
+    GS.set_max_concurrency(2)
+    assert GS._SEM_LIMIT == 2 and GS._get_sem()._initial_value == 2
+    GS.set_max_concurrency(0)          # <1 → 1'e sıkışır
+    assert GS._SEM_LIMIT == 1
+    GS.set_max_concurrency(4)          # geri al (diğer testleri etkileme)
+
+
+def test_eszamanlilik_tavani_http_burst_keser(tmp_path, monkeypatch):
+    """Çağıran 12 thread açsa BİLE aynı anda en çok MAX_CONCURRENCY HTTP çağrısı gider."""
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+    p, clock = _pool(tmp_path, keys=tuple(f"k{i}" for i in range(12)), cap=100)
+    monkeypatch.setattr(GS, "_get_pool", lambda: p)
+    GS.set_max_concurrency(3)
+    live = {"cur": 0, "max": 0}
+    lock = threading.Lock()
+
+    def slow_http(api_key, model, prompt, **k):
+        with lock:
+            live["cur"] += 1
+            live["max"] = max(live["max"], live["cur"])
+        time.sleep(0.05)               # çağrıyı uçuşta tut → eşzamanlılık ölçülsün
+        with lock:
+            live["cur"] -= 1
+        return "OK"
+
+    monkeypatch.setattr(GS, "_http_generate", slow_http)
+    with ThreadPoolExecutor(max_workers=12) as ex:
+        res = list(ex.map(lambda _: GS.generate("x", model="m"), range(12)))
+    GS.set_max_concurrency(4)           # eski hâle
+    assert all(r == "OK" for r in res)
+    assert live["max"] <= 3, f"eşzamanlı HTTP {live['max']} > tavan 3"
+
+
+def test_capacity_429_sabirli_retry_sonra_basari(tmp_path, monkeypatch):
+    """Detaysız capacity 429 → HEMEN gemma'ya düşme; deadline'a kadar sabırla retry et,
+    throttle geçince Google'da başar (short: erken fallback bug'ı)."""
+    (tmp_path / "google-keys.json").write_text(json.dumps(
+        {"keys": [{"id": "k1", "key": "AIza-k1", "enabled": True}]}))
+    p = GS.Pool(tmp_path, now=time.time, daily_cap=100)   # gerçek saat: capacity pause geçsin
+    monkeypatch.setattr(GS, "_get_pool", lambda: p)
+    GS.set_max_concurrency(4)
+    n = {"i": 0}
+    cap_body = {"error": {"code": 429, "message": "Resource has been exhausted",
+                          "status": "RESOURCE_EXHAUSTED"}}
+
+    def http(api_key, model, prompt, **k):
+        n["i"] += 1
+        if n["i"] <= 2:                 # ilk 2 çağrı capacity throttle
+            raise GS.GoogleStudioError("cap", status=429, body=cap_body)
+        return "OK"
+
+    monkeypatch.setattr(GS, "_http_generate", http)
+    out = GS.generate("x", model="m", wait_for_slot_s=40)
+    assert out == "OK" and n["i"] == 3   # 2 throttle atlatıldı, gemma'ya DÜŞMEDİ

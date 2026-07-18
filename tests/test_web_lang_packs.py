@@ -100,10 +100,12 @@ def test_CTA_metinleri_PANELDE_ARTIK_YOK(tmp_path):
 # --- SİHİRBAZ KAPISI: SESSİZ DÜŞME YASAĞININ PANEL UCU ---------------------
 
 def test_paket_YOKKEN_o_dilde_kanal_KURULAMAZ(tmp_path):
+    # Dil kapısı eski reel sihirbazından KÜRATE'ye taşındı (commit da87a24) →
+    # /channels/new-curated (curated.py: load_pack(language) başarısızsa engeller).
     a, cfg = _app(tmp_path)
-    r = a.test_client().post("/channels/new-reel", data={
-        "name": "Jardin", "topic": "jardinage interessant et surprenant",
-        "language": "fr", "voice_id": "elevenlabs_x",
+    r = a.test_client().post("/channels/new-curated", data={
+        "name": "Jardin", "language": "fr", "voice_id": "elevenlabs_x",
+        "category": "Hayvanlar",
     }, follow_redirects=True)
     body = r.data.decode("utf-8")
     assert "dil paketi" in body.lower()
@@ -111,22 +113,16 @@ def test_paket_YOKKEN_o_dilde_kanal_KURULAMAZ(tmp_path):
     assert not list((cfg / "channels").glob("jardin*.yaml")), "paket yokken kanal kuruldu"
 
 
-def test_paketi_OLAN_dil_kapiya_takilmaz(tmp_path, monkeypatch):
-    """Almanca paketi var → sihirbaz dil kapısını geçmeli (DNA üretimine kadar gitmeli)."""
-    import short_bot.web.routes.reel_new as RN
-    gorulen = {}
-
-    def _dur(*a, **kw):
-        gorulen["gecti"] = True
-        raise RuntimeError("dna burada durduruldu")
-
-    monkeypatch.setattr(RN, "generate_dna", _dur, raising=False)
-    a, _ = _app(tmp_path)
-    a.test_client().post("/channels/new-reel", data={
-        "name": "Bier Garten", "topic": "ueberraschende Fakten ueber Bier",
-        "language": "de", "voice_id": "elevenlabs_x",
+def test_paketi_OLAN_dil_kapiya_takilmaz(tmp_path):
+    """Almanca paketi var → kürate sihirbazı dil kapısını GEÇMELİ (kanal oluşmalı).
+    Kürate DNA gerektirmez → kapının geçtiğini kanal YAML'ının yazılmasından anlarız."""
+    a, cfg = _app(tmp_path)
+    a.test_client().post("/channels/new-curated", data={
+        "name": "Bier Garten", "language": "de", "voice_id": "elevenlabs_x",
+        "category": "Hayvanlar",
     })
-    assert gorulen.get("gecti"), "Almanca paketi VAR ama sihirbaz dil kapısında durdu"
+    assert list((cfg / "channels").glob("bier-garten*.yaml")), \
+        "Almanca paketi VAR ama sihirbaz dil kapısında durdu"
 
 
 # --- ELLE DÜZENLEME: BOZUK PAKET KAYDEDİLMEZ ------------------------------

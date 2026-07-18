@@ -273,11 +273,15 @@ def _slow_clip_to(clip, target_s: float, ffmpeg_path: str, out_path):
     return None
 
 
-def _storyboard_frames(clip, out_path, ffmpeg_path: str, *, cols: int = 3, rows: int = 2) -> bool:
+def _storyboard_frames(clip, out_path, ffmpeg_path: str, *, cols: int = 3, rows: int = 2,
+                       frame_w: int = 256) -> bool:
     """Klipten cols×rows kareyi ZAMAN-eşit örnekleyip tek ızgara görsele diz (PIL).
 
     Vision tek donmuş an yerine klibin BOYUNCA aksiyonunu görür (kullanıcı önerisi).
-    Süre okunamaz / yeterli kare çıkmaz / PIL yoksa False (çağıran tek-kareye düşer)."""
+    ``frame_w``: kare genişliği px. Varsayılan 256 (footage keşif — kaba 'ne oluyor').
+    Detay-hassas kürate yargıları (sadakat/kalite/watermark/bant) 384 geçer → küçük
+    logo/altyazı/ince sıra daha net (short 962: ince sıra-uydurması düşük çözünürlükte
+    yanlış yargılanıyordu). Süre okunamaz / yeterli kare yok / PIL yoksa False."""
     import subprocess
     import tempfile
     n = cols * rows
@@ -289,12 +293,13 @@ def _storyboard_frames(clip, out_path, ffmpeg_path: str, *, cols: int = 3, rows:
         from PIL import Image
     except Exception:  # noqa: BLE001 — PIL yoksa storyboard yok
         return False
+    fw = max(160, int(frame_w))
     with tempfile.TemporaryDirectory() as td:
         frames = []
         for i, t in enumerate(times):
             fp = Path(td) / f"f{i}.jpg"
             subprocess.run([ffmpeg_path, "-v", "error", "-y", "-ss", f"{t:.3f}",
-                            "-i", str(clip), "-frames:v", "1", "-vf", "scale=256:-1", str(fp)],
+                            "-i", str(clip), "-frames:v", "1", "-vf", f"scale={fw}:-1", str(fp)],
                            capture_output=True, timeout=20)
             if fp.exists() and fp.stat().st_size > 0:
                 frames.append(fp)
@@ -307,7 +312,7 @@ def _storyboard_frames(clip, out_path, ffmpeg_path: str, *, cols: int = 3, rows:
             for idx, im in enumerate(imgs):
                 r, c = divmod(idx, cols)
                 grid.paste(im.resize((w, h)), (c * w, r * h))
-            grid.save(out_path, "JPEG")
+            grid.save(out_path, "JPEG", quality=88)   # 75→88: ince detay/altyazı okunur kalsın
             return True
         except Exception:  # noqa: BLE001
             return False

@@ -114,6 +114,10 @@ def create_app(
     try:
         from short_bot import google_studio
         google_studio.set_pool_dir(db_path.parent / "google_pool")
+        # Global eşzamanlılık tavanı: burst kapasite-reddini (ücretsiz-tier paylaşılan 429)
+        # engeller. settings.google_studio.max_concurrency ile ayarlanır (varsayılan 4).
+        _gs = app.config["SHORTBOT_SETTINGS"].google_studio or {}
+        google_studio.set_max_concurrency(_gs.get("max_concurrency", google_studio.MAX_CONCURRENCY))
     except Exception:  # noqa: BLE001 — havuz kurulumu üretimi bloklayamaz
         pass
 

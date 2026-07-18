@@ -87,7 +87,7 @@ def detect_watermark(clip, *, vision_call, ffmpeg_path: str = "ffmpeg"):
     try:
         with tempfile.TemporaryDirectory() as td:
             board = Path(td) / "wm_board.jpg"
-            if not _storyboard_frames(clip, board, ffmpeg_path, cols=3, rows=2):
+            if not _storyboard_frames(clip, board, ffmpeg_path, cols=3, rows=2, frame_w=384):
                 # storyboard kurulamazsa tek kareye düş (klibin ortası)
                 from short_bot.reel import _clip_duration_s
                 dur = _clip_duration_s(clip, ffmpeg_path)
@@ -245,7 +245,8 @@ def verify_curated_narration(clip, narration_text: str, *, vision_call,
     try:
         with tempfile.TemporaryDirectory() as td:
             board = Path(td) / "faith_board.jpg"
-            if not _storyboard_frames(clip, board, ffmpeg_path):
+            # sadakat yargısı ince sıra/özne farkına bakar → daha net kare (short 962)
+            if not _storyboard_frames(clip, board, ffmpeg_path, frame_w=384):
                 return None
             if not board.exists() or board.stat().st_size == 0:
                 return None
@@ -267,7 +268,7 @@ def judge_clip_quality(clip, *, vision_call, ffmpeg_path: str = "ffmpeg",
     try:
         with tempfile.TemporaryDirectory() as td:
             board = Path(td) / "q_board.jpg"
-            if not _storyboard_frames(clip, board, ffmpeg_path):
+            if not _storyboard_frames(clip, board, ffmpeg_path, frame_w=384):
                 return None
             if not board.exists() or board.stat().st_size == 0:
                 return None
@@ -370,7 +371,8 @@ def detect_source_banner(clip, *, vision_call, ffmpeg_path: str = "ffmpeg",
     try:
         with tempfile.TemporaryDirectory() as td:
             board = Path(td) / "banner_board.jpg"
-            if not _storyboard_frames(clip, board, ffmpeg_path, cols=cols, rows=rows):
+            # bandın DİKEY konumu hassas ölçülmeli → daha net kare
+            if not _storyboard_frames(clip, board, ffmpeg_path, cols=cols, rows=rows, frame_w=384):
                 return None
             if not board.exists() or board.stat().st_size == 0:
                 return None

@@ -28,11 +28,27 @@ log = logging.getLogger(__name__)
 DAILY_CAP = 500          # key:model başına bedava/gün (canlı 429 ölçümü)
 RPM = 15                 # Google bedava PerMinute
 RPM_MARGIN = 0.8         # güvenli pace payı → ceil(12)/dk/key
-WAIT_FOR_SLOT_S = 20.0   # RPM-dolu havuzda slot için azami bekleme
+# ÖLÇÜLDÜ (2026-07-18 canlı): ücretsiz-tier'ın 429'u genelde DETAYSIZ 'RESOURCE_EXHAUSTED'
+# (violations/retryDelay YOK) = anahtar/gün kotası DEĞİL, Google'ın PAYLAŞILAN ücretsiz-tier
+# kapasite reddi (burst throttle). Rotasyon bunu ÇÖZMEZ (per-key değil). 8-16 paralel çağrı
+# bu limiti tetikliyor → onlarca çağrı erkence gemma'ya düşüyordu (bkz. _gemini_prod.log).
+# Çözüm: (a) global eşzamanlılık tavanı ile Google'ı burst'e zorlama, (b) capacity 429'da
+# SABIRLI retry (uzun deadline + artan geri-çekilme) → gemma yalnız gerçek uzun throttle'da.
+# KISA sabırlı retry: KISA throttle dalgasını (birkaç sn) atlat AMA SÜREKLİ throttle'da
+# hızla gemma'ya bail (ÖLÇÜLDÜ 2026-07-18: 30s deadline sürekli throttle'da boşa dönüp
+# uncapped'ten kötü olabiliyordu). 18s ~ birkaç retry'lık pencere; geçmezse gemma doğru karar.
+WAIT_FOR_SLOT_S = 18.0
 RPM_FALLBACK_COOLDOWN_S = 60.0    # sunucu retryDelay vermezse
 MAX_TRANSIENT_ATTEMPTS = 3
-CAPACITY_PAUSE_BASE_S = 0.25
-CAPACITY_PAUSE_MAX_S = 2.0
+CAPACITY_PAUSE_BASE_S = 0.5       # capacity 429 geri-çekilme tabanı (0.25→0.5, Google dinlensin)
+CAPACITY_PAUSE_MAX_S = 3.0        # azami duraklama (deadline 18s içinde birkaç retry sığsın)
+
+# GLOBAL EŞZAMANLILIK TAVANI: aynı anda en çok bu kadar HTTP çağrısı Google'a gider —
+# çağıran havuz kaç thread açarsa açsın (footage GATE_WORKERS=8, feeds=10, birden çok
+# pipeline aynı anda). ÖLÇÜLDÜ: sıralı ~0 429; 8-paralel ~%38 429 → erken gemma. Tavan tüm
+# çağıranları TEK noktadan sınırlar → burst kapasite-reddi büyük ölçüde kaybolur. set_pool_dir
+# gibi başlangıçta set_max_concurrency ile ayarlanır (settings.google_studio.max_concurrency).
+MAX_CONCURRENCY = 4
 
 # PT (America/Los_Angeles): yaz UTC-7 (PDT). Sabit ofset — kota penceresi gün-kaba;
 # DST geçiş anındaki ~1sn'lik kayma kota için önemsiz. stdlib-only (bağımlılık yok).
@@ -313,12 +329,35 @@ class Pool:
 _POOL: Pool | None = None
 _POOL_DIR = Path("data/google_pool")
 
+# Global eşzamanlılık tavanı (bkz. MAX_CONCURRENCY notu). BoundedSemaphore ile üretim
+# genelinde aynı anda çağrı sayısını sınırla. _SEM_LIMIT yeniden kurmada karşılaştırma için.
+_SEM_LIMIT = MAX_CONCURRENCY
+_SEM = threading.BoundedSemaphore(MAX_CONCURRENCY)
+_SEM_LOCK = threading.Lock()
+
 
 def set_pool_dir(path):
     """Havuz dizinini ayarla (web/pipeline başlangıcında; Electron'da data taşınır)."""
     global _POOL, _POOL_DIR
     _POOL_DIR = Path(path)
     _POOL = None   # sonraki _get_pool yeniden kurar
+
+
+def set_max_concurrency(n: int):
+    """Global eşzamanlılık tavanını ayarla (başlangıçta, çağrılar başlamadan önce).
+
+    settings.google_studio.max_concurrency ile beslenir. n<1 → 1'e sıkışır. Yalnız
+    başlangıçta çağrılmalı (uçuşta değişim eski semaphore release'lerini bozabilir)."""
+    global _SEM, _SEM_LIMIT
+    n = max(1, int(n))
+    with _SEM_LOCK:
+        if n != _SEM_LIMIT:
+            _SEM = threading.BoundedSemaphore(n)
+            _SEM_LIMIT = n
+
+
+def _get_sem() -> threading.BoundedSemaphore:
+    return _SEM
 
 
 def _get_pool() -> Pool:
@@ -365,19 +404,33 @@ def generate(prompt: str, *, model: str, image_path=None, timeout_s: int = 90,
 
     Kurtarılamazsa (hepsi tükenmiş/banlı/dolu ya da boş yanıt) ``GoogleStudioExhausted``
     → çağıran OpenRouter gemma'ya düşer.
+
+    Global eşzamanlılık tavanı (``_SEM``) burst kapasite-reddini engeller: çağıran havuz
+    kaç thread açarsa açsın aynı anda en çok ``MAX_CONCURRENCY`` çağrı Google'a gider.
     """
     pool = _get_pool()
     deadline = time.time() + wait_for_slot_s
     transient = 0
+    reason = "no-slot"   # neden fallback: throttle mı gerçek tükenme mi (yanıltıcı 'Exhausted' netleşsin)
     while True:
         key = pool.acquire(model)
         if key is not None:
             try:
-                text = _http_generate(key["key"], model, prompt, image_path=image_path,
-                                      timeout_s=timeout_s, max_tokens=max_tokens)
+                # Semaphore YALNIZ HTTP çağrısını sarar → aynı anda en çok MAX_CONCURRENCY
+                # istek Google'a gider. Bekleme/uyku semaphore DIŞINDA (bir throttle'a takılan
+                # çağrı slotu tıkamaz — head-of-line blocking yok; ÖLÇÜLDÜ: slot boyunca tutmak
+                # 4 mahkûm çağrının tüm slotları 40s tıkamasına yol açıyordu).
+                with _get_sem():
+                    text = _http_generate(key["key"], model, prompt, image_path=image_path,
+                                          timeout_s=timeout_s, max_tokens=max_tokens)
             except GoogleStudioError as err:
                 if err.status == 429:
                     pool.report_429(key["keyId"], model, err.body)
+                    # capacity/rpm 429 sonrası deadline'a kadar SABIRLA — hemen pes edip
+                    # gemma'ya düşme (bkz. MAX_CONCURRENCY notu). Slot yoksa aşağıda beklenir.
+                    reason = "throttle-429"
+                    if time.time() >= deadline:
+                        break
                     continue
                 if err.status in (401, 403):
                     pool.report_auth_error(key["keyId"], err.status)
@@ -385,6 +438,7 @@ def generate(prompt: str, *, model: str, image_path=None, timeout_s: int = 90,
                 if err.is_timeout or (err.status and 500 <= err.status < 600):
                     pool.report_transient(key["keyId"], model)
                     transient += 1
+                    reason = "transient"
                     if transient >= MAX_TRANSIENT_ATTEMPTS or time.time() >= deadline:
                         break
                     continue
@@ -392,9 +446,14 @@ def generate(prompt: str, *, model: str, image_path=None, timeout_s: int = 90,
             pool.report_success(key["keyId"], model)
             if text and text.strip():
                 return text
-            break       # boş yanıt (güvenlik bloğu / MAX_TOKENS) → fallback
-        slot = pool.next_rpm_slot_s(model)
-        if slot is None or slot <= 0 or (time.time() + slot) > deadline:
+            reason = "empty-response"   # boş yanıt (güvenlik bloğu / MAX_TOKENS) → fallback
             break
-        time.sleep(slot)
-    raise GoogleStudioExhausted()
+        slot = pool.next_rpm_slot_s(model)
+        if slot is None:
+            reason = "all-keys-exhausted"   # GERÇEK tükenme: hepsi gün-tükenmiş/banlı
+            break
+        if (time.time() + slot) > deadline:
+            reason = "throttle-deadline"     # slot var ama deadline'ı aşıyor (throttle/RPM dalgası)
+            break
+        time.sleep(max(slot, CAPACITY_PAUSE_BASE_S))   # slot=0 olsa bile Google'ı hemen dövme
+    raise GoogleStudioExhausted(reason)

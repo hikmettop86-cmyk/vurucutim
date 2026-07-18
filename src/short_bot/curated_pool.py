@@ -144,6 +144,14 @@ def collect_pool(channel, *, settings, secrets, db_path, log=log) -> int:
     thr = DUYGU_MIN_SCORE if tone == "duygu" else MIZAH_POOL_MIN_SCORE
     strong = [g for g in scored if (g.get("curiosity") or 0) >= thr]
     strong.sort(key=lambda g: -(g.get("curiosity") or 0))
+    # FAIL-OPEN: vision HİÇ skorlayamadıysa (yok/çöktü → tüm curiosity=None) sert eşik havuzu
+    # SESSİZCE boşaltır (kullanıcı geçmişi: 'no_candidates' / boş havuz). Skor yoksa engagement
+    # sırasına düş — boş havuzdansa skorsuz aday iyidir (üretimde ayrıca storyboard kalite kapısı
+    # var). Vision GERÇEKTEN skorlayıp hepsini düşük bulduysa TETİKLENMEZ (o zaman eşik doğru).
+    if not strong and scored and not any(g.get("curiosity") is not None for g in scored):
+        strong = sorted(scored, key=lambda g: -(g.get("ups") or 0))[:room + 6]
+        log.info(f"  havuz[{channel.slug}]: vision skorlanamadı → engagement sırasıyla "
+                 f"{len(strong)} aday (skorsuz fallback — sessiz-boş önlendi)")
 
     # STORYBOARD KALİTE KAPISI (kullanıcı: 'kaliteli video motomuz'): thumbnail-skor SIRADAN
     # klibi geçirebiliyor (short 957: kadın-futbolu pile-up skor 8 ama izlenmez — 'maybe maybe

@@ -137,8 +137,8 @@ def _invoke_raw(prompt: str, *, backend: str, model: str,
         if fb is None:
             raise
         fb_backend, fb_model, fb_key = fb
-        log.warning(f"fallback: {backend}/{model} -> {fb_backend}/{fb_model} "
-                    f"({type(e).__name__})")
+        _why = f"{type(e).__name__}" + (f": {e}" if str(e) else "")
+        log.warning(f"fallback: {backend}/{model} -> {fb_backend}/{fb_model} ({_why})")
         return _invoke_primary(prompt, backend=fb_backend, model=fb_model,
                                claude_path=claude_path, api_key=fb_key,
                                timeout_s=timeout_s, image_path=image_path)

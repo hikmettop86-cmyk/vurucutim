@@ -74,6 +74,8 @@ class _Ch:
     keywords = []
     reference_channels = []
     dna = None
+    reel = None          # gerçek ChannelConfig'te reel: ReelConfig | None = None (config.py)
+                         # — topic_autofill cfg.reel.persona'ya getattr ile bakıyor (6670395)
 
 
 def _eng(tmp_path):

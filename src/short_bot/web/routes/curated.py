@@ -334,15 +334,28 @@ def pool_produce():
     if not channel_path.exists():
         flash("Kanal bulunamadı.")
         return redirect(url_for("curated.pool_view", channel=slug))
+    db_path = cfg["SHORTBOT_DB_PATH"]
+    # Cevheri 'producing' yap (pending listesinden çıkar → çift üretilmez; pool_keys'te kalır
+    # → yeniden toplanmaz). Üretim BİTİNCE on_complete ile KESİNLEŞTİR: başarı→'produced',
+    # hata→'pending' (retryable). Eski 'iyimser produced' üretim çökerse (watermark/indirilemez/
+    # vision) cevheri SESSİZCE kaybediyordu — artık geri havuza döner.
+    mark_pool(eng, pool_id, "producing")
+
+    def _finalize(res):
+        eng2 = init_db(db_path)
+        ok = (res is not None and getattr(res, "status", "") == "success"
+              and getattr(res, "short_id", None))
+        if ok:
+            mark_pool(eng2, pool_id, "produced", short_id=res.short_id)
+        else:
+            mark_pool(eng2, pool_id, "pending")   # üretim başarısız → geri havuza (kayıp yok)
+
     launch_pipeline(
         channel=load_channel(channel_path), settings=cfg["SHORTBOT_SETTINGS"],
-        db_path=cfg["SHORTBOT_DB_PATH"], music_root=cfg["SHORTBOT_MUSIC_ROOT"],
+        db_path=db_path, music_root=cfg["SHORTBOT_MUSIC_ROOT"],
         templates_dir=cfg["SHORTBOT_TEMPLATES_DIR"], cache_dir=cfg["SHORTBOT_CACHE_DIR"],
         lock_dir=cfg["SHORTBOT_LOCK_DIR"], logs_dir=cfg["SHORTBOT_LOGS_DIR"],
-        trigger="pool_curated", curated_gem=row_to_gem(row))
-    # İyimser işaretleme: kullanıcı üretmeyi seçti → 'pending'ten çıkar. Üretim başarısız
-    # olsa bile dedup shorts tablosundan çalışır; kayıp minör.
-    mark_pool(eng, pool_id, "produced")
+        trigger="pool_curated", curated_gem=row_to_gem(row), on_complete=_finalize)
     flash(f"Üretim başlatıldı: {(row.get('title') or '')[:50]}")
     return redirect(url_for("curated.pool_view", channel=slug))
 
