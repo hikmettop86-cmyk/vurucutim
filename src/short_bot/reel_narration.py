@@ -674,6 +674,11 @@ RULES:
 - ZORLAMA METAFOR YASAK: Sahneyle ALAKASIZ, rastgele benzetme kullanma ('sanki davulla
   köye gönderiyor' gibi — deniz/kaplumbağayla ilgisiz). Benzetme kullanacaksan sahneden
   ÇIKMALI ve ANLAMLI olmalı; olmuyorsa düz ve komik anlat, zorlama.
+- TEK KELİME/İMGE ÇEKİÇLEME YASAK (short 957 dersi: 'çığ' 5 cümlede 5 kez tekrarlandı,
+  ezber gibi durdu): aynı kelimeyi/imgeyi/benzetmeyi art arda cümlelerde TEKRARLAMA. Bir
+  espriyi ya da imgeyi bir kez kur, GEÇ; sahneyi FARKLI açılardan besle (tepki, iç ses,
+  görünür bir detay, absürt abartı, karşı-karakter). Bir merkez fikrin olabilir ama onu
+  döve döve tekrar etme — çeşitlilik komiği, tekrar yapaylığı doğurur.
 - 🎣 KANCA & MERAK YAPISI (RETENTION — tutan Türk Shorts kanallarının ORTAK formülü):
   * HOOK (ilk cümle) bir MERAK BOŞLUĞU açar: şaşırtan bir iddia/soru — ama SONUCU/açıklamayı
     ELE VERMEZ. Kalıp: "Şu [özneye] bak, [şaşırtan/absürt iddia]…" ya da "Bu [özne] …

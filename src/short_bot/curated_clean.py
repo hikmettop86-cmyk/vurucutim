@@ -172,6 +172,61 @@ def clean_if_needed(clip, *, vision_call, ffmpeg_path: str = "ffmpeg", out_path)
     return (cleaned or clip), det
 
 
+# ── STORYBOARD KALİTE KAPISI (thumbnail körlüğünü kapat) ──────────────────────
+# Skorlama TITLE + tek KAPAK karesinden yargılıyor → 'maybe maybe maybe' gibi bilgisiz
+# başlıklı + aksiyon gibi görünen kapaklı SIRADAN klipler yüksek skor alıp havuza giriyor
+# (short 957: kadın-futbolu pile-up, skor 8, ama izlenmez). ÇÖZÜM: havuza koymadan önce
+# klibi indirip GERÇEK 6 kareyle (storyboard) yargıla — sıradan/rutin olanı ELE.
+class ClipQuality(BaseModel):
+    """Storyboard vision yargısı — klip GERÇEKTEN izlenesi mi (kapak değil, içerik)."""
+    engaging: bool = False   # gerçekten dikkat çekici / durdurur / paylaşılası mı
+    score: int = 5           # 1 (sıradan, kaydırılır) .. 10 (kesin viral, durdurur)
+    reason: str = ""
+
+
+def _quality_prompt(tone: str) -> str:
+    lens = ("GERÇEKTEN DOKUNAKLI/duygusal (içini ısıtan, gözünü dolduran)"
+            if tone == "duygu" else
+            "GERÇEKTEN komik/şaşırtıcı/çarpıcı ('vay!', kahkaha, 'nasıl yani?!')")
+    return (
+        "Bu, bir kısa video klibinin GERÇEK 6 karesi (storyboard, zaman-sıralı, tek ızgara) — "
+        "klibin BAŞTAN SONA ne olduğunu gösteriyor.\n"
+        f"Bu klip {lens} bir AN taşıyor mu — birini KAYDIRMAYI durdurup izleten, paylaştıran? "
+        "Yoksa SIRADAN / rutin / unutulur mu?\n"
+        "DÜŞÜK (score 1-4) sayılanlar: rutin spor anı/düşmesi, sıradan tepki, 'olabilir ama "
+        "özel değil', olayın ne olduğu belirsiz, izleyiciyi durduracak bir tepe YOK.\n"
+        "YÜKSEK (score 7-10): net bir çarpıcı/komik/dokunaklı TEPE var, ilk 2 saniyede "
+        "kanca, sonuna kadar 'ne olacak' merakı.\n"
+        "DİKKAT: bir kapak aldatıcı olabilir — SEN 6 karenin TÜMÜNE bakıp GERÇEK olayı yargıla, "
+        "'aksiyon gibi görünüyor'a kanma.\n"
+        "- engaging: gerçekten durdurup izleten/paylaşılası mı?\n"
+        "- score: 1-10 izlenme-değerliliği.\n"
+        'SADECE JSON: {"engaging": <bool>, "score": <1-10>, "reason": "<çok kısa>"}'
+    )
+
+
+def judge_clip_quality(clip, *, vision_call, ffmpeg_path: str = "ffmpeg",
+                       tone: str = "mizah"):
+    """Storyboard (GERÇEK 6 kare) → klip izlenesi mi yoksa sıradan mı. Döner ClipQuality
+    ya da None (kare/vision hatası → çağıran fail-open kararı verir)."""
+    from short_bot.claude_cli import run_json
+    from short_bot.reel import _storyboard_frames
+    try:
+        with tempfile.TemporaryDirectory() as td:
+            board = Path(td) / "q_board.jpg"
+            if not _storyboard_frames(clip, board, ffmpeg_path):
+                return None
+            if not board.exists() or board.stat().st_size == 0:
+                return None
+            return run_json(_quality_prompt(tone), ClipQuality,
+                            claude_path=vision_call.claude_path, model=vision_call.model,
+                            backend=vision_call.backend, api_key=vision_call.api_key,
+                            image_path=board, retries=1, timeout_s=45)
+    except Exception as e:  # noqa: BLE001
+        log.info(f"  kürate[kalite]: yargı hatası ({e})")
+        return None
+
+
 # ── SAHNE-BÖLÜNME (ses-görüntü senkron) ──────────────────────────────────────
 # Kürate montajı tek klibi baştan sona oynatır; anlatım TTS hızıyla bağımsız akar.
 # Klip 2 sahneli (örn. poster odası → banyo) ve sahne dağılımı eşit değilse (poster

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import re
+from pathlib import Path
 
 from sqlalchemy import func, select
 
@@ -18,7 +19,9 @@ from short_bot.db import init_db, pooled_gems, shorts
 log = logging.getLogger(__name__)
 
 POOL_MAX = 40              # kanal başına en fazla bu kadar BEKLEYEN cevher (havuz taşmasın)
-MIZAH_POOL_MIN_SCORE = 6   # mizah havuz eşiği (duygu için DUYGU_MIN_SCORE=7 kullanılır)
+MIZAH_POOL_MIN_SCORE = 7   # mizah havuz eşiği 6→7 (short 957 dersi: 6 sıradan klibi geçiriyor)
+QUALITY_MIN = 6            # storyboard izlenme-değerliliği eşiği (engaging + score>=bu)
+MAX_JUDGE = 15             # tarama başına en fazla bu kadar aday İNDİR+yargıla (maliyet sınırı)
 
 
 def clip_key(video_url: str) -> str:
@@ -142,6 +145,45 @@ def collect_pool(channel, *, settings, secrets, db_path, log=log) -> int:
     strong = [g for g in scored if (g.get("curiosity") or 0) >= thr]
     strong.sort(key=lambda g: -(g.get("curiosity") or 0))
 
+    # STORYBOARD KALİTE KAPISI (kullanıcı: 'kaliteli video motomuz'): thumbnail-skor SIRADAN
+    # klibi geçirebiliyor (short 957: kadın-futbolu pile-up skor 8 ama izlenmez — 'maybe maybe
+    # maybe' başlığı bilgisiz + kapak aksiyon gibi görünüyor). Güçlü adayları İNDİR + GERÇEK
+    # 6 kareyle (storyboard) yargıla → sıradan/rutin olanı ELE. Yalnız MAX_JUDGE kadar indir
+    # (maliyet). Storyboard skoru thumbnail skorunun YERİNE geçer (daha doğru).
+    if vision is not None and strong:
+        import tempfile
+
+        from short_bot.curated_clean import judge_clip_quality
+        from short_bot.reddit_gems import download_clip
+        verified: list = []
+        judged = 0
+        with tempfile.TemporaryDirectory() as td:
+            for g in strong:
+                if len(verified) >= room or judged >= MAX_JUDGE:
+                    break
+                try:
+                    clip = download_clip(g["video_url"], Path(td) / f"q{judged}.mp4")
+                except Exception:  # noqa: BLE001 — inmezse (403 vs) atla
+                    continue
+                judged += 1
+                q = judge_clip_quality(clip, vision_call=vision,
+                                       ffmpeg_path=settings.ffmpeg_path, tone=tone)
+                try:
+                    Path(clip).unlink()          # yer aç (tarama başına 15 klip inebilir)
+                except Exception:  # noqa: BLE001
+                    pass
+                if q is None:
+                    verified.append(g)           # yargı hatası → fail-open (thumbnail skoruyla)
+                elif q.engaging and q.score >= QUALITY_MIN:
+                    g["curiosity"] = q.score      # storyboard skoru (daha doğru) YERİNE geçer
+                    verified.append(g)
+                else:
+                    log.info(f"  havuz[kalite][{channel.slug}]: "
+                             f"'{(g.get('title') or '')[:34]}' sıradan "
+                             f"(q={getattr(q, 'score', '?')}) → elendi")
+        strong = sorted(verified, key=lambda x: -(x.get("curiosity") or 0))
+        log.info(f"  havuz[kalite][{channel.slug}]: {judged} yargılandı → {len(strong)} izlenesi")
+
     added = 0
     with eng.begin() as c:
         for g in strong[:room]:
@@ -191,6 +233,10 @@ def clean_pool(channels, *, settings, secrets, db_path, log=log) -> int:
     if vision is None:
         log.info("  havuz[temizlik]: vision yok → atlandı")
         return 0
+    import tempfile
+
+    from short_bot.curated_clean import judge_clip_quality
+    from short_bot.reddit_gems import download_clip
     total = 0
     for ch in channels:
         if getattr(ch, "content_source", "") != "curated" or not getattr(ch, "reel", None):
@@ -200,15 +246,45 @@ def clean_pool(channels, *, settings, secrets, db_path, log=log) -> int:
             continue
         tone = getattr(ch.reel, "curated_tone", "mizah")
         gems = [dict(row_to_gem(r), _pool_id=r["id"]) for r in rows]
-        # top_n=hepsi → tüm bekleyenleri tara; drop_text=False → elemeyi BİZ yaparız
+        # 1) YAZI (thumbnail): top_n=hepsi; drop_text=False → elemeyi BİZ yaparız
         score_curiosity(gems, vision_call=vision, tone=tone, top_n=len(gems),
                         drop_text=False, log=log)
         dirty = [g for g in gems if g.get("has_text")]
         for g in dirty:
             mark_pool(eng, g["_pool_id"], "skipped")
-        total += len(dirty)
-        log.info(f"  havuz[temizlik][{ch.slug}]: {len(dirty)} yazılı/logolu elendi "
-                 f"/ {len(gems)} tarandı → {len(gems) - len(dirty)} temiz kaldı")
+        clean = [g for g in gems if not g.get("has_text")]
+        # 2) STORYBOARD KALİTE (indir + gerçek 6 kare): sıradan/rutin olanı ele
+        mundane = 0
+        dl_fail = none_ct = 0
+        with tempfile.TemporaryDirectory() as td:
+            for i, g in enumerate(clean):
+                try:
+                    clip = download_clip(g["video_url"], Path(td) / f"c{i}.mp4")
+                except Exception as e:  # noqa: BLE001 — inmezse dokunma (bırak dursun)
+                    dl_fail += 1
+                    log.info(f"  havuz[temizlik][{ch.slug}]: indirilemedi "
+                             f"({str(e)[:40]}) → {(g.get('title') or '')[:24]}")
+                    continue
+                q = judge_clip_quality(clip, vision_call=vision,
+                                       ffmpeg_path=settings.ffmpeg_path, tone=tone)
+                try:
+                    Path(clip).unlink()
+                except Exception:  # noqa: BLE001
+                    pass
+                if q is None:
+                    none_ct += 1
+                    continue
+                if not q.engaging or q.score < QUALITY_MIN:
+                    mark_pool(eng, g["_pool_id"], "skipped")
+                    mundane += 1
+                    log.info(f"  havuz[temizlik][{ch.slug}]: '{(g.get('title') or '')[:30]}' "
+                             f"sıradan (q={q.score}) → elendi")
+        if dl_fail or none_ct:
+            log.info(f"  havuz[temizlik][{ch.slug}]: {dl_fail} indirilemedi, "
+                     f"{none_ct} vision-hatası (bunlar bırakıldı)")
+        total += len(dirty) + mundane
+        log.info(f"  havuz[temizlik][{ch.slug}]: {len(dirty)} yazılı + {mundane} sıradan "
+                 f"elendi / {len(gems)} tarandı → {len(gems) - len(dirty) - mundane} kaldı")
     return total
 
 
