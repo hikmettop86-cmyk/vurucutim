@@ -116,3 +116,25 @@ def test_judge_clip_quality_gates_mundane(monkeypatch, tmp_path):
 
     q = judge_clip_quality(tmp_path / "clip.mp4", vision_call=_V(), tone="mizah")
     assert q is not None and q.engaging is False and q.score == 3
+
+
+def test_verify_narration_faithfulness(monkeypatch, tmp_path):
+    """verify_curated_narration: storyboard + anlatım → NarrationCheck; kaba uyumsuzlukta
+    faithful=False. run_json/_storyboard_frames fonksiyon-içi import → kaynakta patch."""
+    import short_bot.claude_cli as cli
+    import short_bot.reel as reel
+    from short_bot.curated_clean import NarrationCheck, verify_curated_narration
+
+    monkeypatch.setattr(reel, "_storyboard_frames",
+                        lambda clip, board, *a, **k: (Path(board).write_bytes(b"x") or True))
+    monkeypatch.setattr(cli, "run_json",
+                        lambda prompt, schema, **kw: NarrationCheck(faithful=False,
+                                                                    mismatch="köpek yok"))
+
+    class _V:
+        claude_path = ""; model = ""; backend = "google_studio"; api_key = ""
+
+    c = verify_curated_narration(tmp_path / "c.mp4", "bir köpek koşuyor", vision_call=_V())
+    assert c is not None and c.faithful is False and c.mismatch == "köpek yok"
+    # boş anlatım → None (yargılanmaz)
+    assert verify_curated_narration(tmp_path / "c.mp4", "  ", vision_call=_V()) is None

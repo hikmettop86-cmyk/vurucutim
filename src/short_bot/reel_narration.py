@@ -749,7 +749,7 @@ def write_curated_narration(title: str, clip_description: str, *, channel,
                             backend: str = "claude_cli", api_key: str | None = None,
                             seed: int = 0, target_duration_s=None,
                             scene_split: float | None = None,
-                            comments=None) -> ReelNarration:
+                            comments=None, feedback: str = "") -> ReelNarration:
     """GERÇEK klibin başlığı + vision aksiyonundan persona senaryosu. visual_query'ler
     tek hazır klibe bağlı olduğu için ``subject``e sabitlenir (footage aranmaz).
 
@@ -763,6 +763,12 @@ def write_curated_narration(title: str, clip_description: str, *, channel,
     prompt = build_curated_prompt(title, clip_description, channel=channel,
                                   target_duration_s=target_duration_s,
                                   scene_split=scene_split, comments=comments, tone=tone)
+    if (feedback or "").strip():
+        # SADAKAT KAPISI yeniden-yazımı: önceki deneme uydurma olay ekledi → o hatayı yasakla.
+        prompt += (f"\n\n⚠️ ÖNEMLİ — ÖNCEKİ DENEMEN SADAKATSİZDİ: {feedback.strip()}\n"
+                   "Bu HATAYI YAPMA. YALNIZ ekranda GERÇEKTEN olanı anlat; olmayan bir "
+                   "olay/sıra/dram (bırakılma, geri dönüş, kurtarma, olmayan karakter) EKLEME. "
+                   "İzleyici klibi görüyor — uydurma anında sırıtar.")
     persona = load_persona(getattr(reel, "persona", ""), language=channel.language)
     if persona and tone != "duygu":
         # DUYGU modunda mahalle-mizahı personası ton'la çelişir → persona bloğu eklenmez

@@ -289,11 +289,15 @@ def persona_block(persona: Persona, *, seed: int = 0, curated: bool = False) -> 
     # klip SABİT (footage aranmıyor) → o blok gereksiz, yerine kısa subject-agnostik kural.
     if curated:
         _gorsel = (
-            "  • GÖRSEL SADAKAT (kürate: klip SABİT, footage aranmıyor):\n"
+            "  • GÖRSEL SADAKAT (kürate: klip SABİT, İZLEYİCİ KLİBİ GÖRÜYOR — uydurma sırıtır):\n"
             "    (a) Ekranda GÖRÜNMEYEN küçük ayrıntıyı sahnenin OMURGASI yapma — izleyici\n"
             "        göremez, 'anlatılan bu değil' der. Değinip geç.\n"
-            "    (b) Klipte OLMAYAN olay/sonuç UYDURMA — yalnız ekranda GERÇEKTEN olanı\n"
-            "        anlat (twist, tepki, aksiyon). Görünmeyen galibiyet/olay ekleme.\n\n"
+            "    (b) OLMAYAN olay/SIRA/DRAM UYDURMA (short 962 dersi: kedi yavruyu baştan sona\n"
+            "        AĞZINDA taşırken anlatım 'yavru geride kaldı, ağladı, kedi geri döndü' diye\n"
+            "        OLMAYAN kurtarma uydurdu — izleyici tersini gördü). Özne bir şeyi (yavru,\n"
+            "        nesne) SÜREKLİ taşıyorsa 'bırakıldı/geride kaldı/geri döndü' AŞAMASI EKLEME;\n"
+            "        sahte gerilim/kurtarma YARATMA. Çatışma yoksa UYDURMA — gerçek sürekli\n"
+            "        aksiyonu (taşıma, tırmanma, kaçış) KOMİK çerçevele, yeni olay icat etme.\n\n"
         )
     else:
         _gorsel = (

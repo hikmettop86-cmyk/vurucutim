@@ -177,6 +177,10 @@ _STORYBOARD_PROMPT = (
     "BOYUNCA NE OLDUĞUNU (öznenin hareketi/aksiyonu) 1-2 kısa İngilizce cümleyle anlat. "
     "SPESİFİK ol: özne ne yapıyor, nasıl hareket ediyor (ör. 'an alligator slowly opens "
     "its jaws then lunges forward'). Genel/durağan tarif ('an alligator on a dock') YETMEZ.\n"
+    "TAŞIMA/SÜREKLİLİK — DİKKAT: özne bir NESNEYİ ya da başka bir CANLIYI taşıyor/tutuyorsa "
+    "(ör. ağzında bir yavru, elinde bir alet) bunu AÇIKÇA yaz ve BAŞTAN SONA mı taşıyor "
+    "belirt. Gerçekte olmayan bir AŞAMA/SIRA uydurma ('önce girer, sonra döner' gibi) — "
+    "yalnız karelerde GERÇEKTEN görüneni, aksiyonun sürekliliğiyle anlat.\n"
     "is_static: kareler neredeyse AYNIYSA (özne kıpırdamıyor, klip monoton/donuk) true, "
     "belirgin hareket/aksiyon varsa false.\n"
     # NOT: .format(n=...) ile kullanılır → literal JSON süslü parantezleri {{ }} ile kaçırılır.

@@ -205,6 +205,59 @@ def _quality_prompt(tone: str) -> str:
     )
 
 
+# ── ANLATIM SADAKAT KAPISI (anlatım gerçek videoyu mu anlatıyor) ─────────────
+# Kullanıcı: 'her video böyle mi olacak, bunu teyit edecek bir yapı lazım'. Anlatım
+# yazıldıktan SONRA storyboard'a (gerçek kareler) + anlatıma bakıp uydurma olay/sıra var mı
+# yargıla (short 962: kedi yavruyu baştan sona taşırken anlatım 'bırakıldı→geri döndü' uydurdu).
+# Uydurmuşsa çağıran GERİ BİLDİRİMLE yeniden yazdırır. Prompt yamamak yerine OTOMATİK teyit.
+class NarrationCheck(BaseModel):
+    """Storyboard + anlatım vision yargısı — anlatım gerçek olaya sadık mı."""
+    faithful: bool = True    # anlatım ekrandaki gerçek olaya sadık mı (uydurma olay YOK)
+    mismatch: str = ""       # sadık değilse en büyük uyumsuzluk (tek cümle, TR)
+
+
+_FAITH_PROMPT = (
+    "Aşağıda bir video klibinin GERÇEK 6 karesi (storyboard, zaman-sıralı) ve o klip için "
+    "yazılmış Türkçe bir ANLATIM var.\n"
+    "ANLATIM:\n---\n{narr}\n---\n"
+    "Bu anlatım, karelerdeki ÖZNE ve TEMEL OLAYLA örtüşüyor mu?\n"
+    "MUHAFAZAKÂR OL — yalnız KABA/NET bir uyumsuzluk varsa 'faithful=false' de:\n"
+    "  * Tamamen FARKLI özne (anlatım 'köpek/futbol' der ama karelerde kedi var) VEYA\n"
+    "  * Ekranda AÇIKÇA olmayan büyük bir olay/ortam (anlatım 'denize dalıyor' der, deniz yok).\n"
+    "ŞUNLAR faithful=false YAPMAZ (hepsi SERBEST): mizah, abartı, lakap, benzetme, iç ses, "
+    "küçük sıra/aşama farkı, yorumla eklenen ayrıntı, öznenin ne 'hissettiği'. Kareler "
+    "küçük/belirsizse ya da EMİN DEĞİLSEN → faithful=TRUE (şüphede sadık say).\n"
+    "- faithful: özne + temel olay örtüşüyor mu (KABA uyumsuzluk YOK)?\n"
+    "- mismatch: yalnız KABA uyumsuzlukta tek cümle yaz (Türkçe); değilse boş.\n"
+    'SADECE JSON: {{"faithful": <bool>, "mismatch": "<...>"}}'
+)
+
+
+def verify_curated_narration(clip, narration_text: str, *, vision_call,
+                             ffmpeg_path: str = "ffmpeg"):
+    """Storyboard (gerçek 6 kare) + anlatım → anlatım gerçek olaya sadık mı, uydurma olay
+    var mı. Döner NarrationCheck ya da None (kare/vision hatası → fail-open, çağıran sadık
+    sayar). Mizah/abartı serbest; yalnız uydurma OLAY yakalanır."""
+    from short_bot.claude_cli import run_json
+    from short_bot.reel import _storyboard_frames
+    if not (narration_text or "").strip():
+        return None
+    try:
+        with tempfile.TemporaryDirectory() as td:
+            board = Path(td) / "faith_board.jpg"
+            if not _storyboard_frames(clip, board, ffmpeg_path):
+                return None
+            if not board.exists() or board.stat().st_size == 0:
+                return None
+            return run_json(_FAITH_PROMPT.format(narr=narration_text[:900]), NarrationCheck,
+                            claude_path=vision_call.claude_path, model=vision_call.model,
+                            backend=vision_call.backend, api_key=vision_call.api_key,
+                            image_path=board, retries=1, timeout_s=45)
+    except Exception as e:  # noqa: BLE001
+        log.info(f"  kürate[sadakat]: yargı hatası ({e})")
+        return None
+
+
 def judge_clip_quality(clip, *, vision_call, ffmpeg_path: str = "ffmpeg",
                        tone: str = "mizah"):
     """Storyboard (GERÇEK 6 kare) → klip izlenesi mi yoksa sıradan mı. Döner ClipQuality

@@ -169,6 +169,31 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
         log.info(f"  kürate: senaryo {narration.word_count()} kelime | "
                  f"başlık='{narration.title}' kapak='{narration.cover_title}'")
 
+        # SADAKAT KAPISI (kullanıcı: 'teyit edecek yapı lazım'): anlatım GERÇEK videoyu mu
+        # anlatıyor yoksa olay mı uydurdu (short 962: olmayan 'yavru bırakıldı→geri döndü')?
+        # Storyboard + anlatıma bak; uydurmuşsa GERİ BİLDİRİMLE bir kez yeniden yaz. Fail-open.
+        if vision is not None:
+            from short_bot.curated_clean import verify_curated_narration
+            _chk = verify_curated_narration(clip, narration.full_text(),
+                                            vision_call=vision, ffmpeg_path=settings.ffmpeg_path)
+            if _chk is not None and not _chk.faithful and _chk.mismatch:
+                log.info(f"  kürate[sadakat]: anlatım sadık DEĞİL ({_chk.mismatch}) "
+                         f"→ geri bildirimle yeniden yazılıyor")
+                narration = write_curated_narration(
+                    title_seed, desc, channel=channel, subject="clip",
+                    claude_path=narr_llm.claude_path, model=narr_llm.model,
+                    backend=narr_llm.backend, api_key=narr_llm.api_key,
+                    seed=seed, target_duration_s=target, scene_split=scene_split,
+                    comments=comments, feedback=_chk.mismatch)
+                _chk2 = verify_curated_narration(clip, narration.full_text(),
+                                                 vision_call=vision,
+                                                 ffmpeg_path=settings.ffmpeg_path)
+                if _chk2 is not None and not _chk2.faithful:
+                    log.warning(f"  kürate[sadakat]: yeniden yazım da sadık değil "
+                                f"({_chk2.mismatch}) — yine de üretiliyor (fail-open)")
+                else:
+                    log.info("  kürate[sadakat]: yeniden yazım SADIK ✓")
+
         try:
             music = pick_music(Path(music_root), mood=reel.music_mood,
                                channel_slug=channel.slug)
