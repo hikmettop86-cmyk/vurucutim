@@ -138,3 +138,23 @@ def test_verify_narration_faithfulness(monkeypatch, tmp_path):
     assert c is not None and c.faithful is False and c.mismatch == "köpek yok"
     # boş anlatım → None (yargılanmaz)
     assert verify_curated_narration(tmp_path / "c.mp4", "  ", vision_call=_V()) is None
+
+
+def test_detect_heavy_text_flags_burned_captions(monkeypatch, tmp_path):
+    """detect_heavy_text: storyboard → HeavyText; gömülü altyazı/banner DOLU (editlenmiş
+    repost) klip yakalanır (short 968). run_json/_storyboard_frames kaynakta patch'lenir."""
+    import short_bot.claude_cli as cli
+    import short_bot.reel as reel
+    from short_bot.curated_clean import HeavyText, detect_heavy_text
+
+    monkeypatch.setattr(reel, "_storyboard_frames",
+                        lambda clip, board, *a, **k: (Path(board).write_bytes(b"x") or True))
+    monkeypatch.setattr(cli, "run_json",
+                        lambda prompt, schema, **kw: HeavyText(heavy=True,
+                                                               kinds=["subtitle", "banner"]))
+
+    class _V:
+        claude_path = ""; model = ""; backend = "google_studio"; api_key = ""
+
+    r = detect_heavy_text(tmp_path / "c.mp4", vision_call=_V())
+    assert r is not None and r.heavy is True and "subtitle" in r.kinds

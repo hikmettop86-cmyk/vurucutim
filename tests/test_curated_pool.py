@@ -193,3 +193,41 @@ def test_produce_curated_fail_closed_on_unverified_watermark(tmp_path, monkeypat
             settings=SimpleNamespace(ffmpeg_path="ffmpeg", claude_cli_path="claude"),
             secrets={}, db_path=tmp_path / "db.sqlite", output_root=tmp_path,
             music_root=tmp_path, templates_dir=tmp_path)
+
+
+def test_produce_curated_rejects_heavy_burned_text(tmp_path, monkeypatch):
+    """GÖMÜLÜ-YAZI REDDİ: watermark temiz geçse bile klip altyazı/banner ile DOLUYSA
+    (detect_heavy_text.heavy=True) reddedilir (short 968 'THIS IS JAPAN' + altyazılar)."""
+    from pathlib import Path
+    from types import SimpleNamespace
+
+    import pytest
+
+    import short_bot.curated_clean as cc
+    import short_bot.curated_pipeline as cpl
+    import short_bot.pipeline as pl
+    import short_bot.reddit_gems as rg
+    import short_bot.tts.ai33_client as ai33
+    from short_bot.config import AICall
+    from short_bot.curated_clean import HeavyText, WatermarkDetect
+
+    fake = AICall(backend="google_studio", model="m", api_key=None, claude_path="")
+    monkeypatch.setattr(pl, "resolve_ai_call", lambda *a, **k: fake)
+    monkeypatch.setattr(ai33, "resolve_ai33_api_key", lambda *a, **k: "k")
+    monkeypatch.setattr(rg, "download_clip",
+                        lambda url, dest: (Path(dest).write_bytes(b"m"), Path(dest))[1])
+    # watermark TEMİZ geçsin (present=False), banner yok, AMA gömülü-yazı DOLU
+    monkeypatch.setattr(cc, "clean_if_needed",
+                        lambda clip, **k: (clip, WatermarkDetect(present=False)))
+    monkeypatch.setattr(cc, "detect_source_banner", lambda clip, **k: None)
+    monkeypatch.setattr(cc, "detect_heavy_text",
+                        lambda clip, **k: HeavyText(heavy=True, kinds=["subtitle", "banner"]))
+
+    reel = SimpleNamespace(enabled=True, curated_clean=True, persona="", curated_tone="mizah")
+    channel = SimpleNamespace(slug="kaosdayi", language="tr", reel=reel)
+    with pytest.raises(cpl.CuratedWatermarkError):
+        cpl.produce_curated(
+            {"video_url": "https://v.redd.it/x/DASH.mp4", "title": "t"}, channel,
+            settings=SimpleNamespace(ffmpeg_path="ffmpeg", claude_cli_path="claude"),
+            secrets={}, db_path=tmp_path / "db.sqlite", output_root=tmp_path,
+            music_root=tmp_path, templates_dir=tmp_path)

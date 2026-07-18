@@ -441,3 +441,61 @@ def crop_source_banner(clip, banner, *, ffmpeg_path: str = "ffmpeg", out_path):
     except Exception as e:  # noqa: BLE001
         log.info(f"  kürate[bant]: kırpma hatası ({e}) → orijinal klip")
     return None
+
+
+# ── GÖMÜLÜ-YAZI (editlenmiş repost) REDDİ ────────────────────────────────────
+# Kullanıcı: 'sadece temiz görüntü olsun'. Watermark/köşe-logo (detect_watermark) ve tek
+# üst/alt banner (detect_source_banner) ayrı ele alınıyor; bu detektör GENEL 'klip gömülü
+# ALTYAZI/CAPTION ile mi DOLU' sorusunu yanıtlar (short 968: 'THIS IS JAPAN' banner +
+# İngilizce/Japonca konuşma altyazıları — editlenmiş repost, hem kirli hem çoğu zaman
+# sorunlu içerik). Doğal sahne yazısını (tabela/forma/etiket) editör katmanından AYIRIR.
+class HeavyText(BaseModel):
+    """Storyboard vision — klip TEMİZ çekim mi yoksa gömülü yazıyla dolu edit/repost mü."""
+    heavy: bool = False          # gömülü altyazı/caption/banner ile DOLU → temiz footage DEĞİL
+    kinds: list[str] = []        # subtitle / caption / banner / watermark / branding
+    note: str = ""
+
+
+_HEAVY_TEXT_PROMPT = (
+    "Bu bir kısa video klibinin STORYBOARD'ı (zaman-sıralı 6 kare, tek ızgara). Bu klip TEMİZ "
+    "bir çekim mi, yoksa görüntüye SONRADAN BİNDİRİLMİŞ yazıyla mı DOLU (editlenmiş repost)?\n"
+    "GÖMÜLÜ YAZI SAYILAN (editör/platform katmanı → temiz DEĞİL): konuşmayı çeviren ALTYAZI/"
+    "CAPTION şeritleri, başlık/BANNER metni, kanal ya da @kullanıcı watermark'ı, ekrana basılmış "
+    "açıklama/anlatı metni, meme yazısı.\n"
+    "GÖMÜLÜ SAYILMAYAN (doğal sahne, sorun DEĞİL): tabela, dükkan adı, forma numarası, ürün "
+    "etiketi, sokak levhası, arka planda GERÇEKTEN var olan yazılar.\n"
+    "- heavy: klip gömülü ALTYAZI/CAPTION/BANNER/watermark ile DOLU mu? (birden çok karede "
+    "editör yazı katmanı, konuşma altyazısı ya da kalıcı banner varsa → true. TEK küçük köşe "
+    "etiketi ya da yalnız doğal sahne yazısı → false.)\n"
+    "- kinds: hangileri (subtitle, caption, banner, watermark, branding).\n"
+    'SADECE JSON: {"heavy": <bool>, "kinds": ["..."], "note": "<short English>"}'
+)
+
+
+def detect_heavy_text(clip, *, vision_call, ffmpeg_path: str = "ffmpeg"):
+    """Storyboard → klip gömülü altyazı/caption/banner ile DOLU mu (editlenmiş repost).
+    Döner HeavyText ya da None (DOĞRULANAMADI → çağıran güvenlik için fail-CLOSED reddeder).
+    Burst-throttle'a karşı retry'lı (None yalnız gerçekten doğrulanamayınca)."""
+    from short_bot.claude_cli import run_json
+    from short_bot.reel import _storyboard_frames
+    try:
+        with tempfile.TemporaryDirectory() as td:
+            board = Path(td) / "text_board.jpg"
+            if not _storyboard_frames(clip, board, ffmpeg_path, cols=3, rows=2, frame_w=384):
+                return None
+            if not board.exists() or board.stat().st_size == 0:
+                return None
+            last: Exception | None = None
+            for _ in range(2):
+                try:
+                    return run_json(_HEAVY_TEXT_PROMPT, HeavyText,
+                                    claude_path=vision_call.claude_path, model=vision_call.model,
+                                    backend=vision_call.backend, api_key=vision_call.api_key,
+                                    image_path=board, retries=2, timeout_s=45)
+                except Exception as e:  # noqa: BLE001 — geçici → tekrar dene
+                    last = e
+            log.info(f"  kürate[yazı]: gömülü-yazı tespiti doğrulanamadı ({last})")
+            return None
+    except Exception as e:  # noqa: BLE001
+        log.info(f"  kürate[yazı]: gömülü-yazı tespiti hatası ({e})")
+        return None

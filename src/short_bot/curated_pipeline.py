@@ -130,6 +130,20 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
                                      out_path=td / "nobanner.mp4")
             if _nb is not None:
                 clip = _nb
+            # GÖMÜLÜ-YAZI REDDİ (kullanıcı: 'sadece temiz görüntü'; short 968 'THIS IS JAPAN'
+            # banner + İngilizce/Japonca altyazılar geçmişti). Banner KIRPILDIKTAN SONRA çalışır:
+            # kırpılabilir tek caption kurtulur, kırpılamayan altyazı/çoklu-katman (editlenmiş
+            # repost) elenir. Doğrulanamazsa (None) → fail-CLOSED reddet. Ağır gömülü yazı çoğu
+            # zaman sorunlu/repost içeriğe de işaret eder (bkz. 968 rencide edici altyazılar).
+            from short_bot.curated_clean import detect_heavy_text
+            _ht = detect_heavy_text(clip, vision_call=vision, ffmpeg_path=settings.ffmpeg_path)
+            if _ht is None:
+                raise CuratedWatermarkError(
+                    "Gömülü-yazı DOĞRULANAMADI (vision hatası) → klip atlanıyor (fail-closed).")
+            if _ht.heavy:
+                raise CuratedWatermarkError(
+                    f"Klip gömülü yazıyla dolu ({_ht.kinds}) — editlenmiş repost, temiz görüntü "
+                    "değil (kırpılamayan altyazı/banner). Temiz bir klip seç.")
         # NOT: Kürate klibi renk grade'i (reel_assembler, GRADE_TARGET_LUMA≈0.45'e normalize
         # + vignette) diğer kanallarla AYNI uygulanır. Bir ara gölge-kaldıran ön-aydınlatma
         # (brighten_if_dark) eklenmiş + grade kapatılmıştı ama çıktı FAZLA açık/yıkanmış
