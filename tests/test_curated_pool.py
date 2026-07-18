@@ -64,3 +64,32 @@ def test_row_to_gem_shape():
 
 def test_pool_max_is_sane():
     assert 10 <= POOL_MAX <= 200
+
+
+def test_score_curiosity_drops_text_covers(monkeypatch):
+    """drop_text: kapağında gömülü yazı/logo (has_text) olan gem SONUÇTAN atılır;
+    drop_text=False iken kalır."""
+    import short_bot.claude_cli as cc
+    from short_bot.curated_rank import CuriosityScore, score_curiosity
+
+    def _fake_run_json(prompt, schema, **kw):
+        # başlıkta 'KIRLI' geçen kapak yazılı sayılsın
+        return CuriosityScore(score=8, has_text=("KIRLI" in prompt))
+
+    monkeypatch.setattr(cc, "run_json", _fake_run_json)
+
+    class _V:
+        claude_path = ""; model = ""; backend = "google_studio"; api_key = ""
+
+    gems = [
+        {"title": "TEMIZ klip", "ups": 1000, "thumb": "", "comments": 5,
+         "orient": "DİKEY", "duration": 20},
+        {"title": "KIRLI yazılı", "ups": 2000, "thumb": "", "comments": 5,
+         "orient": "DİKEY", "duration": 20},
+    ]
+    out = score_curiosity(gems, vision_call=_V(), tone="mizah")
+    titles = [g["title"] for g in out]
+    assert "TEMIZ klip" in titles and "KIRLI yazılı" not in titles   # yazılı elendi
+
+    out2 = score_curiosity(gems, vision_call=_V(), tone="mizah", drop_text=False)
+    assert {g["title"] for g in out2} == {"TEMIZ klip", "KIRLI yazılı"}  # ikisi de kalır

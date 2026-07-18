@@ -44,9 +44,21 @@ def engagement_score(gem: dict) -> float:
 
 
 class CuriosityScore(BaseModel):
-    """Vision yargısı — klip merak/gülme/şaşkınlık uyandırır mı."""
+    """Vision yargısı — klip merak/gülme/şaşkınlık uyandırır mı + TEMİZ görüntü mü."""
     score: int = 5           # 1 (sıradan/sıkıcı) .. 10 (kesin viral/çok merak uyandırıcı)
+    has_text: bool = False   # kapakta gömülü yazı/altyazı/logo/watermark VAR mı (temiz değil)
     reason: str = ""
+
+
+# Her iki skorlama promptuna eklenen TEMİZLİK sorusu — kullanıcı: 'altyazılı/yazılı/logolu
+# olanları eleyelim, sadece temiz görüntü'. Kapak karesinde gömülü metin/logo tespiti (ucuz,
+# thumbnail üzerinden); collect_pool has_text=True olanı havuza ALMAZ.
+_CLEAN_LINE = (
+    "AYRICA: kapak karesinde görüntüye SONRADAN BİNDİRİLMİŞ yazı / altyazı bandı / logo / "
+    "watermark (TikTok, Instagram, @kullanıcı, gömülü başlık ya da altyazı) VAR mı? "
+    "(Doğal sahne yazısı, tabela, forma numarası DEĞİL — editör/platform katmanı. "
+    "Emin değilsen ve belirgin bir metin bloğu görüyorsan true.) → has_text.\n"
+)
 
 
 def _curiosity_prompt(title: str) -> str:
@@ -58,7 +70,8 @@ def _curiosity_prompt(title: str) -> str:
         "Sevimli ama sıradan bir hayvan = DÜŞÜK. Beklenmedik, komik, akıl almaz, "
         "'nasıl yani?' dedirten an = YÜKSEK.\n"
         "1-10 puanla (10 = kesin viral/çok merak uyandırıcı, 1 = sıradan/sıkıcı).\n"
-        'SADECE JSON: {"score": <1-10>, "reason": "<çok kısa>"}'
+        + _CLEAN_LINE +
+        'SADECE JSON: {"score": <1-10>, "has_text": <bool>, "reason": "<çok kısa>"}'
     )
 
 
@@ -79,7 +92,8 @@ def _emotion_prompt(title: str) -> str:
         "OLMAYAN (bir hayvanın komik düşmesi/zıplaması gibi), ya da duygusuz-teknik.\n"
         "1-10 puanla (10 = güçlü duygusal/dokunaklı, izleyiciyi duygulandırır; "
         "1 = duygusuz/sıradan/sadece komik).\n"
-        'SADECE JSON: {"score": <1-10>, "reason": "<çok kısa>"}'
+        + _CLEAN_LINE +
+        'SADECE JSON: {"score": <1-10>, "has_text": <bool>, "reason": "<çok kısa>"}'
     )
 
 
@@ -97,13 +111,19 @@ def _download_thumb(url: str, dest: Path) -> Path | None:
 
 
 def score_curiosity(gems: list[dict], *, vision_call, top_n: int = 24,
-                    workers: int = 6, tone: str = "mizah", log=log) -> list[dict]:
+                    workers: int = 6, tone: str = "mizah", drop_text: bool = True,
+                    log=log) -> list[dict]:
     """Etkileşimle en iyi ``top_n`` adayı vision ile skorla → final sıra.
 
     ``tone``: 'mizah' → merak/gülme/şaşkınlık skoru; 'duygu' → kahramanlık/kurtarma/sadakat
     (duygusal potansiyel) skoru. Kanalın tonuna uygun klip seçilir (@NedenHayvan formülü).
     Her gem'e ``curiosity`` (1-10 ya da None) ve ``final_score`` yazar. Kuyruk yalnız
-    engagement ile; vision yoksa/hata → engagement sırası (fail-open)."""
+    engagement ile; vision yoksa/hata → engagement sırası (fail-open).
+
+    ``drop_text=True`` (kullanıcı: 'yazılı/altyazılı/logolu olanları eleyelim, sadece temiz
+    görüntü'): skorlanan kapaklarda gömülü metin/logo görülen (has_text) gem'ler SONUÇTAN
+    ATILIR — havuz/autopilot/manuel arama hepsi temiz görüntü alır. Kuyruk (skorlanmamış)
+    thumbnail'dan geçmediği için dokunulmaz."""
     from short_bot.claude_cli import run_json
     _prompt_fn = _emotion_prompt if tone == "duygu" else _curiosity_prompt
 
@@ -129,29 +149,38 @@ def score_curiosity(gems: list[dict], *, vision_call, top_n: int = 24,
                     claude_path=vision_call.claude_path, model=vision_call.model,
                     backend=vision_call.backend, api_key=vision_call.api_key,
                     image_path=img, retries=1, timeout_s=30)
-                return max(1, min(10, int(res.score)))
+                return (max(1, min(10, int(res.score))), bool(res.has_text))
             except Exception as e:  # noqa: BLE001 — tek skor düşerse nötr, üretim sürsün
                 log.info(f"  cevher[merak]: skor hatası ({e}) → nötr 5")
-                return 5
+                return (5, False)     # hata → temiz varsay (fail-open, eleme yapma)
 
         try:
             with ThreadPoolExecutor(max_workers=workers) as ex:
                 scores = list(ex.map(_score, enumerate(head)))
         except Exception as e:  # noqa: BLE001
             log.info(f"  cevher[merak]: skorlama çöktü ({e}) → engagement sırası")
-            scores = [None] * len(head)
+            scores = [(None, False)] * len(head)
 
-    for g, sc in zip(head, scores):
+    for g, (sc, has_text) in zip(head, scores):
         g["curiosity"] = sc
+        g["has_text"] = has_text     # kapakta gömülü yazı/logo → collect_pool eler
         # final = engagement × (merak/5): skor 10 → ×2, 5 → ×1, 1 → ×0.2
         g["final_score"] = engagement_score(g) * ((sc / 5.0) if sc else 1.0)
     for g in tail:
         g["curiosity"] = None
+        g["has_text"] = False
         g["final_score"] = engagement_score(g)
 
     out = sorted(ranked, key=lambda g: -g["final_score"])
+    if drop_text:
+        before = len(out)
+        out = [g for g in out if not g.get("has_text")]
+        dropped = before - len(out)
+        if dropped:
+            log.info(f"  cevher[temiz]: {dropped} yazılı/altyazılı/logolu kapak elendi")
     if any(g.get("curiosity") for g in head):
-        top = out[0]
-        log.info(f"  cevher[merak]: {len(head)} aday skorlandı → en iyi "
-                 f"'{top.get('title','')[:40]}' (merak={top.get('curiosity')})")
+        top = out[0] if out else None
+        if top:
+            log.info(f"  cevher[merak]: {len(head)} aday skorlandı → en iyi "
+                     f"'{top.get('title','')[:40]}' (merak={top.get('curiosity')})")
     return out
