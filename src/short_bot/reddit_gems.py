@@ -107,6 +107,43 @@ def fetch_top(subreddit: str, token: str, *, t: str = "week", limit: int = 25,
     return [c["data"] for c in r.json()["data"]["children"]]
 
 
+def fetch_popular(client_id: str, client_secret: str, *, geo: str = "GLOBAL",
+                  limit: int = 100, min_ups: int = 500, max_duration: int = 90,
+                  listing: str = "hot", user_agent: str = _UA) -> list[dict]:
+    """r/popular (tüm Reddit'te ANLIK trending, cross-sub) → video cevherleri. find_gems'in
+    sabit subreddit listesi yerine trending feed'i tarar → bizim listede OLMAYAN sub'lardan
+    da taze/yükselen klipler getirir. collect_pool'a EK keşif kaynağı; tona-skor + temizlik
+    filtresi uygunluğu süzer. SFW + video + süre/upvote filtreli; find_gems ile AYNI şema.
+    Ölçüldü 2026-07-18: hot ~30 uygun video/çekim (rising çok erken → 1)."""
+    token = get_token(client_id, client_secret, user_agent=user_agent)
+    params: dict = {"limit": min(100, max(1, limit)), "raw_json": 1}
+    if geo:
+        params["geo_filter"] = geo
+    r = requests.get(f"{_API}/r/popular/{listing}", params=params,
+                     headers={"Authorization": f"bearer {token}", "User-Agent": user_agent},
+                     timeout=20)
+    r.raise_for_status()
+    posts = [c["data"] for c in r.json().get("data", {}).get("children", [])]
+    seen: set[str] = set()
+    gems: list[dict] = []
+    for p in posts:
+        if p.get("over_18") or p.get("ups", 0) < min_ups:
+            continue
+        built = _post_to_gem(p)
+        if built is None:
+            continue
+        gem, url, dur = built
+        if dur and dur > max_duration:
+            continue
+        key = url or p.get("permalink", "")
+        if key in seen:
+            continue
+        seen.add(key)
+        gems.append(gem)
+    gems.sort(key=lambda g: -g["ups"])
+    return gems
+
+
 def find_gems(client_id: str, client_secret: str, *, subreddits=None,
               t: str = "week", per_sub: int = 25, min_ups: int = 500,
               max_duration: int = 90, user_agent: str = _UA) -> list[dict]:

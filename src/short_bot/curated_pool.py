@@ -95,12 +95,28 @@ def collect_pool(channel, *, settings, secrets, db_path, log=log) -> int:
         return 0
 
     tone = getattr(reel, "curated_tone", "mizah")
+    min_ups = getattr(reel, "curated_min_ups", 500)
+    max_dur = getattr(reel, "curated_max_duration", 90)
     subs = list(getattr(reel, "subreddits", []) or []) or (
         DEFAULT_DUYGU_SUBS if tone == "duygu" else DEFAULT_SUBS)
     gems = find_gems(cid, csec, subreddits=subs,
                      t=getattr(reel, "curated_time", "month"),
-                     min_ups=getattr(reel, "curated_min_ups", 500),
-                     max_duration=getattr(reel, "curated_max_duration", 90))
+                     min_ups=min_ups, max_duration=max_dur)
+    # EK KAYNAK: r/popular (tüm Reddit'te anlık trending) — listede olmayan sub'lardan da
+    # taze klip; tona-skor + temizlik filtresi uygunluğu süzer.
+    if getattr(reel, "curated_include_popular", True):
+        from short_bot.reddit_gems import fetch_popular
+        try:
+            pop = fetch_popular(cid, csec, min_ups=min_ups, max_duration=max_dur)
+            gems += pop
+            log.info(f"  havuz[{channel.slug}]: r/popular +{len(pop)} trending video eklendi")
+        except Exception as e:  # noqa: BLE001 — popular düşerse subs ile devam
+            log.info(f"  havuz[{channel.slug}]: r/popular çekilemedi ({e})")
+    # BATCH-İÇİ DEDUP (find_gems + popular çakışabilir) — clip_key başına tek gem
+    _uniq: dict = {}
+    for g in gems:
+        _uniq.setdefault(_gem_key(g), g)
+    gems = list(_uniq.values())
     # DEDUP: üretilmiş + havuzda olan
     skip = _produced_keys(db_path) | pool_keys(eng, channel.slug)
     fresh = [g for g in gems if _gem_key(g) not in skip

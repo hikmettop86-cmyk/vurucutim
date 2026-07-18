@@ -117,3 +117,29 @@ def test_search_gems_paginates_and_sub_restricts(monkeypatch):
 def test_search_gems_empty_query():
     from short_bot.reddit_gems import search_gems
     assert search_gems("id", "sec", "   ") == []            # boş query → boş liste
+
+
+def test_fetch_popular_filters(monkeypatch):
+    """fetch_popular: r/popular/hot (geo GLOBAL) → SFW + video + min_ups filtreler."""
+    import short_bot.reddit_gems as g
+    captured = {}
+
+    def _fake_get(url, params=None, headers=None, timeout=None):
+        captured["url"] = url
+        captured["params"] = params
+        return _Resp([
+            _vpost("MadeMeSmile", 5000),                # geçer
+            _vpost("nsfwsub", 9000, over18=True),       # over_18 → elenir
+            _vpost("aww", 100),                         # min_ups<500 → elenir
+            {"data": {"subreddit": "pics", "ups": 8000, "over_18": False,
+                      "url": "https://i.imgur.com/x.jpg", "title": "resim",
+                      "permalink": "/r/pics/y"}},        # video değil → elenir
+        ], after=None)
+
+    monkeypatch.setattr(g, "get_token", lambda *a, **k: "tok")
+    monkeypatch.setattr(g.requests, "get", _fake_get)
+    gems = g.fetch_popular("id", "sec", min_ups=500)
+
+    assert "/r/popular/hot" in captured["url"]
+    assert captured["params"]["geo_filter"] == "GLOBAL"
+    assert len(gems) == 1 and gems[0]["sub"] == "MadeMeSmile"

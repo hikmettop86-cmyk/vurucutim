@@ -280,6 +280,10 @@ class ReelConfig(BaseModel):
     # duygusal mikro-dram — kahramanlık/sadakat/kurtarma, antropomorfik). @NedenHayvan (437M)
     # kanıtı: hayvan klibinde DUYGU, sevimli-komikten çok daha yüksek tavan veriyor.
     curated_tone: Literal["mizah", "duygu"] = "mizah"
+    # HAVUZ EK KAYNAK: kanalın sublarına EK olarak r/popular (tüm Reddit'te anlık trending)
+    # taransın mı? Açık → bizim listede olmayan sub'lardan da taze/yükselen klip yakalanır
+    # (tona-skor + temizlik filtresi uygunluğu süzer). Sadece havuz (collect_pool) için.
+    curated_include_popular: bool = True
     # KANALIN KENDİ HAS MİZAH SESİ (kullanıcı: 'her kanalın kendi mizahı olacak, belirli
     # kalıp değil'). Serbest metin — bu kanalın komik tonunu tarif eder (ör. 'sakin,
     # ironik, gözlemci' ya da 'coşkulu, abartısız gündelik'). Boşsa: gerçek, klibe özgü
@@ -638,6 +642,7 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
             "curated_max_duration": cfg.reel.curated_max_duration,
             "curated_clean": cfg.reel.curated_clean,
             "curated_tone": cfg.reel.curated_tone,
+            "curated_include_popular": cfg.reel.curated_include_popular,
             "humor_style": cfg.reel.humor_style,
         }
     if cfg.dna is not None:
