@@ -29,6 +29,12 @@ class CuratedWatermarkError(RuntimeError):
     kullanılamaz. Manuel seçimde kullanıcıya net hata; oto-seçimde sıradaki adaya geçilir."""
 
 
+class CuratedClipError(RuntimeError):
+    """Klip İNDİRİLEMEDİ (403/404/ağ) — bu cevher kullanılamaz. Reddit CDN bazı v.redd.it
+    varyantlarına 403 veriyor; tek bozuk klip tüm run'ı DÜŞÜRMESİN → oto-seçimde sıradaki
+    adaya geçilir (watermark eleme deseniyle aynı)."""
+
+
 def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
                     output_root, music_root, templates_dir, cache_dir=None,
                     seed: int = 0, log=log) -> tuple[int, Path]:
@@ -85,7 +91,10 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
     with tempfile.TemporaryDirectory() as td:
         td = Path(td)
         log.info(f"  kürate: klip indiriliyor ({video_url})")
-        clip = download_clip(video_url, td / "src.mp4")
+        try:
+            clip = download_clip(video_url, td / "src.mp4")
+        except Exception as e:  # noqa: BLE001 — 403/404/ağ → skippable (sıradaki aday)
+            raise CuratedClipError(f"klip indirilemedi ({video_url}): {e}") from e
         # TEMİZLİK (SP4): hafif/kenar watermark → delogo (yazılı klip de kullanılabilir);
         # ağır kaplama temizlenmez. Kanal flag'i kapalıysa atlanır.
         if getattr(reel, "curated_clean", True) and vision is not None:
@@ -312,5 +321,9 @@ def auto_produce_curated(channel, *, settings, secrets, db_path, output_root,
         except CuratedWatermarkError as e:
             log.info(f"  kürate[oto]: watermark'lı → atlandı ({e})")
             continue
-    log.warning("  kürate[oto]: denenen adayların hepsi watermark'lı → temiz cevher yok")
+        except CuratedClipError as e:
+            log.info(f"  kürate[oto]: indirilemedi → atlandı ({e})")
+            continue
+    log.warning("  kürate[oto]: denenen adayların hepsi elendi (watermark/indirilemez) "
+                "→ temiz cevher yok")
     return None, None
