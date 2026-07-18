@@ -91,4 +91,8 @@ def test_watermark_uncleanable_moving_vs_static():
     # özneyi KAPLAYAN → temizlenemez
     assert watermark_uncleanable(WatermarkDetect(present=True, regions=["top-right"],
                                                  covers_subject=True))
+    # TikTok PLATFORM logosu (moving=True): tek köşe raporlansa BİLE temizlenemez say
+    # (short 937: vision 'bottom-right' dedi ama logo gezdiği için delogo ıskaladı)
+    assert watermark_uncleanable(WatermarkDetect(present=True, regions=["bottom-right"],
+                                                 moving=True))
     assert not watermark_uncleanable(WatermarkDetect(present=False))

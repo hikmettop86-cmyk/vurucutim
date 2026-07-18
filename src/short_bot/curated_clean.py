@@ -42,6 +42,9 @@ class WatermarkDetect(BaseModel):
     regions: list[str] = []
     # yazı ana ÖZNEYİ mi kaplıyor (ağır → temizlenemez) yoksa kenar/köşede mi
     covers_subject: bool = False
+    # TikTok/Instagram PLATFORM watermark'ı mı (logo + @kullanıcı)? Bunlar TANIMI GEREĞİ
+    # ekranda zıplar → tek delogo yetmez → temizlenemez say (bölge sayısından bağımsız).
+    moving: bool = False
     note: str = ""
 
 
@@ -54,9 +57,12 @@ _DETECT_PROMPT = (
     "- present: böyle bir katman VAR mı?\n"
     "- regions: göründüğü TÜM bölgeler (şunlardan): top-left, top-right, top, bottom-left, "
     "bottom-right, bottom, mid-left, mid-right, left, right, center. Hareketliyse birden çok yaz.\n"
+    "- moving: bu bir TikTok/Instagram PLATFORM watermark'ı mı — yani 'TikTok' logosu/yazısı "
+    "ya da '@kullanıcıadı' etiketi mi? (Öyleyse TANIMI GEREĞİ ekranda zıplar → true. "
+    "TEK bir karede bile TikTok logosu/@kullanıcı görürsen moving=true yaz.)\n"
     "- covers_subject: katman ana ÖZNENİN ÜSTÜNÜ mü kaplıyor (true=ağır) yoksa kenar/köşede mi (false)?\n"
-    'SADECE JSON: {"present": <bool>, "regions": ["<...>", ...], "covers_subject": <bool>, '
-    '"note": "<short English>"}'
+    'SADECE JSON: {"present": <bool>, "regions": ["<...>", ...], "moving": <bool>, '
+    '"covers_subject": <bool>, "note": "<short English>"}'
 )
 
 
@@ -108,10 +114,15 @@ _CORNERS = {"top-left", "top-right", "bottom-left", "bottom-right"}
 
 
 def watermark_uncleanable(detection) -> bool:
-    """Bu watermark delogo ile TEMİZ silinemez mi? (hareketli = birden çok bölge, ya da
-    özneyi kaplıyor). True ise klip ideal değildir — seçimde elenmeli."""
+    """Bu watermark delogo ile TEMİZ silinemez mi? True ise klip ideal değildir — seçimde
+    elenmeli. Temizlenemez sayılanlar: TikTok/IG platform logosu (zıplar), özneyi kaplayan,
+    birden çok bölge, ya da köşe-dışı kenar-strip."""
     if detection is None or not detection.present:
         return False
+    # TikTok/IG platform watermark'ı: TANIMI GEREĞİ zıplar → tek delogo yetmez (short 937:
+    # vision tek 'bottom-right' gördü ama logo sağ-ORTA'daydı, gezdiği için delogo ıskaladı).
+    if getattr(detection, "moving", False):
+        return True
     if detection.covers_subject:
         return True
     regions = {r.lower() for r in (detection.regions or []) if (r or "").lower() in _REGION_BOX}
