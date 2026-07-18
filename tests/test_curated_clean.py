@@ -96,3 +96,23 @@ def test_watermark_uncleanable_moving_vs_static():
     assert watermark_uncleanable(WatermarkDetect(present=True, regions=["bottom-right"],
                                                  moving=True))
     assert not watermark_uncleanable(WatermarkDetect(present=False))
+
+
+def test_judge_clip_quality_gates_mundane(monkeypatch, tmp_path):
+    """judge_clip_quality: storyboard vision → ClipQuality (engaging+score) döner; sıradan
+    (düşük) klip ayırt edilebilsin. run_json/_storyboard_frames fonksiyon-içi import'lanır →
+    KAYNAK modüllerinde patch'le."""
+    import short_bot.claude_cli as cli
+    import short_bot.reel as reel
+    from short_bot.curated_clean import ClipQuality, judge_clip_quality
+
+    monkeypatch.setattr(reel, "_storyboard_frames",
+                        lambda clip, board, *a, **k: (Path(board).write_bytes(b"x") or True))
+    monkeypatch.setattr(cli, "run_json",
+                        lambda prompt, schema, **kw: ClipQuality(engaging=False, score=3))
+
+    class _V:
+        claude_path = ""; model = ""; backend = "google_studio"; api_key = ""
+
+    q = judge_clip_quality(tmp_path / "clip.mp4", vision_call=_V(), tone="mizah")
+    assert q is not None and q.engaging is False and q.score == 3
