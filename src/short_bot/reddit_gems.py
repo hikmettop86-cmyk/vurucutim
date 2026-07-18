@@ -154,55 +154,110 @@ def find_gems(client_id: str, client_secret: str, *, subreddits=None,
     return gems
 
 
+# Global keyword aramasında SUB-KISITLI ikinci tarama için video-zengin küratörlü havuz
+# (kategori + duygu subreddit'lerinin birleşimi). Bu subreddit'lerde görsel oranı düşük,
+# video yoğunluğu yüksek → keyword araması global'e ek olarak burada da tarayınca daha
+# ÇOK VİDEO döner (Reddit araması BAŞLIK-metni eşler; bu subreddit'ler tema-yoğun).
+VIDEO_RICH_SUBS = [
+    "funny", "contagiouslaughter", "Unexpected", "Whatcouldgowrong", "AbruptChaos",
+    "nextfuckinglevel", "interestingasfuck", "BeAmazed", "maybemaybemaybe",
+    "oddlysatisfying", "instant_regret", "therewasanattempt", "aww", "MadeMeSmile",
+    "HumansBeingBros", "AnimalsBeingBros", "nonononoyes", "holdmyredbull",
+]
+
+
+def _post_to_gem(p: dict):
+    """Reddit post → cevher dict (video değilse/filtreye takılırsa None). find_gems ve
+    search_gems AYNI şema; çağıran ayrıca over_18/min_ups/dedup uygular."""
+    vid = _video_of(p)
+    if vid is None:
+        return None
+    url, dur, w, h = vid
+    return {
+        "sub": p.get("subreddit", "?"), "ups": p.get("ups", 0),
+        "comments": p.get("num_comments", 0),
+        "title": (p.get("title") or "").strip(),
+        "duration": dur, "width": w, "height": h,
+        "orient": ("DİKEY" if (h and w and h > w) else "yatay" if w else "?"),
+        "video_url": url,
+        "thumb": _thumb_of(p),
+        "permalink": "https://www.reddit.com" + p.get("permalink", ""),
+        "over18": p.get("over_18", False),
+    }, url, dur
+
+
+def _collect_search(token, base, params, *, seen, gems, min_ups, max_duration,
+                    pages, user_agent):
+    """Bir arama endpoint'ini SAYFALAYARAK topla (Reddit 'after' imleci; sayfa=100).
+    gems'e ekler (dedup: seen). Tek sayfa 100'de tavanlı → çok-sayfa daha çok video."""
+    after = None
+    for _ in range(max(1, pages)):
+        p = dict(params)
+        if after:
+            p["after"] = after
+        try:
+            r = requests.get(base, params=p, timeout=20,
+                             headers={"Authorization": f"bearer {token}",
+                                      "User-Agent": user_agent})
+            r.raise_for_status()
+        except Exception as e:  # noqa: BLE001 — bir sayfa düşerse eldekiyle devam
+            log.info(f"  arama: sayfa çekilemedi ({e})")
+            break
+        data = r.json().get("data", {})
+        children = data.get("children", [])
+        for c in children:
+            post = c.get("data", {})
+            if post.get("over_18") or post.get("ups", 0) < min_ups:
+                continue
+            built = _post_to_gem(post)
+            if built is None:
+                continue
+            gem, url, dur = built
+            if dur and dur > max_duration:
+                continue
+            key = url or post.get("permalink", "")
+            if key in seen:
+                continue
+            seen.add(key)
+            gems.append(gem)
+        after = data.get("after")
+        if not after or not children:
+            break
+
+
 def search_gems(client_id: str, client_secret: str, query: str, *,
-                t: str = "month", limit: int = 100, min_ups: int = 300,
-                max_duration: int = 90, sort: str = "top",
+                t: str = "year", min_ups: int = 300, max_duration: int = 90,
+                sort: str = "top", pages: int = 3, subreddits=None,
                 user_agent: str = _UA) -> list[dict]:
-    """GLOBAL Reddit araması (tüm SFW subreddit'ler) — keyword ile cevher bul. find_gems'in
-    subreddit-listesi yerine /search endpoint'ini kullanır. SFW (over_18 elenmiş, NSFW havuzu
-    kapalı) + video + süre/upvote filtreli; upvote sıralı. Panel MANUEL aramasında kullanılır
-    (autopilot değil). find_gems ile AYNI cevher şeması → aynı skorlama/üretim hattı.
+    """GLOBAL + SUB-KISITLI Reddit keyword araması — panel MANUEL aramasında kullanılır.
+    Reddit araması yapısal olarak sınırlı (BAŞLIK-metni eşler, video İÇERİĞİ değil; sayfa
+    başına 100; ~yarısı görsel). Bunu üç kaldıraçla telafi eder:
+      1) SAYFALAMA: ``pages`` sayfa (after imleci) → 100 yerine ~pages*100 ham sonuç.
+      2) SUB-KISITLI ikinci tarama: ``subreddits`` (yoksa VIDEO_RICH_SUBS) içinde ara →
+         görsel gürültüsü az, video yoğunluğu yüksek (tema-yoğun topluluklar).
+      3) GENİŞ pencere: varsayılan t='year' (duygusal/komik içerik evergreen).
+    İki tarama birleştirilip dedup'lanır. find_gems ile AYNI cevher şeması.
     """
     query = (query or "").strip()
     if not query:
         return []
     token = get_token(client_id, client_secret, user_agent=user_agent)
-    r = requests.get(
-        f"{_API}/search",
-        params={"q": query, "sort": sort, "t": t, "type": "link",
-                "limit": min(100, max(1, limit)), "include_over_18": "off",
-                "raw_json": 1},
-        headers={"Authorization": f"bearer {token}", "User-Agent": user_agent},
-        timeout=20)
-    r.raise_for_status()
-    posts = [c["data"] for c in r.json().get("data", {}).get("children", [])]
     seen: set[str] = set()
     gems: list[dict] = []
-    for p in posts:
-        # SFW guard: include_over_18=off'a EK olarak post bazında da ele (çift emniyet).
-        if p.get("over_18") or p.get("ups", 0) < min_ups:
-            continue
-        vid = _video_of(p)
-        if vid is None:
-            continue
-        url, dur, w, h = vid
-        if dur and dur > max_duration:
-            continue
-        key = url or p.get("permalink", "")
-        if key in seen:
-            continue
-        seen.add(key)
-        gems.append({
-            "sub": p.get("subreddit", "?"), "ups": p.get("ups", 0),
-            "comments": p.get("num_comments", 0),
-            "title": (p.get("title") or "").strip(),
-            "duration": dur, "width": w, "height": h,
-            "orient": ("DİKEY" if (h and w and h > w) else "yatay" if w else "?"),
-            "video_url": url,
-            "thumb": _thumb_of(p),
-            "permalink": "https://www.reddit.com" + p.get("permalink", ""),
-            "over18": p.get("over_18", False),
-        })
+    base_params = {"q": query, "sort": sort, "t": t, "type": "link",
+                   "limit": 100, "include_over_18": "off", "raw_json": 1}
+    # 1) GLOBAL (tüm SFW Reddit), sayfalı
+    _collect_search(token, f"{_API}/search", base_params, seen=seen, gems=gems,
+                    min_ups=min_ups, max_duration=max_duration, pages=pages,
+                    user_agent=user_agent)
+    # 2) SUB-KISITLI (video-zengin havuz), sayfalı — restrict_sr=1 ile o subreddit'lerde ara
+    subs = [s for s in (subreddits or VIDEO_RICH_SUBS) if s]
+    if subs:
+        sr = "+".join(list(dict.fromkeys(subs))[:25])   # Reddit çok-sub sınırı
+        sr_params = dict(base_params); sr_params["restrict_sr"] = 1
+        _collect_search(token, f"{_API}/r/{sr}/search", sr_params, seen=seen, gems=gems,
+                        min_ups=min_ups, max_duration=max_duration, pages=pages,
+                        user_agent=user_agent)
     gems.sort(key=lambda g: -g["ups"])
     return gems
 

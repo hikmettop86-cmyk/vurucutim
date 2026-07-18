@@ -42,34 +42,39 @@ def _vpost(sub, ups, over18=False, dur=20):
                          "duration": dur, "width": 1080, "height": 1920}}}}
 
 
+class _Resp:
+    def __init__(self, posts, after=None):
+        self._posts = posts
+        self._after = after
+    def raise_for_status(self): pass
+    def json(self):
+        return {"data": {"children": self._posts, "after": self._after}}
+
+
 def test_search_gems_global_filters(monkeypatch):
     """search_gems: GLOBAL /search sonuçlarını SFW + video + min_ups filtreler."""
     import short_bot.reddit_gems as g
-
-    class _Resp:
-        def raise_for_status(self): pass
-        def json(self):
-            return {"data": {"children": [
-                _vpost("Unexpected", 5000),                 # geçer
-                _vpost("nsfwsub", 9000, over18=True),       # over_18 → elenir
-                _vpost("aww", 100),                         # min_ups<300 → elenir
-                {"data": {"subreddit": "pics", "ups": 8000, "over_18": False,
-                          "url": "https://i.imgur.com/x.jpg", "title": "resim",
-                          "permalink": "/r/pics/y"}},        # video değil → elenir
-            ]}}
-
     captured = {}
 
     def _fake_get(url, params=None, headers=None, timeout=None):
         captured["url"] = url
         captured["params"] = params
-        return _Resp()
+        # restrict_sr çağrısında boş dön (yalnız global tarama sınanıyor)
+        if "restrict_sr" in (params or {}):
+            return _Resp([], after=None)
+        return _Resp([
+            _vpost("Unexpected", 5000),                 # geçer
+            _vpost("nsfwsub", 9000, over18=True),       # over_18 → elenir
+            _vpost("aww", 100),                         # min_ups<300 → elenir
+            {"data": {"subreddit": "pics", "ups": 8000, "over_18": False,
+                      "url": "https://i.imgur.com/x.jpg", "title": "resim",
+                      "permalink": "/r/pics/y"}},        # video değil → elenir
+        ], after=None)
 
     monkeypatch.setattr(g, "get_token", lambda *a, **k: "tok")
     monkeypatch.setattr(g.requests, "get", _fake_get)
     gems = g.search_gems("id", "sec", "köpek kurtarma", t="month", min_ups=300)
 
-    assert captured["url"].endswith("/search")
     assert captured["params"]["q"] == "köpek kurtarma"
     assert captured["params"]["include_over_18"] == "off"   # SFW zorlanıyor
     assert captured["params"]["t"] == "month"
@@ -77,6 +82,36 @@ def test_search_gems_global_filters(monkeypatch):
     assert len(gems) == 1
     assert gems[0]["sub"] == "Unexpected" and gems[0]["ups"] == 5000
     assert gems[0]["video_url"] == "https://v.redd.it/Unexpected/DASH.mp4"
+
+
+def test_search_gems_paginates_and_sub_restricts(monkeypatch):
+    """SAYFALAMA (after) + SUB-KISITLI ikinci tarama → daha çok video (dedup'lu)."""
+    import short_bot.reddit_gems as g
+    calls = []
+
+    def _fake_get(url, params=None, headers=None, timeout=None):
+        params = params or {}
+        calls.append((url, params))
+        restricted = "restrict_sr" in params
+        after = params.get("after")
+        if not restricted and after is None:            # global sayfa 1 → after ver
+            return _Resp([_vpost("Unexpected", 5000)], after="t3_p2")
+        if not restricted and after == "t3_p2":         # global sayfa 2 → dur
+            return _Resp([_vpost("funny", 4000)], after=None)
+        if restricted:                                  # sub-kısıtlı → 3. video
+            return _Resp([_vpost("aww", 3000)], after=None)
+        return _Resp([], after=None)
+
+    monkeypatch.setattr(g, "get_token", lambda *a, **k: "tok")
+    monkeypatch.setattr(g.requests, "get", _fake_get)
+    gems = g.search_gems("id", "sec", "dog", pages=3, min_ups=300)
+
+    subs = {x["sub"] for x in gems}
+    assert subs == {"Unexpected", "funny", "aww"}          # 3 kaynaktan toplandı
+    assert any("restrict_sr" in p for _, p in calls)       # sub-kısıtlı tarama yapıldı
+    assert all(p.get("include_over_18") == "off" for _, p in calls)  # SFW zorlanıyor
+    # global 2 sayfa + en az 1 sub-kısıtlı çağrı
+    assert len(calls) >= 3
 
 
 def test_search_gems_empty_query():

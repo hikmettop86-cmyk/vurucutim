@@ -199,6 +199,11 @@ def fetch():
     if keyword:
         # Arama hedefli olduğu için upvote tabanı daha düşük (kanal 500 çok eleyebilir).
         min_ups = 300
+        # Keyword araması GENİŞ pencere ister (Reddit araması az sonuç verir + içerik
+        # evergreen) → day/week/month → year'a genişlet (year/all olduğu gibi kalır).
+        _tw = ["day", "week", "month", "year", "all"]
+        if t in _tw and _tw.index(t) < _tw.index("year"):
+            t = "year"
     form_min = (request.form.get("min_ups") or "").strip()
     if form_min:
         try:
