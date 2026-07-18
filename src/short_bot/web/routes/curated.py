@@ -129,12 +129,17 @@ def _decorate(gems: list, db_path) -> list:
 
 def _run_fetch_job(job_id: str, *, client_id, client_secret, subreddits, t,
                    min_ups, max_duration, slug, category, vision_call=None,
-                   tone: str = "mizah") -> None:
+                   tone: str = "mizah", query: str = "") -> None:
     from short_bot.curated_rank import score_curiosity
-    from short_bot.reddit_gems import find_gems
+    from short_bot.reddit_gems import find_gems, search_gems
     try:
-        gems = find_gems(client_id, client_secret, subreddits=subreddits or None,
-                         t=t, min_ups=min_ups, max_duration=max_duration)
+        if (query or "").strip():
+            # KEYWORD: global Reddit araması (kategori/sub değil, tüm SFW Reddit).
+            gems = search_gems(client_id, client_secret, query, t=t,
+                               min_ups=min_ups, max_duration=max_duration)
+        else:
+            gems = find_gems(client_id, client_secret, subreddits=subreddits or None,
+                             t=t, min_ups=min_ups, max_duration=max_duration)
         # TONA-DUYARLI SKOR: mizah kanalı → merak/gülme; DUYGU kanalı → kahramanlık/kurtarma
         # potansiyeli. Kanalın tonuna uygun klip öne çıkar (@NedenHayvan formülü).
         gems = score_curiosity(gems, vision_call=vision_call, tone=tone)
@@ -189,6 +194,11 @@ def fetch():
     if not subreddits and tone == "duygu":
         from short_bot.reddit_gems import DEFAULT_DUYGU_SUBS
         subreddits = list(DEFAULT_DUYGU_SUBS)
+    # KEYWORD (global arama): verilirse kategori/sub yerine tüm SFW Reddit'te ara.
+    keyword = (request.form.get("keyword") or "").strip()
+    if keyword:
+        # Arama hedefli olduğu için upvote tabanı daha düşük (kanal 500 çok eleyebilir).
+        min_ups = 300
     form_min = (request.form.get("min_ups") or "").strip()
     if form_min:
         try:
@@ -217,7 +227,8 @@ def fetch():
         target=_run_fetch_job, args=(job_id,),
         kwargs=dict(client_id=cid, client_secret=csec, subreddits=subreddits,
                     t=t, min_ups=min_ups, max_duration=max_duration, slug=slug,
-                    category=category, vision_call=vision_call, tone=tone),
+                    category=category, vision_call=vision_call, tone=tone,
+                    query=keyword),
         daemon=True).start()
     return render_template("curated/_results.html.j2", job_id=job_id,
                            status="running", gems=None, error=None, slug=slug)

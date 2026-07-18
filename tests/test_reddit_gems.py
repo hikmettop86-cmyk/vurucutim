@@ -32,3 +32,53 @@ def test_video_of_reddit_fallback():
     url, dur, w, h = _video_of(post)
     assert url == "https://v.redd.it/x/DASH.mp4"           # query stripped
     assert dur == 20 and w == 1080 and h == 1920
+
+
+def _vpost(sub, ups, over18=False, dur=20):
+    return {"data": {"subreddit": sub, "ups": ups, "over_18": over18,
+                     "num_comments": 5, "title": f"{sub} clip", "permalink": f"/r/{sub}/x",
+                     "media": {"reddit_video": {
+                         "fallback_url": f"https://v.redd.it/{sub}/DASH.mp4",
+                         "duration": dur, "width": 1080, "height": 1920}}}}
+
+
+def test_search_gems_global_filters(monkeypatch):
+    """search_gems: GLOBAL /search sonuçlarını SFW + video + min_ups filtreler."""
+    import short_bot.reddit_gems as g
+
+    class _Resp:
+        def raise_for_status(self): pass
+        def json(self):
+            return {"data": {"children": [
+                _vpost("Unexpected", 5000),                 # geçer
+                _vpost("nsfwsub", 9000, over18=True),       # over_18 → elenir
+                _vpost("aww", 100),                         # min_ups<300 → elenir
+                {"data": {"subreddit": "pics", "ups": 8000, "over_18": False,
+                          "url": "https://i.imgur.com/x.jpg", "title": "resim",
+                          "permalink": "/r/pics/y"}},        # video değil → elenir
+            ]}}
+
+    captured = {}
+
+    def _fake_get(url, params=None, headers=None, timeout=None):
+        captured["url"] = url
+        captured["params"] = params
+        return _Resp()
+
+    monkeypatch.setattr(g, "get_token", lambda *a, **k: "tok")
+    monkeypatch.setattr(g.requests, "get", _fake_get)
+    gems = g.search_gems("id", "sec", "köpek kurtarma", t="month", min_ups=300)
+
+    assert captured["url"].endswith("/search")
+    assert captured["params"]["q"] == "köpek kurtarma"
+    assert captured["params"]["include_over_18"] == "off"   # SFW zorlanıyor
+    assert captured["params"]["t"] == "month"
+    # Yalnız SFW + video + ups>=300 olan kaldı
+    assert len(gems) == 1
+    assert gems[0]["sub"] == "Unexpected" and gems[0]["ups"] == 5000
+    assert gems[0]["video_url"] == "https://v.redd.it/Unexpected/DASH.mp4"
+
+
+def test_search_gems_empty_query():
+    from short_bot.reddit_gems import search_gems
+    assert search_gems("id", "sec", "   ") == []            # boş query → boş liste
