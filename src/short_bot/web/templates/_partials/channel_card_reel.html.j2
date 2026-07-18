@@ -69,6 +69,11 @@
            class="flex items-center justify-center gap-1 px-1 py-1.5 rounded text-[11px]
                   text-claude-muted hover:text-claude-text hover:bg-claude-surface-alt"
            title="Kanıtlanmış konu bankası"><span>🎯</span><span>Konu</span></a>
+        {% elif c.content_source == 'curated' %}
+        <a href="/curated/pool?channel={{ c.slug }}"
+           class="flex items-center justify-center gap-1 px-1 py-1.5 rounded text-[11px]
+                  text-claude-accent hover:bg-claude-accent-soft"
+           title="Kürate havuzu — biriken temiz cevherler (Üret/Ele)"><span>🪣</span><span>Havuz</span></a>
         {% else %}<span></span>{% endif %}
 
         {# SERİ ve OTOMASYON — seri/otomasyon KAPALI olsa bile görünür.
