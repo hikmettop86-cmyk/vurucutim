@@ -395,16 +395,17 @@ def detect_source_banner(clip, *, vision_call, ffmpeg_path: str = "ffmpeg",
         return None
 
 
-# Bandı YALNIZ kenara yapışıksa kır — üst/alt kenardan bu kadar içeri girmiş olabilir.
-# Ortada yüzen/kayan başlık (bkz. short 935 tembel-hayvan: y_center≈0.48) temiz
-# kırpılamaz (içerik kaybettirir) → dokunma, orijinali kullan.
-_BANNER_EDGE_GAP = 0.06   # kenara yapışıklık toleransı
-_BANNER_MAX_CUT = 0.22    # tek seferde en çok bu kadar kırp (içerik koru)
+# Bandı YALNIZ üst ya da alt KENAR BÖLGESİNDE (%20) ise kır — tepede küçük boşluk olsa BİLE
+# (short 967: caption y≈0.12, tepeye yapışık değil ama üst %20'de → eskiden 'ortada yüzüyor'
+# sanılıp kırpılmıyordu; heavy-text kapısı da iyi klibi reddediyordu). Gerçekten ORTADA yüzen
+# başlık (short 935 tembel-hayvan y≈0.48) temiz kırpılamaz (içerik kaybı) → dokunma.
+_BANNER_TOP_MAX = 0.20    # bandın DİBİ üst %20 içindeyse (ya da TEPESİ alt %20'de) kırpılır
+_BANNER_MAX_CUT = 0.24    # tek seferde en çok bu kadar kırp (içerik koru; %20 bölge + pay)
 
 
 def crop_source_banner(clip, banner, *, ffmpeg_path: str = "ffmpeg", out_path):
-    """Kaynağın gömülü yazı-bandını KIRP — SADECE üst ya da alt kenara yapışıksa (temiz
-    strip). Ortada yüzen banda dokunmaz (None). Blur değil, crop (temiz)."""
+    """Kaynağın gömülü yazı-bandını KIRP — bant üst ya da alt KENAR BÖLGESİNDE (%20) ise (temiz
+    strip). Gerçekten ortada yüzen banda dokunmaz (None). Blur değil, crop (temiz)."""
     if banner is None or not banner.present:
         return None
     yc = float(banner.y_center or 0.5)
@@ -413,13 +414,13 @@ def crop_source_banner(clip, banner, *, ffmpeg_path: str = "ffmpeg", out_path):
         return None                       # ihmal edilebilir — kırpmaya değmez
     top_edge = yc - f / 2.0                # bandın üst sınırı (0-1)
     bot_edge = yc + f / 2.0                # bandın alt sınırı (0-1)
-    # ÜST kenara yapışık (bandın tepesi ~0'da) → üstten bot_edge kadar at.
-    if top_edge <= _BANNER_EDGE_GAP and bot_edge <= 0.40:
+    # ÜST bölge: bandın DİBİ üst %20 içinde → üstten bot_edge kadar at (tepedeki boşluğu da).
+    if bot_edge <= _BANNER_TOP_MAX:
         cut = min(_BANNER_MAX_CUT, bot_edge + 0.02)
         vf = f"crop=iw:trunc(ih*(1-{cut:.3f})/2)*2:0:trunc(ih*{cut:.3f}/2)*2"
         where = "üst"
-    # ALT kenara yapışık (bandın dibi ~1'de) → alttan (1-top_edge) kadar at.
-    elif bot_edge >= (1.0 - _BANNER_EDGE_GAP) and top_edge >= 0.60:
+    # ALT bölge: bandın TEPESİ alt %20 içinde → alttan (1-top_edge) kadar at.
+    elif top_edge >= (1.0 - _BANNER_TOP_MAX):
         cut = min(_BANNER_MAX_CUT, (1.0 - top_edge) + 0.02)
         vf = f"crop=iw:trunc(ih*(1-{cut:.3f})/2)*2:0:0"
         where = "alt"

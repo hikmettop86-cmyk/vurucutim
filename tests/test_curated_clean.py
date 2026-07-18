@@ -57,6 +57,11 @@ def test_crop_source_banner_edges_only(tmp_path):
     top = crop_source_banner(src, SourceBanner(present=True, y_center=0.05, frac=0.08),
                              out_path=tmp_path / "top.mp4")
     assert top is not None and top.exists()
+    # ÜST BÖLGE ama tepede küçük boşluk (short 967: y≈0.12, top_edge≈0.09) → yine KIRPILIR
+    # (bandın dibi üst %20 içinde; eskiden 'ortada yüzüyor' sanılıp kaçıyordu)
+    top2 = crop_source_banner(src, SourceBanner(present=True, y_center=0.12, frac=0.06),
+                              out_path=tmp_path / "top2.mp4")
+    assert top2 is not None and top2.exists()
     # ALT kenar (dipte) → kırpılır
     bot = crop_source_banner(src, SourceBanner(present=True, y_center=0.95, frac=0.08),
                              out_path=tmp_path / "bot.mp4")
