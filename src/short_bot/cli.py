@@ -60,6 +60,8 @@ def _cmd_list(args) -> int:
 def _add_pool(sub):
     p = sub.add_parser("pool", help="Kürate havuzunu doldur (Reddit tara → skorla → biriktir)")
     p.add_argument("--channel", default="", help="Kanal slug (boş = tüm kürate kanallar)")
+    p.add_argument("--clean", action="store_true",
+                   help="Doldurmak yerine MEVCUT bekleyen havuzu yeniden tara → yazılı/logolu ele")
     p.add_argument("--config-dir", default="config")
     p.add_argument("--data-dir", default="data")
     p.set_defaults(func=_cmd_pool)
@@ -70,7 +72,7 @@ def _cmd_pool(args) -> int:
 
     import yaml as _yaml2
 
-    from short_bot.curated_pool import collect_all, collect_pool
+    from short_bot.curated_pool import clean_pool, collect_all, collect_pool
     _lg2.basicConfig(level=_lg2.INFO, format="%(message)s")
     config_dir = Path(args.config_dir)
     settings = load_settings(config_dir / "settings.yaml")
@@ -79,12 +81,18 @@ def _cmd_pool(args) -> int:
         if sec_path.exists() else {}
     db_path = Path(args.data_dir) / "short_bot.sqlite"
     if args.channel:
-        ch = load_channel(config_dir / "channels" / f"{args.channel}.yaml")
-        n = collect_pool(ch, settings=settings, secrets=secrets, db_path=db_path)
+        chans = [load_channel(config_dir / "channels" / f"{args.channel}.yaml")]
     else:
         chans = list_chans(config_dir / "channels", enabled_only=True)
+    if args.clean:
+        n = clean_pool(chans, settings=settings, secrets=secrets, db_path=db_path)
+        print(f"Havuzdan {n} yazılı/logolu klip elendi.")
+    elif args.channel:
+        n = collect_pool(chans[0], settings=settings, secrets=secrets, db_path=db_path)
+        print(f"Havuza {n} cevher eklendi.")
+    else:
         n = collect_all(chans, settings=settings, secrets=secrets, db_path=db_path)
-    print(f"Havuza {n} cevher eklendi.")
+        print(f"Havuza {n} cevher eklendi.")
     return 0
 
 

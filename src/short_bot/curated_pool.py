@@ -161,6 +161,41 @@ def collect_all(channels, *, settings, secrets, db_path, log=log) -> int:
     return total
 
 
+def clean_pool(channels, *, settings, secrets, db_path, log=log) -> int:
+    """Mevcut BEKLEYEN havuz cevherlerini YENİDEN tara; kapağında gömülü yazı/altyazı/logo
+    olanı 'skipped' yap (temiz-only filtresi bu klipler toplandıktan SONRA eklendi). Elenen
+    toplam sayısını döndürür. Skorlamayı DÜŞÜRMEZ (drop_text=False) — yalnız has_text bakar."""
+    from short_bot.curated_rank import score_curiosity
+    from short_bot.pipeline import resolve_ai_call
+    eng = init_db(db_path)
+    try:
+        vision = resolve_ai_call(settings, secrets, "vision")
+    except Exception:  # noqa: BLE001
+        vision = None
+    if vision is None:
+        log.info("  havuz[temizlik]: vision yok → atlandı")
+        return 0
+    total = 0
+    for ch in channels:
+        if getattr(ch, "content_source", "") != "curated" or not getattr(ch, "reel", None):
+            continue
+        rows = list_pool(eng, ch.slug, status="pending", limit=200)
+        if not rows:
+            continue
+        tone = getattr(ch.reel, "curated_tone", "mizah")
+        gems = [dict(row_to_gem(r), _pool_id=r["id"]) for r in rows]
+        # top_n=hepsi → tüm bekleyenleri tara; drop_text=False → elemeyi BİZ yaparız
+        score_curiosity(gems, vision_call=vision, tone=tone, top_n=len(gems),
+                        drop_text=False, log=log)
+        dirty = [g for g in gems if g.get("has_text")]
+        for g in dirty:
+            mark_pool(eng, g["_pool_id"], "skipped")
+        total += len(dirty)
+        log.info(f"  havuz[temizlik][{ch.slug}]: {len(dirty)} yazılı/logolu elendi "
+                 f"/ {len(gems)} tarandı → {len(gems) - len(dirty)} temiz kaldı")
+    return total
+
+
 def list_pool(eng, channel: str, *, status: str = "pending", limit: int = 100) -> list[dict]:
     """Panelde göstermek için havuz satırları (skor sıralı)."""
     with eng.connect() as c:
