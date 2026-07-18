@@ -278,6 +278,85 @@ def produce():
     return render_template("curated/_produce.html.j2", status="started", title=title)
 
 
+# ── KÜRATE HAVUZU: cron biriktirir (pooled_gems), kullanıcı Üret/Ele der ──────
+@bp.route("/curated/pool")
+def pool_view():
+    from short_bot.curated_pool import list_pool, pool_counts
+    from short_bot.db import init_db
+    channels = _curated_channels()
+    slug = (request.args.get("channel") or "").strip()
+    if not slug and channels:
+        slug = channels[0].slug
+    eng = init_db(current_app.config["SHORTBOT_DB_PATH"])
+    gems = list_pool(eng, slug) if slug else []
+    counts = pool_counts(eng, slug) if slug else {}
+    return render_template("curated/pool.html.j2", channels=channels, slug=slug,
+                           gems=gems, counts=counts)
+
+
+@bp.route("/curated/pool/collect", methods=["POST"])
+def pool_collect():
+    """Havuz taramasını ŞİMDİ tetikle (6 saatlik cron'u beklemeden). Arka planda koşar."""
+    slug = (request.form.get("channel") or "").strip()
+    cfg = current_app.config
+    sec = _secrets()
+    settings, db = cfg["SHORTBOT_SETTINGS"], cfg["SHORTBOT_DB_PATH"]
+    cfg_dir = cfg["SHORTBOT_CONFIG_DIR"]
+
+    def _job():
+        try:
+            from short_bot.curated_pool import collect_all, collect_pool
+            if slug:
+                collect_pool(load_channel(cfg_dir / "channels" / f"{slug}.yaml"),
+                             settings=settings, secrets=sec, db_path=db)
+            else:
+                collect_all(_curated_channels(), settings=settings, secrets=sec, db_path=db)
+        except Exception:  # noqa: BLE001 — arka plan işi sessiz düşsün
+            pass
+    threading.Thread(target=_job, daemon=True).start()
+    flash("Havuz taraması başlatıldı — birkaç dakika sürebilir, sonra sayfayı yenile.")
+    return redirect(url_for("curated.pool_view", channel=slug))
+
+
+@bp.route("/curated/pool/produce", methods=["POST"])
+def pool_produce():
+    from short_bot.curated_pool import get_pool_row, mark_pool, row_to_gem
+    from short_bot.db import init_db
+    pool_id = int(request.form.get("pool_id") or 0)
+    cfg = current_app.config
+    eng = init_db(cfg["SHORTBOT_DB_PATH"])
+    row = get_pool_row(eng, pool_id)
+    if not row:
+        flash("Havuz kaydı bulunamadı.")
+        return redirect(url_for("curated.pool_view"))
+    slug = row["channel"]
+    channel_path = cfg["SHORTBOT_CONFIG_DIR"] / "channels" / f"{slug}.yaml"
+    if not channel_path.exists():
+        flash("Kanal bulunamadı.")
+        return redirect(url_for("curated.pool_view", channel=slug))
+    launch_pipeline(
+        channel=load_channel(channel_path), settings=cfg["SHORTBOT_SETTINGS"],
+        db_path=cfg["SHORTBOT_DB_PATH"], music_root=cfg["SHORTBOT_MUSIC_ROOT"],
+        templates_dir=cfg["SHORTBOT_TEMPLATES_DIR"], cache_dir=cfg["SHORTBOT_CACHE_DIR"],
+        lock_dir=cfg["SHORTBOT_LOCK_DIR"], logs_dir=cfg["SHORTBOT_LOGS_DIR"],
+        trigger="pool_curated", curated_gem=row_to_gem(row))
+    # İyimser işaretleme: kullanıcı üretmeyi seçti → 'pending'ten çıkar. Üretim başarısız
+    # olsa bile dedup shorts tablosundan çalışır; kayıp minör.
+    mark_pool(eng, pool_id, "produced")
+    flash(f"Üretim başlatıldı: {(row.get('title') or '')[:50]}")
+    return redirect(url_for("curated.pool_view", channel=slug))
+
+
+@bp.route("/curated/pool/skip", methods=["POST"])
+def pool_skip():
+    from short_bot.curated_pool import mark_pool
+    from short_bot.db import init_db
+    pool_id = int(request.form.get("pool_id") or 0)
+    slug = (request.form.get("channel") or "").strip()
+    mark_pool(init_db(current_app.config["SHORTBOT_DB_PATH"]), pool_id, "skipped")
+    return redirect(url_for("curated.pool_view", channel=slug))
+
+
 # ── Kürate kanal OLUŞTURMA (eski footage-sürüklü reel sihirbazının yerine) ────
 def _slug_from_name(name: str) -> str:
     from short_bot.text_normalize import strip_non_turkish_diacritics

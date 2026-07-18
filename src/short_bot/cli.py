@@ -57,6 +57,37 @@ def _cmd_list(args) -> int:
     return 0
 
 
+def _add_pool(sub):
+    p = sub.add_parser("pool", help="Kürate havuzunu doldur (Reddit tara → skorla → biriktir)")
+    p.add_argument("--channel", default="", help="Kanal slug (boş = tüm kürate kanallar)")
+    p.add_argument("--config-dir", default="config")
+    p.add_argument("--data-dir", default="data")
+    p.set_defaults(func=_cmd_pool)
+
+
+def _cmd_pool(args) -> int:
+    import logging as _lg2
+
+    import yaml as _yaml2
+
+    from short_bot.curated_pool import collect_all, collect_pool
+    _lg2.basicConfig(level=_lg2.INFO, format="%(message)s")
+    config_dir = Path(args.config_dir)
+    settings = load_settings(config_dir / "settings.yaml")
+    sec_path = Path(args.data_dir) / "secrets.yaml"
+    secrets = (_yaml2.safe_load(sec_path.read_text(encoding="utf-8")) or {}) \
+        if sec_path.exists() else {}
+    db_path = Path(args.data_dir) / "short_bot.sqlite"
+    if args.channel:
+        ch = load_channel(config_dir / "channels" / f"{args.channel}.yaml")
+        n = collect_pool(ch, settings=settings, secrets=secrets, db_path=db_path)
+    else:
+        chans = list_chans(config_dir / "channels", enabled_only=True)
+        n = collect_all(chans, settings=settings, secrets=secrets, db_path=db_path)
+    print(f"Havuza {n} cevher eklendi.")
+    return 0
+
+
 def _cmd_run(args) -> int:
     config_dir = Path(args.config_dir)
     settings = load_settings(config_dir / "settings.yaml")
@@ -411,6 +442,7 @@ def main(argv: list[str] | None = None) -> int:
     _add_run(sub)
     _add_init(sub)
     _add_list(sub)
+    _add_pool(sub)
     _add_create_channel(sub)
     _add_regenerate_dna(sub)
     _add_rebuild_css(sub)

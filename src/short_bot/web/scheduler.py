@@ -296,6 +296,37 @@ def init_scheduler(app):
     # açılışını bekletmemeli. needs_refill + kota damgası boşuna koşmayı zaten önlüyor.
     threading.Thread(target=_topic_bank_autofill, daemon=True).start()
 
+    def _pool_collect():
+        """6 saatte bir: her KÜRATE kanal için Reddit'i tara → tona-duyarlı skorla →
+        güçlüyü HAVUZA biriktir (pooled_gems). Kullanıcı panel 'Havuz' sekmesinden bakıp
+        Üret/Ele der. Autopilot'un OTOMATİK-üret kısmı DEĞİL — insan-onaylı biriktirme.
+        Maliyet ~$0 (skor thumbnail/ücretsiz Google vision; klip inmez). POOL_MAX ile
+        havuz taşmaz. Futbol/composer cron'una DOKUNMAZ (ayrı interval job)."""
+        try:
+            import yaml
+
+            from short_bot.curated_pool import collect_all
+            settings = app.config["SHORTBOT_SETTINGS"]
+            cfg_dir = app.config["SHORTBOT_CONFIG_DIR"]
+            db_path = app.config["SHORTBOT_DB_PATH"]
+            try:
+                sp = app.config["SHORTBOT_SECRETS_PATH"]
+                secrets = (yaml.safe_load(sp.read_text(encoding="utf-8"))
+                           if sp.exists() else {}) or {}
+            except Exception:
+                secrets = {}
+            chans = list_channels(cfg_dir / "channels", enabled_only=True)
+            n = collect_all(chans, settings=settings, secrets=secrets,
+                            db_path=db_path, log=_LOG)
+            if n:
+                _LOG.info(f"[havuz] +{n} cevher biriktirildi")
+        except Exception as e:  # noqa: BLE001 — cron ÇÖKMEMELİ
+            _LOG.warning(f"[havuz] toplama işi başarısız: {e}")
+
+    scheduler.add_job(_pool_collect, "interval", hours=6, id="_pool_collect",
+                      replace_existing=True)
+    threading.Thread(target=_pool_collect, daemon=True).start()
+
     # --- AUTOPILOT ---------------------------------------------------------
     def _autopilot_channels():
         cfg_dir = app.config["SHORTBOT_CONFIG_DIR"]

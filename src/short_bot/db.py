@@ -94,6 +94,34 @@ youtube_uploads = Table(
 )
 Index("idx_yt_uploads_short", youtube_uploads.c.short_id, youtube_uploads.c.uploaded_at)
 
+# KÜRATE HAVUZU: cron sürekli Reddit'i tarar, kanala uygun (tona-duyarlı skor) cevherleri
+# buraya biriktirir; kullanıcı panelden bakıp 'Üret'/'Ele' der. status: pending|produced|skipped.
+pooled_gems = Table(
+    "pooled_gems", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("channel", String, nullable=False),
+    Column("clip_key", String, nullable=False),   # dedup: v.redd.it id ya da url
+    Column("permalink", Text),
+    Column("video_url", Text, nullable=False),
+    Column("title", Text),
+    Column("sub", String),
+    Column("ups", Integer),
+    Column("comments", Integer),
+    Column("duration", Integer),
+    Column("width", Integer),
+    Column("height", Integer),
+    Column("orient", String),
+    Column("thumb", Text),
+    Column("score", Float),                        # tona-duyarlı merak/duygu skoru
+    Column("tone", String),
+    Column("status", String, default="pending"),   # pending | produced | skipped
+    Column("added_at", DateTime, default=_utcnow),
+    Column("short_id", Integer, ForeignKey("shorts.id")),  # üretilince bağlanır
+    UniqueConstraint("channel", "clip_key", name="uq_pool_channel_clip"),
+)
+Index("idx_pool_channel_status", pooled_gems.c.channel, pooled_gems.c.status,
+      pooled_gems.c.score.desc())
+
 youtube_video_stats = Table(
     "youtube_video_stats", metadata,
     Column("video_id", String, nullable=False),
