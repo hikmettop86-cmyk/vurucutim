@@ -28,7 +28,9 @@ def clip_key(video_url: str) -> str:
     """Dedup anahtarı — v.redd.it id'si ya da (query'siz) url. _produced_clip_keys ile
     TUTARLI olmalı (aynı klip havuzda + üretilmişte aynı anahtarı üretsin)."""
     vu = (video_url or "").split("?")[0]
-    m = re.search(r"v\.redd\.it/([a-z0-9]+)", vu)
+    # [A-Za-z0-9]: id BÜYÜK harf içerse [a-z0-9] ilk büyükte kesip anahtarı KISALTIP çakıştırıyordu
+    # (denetim L1 — iki farklı klip aynı truncated key → biri 'zaten görülmüş' sanılıp atlanır).
+    m = re.search(r"v\.redd\.it/([A-Za-z0-9]+)", vu)
     return "vreddit:" + m.group(1) if m else vu
 
 
