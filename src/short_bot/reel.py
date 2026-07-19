@@ -265,6 +265,39 @@ CURATED_MAX_SLOWDOWN = 2.7
 CURATED_MAX_SPEEDUP = 1.8
 
 
+def _curated_vertical_pad(clip, ffmpeg_path: str, out_path):
+    """Kürate klip YATAY ise 9:16'ya BLUR-PAD ile oturt → TÜM aksiyon görünür kalır (denetim R2:
+    agresif merkez-crop yatay klibin ~%68 genişliğini atıp aksiyonu kırpıyordu — 'anlamadım').
+    Dikey/kare klip → None (crop zaten iyi doldurur). Bulanık-zoom arka plan + ortalanmış tam kare."""
+    import subprocess
+    probe = _ffprobe_path(ffmpeg_path)
+    try:
+        out = subprocess.run([probe, "-v", "error", "-select_streams", "v:0",
+                              "-show_entries", "stream=width,height", "-of", "csv=p=0:s=x",
+                              str(clip)], capture_output=True, text=True, timeout=30)
+        w, h = (int(x) for x in out.stdout.strip().split("x")[:2])
+    except Exception:  # noqa: BLE001
+        return None
+    if w <= 0 or h <= 0 or (w / h) < 1.1:
+        return None                       # dikey/kare → merkez-crop zaten aksiyonu koruyor
+    from short_bot.reel_assembler import H as _H
+    from short_bot.reel_assembler import W as _W
+    vf = (f"[0:v]split=2[bg][fg];"
+          f"[bg]scale={_W}:{_H}:force_original_aspect_ratio=increase,crop={_W}:{_H},"
+          f"boxblur=20:4[bgb];"
+          f"[fg]scale={_W}:{_H}:force_original_aspect_ratio=decrease[fgs];"
+          f"[bgb][fgs]overlay=(W-w)/2:(H-h)/2,format=yuv420p")
+    try:
+        subprocess.run([ffmpeg_path, "-v", "error", "-y", "-i", str(clip),
+                        "-filter_complex", vf, "-an", "-r", "30", "-preset", "veryfast",
+                        str(out_path)], capture_output=True, timeout=180)
+        if Path(out_path).exists() and Path(out_path).stat().st_size > 0:
+            return out_path
+    except Exception as e:  # noqa: BLE001
+        log.info(f"  kürate: 9:16 blur-pad başarısız ({e}) → crop'a düşülüyor")
+    return None
+
+
 def _slow_clip_to(clip, target_s: float, ffmpeg_path: str, out_path):
     """Klibi setpts ile ~target_s'ye OTURT (video-only, contiguous tek oynatım; scatter önleme).
     Klip kısaysa yavaşlatır, uzunsa hızlandırır (aşırı uzunsa hızlandır+trim). Döner yeni klip
@@ -790,6 +823,11 @@ def produce_reel_video(
     if curated_clip is not None:
         _cc = Path(curated_clip)
         _orig_d = _clip_duration_s(_cc, ffmpeg_path)
+        # YATAY klip → 9:16 blur-pad (aksiyon korunur; agresif crop kırpmasın). Dikey → dokunulmaz.
+        _pad = _curated_vertical_pad(_cc, ffmpeg_path, work_dir / "curated_pad.mp4")
+        if _pad is not None:
+            log.info("  kürate: yatay klip → 9:16 blur-pad (tüm aksiyon görünür, crop yok)")
+            _cc = Path(_pad)
         _slow = _slow_clip_to(_cc, duration_s + 0.4, ffmpeg_path,
                               work_dir / "curated_slow.mp4")
         if _slow is not None:
