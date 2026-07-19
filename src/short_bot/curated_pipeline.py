@@ -282,10 +282,14 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
             # 'faithful=false, mismatch=""' dönünce eski AND-guard rewrite'ı ATLAYIP uydurma
             # anlatımı YAYINLIYORDU). Reason boşsa jenerik geri bildirim ver.
             if _chk is not None and not _chk.faithful:
-                _fb = _chk.mismatch or ("Anlatım videodaki GERÇEK olayla örtüşmüyor (özne/olay/sıra). "
-                                        "SADECE karelerde görüneni anlat, olay/aşama UYDURMA.")
+                # DİREKTİF geri bildirim (denetim short 999): sadece 'X yok' demek yetmiyordu,
+                # rewrite uydurmayı KORUYABİLİYORDU. Net emir: o varlığı/olayı TAMAMEN ÇIKAR.
+                _why = _chk.mismatch or ("Anlatımda ekranda GÖRÜNMEYEN bir olay/varlık var.")
+                _fb = (f"SADAKAT HATASI: {_why} Bu UYDURMA varlığı/olayı anlatımdan TAMAMEN SİL; "
+                       f"onunla ilgili tüm cümleleri çıkar. YALNIZ karelerde GERÇEKTEN görüneni "
+                       f"anlat — olmayan ikinci hayvan/nesne/kişi ya da alt-olay EKLEME.")
                 log.info(f"  kürate[sadakat]: anlatım sadık DEĞİL ({_chk.mismatch or 'reason yok'}) "
-                         f"→ geri bildirimle yeniden yazılıyor")
+                         f"→ direktif geri bildirimle yeniden yazılıyor")
                 narration = write_curated_narration(
                     title_seed, narr_desc, channel=channel, subject="clip",
                     claude_path=narr_llm.claude_path, model=narr_llm.model,
