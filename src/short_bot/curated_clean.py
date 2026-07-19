@@ -260,10 +260,20 @@ def verify_curated_narration(clip, narration_text: str, *, vision_call,
                 return None
             if not board.exists() or board.stat().st_size == 0:
                 return None
-            return run_json(_FAITH_PROMPT.format(narr=narration_text[:900]), NarrationCheck,
-                            claude_path=vision_call.claude_path, model=vision_call.model,
-                            backend=vision_call.backend, api_key=vision_call.api_key,
-                            image_path=board, retries=1, timeout_s=45)
+            # SADAKAT KAPISI geçici vision hatasında None dönüp sessizce ATLANMASIN (short 976:
+            # verify None döndü → kapı fail-open → uydurma anlatım geçti). Burst-throttle'a karşı
+            # ek tur → None yalnız gerçekten doğrulanamayınca (kapı o zaman sadık sayar).
+            last: Exception | None = None
+            for _ in range(2):
+                try:
+                    return run_json(_FAITH_PROMPT.format(narr=narration_text[:900]), NarrationCheck,
+                                    claude_path=vision_call.claude_path, model=vision_call.model,
+                                    backend=vision_call.backend, api_key=vision_call.api_key,
+                                    image_path=board, retries=2, timeout_s=45)
+                except Exception as e:  # noqa: BLE001 — geçici → tekrar dene
+                    last = e
+            log.info(f"  kürate[sadakat]: yargı doğrulanamadı ({last})")
+            return None
     except Exception as e:  # noqa: BLE001
         log.info(f"  kürate[sadakat]: yargı hatası ({e})")
         return None
