@@ -182,6 +182,24 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
             raise CuratedClipError(
                 f"Klip '{_tone}' tonuna uymuyor ({_tf.reason}) → atlanıyor (yanlış kanal için).")
 
+        # ZAMAN-SIRALI BEAT SHEET (kullanıcı short 990: 'sahneler ile cümleler oturmuyor'):
+        # _describe_clip tüm klibi TEK BLOK özetliyor → zaman çizgisi eriyor, anlatıcı ödülü
+        # (yardım/kavuşma) ERKEN açıyor (görüntü hâlâ 'düşüş'teyken) ve 'ikisi' derken kalabalık
+        # taşıyor. KANITLANDI: ücretsiz vision bütünü verince olayları BİRLEŞTİRİYOR ama klibi
+        # ÜÇE bölüp AYRI sorunca her dilimi DOĞRU/zaman-sıralı anlatıyor (sarı-tişört detayı +
+        # 'kalabalık' sayısı doğru). Beat sheet'ten yazılan senaryo footage sırasına oturur;
+        # boşsa blok desc'e düşer (fail-open, mevcut davranış). tone-fit'ten SONRA: yalnız
+        # tonu geçen klip için hesaplanır (boşuna vision harcanmaz).
+        narr_desc = desc
+        if vision is not None:
+            from short_bot.curated_clean import describe_clip_beats
+            _beats = describe_clip_beats(clip, vision_call=vision,
+                                         ffmpeg_path=settings.ffmpeg_path, duration_s=clip_dur)
+            if _beats:
+                narr_desc = _beats
+                log.info(f"  kürate: zaman-sıralı beat sheet ({_beats.count(chr(10)) + 1} "
+                         f"dilim) → anlatım footage sırasına oturur")
+
         # KALABALIK BAĞLAMI (vision'a ALTERNATİF): vision tek storyboard'dan aleti/olayı
         # kaçırabiliyor (short 923: pipeti görmedi, 'parmakla çöp çıkarıyor' dedi — oysa
         # başlık 'using a straw', yorumlar 'nefes borusuna soktu' diyor). Başlık + üst
@@ -209,7 +227,7 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
         target = curated_target(clip_dur, reel.target_duration_s)
         log.info(f"  kürate: klip {clip_dur:.1f}s → video hedefi {target} (loop önleme)")
         narration = write_curated_narration(
-            title_seed, desc, channel=channel, subject="clip",
+            title_seed, narr_desc, channel=channel, subject="clip",
             claude_path=narr_llm.claude_path, model=narr_llm.model,
             backend=narr_llm.backend, api_key=narr_llm.api_key,
             seed=seed, target_duration_s=target, scene_split=scene_split,
@@ -228,7 +246,7 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
                 log.info(f"  kürate[sadakat]: anlatım sadık DEĞİL ({_chk.mismatch}) "
                          f"→ geri bildirimle yeniden yazılıyor")
                 narration = write_curated_narration(
-                    title_seed, desc, channel=channel, subject="clip",
+                    title_seed, narr_desc, channel=channel, subject="clip",
                     claude_path=narr_llm.claude_path, model=narr_llm.model,
                     backend=narr_llm.backend, api_key=narr_llm.api_key,
                     seed=seed, target_duration_s=target, scene_split=scene_split,
@@ -247,18 +265,18 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
         # Sonnet değil, ucuz metin backend 'llm' → bağımsız perspektif) 'akıllı ama anlamsız'
         # varyansını yakalar; değilse geri bildirimle bir kez yeniden yaz. Fail-open.
         from short_bot.reel_narration import judge_narration_clarity
-        _clr = judge_narration_clarity(narration.full_text(), desc, backend=llm.backend,
+        _clr = judge_narration_clarity(narration.full_text(), narr_desc, backend=llm.backend,
                                        model=llm.model, api_key=llm.api_key,
                                        claude_path=llm.claude_path)
         if _clr is not None and not _clr.clear and _clr.reason:
             log.info(f"  kürate[netlik]: anlatım net DEĞİL ({_clr.reason}) → yeniden yazılıyor")
             narration = write_curated_narration(
-                title_seed, desc, channel=channel, subject="clip",
+                title_seed, narr_desc, channel=channel, subject="clip",
                 claude_path=narr_llm.claude_path, model=narr_llm.model,
                 backend=narr_llm.backend, api_key=narr_llm.api_key,
                 seed=seed, target_duration_s=target, scene_split=scene_split,
                 comments=comments, feedback=f"ANLAŞILIRLIK: {_clr.reason}")
-            _clr2 = judge_narration_clarity(narration.full_text(), desc, backend=llm.backend,
+            _clr2 = judge_narration_clarity(narration.full_text(), narr_desc, backend=llm.backend,
                                             model=llm.model, api_key=llm.api_key,
                                             claude_path=llm.claude_path)
             if _clr2 is not None and not _clr2.clear:

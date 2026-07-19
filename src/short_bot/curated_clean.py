@@ -358,6 +358,70 @@ def detect_scene_split(clip, *, vision_call, ffmpeg_path: str = "ffmpeg",
     return max(0.15, min(0.85, frac))
 
 
+# ── ZAMAN-SIRALI BEAT SHEET (anlatım görüntünün zaman çizgisine oturur) ───────
+# SORUN (short 990, kullanıcı: 'sahneler ile cümleler oturmuyor'): _describe_clip tüm klibi
+# TEK BLOK özetliyor ('koşuculara yardım ediliyor') → zaman çizgisi kayboluyor, anlatıcı
+# ödülü (yardım/kavuşma) ERKEN açıyor, görüntü hâlâ kurulumdayken (düşüş). Ayrıca tek blok
+# 'kaç kişi/ne sırayla' detayını eritiyor ('ikisi' derken 3-4 kişi taşıyor).
+# ÇÖZÜM (KANITLANDI: ücretsiz gemini-flash-lite bütünü verince olayları BİRLEŞTİRİYOR ama
+# klibi ÜÇE bölüp AYRI sorunca her dilimi DOĞRU ve zaman-sıralı anlatıyor): klibi segment'lere
+# böl, her segment'i ayrı tarif et → anlatıcıya 'BAŞTA X, SONRA Y, SONUNDA Z; ödülü sona sakla'
+# beat listesi ver. Böylece cümleler ekrandaki ana denk gelir.
+def describe_clip_beats(clip, *, vision_call, ffmpeg_path: str = "ffmpeg",
+                        segments: int = 3, duration_s: float | None = None) -> str:
+    """Klibi ``segments`` eşit zaman dilimine böl, her dilimi AYRI storyboard'la tarif et →
+    zaman-sıralı 'beat sheet' döndür (ör. 'BAŞ (0-12sn): …\\nORTA (12-23sn): …\\nSON …').
+    Boş döner (fail-open): süre okunamaz / vision yok / tüm dilimler boş → çağıran tek-blok
+    _describe_clip'e düşer."""
+    import subprocess
+    from short_bot.footage_matcher import describe_storyboard
+    if duration_s is None:
+        try:
+            out = subprocess.run(
+                [ffmpeg_path.replace("ffmpeg", "ffprobe"), "-v", "error",
+                 "-show_entries", "format=duration", "-of", "csv=p=0", str(clip)],
+                capture_output=True, text=True, timeout=30)
+            duration_s = float((out.stdout or "").strip())
+        except Exception:  # noqa: BLE001
+            return ""
+    if not duration_s or duration_s < 6 or segments < 2:
+        return ""
+    step = duration_s / segments
+    labels = (["BAŞ", "ORTA", "SON"] if segments == 3
+              else [f"B{i+1}" for i in range(segments)])
+    beats: list[str] = []
+    for i in range(segments):
+        s0, s1 = i * step, min(duration_s, (i + 1) * step)
+        try:
+            with tempfile.TemporaryDirectory() as td:
+                seg = Path(td) / f"seg{i}.mp4"
+                board = Path(td) / f"segb{i}.jpg"
+                r = subprocess.run(
+                    [ffmpeg_path, "-v", "error", "-ss", f"{s0:.2f}", "-to", f"{s1:.2f}",
+                     "-i", str(clip), "-c", "copy", str(seg)],
+                    capture_output=True, timeout=60)
+                if r.returncode != 0 or not seg.exists() or seg.stat().st_size == 0:
+                    # -c copy anahtar-kare hizasında kesemezse yeniden-kodla (yavaş ama sağlam)
+                    subprocess.run(
+                        [ffmpeg_path, "-v", "error", "-ss", f"{s0:.2f}", "-to", f"{s1:.2f}",
+                         "-i", str(clip), "-an", str(seg)],
+                        capture_output=True, timeout=90)
+                if not seg.exists() or seg.stat().st_size == 0:
+                    continue
+                from short_bot.reel import _storyboard_frames
+                if not _storyboard_frames(seg, board, ffmpeg_path, cols=3, rows=2,
+                                          frame_w=384):
+                    continue
+                desc, _static = describe_storyboard(board, vision_call=vision_call)
+                if desc and desc.strip():
+                    lbl = labels[i] if i < len(labels) else f"B{i+1}"
+                    beats.append(f"{lbl} ({int(s0)}-{int(s1)}sn): {desc.strip()}")
+        except Exception as e:  # noqa: BLE001
+            log.info(f"  kürate[beat]: segment {i} tarif hatası ({e})")
+            continue
+    return "\n".join(beats)
+
+
 # ── KAYNAK YAZI-BANDI (repost başlığı) KIRPMA ────────────────────────────────
 # Reddit/TikTok repost klipleri sık sık üstte/altta gömülü bir BAŞLIK ŞERİDİ taşır
 # (örn. 'The way her mom said thank you… 🥺'). Watermark değil; delogo silmez. Bizim

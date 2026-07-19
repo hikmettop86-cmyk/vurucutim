@@ -163,3 +163,43 @@ def test_detect_heavy_text_flags_burned_captions(monkeypatch, tmp_path):
 
     r = detect_heavy_text(tmp_path / "c.mp4", vision_call=_V())
     assert r is not None and r.heavy is True and "subtitle" in r.kinds
+
+
+def test_describe_clip_beats_time_ordered(monkeypatch, tmp_path):
+    """describe_clip_beats: klibi segment'lere bölüp her dilimi AYRI tarif eder → zaman-sıralı
+    beat sheet (BAŞ/ORTA/SON). Böylece anlatım footage SIRASINA oturur, ödül erken açılmaz
+    (short 990: kullanıcı 'sahneler ile cümleler oturmuyor'). subprocess/storyboard/describe
+    fonksiyon-içi import → kaynakta patch."""
+    import subprocess
+    import short_bot.footage_matcher as fm
+    import short_bot.reel as reel
+    from short_bot.curated_clean import describe_clip_beats
+
+    # ffmpeg segment kesme → çıktı dosyasını yarat (başarı simüle); ffprobe çağrılmaz (duration_s verili)
+    def _fake_run(cmd, *a, **k):
+        try:
+            Path(cmd[-1]).write_bytes(b"x")
+        except Exception:  # noqa: BLE001
+            pass
+        class _R:
+            returncode = 0; stdout = ""; stderr = ""
+        return _R()
+    monkeypatch.setattr(subprocess, "run", _fake_run)
+    monkeypatch.setattr(reel, "_storyboard_frames",
+                        lambda clip, board, *a, **k: (Path(board).write_bytes(b"x") or True))
+    # her segment FARKLI (zaman-sıralı) tarif döndür
+    _descs = iter(["a runner collapses, others pass",
+                   "a yellow-shirt runner stops to help",
+                   "several runners carry him to the finish"])
+    monkeypatch.setattr(fm, "describe_storyboard", lambda board, **k: (next(_descs), False))
+
+    class _V:
+        claude_path = ""; model = ""; backend = "google_studio"; api_key = ""
+
+    out = describe_clip_beats(tmp_path / "c.mp4", vision_call=_V(), duration_s=30, segments=3)
+    # üç dilim de var, zaman-sıralı, her biri kendi tarifiyle
+    assert "BAŞ" in out and "ORTA" in out and "SON" in out
+    assert "collapses" in out and "yellow-shirt" in out and "carry him" in out
+    assert out.index("BAŞ") < out.index("ORTA") < out.index("SON")
+    # süre çok kısa / segment<2 → boş (fail-open, blok desc'e düşülür)
+    assert describe_clip_beats(tmp_path / "c.mp4", vision_call=_V(), duration_s=3) == ""
