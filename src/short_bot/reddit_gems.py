@@ -107,6 +107,37 @@ def fetch_top(subreddit: str, token: str, *, t: str = "week", limit: int = 25,
     return [c["data"] for c in r.json()["data"]["children"]]
 
 
+def _fetch_listing_paged(subreddit: str, token: str, listing: str, *, t: str = "month",
+                         pages: int = 3, user_agent: str = _UA) -> list[dict]:
+    """Bir subreddit listesini (top/hot) SAYFALAYARAK DERİN çeker (Reddit 'after' imleci,
+    100/sayfa). find_gems'in 25-post sığ çekimini derinleştirir → funnel'daki 'kaynak yok'
+    darboğazını açar (milyonlarca video var, biz sığ çekince aza düşüyordu). Reddit OAuth:
+    100 item/istek, ~100 istek/dk — 17 sub × pages sayfa API sınırının çok altında."""
+    out: list[dict] = []
+    after: str | None = None
+    for _ in range(max(1, pages)):
+        params: dict = {"limit": 100, "raw_json": 1}
+        if listing == "top":
+            params["t"] = t
+        if after:
+            params["after"] = after
+        try:
+            r = requests.get(f"{_API}/r/{subreddit}/{listing}", params=params,
+                             headers={"Authorization": f"bearer {token}",
+                                      "User-Agent": user_agent}, timeout=20)
+            r.raise_for_status()
+        except Exception:  # noqa: BLE001 — bir sayfa düşerse eldekiyle devam
+            break
+        data = r.json().get("data", {})
+        children = data.get("children", [])
+        out.extend(c["data"] for c in children)
+        after = data.get("after")
+        if not after or not children:
+            break
+        time.sleep(0.4)   # rate-limit payı (100 QPM'in altında kal)
+    return out
+
+
 def fetch_popular(client_id: str, client_secret: str, *, geo: str = "GLOBAL",
                   limit: int = 100, min_ups: int = 500, max_duration: int = 90,
                   listing: str = "hot", user_agent: str = _UA) -> list[dict]:
@@ -146,8 +177,14 @@ def fetch_popular(client_id: str, client_secret: str, *, geo: str = "GLOBAL",
 
 def find_gems(client_id: str, client_secret: str, *, subreddits=None,
               t: str = "week", per_sub: int = 25, min_ups: int = 500,
-              max_duration: int = 90, user_agent: str = _UA) -> list[dict]:
+              max_duration: int = 90, pages: int = 3, listings=("top", "hot"),
+              user_agent: str = _UA) -> list[dict]:
     """Cevher adaylarını bulur: SFW video, süre ≤max, upvote ≥min; upvote sıralı.
+
+    DERİN ÇEKİM (2026-07-19): her sub'dan SAYFALAYARAK ~pages×100 post × (top+hot) çeker —
+    eski 25-post/sub sığ çekim funnel'ı daraltıp 'temiz cevher yok'a düşürüyordu (kaynak
+    milyonlarca, biz aza bakıyorduk). ``per_sub`` artık yok sayılır (geriye-uyum). Reddit
+    OAuth sınırı içinde (100 item/istek, ~100 istek/dk).
 
     Döner: [{sub, ups, comments, title, duration, width, height, orient,
              video_url, permalink, over18}] — indirme/onay çağırana bırakılır.
@@ -157,10 +194,12 @@ def find_gems(client_id: str, client_secret: str, *, subreddits=None,
     seen: set[str] = set()
     gems: list[dict] = []
     for sub in subs:
-        try:
-            posts = fetch_top(sub, token, t=t, limit=per_sub, user_agent=user_agent)
-        except Exception as e:  # noqa: BLE001 — tek sub düşerse diğerleri sürsün
-            log.info(f"  cevher: r/{sub} çekilemedi ({e})")
+        posts: list[dict] = []
+        for _lst in listings:
+            posts += _fetch_listing_paged(sub, token, _lst, t=t, pages=pages,
+                                          user_agent=user_agent)
+        if not posts:
+            log.info(f"  cevher: r/{sub} çekilemedi/boş")
             continue
         for p in posts:
             if p.get("over_18") or p.get("ups", 0) < min_ups:
