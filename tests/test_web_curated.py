@@ -293,7 +293,7 @@ def test_new_curated_creates_channel(tmp_path, monkeypatch):
     ch = load_channel(p)
     assert ch.content_source == "curated"
     assert ch.reel.enabled and ch.reel.voice_id == "V1"
-    assert "AnimalsBeingJerks" in ch.reel.subreddits   # kategori subreddit'leri geçti
+    assert "AnimalsBeingDerps" in ch.reel.subreddits   # kategori subreddit'leri geçti
     assert ch.dna is None                              # kürate DNA gerektirmez
 
 

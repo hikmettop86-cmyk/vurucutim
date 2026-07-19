@@ -20,26 +20,28 @@ _TOKEN_URL = "https://www.reddit.com/api/v1/access_token"
 _API = "https://oauth.reddit.com"
 _UA = "shortbot-gemfinder/0.1"
 
-# Persona-fit (mahalle vahşisi = karakterli/kabadayı/şaşırtıcı hayvan): topluluk oyu
-# (upvote) 'satisfying/komik' sinyalini zaten taşıyor.
+# MİZAH (kaosdayi = genel kaos/komik). ÖLÇÜLDÜ 2026-07-19 (top?t=month, ups≥1000 VİDEO sayısı):
+# eski liste hayvan-ağırlıklıydı (AnimalsBeingJerks 2 video); genel komik video-yoğun subler
+# eklendi (therewasanattempt 79, funny 49, contagiouslaughter 57, WhatCouldGoWrong 26...).
 DEFAULT_SUBS = [
-    "AnimalsBeingJerks", "AnimalsBeingDerps", "likeus", "AnimalsBeingBros",
-    "NatureIsFuckingLit", "Unexpected", "nextfuckinglevel", "holdmycatnip",
-    "AnimalsBeingConfused", "AnimalsBeingGeniuses",
-    # YÜKSEK-MERAK (doğrulandı 2026-07-17: video-zengin, beklenmedik/gerilim anları).
-    "AbruptChaos", "maybemaybemaybe", "interestingasfuck",
+    # Genel komik / beklenmedik / fail / kaos (video-yoğun, ölçüldü)
+    "Unexpected", "funny", "WhatCouldGoWrong", "therewasanattempt", "instant_regret",
+    "facepalm", "contagiouslaughter", "nonononoyes", "AbruptChaos", "maybemaybemaybe",
+    "Wellthatsucks", "IdiotsInCars", "kidsarefuckingstupid", "holdmyredbull",
+    "nextfuckinglevel", "interestingasfuck", "nevertellmetheodds",
+    # Hayvan-komik (persona için)
+    "AnimalsBeingDerps", "AnimalsBeingGeniuses", "funnycats", "FunnyAnimals", "likeus",
+    "AnimalsBeingStupid",
 ]
 
-# DUYGU kanalı havuzu (curated_tone='duygu'): kahramanlık/kurtarma/sadakat/dokunaklı +
-# wholesome/minnet/kavuşma — derp/komik değil. @NedenHayvan şeridi. GENİŞLETİLDİ
-# (2026-07-18): 6 sub 'week' penceresinde ~10 videoda tükeniyordu; duygusal içerik
-# EVERGREEN olduğu için havuzu 17 sub'a çıkardık (kanal curated_time='month' ile eşleşir
-# → ~118 klip/pencere, dedup+rubrik sonrası ~60-80 güçlü aday = fiilen tükenmez).
+# DUYGU kanalı havuzu (curated_tone='duygu'): dokunaklı/kurtarma/kavuşma. ÖLÇÜLDÜ 2026-07-19:
+# eski 17-sub listenin YARISI RESİM-yoğun/ölüydü (rescuedogs/rescuecats/AnimalRescue/
+# BeforeNAfterAdoption/Eyebleach/dogswithjobs/wholesomegifs/MadeMeCry ≈0 VİDEO!) → funnel'ı
+# yanıltıyordu. Yalnız video-yoğun dokunaklı subler kaldı + Heartwarming(30)/wholesome(6) eklendi.
+# Ton-uyum kapısı (judge_tone_fit) karışık sublerdeki (MadeMeSmile) komik klipleri zaten eler.
 DEFAULT_DUYGU_SUBS = [
-    "MadeMeSmile", "HumansBeingBros", "AnimalsBeingBros", "likeus",
-    "AnimalsBeingGeniuses", "rarepuppers", "aww", "Eyebleach", "dogswithjobs",
-    "IllegallySmolCats", "rescuedogs", "rescuecats", "AnimalRescue",
-    "BeforeNAfterAdoption", "wholesomegifs", "OldPeopleWholesome", "MadeMeCry",
+    "MadeMeSmile", "HumansBeingBros", "Heartwarming", "AnimalsBeingBros", "aww",
+    "IllegallySmolCats", "AnimalsBeingGeniuses", "likeus", "wholesome", "rarepuppers",
 ]
 
 # İndirilebilir video kaynakları (yt-dlp bunları çözer).

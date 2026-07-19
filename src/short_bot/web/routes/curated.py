@@ -24,25 +24,30 @@ _TIME_WINDOWS = ("hour", "day", "week", "month", "year", "all")
 
 # KATEGORİLER: niş = subreddit kümesi. Kullanıcı kategori seçer (kanalın kendi
 # subreddit listesi yerine). "Kanal ayarı" = kanalın reel.subreddits (ya da DEFAULT_SUBS).
+# ÖLÇÜLDÜ 2026-07-19 (top?t=month, ups≥1000 VİDEO sayısı): resim-yoğun/ölü subler çıkarıldı,
+# video-yoğunlar eklendi. Sayılar yorumda referans.
 CATEGORIES: dict[str, list[str]] = {
-    "Hayvanlar": ["AnimalsBeingJerks", "AnimalsBeingDerps", "likeus",
-                  "AnimalsBeingBros", "holdmycatnip", "AnimalsBeingConfused",
+    "Hayvanlar": ["AnimalsBeingDerps", "likeus", "AnimalsBeingBros",
                   "AnimalsBeingGeniuses", "funnycats", "IllegallySmolCats",
-                  "humansbeingbros"],
-    # YÜKSEK-MERAK (doğrulandı: video-zengin + yüksek upvote 2026-07-17). 'Bunu
-    # izlemeliyim' dedirten beklenmedik/gerilim anları — merak skorunu besler.
+                  "FunnyAnimals", "AnimalsBeingStupid", "HumansBeingBros", "aww"],
+    # Dokunaklı/wholesome VİDEO subler (dayidiyorki gibi DUYGU kanalları için).
+    "Duygusal / dokunaklı": ["MadeMeSmile", "HumansBeingBros", "Heartwarming",
+                             "AnimalsBeingBros", "aww", "IllegallySmolCats",
+                             "wholesome", "AnimalsBeingGeniuses"],
     "Kaos / beklenmedik": ["AbruptChaos", "maybemaybemaybe", "nonononoyes",
-                           "Unexpected", "holdmyredbull", "nevertellmetheodds"],
-    "Kahkaha / komik": ["contagiouslaughter", "therewasanattempt", "funnycats",
-                        "instant_regret", "facepalm"],
-    "Tatmin edici": ["oddlysatisfying", "Satisfyingasfuck", "nevertellmetheodds"],
+                           "Unexpected", "holdmyredbull", "nevertellmetheodds",
+                           "IdiotsInCars"],
+    "Kahkaha / komik": ["contagiouslaughter", "therewasanattempt", "funny",
+                        "funnycats", "instant_regret", "facepalm", "kidsarefuckingstupid"],
+    "Tatmin edici": ["oddlysatisfying", "Satisfyingasfuck", "blackmagicfuckery",
+                     "toptalent"],
     "İnanılmaz": ["nextfuckinglevel", "BeAmazed", "interestingasfuck",
                   "Damnthatsinteresting", "blackmagicfuckery", "toptalent"],
-    "Fail / komik": ["Whatcouldgowrong", "instant_regret", "Wellthatsucks",
-                     "facepalm", "therewasanattempt"],
-    "Doğa": ["NatureIsFuckingLit", "natureismetal", "BeAmazed"],
+    "Fail / komik": ["WhatCouldGoWrong", "instant_regret", "Wellthatsucks",
+                     "facepalm", "therewasanattempt", "IdiotsInCars"],
+    "Doğa": ["NatureIsFuckingLit", "BeAmazed", "Damnthatsinteresting"],
     "Şaşırtıcı anlar": ["Unexpected", "holdmyredbull", "AbruptChaos",
-                        "maybemaybemaybe", "nonononoyes"],
+                        "maybemaybemaybe", "nonononoyes", "kidsarefuckingstupid"],
 }
 
 # Bellek-içi iş kaydı + son arama cache'i (tek kullanıcılı panel).
