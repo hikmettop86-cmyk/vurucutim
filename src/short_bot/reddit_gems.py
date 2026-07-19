@@ -44,6 +44,14 @@ DEFAULT_DUYGU_SUBS = [
     "IllegallySmolCats", "AnimalsBeingGeniuses", "likeus", "wholesome", "rarepuppers",
 ]
 
+# KARMA ('oh olsun') — hak edilmiş, TATMİN EDİCİ comeuppance video-yoğun sublar. Ciddi
+# yaralanma/şiddet riski taşıyanlar (PublicFreakout vb.) BİLİNÇLİ olarak DIŞARIDA; kalan graphic
+# klipler tone-fit/kalite/karma-skor kapılarında elenir (güvenlik).
+DEFAULT_KARMA_SUBS = [
+    "instant_regret", "instantkarma", "JusticeServed", "IdiotsInCars",
+    "Whatcouldgowrong", "therewasanattempt", "facepalm", "Unexpected",
+]
+
 # İndirilebilir video kaynakları (yt-dlp bunları çözer).
 _VIDEO_DOMAINS = ("v.redd.it", "redgifs.com", "gfycat.com", "streamable.com",
                   "i.imgur.com")

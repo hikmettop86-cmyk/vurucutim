@@ -108,8 +108,8 @@ def collect_pool(channel, *, settings, secrets, db_path, log=log) -> int:
                                             CURATED_MIZAH_MIN_S, DUYGU_MIN_SCORE)
     from short_bot.curated_rank import score_curiosity
     from short_bot.pipeline import resolve_ai_call
-    from short_bot.reddit_gems import (DEFAULT_DUYGU_SUBS, DEFAULT_SUBS,
-                                       find_gems)
+    from short_bot.reddit_gems import (DEFAULT_DUYGU_SUBS, DEFAULT_KARMA_SUBS,
+                                       DEFAULT_SUBS, find_gems)
 
     reel = getattr(channel, "reel", None)
     if reel is None or not reel.enabled or getattr(channel, "content_source", "") != "curated":
@@ -128,7 +128,9 @@ def collect_pool(channel, *, settings, secrets, db_path, log=log) -> int:
     min_ups = getattr(reel, "curated_min_ups", 500)
     max_dur = getattr(reel, "curated_max_duration", 90)
     subs = list(getattr(reel, "subreddits", []) or []) or (
-        DEFAULT_DUYGU_SUBS if tone == "duygu" else DEFAULT_SUBS)
+        DEFAULT_DUYGU_SUBS if tone == "duygu"
+        else DEFAULT_KARMA_SUBS if tone == "karma"
+        else DEFAULT_SUBS)
     gems = find_gems(cid, csec, subreddits=subs,
                      t=getattr(reel, "curated_time", "month"),
                      min_ups=min_ups, max_duration=max_dur)

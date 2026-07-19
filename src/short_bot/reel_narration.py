@@ -611,7 +611,7 @@ def build_curated_prompt(title: str, clip_description: str, *, channel,
     lo_w, hi_w = reel_word_budget(td)
     lang = _language_name(channel.language)
     _duygu = (tone == "duygu")
-    # TON KURALI: mizah → güldür; duygu → gerilim + sıcak çözüm (antropomorfik, @NedenHayvan).
+    # TON KURALI: mizah → güldür; duygu → gerilim + sıcak çözüm; karma → tatmin edici 'oh olsun'.
     if _duygu:
         tone_rule = (
             "- 💗 DUYGU VER — bu bir DUYGUSAL MİKRO-DRAM (@NedenHayvan formülü). GÜLDÜRME; "
@@ -620,6 +620,13 @@ def build_curated_prompt(title: str, clip_description: str, *, channel,
             "'sanki koruyordu', 'pes etmedi', 'onu asla bırakmadı'). Mahalle-argosu, şaka, "
             "ironi YASAK. Ton: sıcak + gerilimli; final DUYGUSAL çözüm (kurtuluş/kavuşma/sadakat).")
         cta_hint = "izleyiciye içten çağrı ('Bu dokunduysa yorumlara bir kalp bırak.')"
+    elif tone == "karma":
+        tone_rule = (
+            "- ⚖️ KARMA / 'OH OLSUN' — mahalle ağzıyla TATMİN EDİCİ adalet yorumu (aşağıdaki EN "
+            "ÖNCELİKLİ KARMA KURALI'na uy). Kurulum: biri kaba/kuralsız/kibirli; final: hak ettiği "
+            "hafif karşılık → 'buldu belasını'. GÜVENLİK: ciddi zarara/kana SEVİNME, kurbanı "
+            "aşağılama; hedef KÖTÜ DAVRANIŞ.")
+        cta_hint = "izleyiciye tatmin-onaylatan bir kışkırtma ('Sence de müstahak mı? Yaz bakalım.')"
     else:
         tone_rule = (
             "- GÜLDÜR — ama GERÇEK, ANLAMLI mizahla (aşağıdaki EN ÖNCELİKLİ MİZAH KURALI'na uy). "
@@ -759,6 +766,28 @@ def _curated_humor_override(humor_style: str = "") -> str:
     )
 
 
+def _curated_karma_override() -> str:
+    """EN ÖNCELİKLİ KARMA katmanı (persona formülünü de ezer). 'Oh olsun / müstahak' — mahalle
+    ağzıyla TATMİN EDİCİ adalet yorumu. GÜVENLİK: ciddi zarara sevinmek YOK; kutlanan hak
+    edilmiş DERS/denge, acı değil."""
+    return (
+        "=== EN ÖNCELİKLİ TON KURALI (YUKARIDAKİ HER ŞEYİ, PERSONA FORMÜLÜNÜ DE EZER) ===\n"
+        "Bu bir KARMA / 'OH OLSUN' anlatımı. Ağız MAHALLE ağzı, tavır: keyifli-tatmin olmuş bir "
+        "dayı 'buldu belasını' der gibi. Yapı: HOOK'ta kurulumu ver (biri KABA/ukala/kuralsız/"
+        "kurnaz davranıyor, 'kendine güveniyor'); ORTADA gerilimi/beklentiyi kur ('ama evrende bir "
+        "denge var kardeş'); FİNALDE hak ettiği TATMİN EDİCİ karşılığı vur + 'oh olsun/müstahak/"
+        "racon böyle kesilir' tadında bir kapanış (kalıp DEĞİL, o ana özgü).\n"
+        "SÖZLÜK (doğal kullan, zorlama): 'buldu belasını', 'müstahak', 'oh olsun', 'evrende denge "
+        "var', 'racon böyle kesilir', 'kibir para etmez', 'gülme komşuna gelir başına'.\n"
+        "⛔ GÜVENLİK/SINIR (ŞART): Kutlanan şey HAK EDİLMİŞ DERS ve DENGE — kimsenin ACISI/kanı "
+        "DEĞİL. CİDDİ yaralanmaya, kana, dövüşe SEVİNME/gülme; öyle bir an varsa acıyı değil "
+        "'kibrin sonu' dersini vurgula ya da düz geç. Kurbanı AŞAĞILAMA (engel/yoksulluk/görünüş "
+        "üzerinden ASLA); yalnız KÖTÜ DAVRANIŞ hedeftir. Zalimlik değil, tatmin.\n"
+        "Yalnız EKRANDA olanı anlat — olmayan kişi/olay/sebep UYDURMA. Bir satır gerçekten "
+        "'oh olsun' dedirtmiyorsa sade ama net yaz."
+    )
+
+
 def _curated_emotion_override() -> str:
     """EN ÖNCELİKLİ DUYGU katmanı (persona formülünü de ezer). Gerilim-kurgulu duygusal
     mikro-dram — @NedenHayvan (437M) formülü: mizah/argo YOK, antropomorfik + sinematik."""
@@ -805,9 +834,10 @@ def write_curated_narration(title: str, clip_description: str, *, channel,
                    "UYDURMA; kopuk/bağlamsız/anlamsız 'akıllı laf' KULLANMA. İzleyici klibi "
                    "görüyor ve videoda NE OLDUĞUNU anlamalı.")
     persona = load_persona(getattr(reel, "persona", ""), language=channel.language)
-    if persona and tone != "duygu":
-        # DUYGU modunda mahalle-mizahı personası ton'la çelişir → persona bloğu eklenmez
-        # (duygu override tek başına yönetir). Mizahta persona ağzı/karakteri korunur.
+    if persona and tone not in ("duygu", "karma"):
+        # DUYGU ve KARMA modunda mahalle-mizahı personası (vahsi_mizah few-shot) ton'la çelişir →
+        # persona bloğu eklenmez (o tonun override'ı tek başına 'oh olsun' / duygu sesini yönetir).
+        # Mizahta persona ağzı/karakteri korunur.
         # curated=True: subject-agnostik (kaosdayi hayvan-DIŞI kaos/fail) + footage-sadakat
         # bloğu atlanır (klip sabit). Bkz. persona.persona_block.
         prompt += "\n\n" + persona_block(persona, seed=seed, curated=True)
@@ -817,9 +847,13 @@ def write_curated_narration(title: str, clip_description: str, *, channel,
                              getattr(reel, "mascot_trait", ""))
         if mblok:
             prompt += "\n\n" + mblok
-    # EN SON KATMAN → EN ÖNCELİKLİ: tona göre humor ya da duygu override (persona formülünü EZER).
-    prompt += "\n\n" + (_curated_emotion_override() if tone == "duygu"
-                        else _curated_humor_override(getattr(reel, "humor_style", "")))
+    # EN SON KATMAN → EN ÖNCELİKLİ: tona göre override (persona formülünü EZER).
+    if tone == "duygu":
+        prompt += "\n\n" + _curated_emotion_override()
+    elif tone == "karma":
+        prompt += "\n\n" + _curated_karma_override()
+    else:
+        prompt += "\n\n" + _curated_humor_override(getattr(reel, "humor_style", ""))
 
     # TEK LLM ÇAĞRISI: kürate anlatımı Claude CLI Sonnet 5 ile yazılır (Max aboneliği →
     # ÜCRETSİZ, OpenRouter parası yok). Ama CLI Sonnet ~50sn/çağrı: eski çok-turlu LLM
@@ -874,6 +908,15 @@ _TONE_FIT_MIZAH = (
     "(fits=false): SADECE hüzünlü/ağır/ciddi ya da dokunaklı-dram; komik/şaşırtıcı yanı OLMAYAN "
     "sıradan/durgun an."
 )
+_TONE_FIT_KARMA = (
+    "Bu video KARMA / 'OH OLSUN' kanalına UYAR mı? UYANLAR (fits=true): biri KABA / HAKSIZ / "
+    "KURALSIZ / KİBİRLİ / kurnaz davranıp ANINDA hak ettiği TATMİN EDİCİ (hafif, kansız) karşılığı "
+    "buluyor — ukala tökezler, kural tanımaz pervasızlığının sonucunu görür, dolandırıcı/zorba "
+    "kendi tuzağına düşer, kibir bir anda bozulur ('buldu belasını'). UYMAYANLAR (fits=false): "
+    "kim-haklı belirsiz DÜZ kaza/şanssızlık (hak ediş YOK); CİDDİ yaralanma/kan/şiddet/dövüş "
+    "(tatmin değil, rahatsız edici); masum biri zarar görüyor; ya da sadece komik/dokunaklı ama "
+    "'hak etti' unsuru olmayan an."
+)
 _TONE_FIT_PROMPT = (
     "Bir kısa video şunu gösteriyor:\nVİDEO: {desc}\n\n{rule}\n"
     "- fits: video bu tona GERÇEKTEN uyuyor mu?\n"
@@ -890,7 +933,9 @@ def judge_tone_fit(clip_description: str, tone: str, *, backend: str = "claude_c
     sayar). Retry'lı (None yalnız gerçekten doğrulanamayınca)."""
     if not (clip_description or "").strip():
         return None
-    rule = _TONE_FIT_DUYGU if tone == "duygu" else _TONE_FIT_MIZAH
+    rule = (_TONE_FIT_DUYGU if tone == "duygu"
+            else _TONE_FIT_KARMA if tone == "karma"
+            else _TONE_FIT_MIZAH)
     prompt = _TONE_FIT_PROMPT.format(desc=clip_description[:600], rule=rule)
     last: Exception | None = None
     for _ in range(2):
@@ -949,6 +994,14 @@ _CLARITY_TONE = {
                      "mı çıkıyor?)",
         "tone_fail": "duygu kopuk/klişe/boş ya da olay sahneyle bağlantısız",
         "tone_ok": "içten duygusal anlatım, sahneden çıkan sıcaklık",
+    },
+    "karma": {
+        "tone_word": "karma / 'oh olsun'",
+        "tone_rule": "3) KARMA net oturuyor mu — izleyici KİMİN neden 'hak ettiğini' + tatmin edici "
+                     "karşılığı anlıyor mu? (Bu KARMA tonu; komik olması ŞART değil, TATMİN "
+                     "dedirtmeli. Kim-haklı belirsizse ya da 'oh olsun' hissi yoksa kopuk.)",
+        "tone_fail": "kim-neden-hak-etti belirsiz, tatmin edici karma noktası YOK ya da olay kopuk",
+        "tone_ok": "net kurulum+comeuppance, mahalle 'oh olsun' tadı",
     },
 }
 

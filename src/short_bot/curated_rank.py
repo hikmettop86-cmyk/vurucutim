@@ -98,6 +98,30 @@ def _emotion_prompt(title: str) -> str:
     )
 
 
+def _karma_prompt(title: str) -> str:
+    """KARMA ('oh olsun') kanalı skorlaması — kaba/haksız/pervasız birinin ANINDA hak ettiği
+    TATMİN EDİCİ karşılığı. YÜKSEK = net 'buldu belasını' anı; DÜŞÜK = karma yok ya da CİDDİ
+    zarar (o tatmin değil, rahatsız edici + platform-riskli)."""
+    return (
+        "Bu bir kısa video klibinin BAŞLIĞI ve KAPAK KARESİ (thumbnail).\n"
+        f"BAŞLIK: {title or '(başlık yok)'}\n\n"
+        "Bu klip TATMİN EDİCİ bir KARMA ('oh olsun / müstahak / buldu belasını') anına dönüşebilir "
+        "mi — biri KABA / HAKSIZ / KURALSIZ / KİBİRLİ / kurnaz davranıp ANINDA hak ettiği karşılığı "
+        "buluyor mu? YÜKSEK sayılanlar:\n"
+        "- Fazla ukala/pervasız biri kendi hatasıyla rezil olur (kaykılır, tökezler, planı ters teper)\n"
+        "- Kural tanımaz sürücü/kişi pervasızlığının SONUCUNU (hafif, kansız) yaşar\n"
+        "- Dolandırıcı/hilekâr/zorba kendi kurduğu tuzağa düşer, yakalanır, utanır\n"
+        "- Kurulan kibir/racon bir anda bozulur — izleyici 'oh be, müstahak' der\n"
+        "DÜŞÜK sayılanlar (score 1-3): karma/hak ediş YOK (sadece kaza/şanssızlık, masum biri); "
+        "ya da CİDDİ yaralanma/kan/şiddet/dövüş/çok tehlikeli sonuç (bu tatmin DEĞİL, rahatsız edici "
+        "+ platform-riskli); ya da olayın kim-haklı-kim-haksız'ı belirsiz.\n"
+        "1-10 puanla (10 = net kurulum[kaba davranış] + tatmin edici hafif comeuppance, kansız; "
+        "1 = karma yok ya da ciddi zarar/masum kurban).\n"
+        + _CLEAN_LINE +
+        'SADECE JSON: {"score": <1-10>, "has_text": <bool>, "reason": "<çok kısa>"}'
+    )
+
+
 def _download_thumb(url: str, dest: Path) -> Path | None:
     if not url or not url.startswith("http"):
         return None
@@ -126,7 +150,9 @@ def score_curiosity(gems: list[dict], *, vision_call, top_n: int = 24,
     ATILIR — havuz/autopilot/manuel arama hepsi temiz görüntü alır. Kuyruk (skorlanmamış)
     thumbnail'dan geçmediği için dokunulmaz."""
     from short_bot.claude_cli import run_json
-    _prompt_fn = _emotion_prompt if tone == "duygu" else _curiosity_prompt
+    _prompt_fn = (_emotion_prompt if tone == "duygu"
+                  else _karma_prompt if tone == "karma"
+                  else _curiosity_prompt)
 
     ranked = sorted(gems, key=lambda g: -engagement_score(g))
     head = ranked[:top_n]

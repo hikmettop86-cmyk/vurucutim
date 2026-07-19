@@ -202,9 +202,14 @@ class ClipQuality(BaseModel):
 
 
 def _quality_prompt(tone: str) -> str:
-    lens = ("GERÇEKTEN DOKUNAKLI/duygusal (içini ısıtan, gözünü dolduran)"
-            if tone == "duygu" else
-            "GERÇEKTEN komik/şaşırtıcı/çarpıcı ('vay!', kahkaha, 'nasıl yani?!')")
+    if tone == "duygu":
+        lens = "GERÇEKTEN DOKUNAKLI/duygusal (içini ısıtan, gözünü dolduran)"
+    elif tone == "karma":
+        lens = ("GERÇEKTEN TATMİN EDİCİ bir KARMA/'oh olsun' — biri kaba/kuralsız/kibirli davranıp "
+                "ANINDA hak ettiği HAFİF (kansız) karşılığı buluyor; ciddi yaralanma/şiddet varsa "
+                "bu DÜŞÜKtür (tatmin değil, rahatsız edici)")
+    else:
+        lens = "GERÇEKTEN komik/şaşırtıcı/çarpıcı ('vay!', kahkaha, 'nasıl yani?!')"
     return (
         "Bu, bir kısa video klibinin GERÇEK 6 karesi (storyboard, zaman-sıralı, tek ızgara) — "
         "klibin BAŞTAN SONA ne olduğunu gösteriyor.\n"

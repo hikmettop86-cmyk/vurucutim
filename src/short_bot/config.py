@@ -279,7 +279,9 @@ class ReelConfig(BaseModel):
     # KÜRATE ANLATIM TONU: 'mizah' (mahalle mizahı, varsayılan) | 'duygu' (gerilim-kurgulu
     # duygusal mikro-dram — kahramanlık/sadakat/kurtarma, antropomorfik). @NedenHayvan (437M)
     # kanıtı: hayvan klibinde DUYGU, sevimli-komikten çok daha yüksek tavan veriyor.
-    curated_tone: Literal["mizah", "duygu"] = "mizah"
+    # 'karma' = "oh olsun / müstahak": kaba/haksız/pervasız biri ANINDA hak ettiği TATMİN EDİCİ
+    # cevabı bulur (Türk adalet-iştahı). GÜVENLİK: ciddi yaralanma/şiddet/kan REDDEDİLİR (gate'ler).
+    curated_tone: Literal["mizah", "duygu", "karma"] = "mizah"
     # HAVUZ EK KAYNAK: kanalın sublarına EK olarak r/popular (tüm Reddit'te anlık trending)
     # taransın mı? Açık → bizim listede olmayan sub'lardan da taze/yükselen klip yakalanır
     # (tona-skor + temizlik filtresi uygunluğu süzer). Sadece havuz (collect_pool) için.

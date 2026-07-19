@@ -439,7 +439,8 @@ def auto_produce_curated(channel, *, settings, secrets, db_path, output_root,
     en iyi) + üret. Cron/autopilot/'Şimdi üret' bunu kullanır (Cevher onayı gerekmez).
 
     Döner (short_id, out_path); taze cevher yoksa (None, None)."""
-    from short_bot.reddit_gems import DEFAULT_DUYGU_SUBS, DEFAULT_SUBS, find_gems
+    from short_bot.reddit_gems import (DEFAULT_DUYGU_SUBS, DEFAULT_KARMA_SUBS,
+                                        DEFAULT_SUBS, find_gems)
     reel = channel.reel
     cid = secrets.get("reddit_client_id")
     csec = secrets.get("reddit_client_secret")
@@ -450,7 +451,9 @@ def auto_produce_curated(channel, *, settings, secrets, db_path, output_root,
     # HAVUZ: kanal kendi subreddit'ini vermediyse tona göre varsayılan — DUYGU kanalı
     # kurtarma/kahramanlık suları (derp değil; short 934'te derp klibi zorlama çıkmıştı).
     subs = list(getattr(reel, "subreddits", []) or []) or (
-        DEFAULT_DUYGU_SUBS if tone == "duygu" else DEFAULT_SUBS)
+        DEFAULT_DUYGU_SUBS if tone == "duygu"
+        else DEFAULT_KARMA_SUBS if tone == "karma"
+        else DEFAULT_SUBS)
     t = getattr(reel, "curated_time", "week")
     # ELENEN-HAFIZASI + PENCERE ROTASYONU: seen (kalıcı yargılanmış) büyüdükçe zaman penceresini
     # GENİŞLET (month → +year → +all) → önceki koşularda görülenler tükendikçe DAHA DERİN dilim
@@ -476,8 +479,8 @@ def auto_produce_curated(channel, *, settings, secrets, db_path, output_root,
         # DUYGU: kısa klip mikro-dramı taşımaz (~30-40sn ister) → bilinen-kısa klibi ELE.
         fresh = [g for g in fresh
                  if not (0 < (g.get("duration") or 0) < CURATED_DUYGU_MIN_S)]
-    elif tone == "mizah":
-        # MİZAH: çok kısa klip espri kurulumuna yer bırakmaz (short 947, 12sn) → ELE.
+    elif tone in ("mizah", "karma"):
+        # MİZAH/KARMA: çok kısa klip espri/comeuppance kurulumuna yer bırakmaz (short 947) → ELE.
         fresh = [g for g in fresh
                  if not (0 < (g.get("duration") or 0) < CURATED_MIZAH_MIN_S)]
     if not fresh:
@@ -533,10 +536,10 @@ def auto_produce_curated(channel, *, settings, secrets, db_path, output_root,
         else:
             log.info("  kürate[oto]: vision skorlanamadı → engagement sırasıyla deneniyor "
                      "(fail-open, sessiz-boş önlendi)")
-    elif tone == "mizah":
-        # HAFİF MİZAH TABANI (denetim H1): merak-baskın sıralama zaten zayıfı alta itiyor + kalite
-        # kapısı eliyor; yine de vision'ın AÇIKÇA komik-değil (merak≤3) dediği klibi hiç DENEME
-        # (boşuna indirme/kalite-çağrısı). Skorlanmamış (None) klip KORUNUR (fail-open).
+    elif tone in ("mizah", "karma"):
+        # HAFİF MİZAH/KARMA TABANI (denetim H1): merak-baskın sıralama zaten zayıfı alta itiyor +
+        # kalite kapısı eliyor; yine de vision'ın AÇIKÇA zayıf (skor≤3: komik-değil / karma-yok)
+        # dediği klibi hiç DENEME. Skorlanmamış (None) klip KORUNUR (fail-open).
         _kept = [g for g in fresh if (g.get("curiosity") is None or g.get("curiosity") > 3)]
         if _kept:
             fresh = _kept
