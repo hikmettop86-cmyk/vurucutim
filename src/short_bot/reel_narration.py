@@ -821,6 +821,58 @@ def write_curated_narration(title: str, clip_description: str, *, channel,
     return narration
 
 
+# ── TON-KLİP UYUM KAPISI (DUYGU kanalı KOMİK klip seçince zorla 'yas' draması çıkıyordu) ──
+# Emotion/curiosity thumbnail-skoru aldatılabiliyor (stadyumda Viking-kask klibi merak=8 aldı
+# ama duygusuz). Vision TARİFİNDEN (indirilmiş klip) METİN yargısı: klip kanalın TONUNA gerçekten
+# uyuyor mu (DUYGU=dokunaklı, mizah=komik). Uymuyorsa klip YANLIŞ kanalda → atla.
+class ToneFit(_BaseModel):
+    """Klip kanalın tonuna (duygu/mizah) uyuyor mu — vision tarifinden metin yargısı."""
+    fits: bool = True
+    reason: str = ""
+
+
+_TONE_FIT_DUYGU = (
+    "Bu video DUYGUSAL/DOKUNAKLI bir kanala UYAR mı? UYANLAR: kurtarma, kavuşma, vefa/sadakat, "
+    "şükran/nezaket/iyilik, kahramanlık/fedakârlık, içini ısıtan ya da gözünü dolduran insan/"
+    "hayvan anı. UYMAYANLAR (fits=false): SADECE komik/absürt/şakacı, random/anlamsız, gerilim/"
+    "aksiyon/fail, duygusal derinliği OLMAYAN (örn. stadyumda kostümle takılan biri, komik düşme, "
+    "oyun oynama). Klip dokunaklı DEĞİL sadece eğlenceli/ilginçse fits=false."
+)
+_TONE_FIT_MIZAH = (
+    "Bu video KOMİK/ŞAŞIRTICI bir kanala UYAR mı? UYANLAR: komik, absürt, beklenmedik, çarpıcı, "
+    "'nasıl yani?!' dedirten, gülümseten ya da kahkaha attıran, fail/kaos anı. UYMAYANLAR "
+    "(fits=false): SADECE hüzünlü/ağır/ciddi ya da dokunaklı-dram; komik/şaşırtıcı yanı OLMAYAN "
+    "sıradan/durgun an."
+)
+_TONE_FIT_PROMPT = (
+    "Bir kısa video şunu gösteriyor:\nVİDEO: {desc}\n\n{rule}\n"
+    "- fits: video bu tona GERÇEKTEN uyuyor mu?\n"
+    "- reason: uymuyorsa kısa neden (tek cümle Türkçe).\n"
+    'SADECE JSON: {{"fits": <bool>, "reason": "<...>"}}'
+)
+
+
+def judge_tone_fit(clip_description: str, tone: str, *, backend: str = "claude_cli",
+                   model: str = "default", api_key: str | None = None,
+                   claude_path: str = "claude"):
+    """Klip kanalın TONUNA (duygu/mizah) uyuyor mu — vision tarifinden METİN yargısı (ucuz,
+    vision/storyboard GEREKMEZ). Döner ToneFit ya da None (hata → fail-open, çağıran uyuyor
+    sayar). Retry'lı (None yalnız gerçekten doğrulanamayınca)."""
+    if not (clip_description or "").strip():
+        return None
+    rule = _TONE_FIT_DUYGU if tone == "duygu" else _TONE_FIT_MIZAH
+    prompt = _TONE_FIT_PROMPT.format(desc=clip_description[:600], rule=rule)
+    last: Exception | None = None
+    for _ in range(2):
+        try:
+            return run_json(prompt, ToneFit, claude_path=claude_path, model=model,
+                            backend=backend, api_key=api_key, retries=2, timeout_s=60)
+        except Exception as e:  # noqa: BLE001 — geçici → tekrar dene
+            last = e
+    log.info(f"  kürate[ton-uyum]: yargı doğrulanamadı ({last})")
+    return None
+
+
 # ── ANLATIM TUTARLILIK / NETLİK KAPISI (kullanıcı: 'videodan hiçbir şey anlamadım', short 980) ──
 # Sadakat kapısı (verify_curated_narration) anlatım gerçek videoyu mu anlatıyor diye VISION'la
 # bakar; bu kapı METİN-tabanlı: anlatım TUTARLI + ANLAŞILIR mı, izleyici olayı takip eder mi.

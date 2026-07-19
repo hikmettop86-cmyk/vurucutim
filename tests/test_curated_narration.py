@@ -21,6 +21,20 @@ def test_judge_narration_clarity(monkeypatch):
     assert judge_narration_clarity("  ", "video", backend="openrouter", model="m") is None
 
 
+def test_judge_tone_fit(monkeypatch):
+    """judge_tone_fit: klip kanal tonuna uyuyor mu (DUYGU=dokunaklı, mizah=komik) — vision
+    tarifinden metin yargısı; DUYGU kanalına komik klip fits=False (Viking-kask dersi)."""
+    from short_bot.reel_narration import ToneFit, judge_tone_fit
+
+    monkeypatch.setattr("short_bot.reel_narration.run_json",
+                        lambda prompt, schema, **kw: ToneFit(fits=False, reason="komik, duygusuz"))
+    r = judge_tone_fit("stadyumda Viking kask komik", "duygu",
+                       backend="openrouter", model="m", api_key="k")
+    assert r is not None and r.fits is False and "komik" in r.reason
+    # boş tarif → None (yargılanmaz)
+    assert judge_tone_fit("  ", "duygu", backend="openrouter", model="m") is None
+
+
 def test_curated_target_derives_from_clip_length():
     assert curated_target(6, (30, 45)) == (12, 16)     # kısa → ~klip×2.6 (yavaşlatma kapsar)
     assert curated_target(20, (30, 45)) == (16, 20)    # yeterince uzun → ~klip boyu

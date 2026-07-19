@@ -156,6 +156,18 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
             raise RuntimeError("kürate: vision klibi tarif edemedi (backend kapalı?)")
         log.info(f"  kürate: vision → {desc}")
 
+        # TON-KLİP UYUM KAPISI (DUYGU kanalı stadyumda Viking-kask komik klibini seçip zorla
+        # 'kayıp/yas' draması yazdı — thumbnail emotion-skoru aldatıldı). Vision TARİFİNDEN klip
+        # kanalın TONUNA gerçekten uyuyor mu (DUYGU=dokunaklı, mizah=komik) yargıla; UYMUYORSA
+        # klip YANLIŞ kanalda → atla (oto: sıradaki aday; manuel: net neden). Fail-open (None→devam).
+        _tone = getattr(reel, "curated_tone", "mizah")
+        from short_bot.reel_narration import judge_tone_fit
+        _tf = judge_tone_fit(desc, _tone, backend=llm.backend, model=llm.model,
+                             api_key=llm.api_key, claude_path=llm.claude_path)
+        if _tf is not None and not _tf.fits:
+            raise CuratedClipError(
+                f"Klip '{_tone}' tonuna uymuyor ({_tf.reason}) → atlanıyor (yanlış kanal için).")
+
         # KALABALIK BAĞLAMI (vision'a ALTERNATİF): vision tek storyboard'dan aleti/olayı
         # kaçırabiliyor (short 923: pipeti görmedi, 'parmakla çöp çıkarıyor' dedi — oysa
         # başlık 'using a straw', yorumlar 'nefes borusuna soktu' diyor). Başlık + üst
