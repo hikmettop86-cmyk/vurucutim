@@ -684,6 +684,14 @@ RULES:
   soktu — karelerde yengeç YOKTU. Tek özneye/olaya SADIK KAL. Yalnız başlık+yorum+vision'ın
   BİLDİRDİĞİ varlıklar vardır; başkası YOK. (Duygu/abartı/lakap serbest — o YORUM; yeni fiziksel
   varlık değil.){scene_rule}
+- ⛔ UYDURMA GEÇMİŞ/SEBEP DE YASAK (short 1000, YAPMA): Öznenin ekranda GÖRÜNMEYEN geçmişini,
+  günlük rutinini ya da bir olayın SEBEBİNİ UYDURMA. Örnek-hata: kalabalıkta arabaya yürüyüp bir
+  kadına sarılan adam için 'her maçtan sonra en son çıkardı', 'gece yarısı hep yalnız yürürdü',
+  'öğrenciler ona araba almıştı' diye UYDURMA sebep-sonuç zinciri kuruldu → 'geç çıkmak' ile
+  'araba' arasında bağ yok, izleyici 'ne alaka' dedi. YALNIZ ŞU ANI (vision + başlık/yorumun net
+  söylediği) anlat; 'neden', 'geçmişte', 'çünkü şöyleydi' gibi UYDURMA arka plan/gerekçe EKLEME.
+  Duygu, GÖRÜNEN andan çıkar (adam duygulanmış, sarılıyor, kalabalık onu alkışlıyor) — uydurma
+  hikâyeden değil.
 - KENDİ İÇİNDE HİKÂYE — META YOK: Anlatım, olayı GÖREN birinin ağzından akan tek bir
   hikâyedir. 'Yorumlarda millet', 'izleyici', 'Reddit', 'video' gibi DIŞ referans SOKMA;
   dördüncü duvarı KIRMA. (Yorumlar sana bağlam; metne değil.)

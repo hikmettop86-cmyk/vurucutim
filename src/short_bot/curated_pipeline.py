@@ -300,8 +300,13 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
                                                  vision_call=vision,
                                                  ffmpeg_path=settings.ffmpeg_path)
                 if _chk2 is not None and not _chk2.faithful:
-                    log.warning(f"  kürate[sadakat]: yeniden yazım da sadık değil "
-                                f"({_chk2.mismatch}) — yine de üretiliyor (fail-open)")
+                    # KALICI UYDURMA → çöp YAYINLAMA, klibi ATLA (denetim 999: direktif rewrite'a
+                    # rağmen uydurma kalırsa fail-open çöpü basıyordu). Oto-loop sıradaki adaya
+                    # geçer. seen'e YAZMA: klip iyi, anlatım rastgele kötü çıktı — sonraki koşuda
+                    # (farklı seed) düzgün anlatılabilir, kalıcı blacklist HAKSIZ olur.
+                    raise CuratedClipError(
+                        f"Anlatım iki denemede de UYDURMA içeriyor ({_chk2.mismatch}) → "
+                        f"atlanıyor (çöp yayınlanmaz, klip hatırlanmaz).")
                 else:
                     log.info("  kürate[sadakat]: yeniden yazım SADIK ✓")
 
@@ -314,10 +319,16 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
                                        model=llm.model, api_key=llm.api_key,
                                        claude_path=llm.claude_path)
         if _clr is not None and not _clr.clear:  # reason BOŞ olsa bile yeniden yaz (denetim)
-            _cfb = _clr.reason or ("İzleyici olayı takip edemiyor; anlatımı BASİT ve NET yap, "
-                                   "kim/ne/neden açık olsun.")
+            # DİREKTİF + VISION-ANCHORED (denetim short 1000: netlik yakaladı ama rewrite yine
+            # kopuk hikâye yazdı → fail-open yayınladı). Modele NET emir + neyin GERÇEK olduğunu
+            # hatırlat: yalnız beat sheet'teki GÖRÜNENİ anlat, uydurma geçmiş/sebep/varlık EKLEME.
+            _reason = _clr.reason or "İzleyici olayı takip edemiyor."
+            _cfb = (f"{_reason} DÜZELT: yukarıdaki 'WHAT IS ACTUALLY ON SCREEN' beat sheet'inde "
+                    f"GERÇEKTEN ne varsa YALNIZ onu, BASİT ve NET anlat. Uydurma geçmiş/sebep "
+                    f"('neden geç çıkar', 'gece yürürdü', 'çünkü şöyleydi') ve olmayan varlık "
+                    f"EKLEME. Kopuk sebep-sonuç kurma; her cümle sahnedeki ana bağlı olsun.")
             log.info(f"  kürate[netlik]: anlatım net DEĞİL ({_clr.reason or 'reason yok'}) "
-                     f"→ yeniden yazılıyor")
+                     f"→ direktif geri bildirimle yeniden yazılıyor")
             narration = write_curated_narration(
                 title_seed, narr_desc, channel=channel, subject="clip",
                 claude_path=narr_llm.claude_path, model=narr_llm.model,
