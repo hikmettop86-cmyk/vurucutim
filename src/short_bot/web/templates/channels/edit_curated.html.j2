@@ -72,8 +72,9 @@
           <label class="block">
             <span class="text-xs text-claude-muted uppercase tracking-wide">Anlatım tonu</span>
             <select name="curated_tone" class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
-              <option value="mizah" {% if ch.reel.curated_tone != 'duygu' %}selected{% endif %}>😄 Mizah (mahalle mizahı)</option>
+              <option value="mizah" {% if ch.reel.curated_tone == 'mizah' %}selected{% endif %}>😄 Mizah (mahalle mizahı)</option>
               <option value="duygu" {% if ch.reel.curated_tone == 'duygu' %}selected{% endif %}>💗 Duygu (kahramanlık/kurtarma mikro-dram)</option>
+              <option value="karma" {% if ch.reel.curated_tone == 'karma' %}selected{% endif %}>⚖️ Karma (oh olsun / müstahak — hak edilmiş comeuppance)</option>
             </select>
             <span class="text-xs text-claude-muted">Duygu modu: @NedenHayvan (437M) formülü — hayvan klibinde sevimli-komikten yüksek tavan.</span>
           </label>
