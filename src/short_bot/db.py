@@ -119,6 +119,20 @@ pooled_gems = Table(
     Column("short_id", Integer, ForeignKey("shorts.id")),  # üretilince bağlanır
     UniqueConstraint("channel", "clip_key", name="uq_pool_channel_clip"),
 )
+
+# ELENEN-HAFIZASI (2026-07-19): indirilip YARGILANMIŞ her klip (üretildi/watermark/gömülü-yazı/
+# yanlış-ton). Aynı klibi HER koşuda yeniden indirip vision'la kontrol etmemek için (funnel
+# israfı — kullanıcı: 'önceden elenenler yine geliyor'). Yalnız KALICI yargılar yazılır; geçici
+# indirme/vision hatası KAYDEDİLMEZ (tekrar denenir). auto_produce fresh'i buna karşı da dedup'lar.
+seen_clips = Table(
+    "seen_clips", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("channel", String, nullable=False),
+    Column("clip_key", String, nullable=False),
+    Column("verdict", String, nullable=False),   # produced | watermark | heavy-text | off-tone
+    Column("ts", DateTime, default=_utcnow),
+    UniqueConstraint("channel", "clip_key", name="uq_seen_channel_clip"),
+)
 Index("idx_pool_channel_status", pooled_gems.c.channel, pooled_gems.c.status,
       pooled_gems.c.score.desc())
 

@@ -109,6 +109,33 @@ def fetch_top(subreddit: str, token: str, *, t: str = "week", limit: int = 25,
     return [c["data"] for c in r.json()["data"]["children"]]
 
 
+def _rate_wait_s(r) -> float:
+    """429 sonrası bekleme: Retry-After ya da X-Ratelimit-Reset (sn), [1,30]'a sıkıştır."""
+    for h in ("Retry-After", "X-Ratelimit-Reset"):
+        v = r.headers.get(h)
+        if v:
+            try:
+                return min(30.0, max(1.0, float(v)))
+            except ValueError:
+                pass
+    return 5.0
+
+
+def _proactive_pace_s(r) -> float:
+    """AKILLI (proaktif) pacing — Reddit'in KENDİ header'ından: kalan kota azsa reset'e doğru
+    yavaşla, bolsa minimum. Sabit uyku yerine → 429'a hiç düşmeden mümkün olan en hızlı çekim."""
+    try:
+        remaining = float(r.headers.get("X-Ratelimit-Remaining", "100"))
+        reset = float(r.headers.get("X-Ratelimit-Reset", "60"))
+    except (ValueError, TypeError):
+        return 0.4
+    if remaining <= 2:
+        return min(30.0, max(1.0, reset))              # kota bitti → reset'e kadar bekle
+    if remaining <= 10:
+        return min(3.0, reset / max(1.0, remaining))   # azalıyor → kalanı reset'e yay
+    return 0.3                                          # bol → minimum
+
+
 def _fetch_listing_paged(subreddit: str, token: str, listing: str, *, t: str = "month",
                          pages: int = 3, user_agent: str = _UA) -> list[dict]:
     """Bir subreddit listesini (top/hot) SAYFALAYARAK DERİN çeker (Reddit 'after' imleci,
@@ -123,12 +150,20 @@ def _fetch_listing_paged(subreddit: str, token: str, listing: str, *, t: str = "
             params["t"] = t
         if after:
             params["after"] = after
-        try:
-            r = requests.get(f"{_API}/r/{subreddit}/{listing}", params=params,
-                             headers={"Authorization": f"bearer {token}",
-                                      "User-Agent": user_agent}, timeout=20)
-            r.raise_for_status()
-        except Exception:  # noqa: BLE001 — bir sayfa düşerse eldekiyle devam
+        r = None
+        for _attempt in range(3):
+            try:
+                r = requests.get(f"{_API}/r/{subreddit}/{listing}", params=params,
+                                 headers={"Authorization": f"bearer {token}",
+                                          "User-Agent": user_agent}, timeout=20)
+            except Exception:  # noqa: BLE001 — ağ hatası → bu sub'ı bırak
+                r = None
+                break
+            if r.status_code == 429:   # Reddit RATE-LIMIT → header kadar bekle, TEKRAR DENE (veri kaybetme)
+                time.sleep(_rate_wait_s(r))
+                continue
+            break
+        if r is None or r.status_code != 200:
             break
         data = r.json().get("data", {})
         children = data.get("children", [])
@@ -136,7 +171,7 @@ def _fetch_listing_paged(subreddit: str, token: str, listing: str, *, t: str = "
         after = data.get("after")
         if not after or not children:
             break
-        time.sleep(0.4)   # rate-limit payı (100 QPM'in altında kal)
+        time.sleep(_proactive_pace_s(r))   # AKILLI pacing: Reddit'in kalan-kota header'ına göre
     return out
 
 
@@ -180,7 +215,7 @@ def fetch_popular(client_id: str, client_secret: str, *, geo: str = "GLOBAL",
 def find_gems(client_id: str, client_secret: str, *, subreddits=None,
               t: str = "week", per_sub: int = 25, min_ups: int = 500,
               max_duration: int = 90, pages: int = 3, listings=("top", "hot"),
-              user_agent: str = _UA) -> list[dict]:
+              t_windows=None, user_agent: str = _UA) -> list[dict]:
     """Cevher adaylarını bulur: SFW video, süre ≤max, upvote ≥min; upvote sıralı.
 
     DERİN ÇEKİM (2026-07-19): her sub'dan SAYFALAYARAK ~pages×100 post × (top+hot) çeker —
@@ -193,13 +228,22 @@ def find_gems(client_id: str, client_secret: str, *, subreddits=None,
     """
     subs = subreddits or DEFAULT_SUBS
     token = get_token(client_id, client_secret, user_agent=user_agent)
+    # PENCERE ROTASYONU: /top için birden çok zaman penceresi (month→year→all) — çağıran
+    # elenen-hafızası büyüdükçe pencereyi genişletir → her koşu FARKLI/DAHA DERİN dilim keşfeder
+    # (kullanıcı: 'aynılar geliyor'). t_windows verilmezse tek pencere (t). /hot her zaman taze.
+    tws = list(t_windows) if t_windows else [t]
     seen: set[str] = set()
     gems: list[dict] = []
     for sub in subs:
         posts: list[dict] = []
         for _lst in listings:
-            posts += _fetch_listing_paged(sub, token, _lst, t=t, pages=pages,
-                                          user_agent=user_agent)
+            if _lst == "top":
+                for _tw in tws:
+                    posts += _fetch_listing_paged(sub, token, "top", t=_tw, pages=pages,
+                                                  user_agent=user_agent)
+            else:
+                posts += _fetch_listing_paged(sub, token, _lst, pages=pages,
+                                              user_agent=user_agent)
         if not posts:
             log.info(f"  cevher: r/{sub} çekilemedi/boş")
             continue

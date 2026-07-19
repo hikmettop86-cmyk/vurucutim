@@ -50,6 +50,22 @@ def test_pool_crud(tmp_path):
     assert pool_counts(eng, "kaosdayi").get("skipped") == 1
 
 
+def test_seen_memory(tmp_path):
+    """Elenen-hafızası: mark_seen/seen_keys — per-kanal, OR IGNORE (tekrar sorun değil),
+    boş clip_key no-op. auto_produce önceden elenen klibi bir daha indirmesin diye."""
+    from short_bot.curated_pool import mark_seen, seen_keys
+
+    eng = init_db(tmp_path / "s.db")
+    mark_seen(eng, "kaosdayi", "vreddit:a", "watermark")
+    mark_seen(eng, "kaosdayi", "vreddit:a", "watermark")   # tekrar → OR IGNORE (hata yok)
+    mark_seen(eng, "kaosdayi", "vreddit:b", "off-tone")
+    mark_seen(eng, "dayidiyorki", "vreddit:a", "produced")  # başka kanal ayrı
+    mark_seen(eng, "kaosdayi", "", "x")                     # boş → no-op
+    assert seen_keys(eng, "kaosdayi") == {"vreddit:a", "vreddit:b"}
+    assert seen_keys(eng, "dayidiyorki") == {"vreddit:a"}
+    assert seen_keys(eng, "yok") == set()
+
+
 def test_row_to_gem_shape():
     row = {"video_url": "https://v.redd.it/x/y.mp4", "title": "başlık",
            "permalink": "https://reddit.com/r/x/1", "sub": "funny", "ups": 500,

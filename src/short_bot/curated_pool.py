@@ -52,6 +52,31 @@ def pool_keys(eng, channel: str) -> set:
             select(pooled_gems.c.clip_key).where(pooled_gems.c.channel == channel))}
 
 
+# ── ELENEN-HAFIZASI: aynı klibi her koşuda yeniden indirip yargılamayı önle ──────────────
+def mark_seen(eng, channel: str, clip_key: str, verdict: str) -> None:
+    """Bir klibi KALICI yargısıyla (produced/watermark/heavy-text/off-tone) hatırla → aynı klip
+    bir daha indirilip vision'la kontrol edilmesin. Geçici indirme/vision hatasında ÇAĞRILMAZ.
+    INSERT OR IGNORE (yarış-güvenli); hafıza best-effort, üretimi asla düşürmez."""
+    if not (clip_key or "").strip():
+        return
+    from short_bot.db import seen_clips
+    try:
+        with eng.begin() as c:
+            c.execute(seen_clips.insert().prefix_with("OR IGNORE").values(
+                channel=channel, clip_key=clip_key, verdict=verdict))
+    except Exception as e:  # noqa: BLE001 — hafıza yazımı üretimi bloklamaz
+        log.info(f"  kürate[hafıza]: seen yazılamadı ({e})")
+
+
+def seen_keys(eng, channel: str) -> set:
+    """Bu kanal için KALICI yargılanmış (elenmiş/üretilmiş) clip_key'ler — auto_produce fresh
+    bunlara karşı da dedup'lar → önceden elenen klip yeniden indirilip kontrol edilmez."""
+    from short_bot.db import seen_clips
+    with eng.connect() as c:
+        return {r[0] for r in c.execute(
+            select(seen_clips.c.clip_key).where(seen_clips.c.channel == channel))}
+
+
 def _produced_keys(db_path) -> set:
     """Üretilmiş kliplerin clip_key'leri (shorts.script_json'dan)."""
     import json

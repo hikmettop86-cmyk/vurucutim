@@ -60,6 +60,17 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
         raise ValueError("produce_curated: cevherde video_url yok")
     title_seed = (gem.get("title") or "kürate klip").strip()
 
+    # ELENEN-HAFIZASI: bu klibin KALICI yargısını (produced/watermark/heavy-text/off-tone) kaydet
+    # → aynı klip bir daha indirilip vision'la kontrol edilmesin (funnel israfı). Geçici hatada
+    # (indirme 403 / vision None) ÇAĞRILMAZ → tekrar denensin.
+    from short_bot.curated_pool import clip_key as _pool_clip_key, mark_seen as _mark_seen_fn
+
+    def _remember(verdict: str):
+        try:
+            _mark_seen_fn(init_db(db_path), channel.slug, _pool_clip_key(video_url), verdict)
+        except Exception:  # noqa: BLE001 — hafıza best-effort
+            pass
+
     # KLİP-BAŞINA VARYANT SEED (kullanıcı: 'senaryo hep aynı kalıp'). persona_block
     # açılış/anlatıcı-ses/benzetme-dünyası/kapanış-imzası stillerini SEED'e göre döndürür;
     # kürate hep seed=0 kullanınca hepsi index 0'a (ozan beyti + 'Şu X'e bak') kilitleniyordu.
@@ -115,6 +126,7 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
                 # Temizlenemeyen (hareketli TikTok / kaplayan) → bu klip WATERMARK'LI
                 # kalır; kullanma. Manuel: net hata. Oto: çağıran sıradaki adaya geçer.
                 if watermark_uncleanable(_wm):
+                    _remember("watermark")
                     raise CuratedWatermarkError(
                         "Bu klipte temizlenemeyen (hareketli TikTok / kaplayan) watermark "
                         "var — watermark'sız bir klip seç.")
@@ -141,6 +153,7 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
                 raise CuratedWatermarkError(
                     "Gömülü-yazı DOĞRULANAMADI (vision hatası) → klip atlanıyor (fail-closed).")
             if _ht.heavy:
+                _remember("heavy-text")
                 raise CuratedWatermarkError(
                     f"Klip gömülü yazıyla dolu ({_ht.kinds}) — editlenmiş repost, temiz görüntü "
                     "değil (kırpılamayan altyazı/banner). Temiz bir klip seç.")
@@ -165,6 +178,7 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
         _tf = judge_tone_fit(desc, _tone, backend=llm.backend, model=llm.model,
                              api_key=llm.api_key, claude_path=llm.claude_path)
         if _tf is not None and not _tf.fits:
+            _remember("off-tone")
             raise CuratedClipError(
                 f"Klip '{_tone}' tonuna uymuyor ({_tf.reason}) → atlanıyor (yanlış kanal için).")
 
@@ -291,6 +305,7 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
         file_path=str(out_path), duration_s=int(round(clip_dur)) or None,
         script_json=script_json, render_ms=render_ms)
     log.info(f"  kürate: Short kaydedildi id={short_id} → {out_path.name}")
+    _remember("produced")   # elenen-hafızası: üretileni de hatırla (çift üretimi önler)
     return short_id, out_path
 
 
@@ -357,12 +372,26 @@ def auto_produce_curated(channel, *, settings, secrets, db_path, output_root,
     subs = list(getattr(reel, "subreddits", []) or []) or (
         DEFAULT_DUYGU_SUBS if tone == "duygu" else DEFAULT_SUBS)
     t = getattr(reel, "curated_time", "week")
-    log.info(f"  kürate[oto]: {len(subs)} subreddit taranıyor (t={t}, ton={tone})")
-    gems = find_gems(cid, csec, subreddits=subs, t=t,
+    # ELENEN-HAFIZASI + PENCERE ROTASYONU: seen (kalıcı yargılanmış) büyüdükçe zaman penceresini
+    # GENİŞLET (month → +year → +all) → önceki koşularda görülenler tükendikçe DAHA DERİN dilim
+    # keşfet ('aynılar geliyor' biter). Fresh, üretilmiş + seen'e karşı dedup'lanır → elenen klip
+    # bir daha İNDİRİLİP vision'la kontrol edilmez (funnel israfı biter). Yalnız KALICI yargılar
+    # hafızada; geçici indirme/vision hatası kaydedilmez → tekrar denenir.
+    from short_bot.curated_pool import clip_key as _pool_clip_key
+    from short_bot.curated_pool import seen_keys
+    from short_bot.db import init_db as _init_db
+    _seen = seen_keys(_init_db(db_path), channel.slug)
+    _n = len(_seen)
+    _tws = ["month"] + (["year"] if _n >= 150 else []) + (["all"] if _n >= 400 else [])
+    log.info(f"  kürate[oto]: {len(subs)} sub taranıyor (ton={tone}, pencere={_tws}, "
+             f"elenen-hafızası={_n})")
+    gems = find_gems(cid, csec, subreddits=subs, t=t, t_windows=_tws,
                      min_ups=getattr(reel, "curated_min_ups", 500),
                      max_duration=getattr(reel, "curated_max_duration", 90))
     produced = _produced_clip_keys(db_path)
-    fresh = [g for g in gems if not _gem_produced(g, produced)]
+    fresh = [g for g in gems if not _gem_produced(g, produced)
+             and _pool_clip_key(g.get("video_url", "")) not in _seen]
+    log.info(f"  kürate[oto]: {len(gems)} ham → {len(fresh)} taze (üretilmiş+elenen düşüldü)")
     if tone == "duygu":
         # DUYGU: kısa klip mikro-dramı taşımaz (~30-40sn ister) → bilinen-kısa klibi ELE.
         fresh = [g for g in fresh

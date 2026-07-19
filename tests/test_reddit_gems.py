@@ -143,3 +143,35 @@ def test_fetch_popular_filters(monkeypatch):
     assert "/r/popular/hot" in captured["url"]
     assert captured["params"]["geo_filter"] == "GLOBAL"
     assert len(gems) == 1 and gems[0]["sub"] == "MadeMeSmile"
+
+
+def test_reddit_pacing_and_backoff():
+    """AKILLI Reddit pacing: 429'da Retry-After/Reset kadar bekle-tekrar; proaktif olarak
+    kalan-kota header'ına göre yavaşla (bolsa minimum). Sabit uyku yerine header-tabanlı."""
+    from short_bot.reddit_gems import _proactive_pace_s, _rate_wait_s
+
+    class R:
+        def __init__(self, h):
+            self.headers = h
+
+    # 429 backoff: Retry-After öncelikli, [1,30]'a sıkışır
+    assert _rate_wait_s(R({"Retry-After": "12"})) == 12.0
+    assert _rate_wait_s(R({"X-Ratelimit-Reset": "50"})) == 30.0     # capped
+    assert _rate_wait_s(R({})) == 5.0                               # default
+    # proaktif pacing: kota az → reset'e doğru bekle; bol → minimum 0.3
+    assert _proactive_pace_s(R({"X-Ratelimit-Remaining": "1", "X-Ratelimit-Reset": "8"})) == 8.0
+    assert _proactive_pace_s(R({"X-Ratelimit-Remaining": "50", "X-Ratelimit-Reset": "60"})) == 0.3
+
+
+def test_find_gems_window_rotation(monkeypatch):
+    """Pencere rotasyonu: /top her t_windows penceresi için çağrılır, /hot bir kez (t'siz)."""
+    import short_bot.reddit_gems as rg
+
+    calls = []
+    monkeypatch.setattr(rg, "get_token", lambda *a, **k: "tok")
+    monkeypatch.setattr(rg, "_fetch_listing_paged",
+                        lambda sub, tok, listing, **kw: calls.append((listing, kw.get("t"))) or [])
+    rg.find_gems("id", "sec", subreddits=["x"], t_windows=["month", "year"],
+                 listings=("top", "hot"))
+    assert ("top", "month") in calls and ("top", "year") in calls
+    assert ("hot", None) in calls          # /hot t'siz (taze)
