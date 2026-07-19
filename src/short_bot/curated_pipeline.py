@@ -195,8 +195,8 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
                 f"(kurulum+tırmanma+ödül için yer yok).")
 
         from short_bot.reel_narration import judge_tone_fit
-        _tf = judge_tone_fit(desc, _tone, backend=llm.backend, model=llm.model,
-                             api_key=llm.api_key, claude_path=llm.claude_path)
+        _tf = judge_tone_fit(desc, _tone, title=gem.get("title", ""), backend=llm.backend,
+                             model=llm.model, api_key=llm.api_key, claude_path=llm.claude_path)
         if _tf is not None and not _tf.fits:
             _remember("off-tone")
             raise CuratedClipError(

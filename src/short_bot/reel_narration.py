@@ -909,34 +909,40 @@ _TONE_FIT_MIZAH = (
     "sıradan/durgun an."
 )
 _TONE_FIT_KARMA = (
-    "Bu video KARMA / 'OH OLSUN' kanalına UYAR mı? UYANLAR (fits=true): biri KABA / HAKSIZ / "
-    "KURALSIZ / KİBİRLİ / kurnaz davranıp ANINDA hak ettiği TATMİN EDİCİ (hafif, kansız) karşılığı "
-    "buluyor — ukala tökezler, kural tanımaz pervasızlığının sonucunu görür, dolandırıcı/zorba "
-    "kendi tuzağına düşer, kibir bir anda bozulur ('buldu belasını'). UYMAYANLAR (fits=false): "
-    "kim-haklı belirsiz DÜZ kaza/şanssızlık (hak ediş YOK); CİDDİ yaralanma/kan/şiddet/dövüş "
-    "(tatmin değil, rahatsız edici); masum biri zarar görüyor; ya da sadece komik/dokunaklı ama "
-    "'hak etti' unsuru olmayan an."
+    "Bu video KARMA / 'OH OLSUN' kanalına UYAR mı? ÖNEMLİ: 'hak ediş/karma' çoğu zaman görüntüde "
+    "GÖRÜNMEZ, BAŞLIKtadır ('idiot regrets…', 'instant karma', 'should've listened', 'FAFO', "
+    "'plays stupid games') → BAŞLIK karma/hak-ediş ima ediyorsa ve görüntü onunla ÇELİŞMİYORSA "
+    "fits=TRUE say (kaynak zaten karma sub'ı). UYANLAR (fits=true): biri kaba/kuralsız/kibirli/"
+    "kurnaz davranıp hak ettiği TATMİN EDİCİ (hafif, kansız) karşılığı buluyor; başlık 'karma/"
+    "regret/deserved' diyor. UYMAYANLAR (fits=false): başlık+görüntü hiçbir hak-ediş/karma İMA "
+    "ETMİYOR (düz wholesome/dokunaklı/random an); VEYA CİDDİ yaralanma/kan/şiddet/dövüş (tatmin "
+    "değil, güvenlik); VEYA masum biri zarar görüyor. Şüphede (başlık karma ima ediyorsa) fits=TRUE."
 )
 _TONE_FIT_PROMPT = (
-    "Bir kısa video şunu gösteriyor:\nVİDEO: {desc}\n\n{rule}\n"
+    "Bir kısa video var.\nGÖRÜNTÜ (vision): {desc}\nBAŞLIK (kaynağın kendi başlığı — olayın "
+    "BAĞLAMINI/niyetini verir, görüntünün gösteremediği 'kim haklı/kim hak etti'yi söyler): "
+    "{title}\n\n{rule}\n"
+    "NOT: Bağlam/hak-ediş çoğu zaman GÖRÜNTÜde değil BAŞLIKtadır — ikisini BİRLİKTE değerlendir.\n"
     "- fits: video bu tona GERÇEKTEN uyuyor mu?\n"
     "- reason: uymuyorsa kısa neden (tek cümle Türkçe).\n"
     'SADECE JSON: {{"fits": <bool>, "reason": "<...>"}}'
 )
 
 
-def judge_tone_fit(clip_description: str, tone: str, *, backend: str = "claude_cli",
-                   model: str = "default", api_key: str | None = None,
-                   claude_path: str = "claude"):
-    """Klip kanalın TONUNA (duygu/mizah) uyuyor mu — vision tarifinden METİN yargısı (ucuz,
-    vision/storyboard GEREKMEZ). Döner ToneFit ya da None (hata → fail-open, çağıran uyuyor
-    sayar). Retry'lı (None yalnız gerçekten doğrulanamayınca)."""
+def judge_tone_fit(clip_description: str, tone: str, *, title: str = "",
+                   backend: str = "claude_cli", model: str = "default",
+                   api_key: str | None = None, claude_path: str = "claude"):
+    """Klip kanalın TONUNA (duygu/mizah/karma) uyuyor mu — vision tarifi + BAŞLIK'tan METİN
+    yargısı. ``title`` KARMA için kritik: 'hak ediş/kim haklı' çoğu zaman görüntüde değil
+    başlıktadır ('idiot regrets…', 'instant karma') → başlık verilmezse karma yanlışça reddedilir
+    (karmadayi ilk koşular %75 red). Döner ToneFit ya da None (hata → fail-open). Retry'lı."""
     if not (clip_description or "").strip():
         return None
     rule = (_TONE_FIT_DUYGU if tone == "duygu"
             else _TONE_FIT_KARMA if tone == "karma"
             else _TONE_FIT_MIZAH)
-    prompt = _TONE_FIT_PROMPT.format(desc=clip_description[:600], rule=rule)
+    prompt = _TONE_FIT_PROMPT.format(desc=clip_description[:600], rule=rule,
+                                     title=(title or "(başlık yok)")[:200])
     last: Exception | None = None
     for _ in range(2):
         try:
