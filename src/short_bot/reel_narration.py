@@ -677,8 +677,13 @@ RULES:
   gibi yanlış ikame UYDURMA. Örn. 'saves a turtle using a straw' = balıkçı pipeti KURTARMAK
   için kullanır (pipeti burundan çıkarmak DEĞİL). Vision görsel detay (renk, poz, ortam)
   için; olayın ÖZÜ + AMACI başlık+yorumdan gelir.
-- Bunların ÜÇÜNÜN (başlık + yorum + vision) BİLDİRDİĞİ dışında bir şey UYDURMA (olmayan
-  ikinci hayvan, gizli olay yok). Ama üçünden BİRİ net söylüyorsa o GERÇEKTİR, kullan.{scene_rule}
+- ⛔ UYDURMA VARLIK KESİN YASAK (EN SIK HATA): Ekranda GÖRÜNMEYEN ikinci bir CANLI / NESNE / KİŞİ
+  ya da onunla ilgili bir alt-olay EKLEME. Sahneyi 'zenginleştirmek' ya da kelime doldurmak için
+  olmayan bir şey İCAT ETME. GERÇEK örnek-hata (short 999, YAPMA): kaplumbağa taşıyan adama dair
+  anlatım araya 'yolda kaybolmuş bir YENGEÇ bulunca onu da taşıdı' diye UYDURULMUŞ bir yengeç
+  soktu — karelerde yengeç YOKTU. Tek özneye/olaya SADIK KAL. Yalnız başlık+yorum+vision'ın
+  BİLDİRDİĞİ varlıklar vardır; başkası YOK. (Duygu/abartı/lakap serbest — o YORUM; yeni fiziksel
+  varlık değil.){scene_rule}
 - KENDİ İÇİNDE HİKÂYE — META YOK: Anlatım, olayı GÖREN birinin ağzından akan tek bir
   hikâyedir. 'Yorumlarda millet', 'izleyici', 'Reddit', 'video' gibi DIŞ referans SOKMA;
   dördüncü duvarı KIRMA. (Yorumlar sana bağlam; metne değil.)
@@ -755,9 +760,11 @@ def _curated_emotion_override() -> str:
         "tanık gibi GERİLİMLİ ve İÇTEN anlat. Hayvanı KAHRAMAN/insan gibi çerçevele — niyet, "
         "cesaret, sadakat, şefkat ata ('sanki koruyordu', 'bir an bile bırakmadı', 'pes "
         "etmeyi reddetti'). HOOK'ta saniye-1 ölüm-kalım/duygusal risk; ORTADA 'ama tehlike "
-        "henüz geçmemişti' ile gerilimi sürdür; FİNALDE sıcak bir çözüm (kurtuluş/kavuşma/"
-        "fedakârlık). Klişe/melodram DEĞİL — bu ANIN GERÇEK duygusundan çık, abartma. Bir "
-        "satır gerçekten duygu vermiyorsa sade ama içten yaz."
+        "henüz geçmemişti' ile gerilimi sürdür AMA gerilimi UYDURMA bir engelle/varlıkla değil, "
+        "sahnedeki GERÇEK zorlukla besle (ekranda olmayan ikinci bir hayvan/nesne/engel EKLEME — "
+        "short 999: 'yolda bir yengeç buldu' diye olmayan yengeç uydurdu, YAPMA). FİNALDE sıcak "
+        "bir çözüm (kurtuluş/kavuşma/fedakârlık). Klişe/melodram DEĞİL — bu ANIN GERÇEK "
+        "duygusundan çık, abartma. Bir satır gerçekten duygu vermiyorsa sade ama içten yaz."
     )
 
 
