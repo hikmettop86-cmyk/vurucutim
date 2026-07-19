@@ -171,7 +171,10 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
         log.info("  kürate: vision ile GERÇEK aksiyon okunuyor…")
         desc = _describe_clip(clip, vision_call=vision, ffmpeg_path=settings.ffmpeg_path)
         if not desc.strip():
-            raise RuntimeError("kürate: vision klibi tarif edemedi (backend kapalı?)")
+            # CuratedClipError (RuntimeError DEĞİL): geçici vision hatası oto-loop'ta SIRADAKİ
+            # adaya geçsin, TÜM run'ı çökertmesin (denetim bulgusu: çıplak RuntimeError loop'un
+            # except'lerine takılmayıp auto_produce_curated'ı öldürüyordu).
+            raise CuratedClipError("kürate: vision klibi tarif edemedi (geçici hata) → atlanıyor")
         log.info(f"  kürate: vision → {desc}")
 
         # TON-KLİP UYUM KAPISI (DUYGU kanalı stadyumda Viking-kask komik klibini seçip zorla
@@ -489,6 +492,11 @@ def auto_produce_curated(channel, *, settings, secrets, db_path, output_root,
             continue
         except CuratedClipError as e:
             log.info(f"  kürate[oto]: indirilemedi → atlandı ({e})")
+            continue
+        except Exception as e:  # noqa: BLE001 — GÜVENLİK AĞI (denetim bulgusu): beklenmedik bir
+            # hata (render/ffmpeg/vision) tek adayda patlarsa TÜM run'ı ÖLDÜRMESİN; logla, sıradaki
+            # adaya geç. Geçici hata seen'e YAZILMAZ (tekrar denenebilir).
+            log.warning(f"  kürate[oto]: beklenmedik hata ({type(e).__name__}: {e}) → sıradaki aday")
             continue
     log.warning("  kürate[oto]: denenen adayların hepsi elendi (watermark/indirilemez) "
                 "→ temiz cevher yok")

@@ -165,6 +165,24 @@ def test_detect_heavy_text_flags_burned_captions(monkeypatch, tmp_path):
     assert r is not None and r.heavy is True and "subtitle" in r.kinds
 
 
+def test_safety_schemas_reject_empty_json():
+    """Güvenlik şemaları (WatermarkDetect/HeavyText/ClipQuality) BOŞ {} yanıtı REDDETMELİ →
+    model_validate({}) ValidationError atsın ki run_json None dönsün → gate fail-closed/open
+    DOĞRU çalışsın. Eskiden default'lar sessizce geçiyordu (kirli klip geçer / iyi klip elenir)."""
+    import pytest
+    from pydantic import ValidationError
+
+    from short_bot.curated_clean import ClipQuality, HeavyText, WatermarkDetect
+
+    for schema in (WatermarkDetect, HeavyText, ClipQuality):
+        with pytest.raises(ValidationError):
+            schema.model_validate({})
+    # karar alanı VERİLİRSE geçerli (diğer alanlar default'lu kalır)
+    assert WatermarkDetect.model_validate({"present": True}).present is True
+    assert HeavyText.model_validate({"heavy": False}).heavy is False
+    assert ClipQuality.model_validate({"engaging": True, "score": 8}).score == 8
+
+
 def test_describe_clip_beats_time_ordered(monkeypatch, tmp_path):
     """describe_clip_beats: klibi segment'lere bölüp her dilimi AYRI tarif eder → zaman-sıralı
     beat sheet (BAŞ/ORTA/SON). Böylece anlatım footage SIRASINA oturur, ödül erken açılmaz

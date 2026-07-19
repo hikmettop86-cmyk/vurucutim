@@ -37,7 +37,10 @@ _MAX_REGIONS = 4   # bundan fazla bölge = watermark her yerde → temizlenmez (
 
 class WatermarkDetect(BaseModel):
     """Storyboard vision yargısı — watermark tüm karelerde nerelerde görünüyor."""
-    present: bool = False
+    # ZORUNLU (default YOK): model boş/kısmi JSON ({}) dönerse model_validate ValidationError
+    # atsın → run_json retry → hâlâ bozuksa detect None döner → gate FAIL-CLOSED reddeder. Eskiden
+    # default False, boş yanıt 'temiz' sayılıp kirli klip GEÇİYORDU (denetim bulgusu, kritik).
+    present: bool
     # watermark'ın GÖRÜNDÜĞÜ TÜM bölgeler (hareketliyse birden çok): _REGION_BOX etiketleri
     regions: list[str] = []
     # yazı ana ÖZNEYİ mi kaplıyor (ağır → temizlenemez) yoksa kenar/köşede mi
@@ -189,8 +192,11 @@ def clean_if_needed(clip, *, vision_call, ffmpeg_path: str = "ffmpeg", out_path)
 # klibi indirip GERÇEK 6 kareyle (storyboard) yargıla — sıradan/rutin olanı ELE.
 class ClipQuality(BaseModel):
     """Storyboard vision yargısı — klip GERÇEKTEN izlenesi mi (kapak değil, içerik)."""
-    engaging: bool = False   # gerçekten dikkat çekici / durdurur / paylaşılası mı
-    score: int = 5           # 1 (sıradan, kaydırılır) .. 10 (kesin viral, durdurur)
+    # ZORUNLU (bkz. WatermarkDetect.present): boş yanıt → ValidationError → None → kalite gate
+    # FAIL-OPEN (üretir). Eskiden default engaging=False/score=5, boş yanıt iyi klibi 'sıradan'
+    # sayıp REDDEDİP KALICI blacklist'liyordu (denetim bulgusu) — tek vision hıçkırığı = klip kaybı.
+    engaging: bool           # gerçekten dikkat çekici / durdurur / paylaşılası mı
+    score: int               # 1 (sıradan, kaydırılır) .. 10 (kesin viral, durdurur)
     reason: str = ""
 
 
@@ -526,7 +532,8 @@ def crop_source_banner(clip, banner, *, ffmpeg_path: str = "ffmpeg", out_path):
 # sorunlu içerik). Doğal sahne yazısını (tabela/forma/etiket) editör katmanından AYIRIR.
 class HeavyText(BaseModel):
     """Storyboard vision — klip TEMİZ çekim mi yoksa gömülü yazıyla dolu edit/repost mü."""
-    heavy: bool = False          # gömülü altyazı/caption/banner ile DOLU → temiz footage DEĞİL
+    # ZORUNLU (bkz. WatermarkDetect.present): boş yanıt → ValidationError → None → gate FAIL-CLOSED.
+    heavy: bool                  # gömülü altyazı/caption/banner ile DOLU → temiz footage DEĞİL
     kinds: list[str] = []        # subtitle / caption / banner / watermark / branding
     note: str = ""
 
