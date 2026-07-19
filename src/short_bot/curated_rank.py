@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -164,12 +165,16 @@ def score_curiosity(gems: list[dict], *, vision_call, top_n: int = 24,
     for g, (sc, has_text) in zip(head, scores):
         g["curiosity"] = sc
         g["has_text"] = has_text     # kapakta gömülü yazı/logo → collect_pool eler
-        # final = engagement × (merak/5): skor 10 → ×2, 5 → ×1, 1 → ×0.2
-        g["final_score"] = engagement_score(g) * ((sc / 5.0) if sc else 1.0)
-    for g in tail:
+        # MERAK BİRİNCİL (denetim bulgusu H2): eski 'engagement × merak/5' ÇARPIMINDA upvote
+        # (~500-100k, 200× yayılım) merak'ı (10× yayılım) EZİYORDU → sıradan-viral güçlüyü
+        # geçiyordu ('hep sıradan geliyor'). YENİ: merak (1-10, KALİTE) tam sayı-baskın terim;
+        # log1p(engagement)/8 ∈ [0,~1.5] yalnız AYNI merak seviyesinde tiebreak. Böylece bir
+        # merak farkını (1.0) hiçbir upvote uçurumu ezemez → kalite gerçekten yönetir.
+        g["final_score"] = (sc if sc else 0) + math.log1p(engagement_score(g)) / 8.0
+    for g in tail:                     # skorlanmayan kuyruk (rank 61+): merak yok → alt bant
         g["curiosity"] = None
         g["has_text"] = False
-        g["final_score"] = engagement_score(g)
+        g["final_score"] = math.log1p(engagement_score(g)) / 8.0
 
     out = sorted(ranked, key=lambda g: -g["final_score"])
     if drop_text:

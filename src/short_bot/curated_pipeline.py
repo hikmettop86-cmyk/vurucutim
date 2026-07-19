@@ -448,9 +448,12 @@ def auto_produce_curated(channel, *, settings, secrets, db_path, output_root,
     fresh.sort(key=lambda g: -_gem_rank(g))
     # TONA-DUYARLI SEÇİM: en iyi adayları vision ile kanalın tonuna göre skorla — mizah
     # kanalı 'merak/gülme', DUYGU kanalı 'kahramanlık/kurtarma' klibi seçer (@NedenHayvan).
+    _vis = None
+    _score_fn = None
     try:
         from short_bot.curated_rank import score_curiosity
         from short_bot.pipeline import resolve_ai_call
+        _score_fn = score_curiosity
         _vis = resolve_ai_call(settings, secrets, "vision")
         # DERİN HAVUZ (find_gems ~1200 taze) → GENİŞ skorla ki temiz+kaliteli aday havuzu
         # geniş olsun (watermark'lı viral repost'lar elenince altında temizi kalsın). 30→60:
@@ -466,16 +469,39 @@ def auto_produce_curated(channel, *, settings, secrets, db_path, output_root,
         # eşik üretimi SESSİZCE engelliyordu (kullanıcı: 'no_candidates') → o zaman fail-open.
         _scored = any(g.get("curiosity") is not None for g in fresh)
         _strong = [g for g in fresh if (g.get("curiosity") or 0) >= DUYGU_MIN_SCORE]
+        if not _strong and _scored and _vis is not None and _score_fn is not None:
+            # DERİN TİER (denetim H4): top-60'ta güçlü YOK diye HEMEN pes etme — havuzda yüzlerce
+            # aday 61+ sırada henüz skorlanmadı. Skorlanmamış kuyruğu bir kez daha skorla, güçlü ara
+            # (aksi halde top-60 watermark-yoğun/zayıfsa devasa havuza rağmen 'no_candidates').
+            _tail = [g for g in fresh if g.get("curiosity") is None]
+            if _tail:
+                try:
+                    log.info(f"  kürate[oto]: top-60'ta güçlü duygusal yok → derin tier "
+                             f"({min(60, len(_tail))} aday daha skorlanıyor)")
+                    _tail = _score_fn(_tail, vision_call=_vis, top_n=60, tone=tone, log=log)
+                    fresh = sorted(
+                        [g for g in fresh if g.get("curiosity") is not None] + _tail,
+                        key=lambda g: -g.get("final_score", 0))
+                    _strong = [g for g in fresh if (g.get("curiosity") or 0) >= DUYGU_MIN_SCORE]
+                except Exception as e:  # noqa: BLE001
+                    log.info(f"  kürate[oto]: derin tier skorlanamadı ({e})")
         if _strong:
             fresh = _strong
         elif _scored:
             best = max((g.get("curiosity") or 0) for g in fresh) if fresh else 0
             log.warning(f"  kürate[oto]: yeterince güçlü duygusal klip yok (en iyi skor "
-                        f"{best}<{DUYGU_MIN_SCORE}) → üretim atlandı")
+                        f"{best}<{DUYGU_MIN_SCORE}, derin tier dahil) → üretim atlandı")
             return None, None
         else:
             log.info("  kürate[oto]: vision skorlanamadı → engagement sırasıyla deneniyor "
                      "(fail-open, sessiz-boş önlendi)")
+    elif tone == "mizah":
+        # HAFİF MİZAH TABANI (denetim H1): merak-baskın sıralama zaten zayıfı alta itiyor + kalite
+        # kapısı eliyor; yine de vision'ın AÇIKÇA komik-değil (merak≤3) dediği klibi hiç DENEME
+        # (boşuna indirme/kalite-çağrısı). Skorlanmamış (None) klip KORUNUR (fail-open).
+        _kept = [g for g in fresh if (g.get("curiosity") is None or g.get("curiosity") > 3)]
+        if _kept:
+            fresh = _kept
     # En iyi adayları sırayla dene; WATERMARK'LI (temizlenemeyen) olanı ATLA → temiz video.
     # 8→20: DUYGU kaynakları (r/MadeMeSmile) watermark-yoğun repost; derin havuzda temiz olanı
     # bulana kadar dene (kirli aday watermark kapısında ~8sn'de erken elenir, pahalı değil).
