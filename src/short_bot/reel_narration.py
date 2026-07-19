@@ -674,6 +674,13 @@ RULES:
 - ZORLAMA METAFOR YASAK: Sahneyle ALAKASIZ, rastgele benzetme kullanma ('sanki davulla
   köye gönderiyor' gibi — deniz/kaplumbağayla ilgisiz). Benzetme kullanacaksan sahneden
   ÇIKMALI ve ANLAMLI olmalı; olmuyorsa düz ve komik anlat, zorlama.
+- ANLAŞILIRLIK ŞART — İZLEYİCİ NE OLDUĞUNU ANLAMALI (short 980: 'Nereye baksan orada;
+  fizikçiler elektron ararken bu kadar çaresiz kalmaz' → anlamsız/kopuk laf, izleyici videodan
+  hiçbir şey anlamadı): HER cümle anlaşılır ve sahneyle NET bağlantılı olmalı. İzleyici
+  anlatımı dinleyince videoda GERÇEKTE ne olduğunu — KURULUM (kim, nerede, ne yapıyor) + ASIL
+  OLAY/ÖDÜL (sürpriz/komik an) — net kavramalı. Bağlamsız, kendinden menkul, 'akıllı laf' gibi
+  duran ama bir şey ANLATMAYAN cümle YASAK. Zekâ, sahneyi NET ve komik anlatmaktan gelir —
+  laf kalabalığından değil.
 - TEK KELİME/İMGE ÇEKİÇLEME YASAK (short 957 dersi: 'çığ' 5 cümlede 5 kez tekrarlandı,
   ezber gibi durdu): aynı kelimeyi/imgeyi/benzetmeyi art arda cümlelerde TEKRARLAMA. Bir
   espriyi ya da imgeyi bir kez kur, GEÇ; sahneyi FARKLI açılardan besle (tepki, iç ses,
