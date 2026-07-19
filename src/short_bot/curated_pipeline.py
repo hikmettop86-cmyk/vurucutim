@@ -315,8 +315,8 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
         # Sonnet değil, ucuz metin backend 'llm' → bağımsız perspektif) 'akıllı ama anlamsız'
         # varyansını yakalar; değilse geri bildirimle bir kez yeniden yaz. Fail-open.
         from short_bot.reel_narration import judge_narration_clarity
-        _clr = judge_narration_clarity(narration.full_text(), narr_desc, backend=llm.backend,
-                                       model=llm.model, api_key=llm.api_key,
+        _clr = judge_narration_clarity(narration.full_text(), narr_desc, tone=_tone,
+                                       backend=llm.backend, model=llm.model, api_key=llm.api_key,
                                        claude_path=llm.claude_path)
         if _clr is not None and not _clr.clear:  # reason BOŞ olsa bile yeniden yaz (denetim)
             # DİREKTİF + VISION-ANCHORED (denetim short 1000: netlik yakaladı ama rewrite yine
@@ -338,8 +338,8 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
                 backend=narr_llm.backend, api_key=narr_llm.api_key,
                 seed=seed, target_duration_s=target, scene_split=scene_split,
                 comments=comments, feedback=f"ANLAŞILIRLIK: {_cfb}")
-            _clr2 = judge_narration_clarity(narration.full_text(), narr_desc, backend=llm.backend,
-                                            model=llm.model, api_key=llm.api_key,
+            _clr2 = judge_narration_clarity(narration.full_text(), narr_desc, tone=_tone,
+                                            backend=llm.backend, model=llm.model, api_key=llm.api_key,
                                             claude_path=llm.claude_path)
             if _clr2 is not None and not _clr2.clear:
                 log.warning(f"  kürate[netlik]: yeniden yazım da net değil ({_clr2.reason}) "

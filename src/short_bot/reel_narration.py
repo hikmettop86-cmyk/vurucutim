@@ -915,34 +915,56 @@ class NarrationClarity(_BaseModel):
 
 
 _CLARITY_PROMPT = (
-    "Aşağıda bir kısa video için yazılmış Türkçe bir mahalle-mizahı ANLATIMI var. Video şunu "
-    "gösteriyor:\nVİDEO: {desc}\n\nANLATIM:\n---\n{narr}\n---\n"
-    "Bu anlatım NET, TUTARLI ve GERÇEKTEN İŞLEYEN bir mizah mı? İKİ şeye bak:\n"
-    "1) İzleyici NE OLDUĞUNU net anlıyor mu (kim / ne yapıyor / asıl sürpriz-komik AN)?\n"
-    "2) Benzetmeler/laflar sahneye OTURUYOR mu, yoksa ZORLAMA / kopuk / üst üste yığılmış mı? "
-    "Net bir KOMİK NOKTA var mı, yoksa kulağa akıllı gelen ama bir şey ANLATMAYAN/güldürmeyen "
-    "laf yığını mı?\n"
+    "Aşağıda bir kısa video için yazılmış Türkçe bir ANLATIM var ({tone_word} tonunda). Video "
+    "şunu gösteriyor:\nVİDEO: {desc}\n\nANLATIM:\n---\n{narr}\n---\n"
+    "Bu anlatım NET, TUTARLI ve tona uygun İŞLİYOR mu? Şunlara bak:\n"
+    "1) İzleyici NE OLDUĞUNU net anlıyor mu (kim / ne yapıyor / asıl an)?\n"
+    "2) Benzetmeler/laflar sahneye OTURUYOR mu, yoksa ZORLAMA / kopuk / üst üste yığılmış mı?\n"
+    "{tone_rule}\n"
     "clear=false DE eğer: bağlamsız/anlamsız cümle var; VEYA benzetmeler sahneyle ZAYIF bağlı/"
     "zorlama ve ÜST ÜSTE yığılmış (ör. basit bir düşüşe alakasız 'kaleci pozu / kanat gibi / "
-    "cesaret kaydı gitti' benzetmeleri arka arkaya — short 1004, izleyici 'neresi komik, ne demek "
-    "istedi' der); VEYA net bir komik nokta YOK; VEYA asıl olayı hiç anlatmıyor.\n"
-    "SERBEST (clear=true): mahalle ağzı, abartı, lakap ve YERİNİ BULAN tek-iki keskin benzetme + "
-    "NET olay. Amaç: zorlama-laf yığınını elemek, İYİ mahalle mizahını DEĞİL. Şüphede clear=TRUE.\n"
-    "- clear: hem NET hem İŞLEYEN-mizah mı (olay anlaşılıyor + benzetmeler oturuyor + komik nokta var)?\n"
+    "cesaret kaydı gitti' arka arkaya — short 1004); VEYA {tone_fail}; VEYA asıl olayı hiç "
+    "anlatmıyor.\n"
+    "SERBEST (clear=true): {tone_ok}, YERİNİ BULAN tek-iki keskin benzetme + NET olay. Amaç: "
+    "zorlama-laf yığınını/kopukluğu elemek, İYİ anlatımı DEĞİL. Şüphede clear=TRUE.\n"
+    "- clear: hem NET hem tona uygun İŞLİYOR mu?\n"
     "- reason: clear=false ise EN büyük sorun (tek cümle Türkçe).\n"
     'SADECE JSON: {{"clear": <bool>, "reason": "<...>"}}'
 )
 
+# Tona göre 3. kural — MİZAH komik-nokta arar; DUYGU duygusal-oturma arar (KOMİK ARAMAZ). Denetim
+# bulgusu (short 1005): tek-tip 'mizah' prompt DUYGU anlatımını 'komik değil' diye yanlış eliyordu.
+_CLARITY_TONE = {
+    "mizah": {
+        "tone_word": "mahalle-mizahı",
+        "tone_rule": "3) Net bir KOMİK NOKTA var mı, yoksa kulağa akıllı gelen ama güldürmeyen "
+                     "laf yığını mı? (Bu MİZAH tonu — güldürmeli.)",
+        "tone_fail": "net bir komik nokta YOK / güldürmüyor",
+        "tone_ok": "mahalle ağzı, abartı, lakap",
+    },
+    "duygu": {
+        "tone_word": "duygusal",
+        "tone_rule": "3) Duygu NET ve İÇTEN oturuyor mu? (Bu DUYGUSAL bir anlatım — KOMİK olması "
+                     "GEREKMEZ, mizah ARAMA. Klişe/boş melodram değil, sahnenin GERÇEK duygusundan "
+                     "mı çıkıyor?)",
+        "tone_fail": "duygu kopuk/klişe/boş ya da olay sahneyle bağlantısız",
+        "tone_ok": "içten duygusal anlatım, sahneden çıkan sıcaklık",
+    },
+}
 
-def judge_narration_clarity(narration_text: str, clip_description: str, *,
+
+def judge_narration_clarity(narration_text: str, clip_description: str, *, tone: str = "mizah",
                             backend: str = "claude_cli", model: str = "default",
                             api_key: str | None = None, claude_path: str = "claude"):
-    """Anlatım NET + TUTARLI mı (izleyici olayı anlar mı)? METİN-tabanlı ikinci-LLM yargısı
-    (vision/storyboard GEREKMEZ → ucuz). Döner NarrationClarity ya da None (hata → fail-open,
-    çağıran net sayar). Geçici hataya karşı retry'lı (None yalnız gerçekten doğrulanamayınca)."""
+    """Anlatım NET + TUTARLI + TONA UYGUN mı (izleyici olayı anlar mı; mizah güldürüyor / duygu
+    dokunuyor mu)? METİN-tabanlı ikinci-LLM yargısı (ucuz). ``tone`` MİZAH'ta komik-nokta, DUYGU'da
+    duygusal-oturma arar (denetim 1005: tek-tip prompt DUYGU'yu 'komik değil' diye yanlış eliyordu).
+    Döner NarrationClarity ya da None (hata → fail-open). Geçici hataya karşı retry'lı."""
     if not (narration_text or "").strip():
         return None
-    prompt = _CLARITY_PROMPT.format(desc=(clip_description or "")[:600], narr=narration_text[:900])
+    _tk = _CLARITY_TONE.get(tone, _CLARITY_TONE["mizah"])
+    prompt = _CLARITY_PROMPT.format(desc=(clip_description or "")[:600], narr=narration_text[:900],
+                                    **_tk)
     last: Exception | None = None
     for _ in range(2):
         try:
