@@ -243,33 +243,42 @@ def _clip_duration_s(clip, ffmpeg_path: str) -> float:
         return 0.0
 
 
-# KÜRATE yavaşlatma: kısa klip videodan kısaysa LOOP yerine YAVAŞLATILIR (setpts) →
-# tek uzun oynatım (kullanıcı: "loopa girince kötü oluyor"). En çok bu kat; daha
-# kısa klipte kalan boşluk yine loop'lanır (2.5x'ten fazla yavaşlatma tuhaf görünür).
+# KÜRATE süre OTURTMA: klibi videoya CONTIGUOUS (tek sıralı oynatım) sığdır — scatter YOK.
+#  - klip video'dan KISA → YAVAŞLAT (setpts, ×kat, en çok 2.7); kalan boşluk loop yerine dolar.
+#  - klip video'dan UZUN → HIZLANDIR (setpts, en çok 1.8×). Denetim bulgusu (KRİTİK): eskiden
+#    clip>video'da None dönüyordu → tek klip her segmente atanıp subcut'ların clip_offsets'i onu
+#    DAĞITIK pencerelere bölüyordu (skip/geri-sarma → 'hiçbir şey anlamadım'). Çift-yönlü oturtma
+#    ile tüm klip baştan sona sıralı oynar. 1.8×'i aşan aşırı-uzun klip hızlandırılıp target'a
+#    TRIM'lenir (yine contiguous). İdeal: anlatım≈klip (N≈L) → kat≈1, doğal hızda oynar.
 CURATED_MAX_SLOWDOWN = 2.7
+CURATED_MAX_SPEEDUP = 1.8
 
 
 def _slow_clip_to(clip, target_s: float, ffmpeg_path: str, out_path):
-    """Klibi setpts ile ~target_s'ye YAVAŞLAT (video-only; loop yerine tek oynatım).
-
-    Döner yeni klip yolu, ya da None (klip zaten yeterince uzun / okunamadı /
-    ffmpeg hatası → çağıran orijinali loop'lar, fail-open)."""
+    """Klibi setpts ile ~target_s'ye OTURT (video-only, contiguous tek oynatım; scatter önleme).
+    Klip kısaysa yavaşlatır, uzunsa hızlandırır (aşırı uzunsa hızlandır+trim). Döner yeni klip
+    yolu, ya da None (klip zaten ~oturuyor / okunamadı / ffmpeg hatası → çağıran orijinali kullanır)."""
     import subprocess
     dur = _clip_duration_s(clip, ffmpeg_path)
     if dur <= 0:
         return None
-    factor = min(CURATED_MAX_SLOWDOWN, target_s / dur)
-    if factor <= 1.05:
-        return None                       # klip zaten videoyu tek oynatımda dolduruyor
+    raw = target_s / dur
+    if 0.95 <= raw <= 1.05:
+        return None                       # zaten ~oturuyor → olduğu gibi contiguous oynar
+    # kat>1 yavaşlatma, kat<1 hızlandırma; [1/1.8, 2.7]'e sıkıştır
+    factor = max(1.0 / CURATED_MAX_SPEEDUP, min(CURATED_MAX_SLOWDOWN, raw))
+    trim = target_s if (factor * dur) > (target_s + 0.15) else None  # aşırı-uzun → sonra trim
     try:
-        subprocess.run([ffmpeg_path, "-v", "error", "-y", "-i", str(clip),
-                        "-filter:v", f"setpts={factor:.3f}*PTS", "-an", "-r", "30",
-                        "-preset", "veryfast", str(out_path)],
-                       capture_output=True, timeout=180)
+        cmd = [ffmpeg_path, "-v", "error", "-y", "-i", str(clip),
+               "-filter:v", f"setpts={factor:.3f}*PTS", "-an", "-r", "30", "-preset", "veryfast"]
+        if trim is not None:
+            cmd += ["-t", f"{trim:.2f}"]
+        cmd += [str(out_path)]
+        subprocess.run(cmd, capture_output=True, timeout=180)
         if Path(out_path).exists() and Path(out_path).stat().st_size > 0:
             return out_path
-    except Exception as e:  # noqa: BLE001 — yavaşlatma başarısızsa loop'a düş
-        log.info(f"  kürate: klip yavaşlatılamadı ({e}) → loop'a düşülüyor")
+    except Exception as e:  # noqa: BLE001 — oturtma başarısızsa loop'a düş
+        log.info(f"  kürate: klip oturtulamadı ({e}) → loop'a düşülüyor")
     return None
 
 
@@ -764,18 +773,19 @@ def produce_reel_video(
     # koşuda 67 vision çağrısının çoğu aynı martı/pelikan/kelebek döngüsüydü;
     # bütçe onlara gidince YENİ adaylara hiç sıra gelmiyordu.
     seen_verdicts: dict = {}
-    # KÜRATE-KLİP: tek hazır klip TÜM segmentlere atanır → footage arama döngüsü
-    # atlanır (order boşaltılır). Klip videodan KISAYSA loop yerine YAVAŞLATILIR
-    # (tek uzun oynatım); yeterince uzun klip olduğu gibi kullanılır (loop yok).
+    # KÜRATE-KLİP: tek hazır klip TÜM segmentlere atanır → footage arama döngüsü atlanır
+    # (order boşaltılır). Klip videoya CONTIGUOUS oturtulur (_slow_clip_to çift-yönlü: kısaysa
+    # yavaşlat, uzunsa hızlandır) → subcut'lar klibi DAĞITMAZ (scatter/geri-sarma önlenir).
     if curated_clip is not None:
         _cc = Path(curated_clip)
         _orig_d = _clip_duration_s(_cc, ffmpeg_path)
         _slow = _slow_clip_to(_cc, duration_s + 0.4, ffmpeg_path,
                               work_dir / "curated_slow.mp4")
         if _slow is not None:
-            log.info(f"  kürate: klip {_orig_d:.1f}s → yavaşlatıldı "
-                     f"{_clip_duration_s(Path(_slow), ffmpeg_path):.1f}s "
-                     f"(video {duration_s:.1f}s, loop önleme)")
+            _new_d = _clip_duration_s(Path(_slow), ffmpeg_path)
+            log.info(f"  kürate: klip {_orig_d:.1f}s → {_new_d:.1f}s "
+                     f"({'hızlandırıldı' if _new_d < _orig_d else 'yavaşlatıldı'}, "
+                     f"video {duration_s:.1f}s, contiguous)")
             _cc = Path(_slow)
         for si in range(n_segs):
             clips_by_seg[si] = [_cc]

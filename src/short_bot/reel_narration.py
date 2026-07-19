@@ -649,11 +649,22 @@ def build_curated_prompt(title: str, clip_description: str, *, channel,
             f"'ardından', yeni mekân adı) ANCAK sözlerinin son ~%{s2}'sinde GEÇ. İkinci "
             f"sahneyi ERKEN anlatırsan izleyici onu HENÜZ görmüyor — ses görüntünün önüne "
             f"geçer, senkron bozulur. İlk sahneyi doyur, geçişi tam yerinde yap.")
+    # ZAMAN-SIRALI BEAT SHEET (kürate: clip_description = 'BAŞ/ORTA/SON (Xsn): …'): anlatımı
+    # AYNI zaman-sırasına oturt ki cümleler ekrandaki ana denk gelsin (short 990). scene_rule
+    # yalnız 2-sahnede tetikleniyordu; beat sheet TEK-sahne çok-olay için de sırayı zorlar.
+    beat_rule = ""
+    if "BAŞ (" in clip_description or "ORTA (" in clip_description:
+        beat_rule = (
+            "\n- ⏱ ZAMAN-SIRALI BEAT SHEET: Yukarıdaki tarif klibin ZAMAN dilimleridir "
+            "(BAŞ→ORTA→SON, saniyelerle). Anlatımını TAM bu sırayla kur: 1. beat BAŞ'takini, "
+            "2. beat ORTA'dakini, kapanış SON'dakini anlatsın. SON'daki ödülü/kavuşmayı/çözümü/"
+            "punchline'ı ERKEN AÇMA — izleyici onu HENÜZ görmüyor, ses görüntünün önüne geçer, "
+            "cümleler sahneyle oturmaz. Sıralamayı ASLA bozma; her beati kendi zaman dilimine yaz.")
     return f"""You are writing narration for a REAL short video clip we are RE-TELLING.
 
 REAL CONTEXT (the clip's own caption/title): {title}
 WHAT IS ACTUALLY ON SCREEN (vision of the real clip): {clip_description}
-{crowd}
+{crowd}{beat_rule}
 This is a KÜRATE clip — the audience already loved this REAL moment. Narrate the REAL
 story with the channel's persona. Do NOT invent a new story.
 
@@ -806,9 +817,13 @@ def write_curated_narration(title: str, clip_description: str, *, channel,
 
     from short_bot.reel_models import ReelBeat
     subj = (subject or "scene").strip() or "scene"
-    beats = [ReelBeat(text=t, visual_query=subj, keyword="") for t in draft.beats]
+    # Ozan kalıbını ('Aşık X der ki' + zorlama kafiye) hook+beat İÇİNDEN de temizle (denetim:
+    # few-shot düzeltildi ama savunma şart). _strip_bard_inline noktalama/büyük-harf DOKUNMAZ →
+    # ozan yoksa hook/beat DEĞİŞMEZ (close için tam _strip_bard: tam cümle olsun).
+    beats = [ReelBeat(text=_strip_bard_inline(t), visual_query=subj, keyword="")
+             for t in draft.beats]
     narration = ReelNarration(
-        hook=draft.hook, beats=beats, close=_strip_bard(draft.close),
+        hook=_strip_bard_inline(draft.hook), beats=beats, close=_strip_bard(draft.close),
         mood=draft.mood, title=draft.title, title_en=getattr(draft, "title_en", ""),
         cover_title=draft.cover_title, hook_visual=subj, close_visual=subj)
     # BÜTÇE: taşarsa deterministik sığdır (SONDAN beat at, hook/tepe/close korunur).
@@ -929,6 +944,15 @@ _BARD_RE = re.compile(
     re.IGNORECASE)
 _BARD_TAIL_RE = re.compile(
     r"[.,;:—–-]\s*(?:a[şs][iıİ]k|ozan)\b.*$", re.IGNORECASE | re.DOTALL)
+
+
+def _strip_bard_inline(s: str) -> str:
+    """Ozan kalıbını ('Aşık X der ki' öneki + zorlama kafiye kuyruğu) hook/beat İÇİNDEN temizle,
+    AMA _strip_bard'ın aksine noktalama/büyük-harf normalizasyonu YAPMA (hook/beat'i değiştirme —
+    ozan yoksa aynen kalsın). Yalnız kalıp sızarsa keser."""
+    if not isinstance(s, str):
+        return s
+    return _BARD_TAIL_RE.sub("", _BARD_RE.sub("", s)).strip()
 
 
 def _strip_bard(close: str) -> str:

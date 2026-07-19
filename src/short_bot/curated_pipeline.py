@@ -266,15 +266,20 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
             from short_bot.curated_clean import verify_curated_narration
             _chk = verify_curated_narration(clip, narration.full_text(),
                                             vision_call=vision, ffmpeg_path=settings.ffmpeg_path)
-            if _chk is not None and not _chk.faithful and _chk.mismatch:
-                log.info(f"  kürate[sadakat]: anlatım sadık DEĞİL ({_chk.mismatch}) "
+            # not-faithful İSE yeniden yaz — mismatch BOŞ OLSA BİLE (denetim bulgusu: zayıf model
+            # 'faithful=false, mismatch=""' dönünce eski AND-guard rewrite'ı ATLAYIP uydurma
+            # anlatımı YAYINLIYORDU). Reason boşsa jenerik geri bildirim ver.
+            if _chk is not None and not _chk.faithful:
+                _fb = _chk.mismatch or ("Anlatım videodaki GERÇEK olayla örtüşmüyor (özne/olay/sıra). "
+                                        "SADECE karelerde görüneni anlat, olay/aşama UYDURMA.")
+                log.info(f"  kürate[sadakat]: anlatım sadık DEĞİL ({_chk.mismatch or 'reason yok'}) "
                          f"→ geri bildirimle yeniden yazılıyor")
                 narration = write_curated_narration(
                     title_seed, narr_desc, channel=channel, subject="clip",
                     claude_path=narr_llm.claude_path, model=narr_llm.model,
                     backend=narr_llm.backend, api_key=narr_llm.api_key,
                     seed=seed, target_duration_s=target, scene_split=scene_split,
-                    comments=comments, feedback=_chk.mismatch)
+                    comments=comments, feedback=_fb)
                 _chk2 = verify_curated_narration(clip, narration.full_text(),
                                                  vision_call=vision,
                                                  ffmpeg_path=settings.ffmpeg_path)
@@ -292,14 +297,17 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
         _clr = judge_narration_clarity(narration.full_text(), narr_desc, backend=llm.backend,
                                        model=llm.model, api_key=llm.api_key,
                                        claude_path=llm.claude_path)
-        if _clr is not None and not _clr.clear and _clr.reason:
-            log.info(f"  kürate[netlik]: anlatım net DEĞİL ({_clr.reason}) → yeniden yazılıyor")
+        if _clr is not None and not _clr.clear:  # reason BOŞ olsa bile yeniden yaz (denetim)
+            _cfb = _clr.reason or ("İzleyici olayı takip edemiyor; anlatımı BASİT ve NET yap, "
+                                   "kim/ne/neden açık olsun.")
+            log.info(f"  kürate[netlik]: anlatım net DEĞİL ({_clr.reason or 'reason yok'}) "
+                     f"→ yeniden yazılıyor")
             narration = write_curated_narration(
                 title_seed, narr_desc, channel=channel, subject="clip",
                 claude_path=narr_llm.claude_path, model=narr_llm.model,
                 backend=narr_llm.backend, api_key=narr_llm.api_key,
                 seed=seed, target_duration_s=target, scene_split=scene_split,
-                comments=comments, feedback=f"ANLAŞILIRLIK: {_clr.reason}")
+                comments=comments, feedback=f"ANLAŞILIRLIK: {_cfb}")
             _clr2 = judge_narration_clarity(narration.full_text(), narr_desc, backend=llm.backend,
                                             model=llm.model, api_key=llm.api_key,
                                             claude_path=llm.claude_path)
