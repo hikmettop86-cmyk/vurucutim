@@ -410,9 +410,12 @@ def auto_produce_curated(channel, *, settings, secrets, db_path, output_root,
         from short_bot.curated_rank import score_curiosity
         from short_bot.pipeline import resolve_ai_call
         _vis = resolve_ai_call(settings, secrets, "vision")
-        # DERİN HAVUZ (find_gems ~800 aday) → daha çok skorla ki temiz+kaliteli aday havuzu
-        # geniş olsun (watermark'lı viral repost'lar elenince altında temizi kalsın).
-        fresh = score_curiosity(fresh, vision_call=_vis, top_n=30, tone=tone, log=log)
+        # DERİN HAVUZ (find_gems ~1200 taze) → GENİŞ skorla ki temiz+kaliteli aday havuzu
+        # geniş olsun (watermark'lı viral repost'lar elenince altında temizi kalsın). 30→60:
+        # DUYGU eşiği (emotion≥7) + yazı-kapak elemesi top_n'i sertçe daraltıyordu; 30'da güçlü
+        # aday ~5'e düşüp hepsi kirli çıkınca 'temiz cevher yok' (run 1143). 60 skorlanınca güçlü
+        # havuz ~2x → biri temiz çıkma olasılığı belirgin artar (skor bedava, Google havuz).
+        fresh = score_curiosity(fresh, vision_call=_vis, top_n=60, tone=tone, log=log)
     except Exception as e:  # noqa: BLE001 — skor düşerse engagement sırası (fail-open)
         log.info(f"  kürate[oto]: ton-skoru atlandı ({e})")
     if tone == "duygu":
