@@ -22,6 +22,11 @@ DUYGU_MIN_SCORE = 7        # emotion skoru bunun altındaysa oto-üretim ATLANIR
 # MİZAH modu min-süre (short 947 dersi: 12sn klip kurulum+tırmanma+punchline'a yer bırakmıyor
 # → narration taşıp klip 3x loop'lanıyor). Kaos/fail snappy olabilir ama iyi espri ~15sn ister.
 CURATED_MIZAH_MIN_S = 15
+# STORYBOARD KALİTE eşiği (short 992: 'hiç komik bir şey yok, çok zayıf'). tone-fit klibin DOĞRU
+# tonda mı olduğuna bakar, GÜÇLÜ mü olduğuna değil; thumbnail-skoru 'gülen yüz' kapağına aldanır.
+# judge_clip_quality GERÇEK storyboard'dan izlenme-değeri yargılar → engaging=False veya bundan
+# düşük skor = sıradan/zayıf → oto-üretimde ATLA (DUYGU_MIN_SCORE'un tüm-tonlar/storyboard karşılığı).
+CURATED_QUALITY_MIN = 6
 
 
 class CuratedWatermarkError(RuntimeError):
@@ -181,6 +186,22 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
             _remember("off-tone")
             raise CuratedClipError(
                 f"Klip '{_tone}' tonuna uymuyor ({_tf.reason}) → atlanıyor (yanlış kanal için).")
+
+        # STORYBOARD KALİTE KAPISI (kullanıcı short 992: 'hiç komik bir şey yok, çok zayıf'):
+        # tone-fit DOĞRU-ton'a bakar, GÜÇLÜ'ye değil; score_curiosity thumbnail'dan skorluyor →
+        # 'gülen yüz' kapağı yüksek merak alıyor ama muted video sıradan (contagiouslaughter komik-
+        # liği SESTE, biz sesi atıyoruz). judge_clip_quality GERÇEK 6-kare storyboard'dan izlenme-
+        # değeri yargılar (992 → engaging=False, skor 3, 'iç şaka, kanca yok'). Zayıfsa oto-üretimde
+        # ATLA → DUYGU_MIN_SCORE'un tüm-tonlar/storyboard karşılığı (zayıfı zorlama). Fail-open (None→devam).
+        if vision is not None:
+            from short_bot.curated_clean import judge_clip_quality
+            _q = judge_clip_quality(clip, vision_call=vision,
+                                    ffmpeg_path=settings.ffmpeg_path, tone=_tone)
+            if _q is not None and (not _q.engaging or _q.score < CURATED_QUALITY_MIN):
+                _remember("mundane")
+                raise CuratedClipError(
+                    f"Klip sıradan/zayıf (izlenme-skoru {_q.score}<{CURATED_QUALITY_MIN}: "
+                    f"{_q.reason}) → atlanıyor (izlenesi/güçlü klip seç).")
 
         # ZAMAN-SIRALI BEAT SHEET (kullanıcı short 990: 'sahneler ile cümleler oturmuyor'):
         # _describe_clip tüm klibi TEK BLOK özetliyor → zaman çizgisi eriyor, anlatıcı ödülü
