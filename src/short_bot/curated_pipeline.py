@@ -216,6 +216,31 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
                 else:
                     log.info("  kürate[sadakat]: yeniden yazım SADIK ✓")
 
+        # NETLİK/TUTARLILIK KAPISI (short 980: 'videodan hiçbir şey anlamadım'): anlatım
+        # TUTARLI + ANLAŞILIR mı (izleyici olayı takip eder mi). METİN-tabanlı İKİNCİ LLM (yazan
+        # Sonnet değil, ucuz metin backend 'llm' → bağımsız perspektif) 'akıllı ama anlamsız'
+        # varyansını yakalar; değilse geri bildirimle bir kez yeniden yaz. Fail-open.
+        from short_bot.reel_narration import judge_narration_clarity
+        _clr = judge_narration_clarity(narration.full_text(), desc, backend=llm.backend,
+                                       model=llm.model, api_key=llm.api_key,
+                                       claude_path=llm.claude_path)
+        if _clr is not None and not _clr.clear and _clr.reason:
+            log.info(f"  kürate[netlik]: anlatım net DEĞİL ({_clr.reason}) → yeniden yazılıyor")
+            narration = write_curated_narration(
+                title_seed, desc, channel=channel, subject="clip",
+                claude_path=narr_llm.claude_path, model=narr_llm.model,
+                backend=narr_llm.backend, api_key=narr_llm.api_key,
+                seed=seed, target_duration_s=target, scene_split=scene_split,
+                comments=comments, feedback=f"ANLAŞILIRLIK: {_clr.reason}")
+            _clr2 = judge_narration_clarity(narration.full_text(), desc, backend=llm.backend,
+                                            model=llm.model, api_key=llm.api_key,
+                                            claude_path=llm.claude_path)
+            if _clr2 is not None and not _clr2.clear:
+                log.warning(f"  kürate[netlik]: yeniden yazım da net değil ({_clr2.reason}) "
+                            f"— yine de üretiliyor (fail-open)")
+            else:
+                log.info("  kürate[netlik]: yeniden yazım NET ✓")
+
         try:
             music = pick_music(Path(music_root), mood=reel.music_mood,
                                channel_slug=channel.slug)

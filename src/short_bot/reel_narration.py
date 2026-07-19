@@ -771,11 +771,13 @@ def write_curated_narration(title: str, clip_description: str, *, channel,
                                   target_duration_s=target_duration_s,
                                   scene_split=scene_split, comments=comments, tone=tone)
     if (feedback or "").strip():
-        # SADAKAT KAPISI yeniden-yazımı: önceki deneme uydurma olay ekledi → o hatayı yasakla.
-        prompt += (f"\n\n⚠️ ÖNEMLİ — ÖNCEKİ DENEMEN SADAKATSİZDİ: {feedback.strip()}\n"
-                   "Bu HATAYI YAPMA. YALNIZ ekranda GERÇEKTEN olanı anlat; olmayan bir "
-                   "olay/sıra/dram (bırakılma, geri dönüş, kurtarma, olmayan karakter) EKLEME. "
-                   "İzleyici klibi görüyor — uydurma anında sırıtar.")
+        # SADAKAT ya da NETLİK kapısı yeniden-yazımı: önceki deneme reddedildi → sorunu düzelt.
+        # Framing İKİSİNİ de karşılar: uydurma olay (sadakat) + kopuk/anlamsız anlatım (netlik).
+        prompt += (f"\n\n⚠️ ÖNEMLİ — ÖNCEKİ DENEMEN REDDEDİLDİ, ŞU SORUN VARDI:\n{feedback.strip()}\n"
+                   "Bu sorunu DÜZELT. Yalnız ekranda GERÇEKTEN olanı, NET ve ANLAŞILIR anlat: "
+                   "olmayan olay/sıra/dram (bırakılma, geri dönüş, kurtarma, olmayan karakter) "
+                   "UYDURMA; kopuk/bağlamsız/anlamsız 'akıllı laf' KULLANMA. İzleyici klibi "
+                   "görüyor ve videoda NE OLDUĞUNU anlamalı.")
     persona = load_persona(getattr(reel, "persona", ""), language=channel.language)
     if persona and tone != "duygu":
         # DUYGU modunda mahalle-mizahı personası ton'la çelişir → persona bloğu eklenmez
@@ -817,6 +819,54 @@ def write_curated_narration(title: str, clip_description: str, *, channel,
                  f"deterministik kısaltma")
         narration = fit_word_budget(narration, lo_w=lo_w, hi_w=hi_w)
     return narration
+
+
+# ── ANLATIM TUTARLILIK / NETLİK KAPISI (kullanıcı: 'videodan hiçbir şey anlamadım', short 980) ──
+# Sadakat kapısı (verify_curated_narration) anlatım gerçek videoyu mu anlatıyor diye VISION'la
+# bakar; bu kapı METİN-tabanlı: anlatım TUTARLI + ANLAŞILIR mı, izleyici olayı takip eder mi.
+# İkinci-LLM (yazan Sonnet değil, ucuz metin backend) → varyansla üretilen 'akıllı ama anlamsız'
+# / kopuk anlatımı yakalar; produce_curated değilse geri bildirimle yeniden yazdırır.
+class NarrationClarity(_BaseModel):
+    """Metin yargısı — anlatım NET + TUTARLI mı (izleyici videoda ne olduğunu anlıyor mu)."""
+    clear: bool = True    # izleyici olayı net + tutarlı anlıyor mu
+    reason: str = ""      # clear=False ise en büyük anlaşılırlık sorunu (tek cümle, TR)
+
+
+_CLARITY_PROMPT = (
+    "Aşağıda bir kısa video için yazılmış Türkçe bir mahalle-mizahı ANLATIMI var. Video şunu "
+    "gösteriyor:\nVİDEO: {desc}\n\nANLATIM:\n---\n{narr}\n---\n"
+    "Bu anlatım NET ve TUTARLI mı? Bir izleyici dinleyince videoda NE OLDUĞUNU — kim, ne "
+    "yapıyor, asıl sürpriz/komik AN — net anlar mı? Yoksa KAFA KARIŞTIRICI mı: bağlamsız/"
+    "anlamsız cümle ('akıllı laf' gibi durup bir şey ANLATMAYAN), kopuk metafor, ya da asıl "
+    "olayı hiç anlatmayan mı?\n"
+    "MUHAFAZAKÂR OL: mahalle ağzı, abartı, mizah, lakap, yerini bulan benzetme SERBEST — "
+    "bunlar 'net değil' YAPMAZ. Yalnız GERÇEKTEN anlaşılmaz/tutarsız ya da olayı hiç anlatmayan "
+    "anlatıma clear=false de. Şüphede clear=TRUE.\n"
+    "- clear: izleyici olayı net + tutarlı anlıyor mu?\n"
+    "- reason: clear=false ise EN büyük sorun (tek cümle Türkçe: hangi kısım kopuk / olay neden "
+    "anlaşılmıyor).\n"
+    'SADECE JSON: {{"clear": <bool>, "reason": "<...>"}}'
+)
+
+
+def judge_narration_clarity(narration_text: str, clip_description: str, *,
+                            backend: str = "claude_cli", model: str = "default",
+                            api_key: str | None = None, claude_path: str = "claude"):
+    """Anlatım NET + TUTARLI mı (izleyici olayı anlar mı)? METİN-tabanlı ikinci-LLM yargısı
+    (vision/storyboard GEREKMEZ → ucuz). Döner NarrationClarity ya da None (hata → fail-open,
+    çağıran net sayar). Geçici hataya karşı retry'lı (None yalnız gerçekten doğrulanamayınca)."""
+    if not (narration_text or "").strip():
+        return None
+    prompt = _CLARITY_PROMPT.format(desc=(clip_description or "")[:600], narr=narration_text[:900])
+    last: Exception | None = None
+    for _ in range(2):
+        try:
+            return run_json(prompt, NarrationClarity, claude_path=claude_path, model=model,
+                            backend=backend, api_key=api_key, retries=2, timeout_s=60)
+        except Exception as e:  # noqa: BLE001 — geçici → tekrar dene
+            last = e
+    log.info(f"  kürate[netlik]: yargı doğrulanamadı ({last})")
+    return None
 
 
 # Ozan/âşık imzası — kullanıcı ozanı İSTEMİYOR ama model arada prompt'u delip yazıyor.

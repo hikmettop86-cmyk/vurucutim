@@ -6,6 +6,21 @@ from short_bot.reel_narration import (_CuratedDraft, curated_target,
                                       write_curated_narration)
 
 
+def test_judge_narration_clarity(monkeypatch):
+    """judge_narration_clarity: metin → NarrationClarity; tutarsız/kopuk anlatım clear=False
+    (short 980: 'fizikçiler elektron ararken...'). Metin-tabanlı, vision GEREKMEZ."""
+    from short_bot.reel_narration import NarrationClarity, judge_narration_clarity
+
+    monkeypatch.setattr("short_bot.reel_narration.run_json",
+                        lambda prompt, schema, **kw: NarrationClarity(clear=False,
+                                                                      reason="kopuk metafor"))
+    r = judge_narration_clarity("bağlamsız akıllı laf", "A man races a toy car",
+                                backend="openrouter", model="m", api_key="k")
+    assert r is not None and r.clear is False and "kopuk" in r.reason
+    # boş anlatım → None (yargılanmaz)
+    assert judge_narration_clarity("  ", "video", backend="openrouter", model="m") is None
+
+
 def test_curated_target_derives_from_clip_length():
     assert curated_target(6, (30, 45)) == (12, 16)     # kısa → ~klip×2.6 (yavaşlatma kapsar)
     assert curated_target(20, (30, 45)) == (16, 20)    # yeterince uzun → ~klip boyu
