@@ -230,10 +230,21 @@ def _rotate_sources(footage_deps, si: int):
     return FootageDeps(sources=rotated, verify_footage=footage_deps.verify_footage)
 
 
+def _ffprobe_path(ffmpeg_path: str) -> str:
+    """ffmpeg yolundan ffprobe yolunu türet — YALNIZ dosya adını değiştir. Naif
+    replace('ffmpeg','ffprobe') dizin de 'ffmpeg' içerince BOZULUYORDU (denetim: electron
+    installer .../ffmpeg/bin/ffmpeg.exe → yanlış .../ffprobe/bin/ffprobe.exe → ffprobe
+    bulunamaz → süre=0 → storyboard/beat sheet SESSİZCE devre dışı)."""
+    if not ffmpeg_path or ffmpeg_path == "ffmpeg":
+        return "ffprobe"
+    p = Path(ffmpeg_path)
+    return str(p.with_name(p.name.replace("ffmpeg", "ffprobe")))
+
+
 def _clip_duration_s(clip, ffmpeg_path: str) -> float:
     """Klip süresi (ffprobe). Okunamazsa 0.0 (çağıran storyboard'ı atlar)."""
     import subprocess
-    probe = "ffprobe" if ffmpeg_path in ("ffmpeg", "") else ffmpeg_path.replace("ffmpeg", "ffprobe")
+    probe = _ffprobe_path(ffmpeg_path)
     try:
         out = subprocess.run([probe, "-v", "error", "-show_entries", "format=duration",
                               "-of", "csv=p=0", str(clip)],

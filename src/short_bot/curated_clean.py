@@ -70,7 +70,8 @@ _DETECT_PROMPT = (
 
 
 def _dims(clip, ffmpeg_path: str = "ffmpeg") -> tuple[int, int]:
-    probe = "ffprobe" if ffmpeg_path in ("ffmpeg", "") else ffmpeg_path.replace("ffmpeg", "ffprobe")
+    from short_bot.reel import _ffprobe_path
+    probe = _ffprobe_path(ffmpeg_path)
     try:
         out = subprocess.run(
             [probe, "-v", "error", "-select_streams", "v", "-show_entries",
@@ -381,10 +382,11 @@ def describe_clip_beats(clip, *, vision_call, ffmpeg_path: str = "ffmpeg",
     _describe_clip'e düşer."""
     import subprocess
     from short_bot.footage_matcher import describe_storyboard
+    from short_bot.reel import _ffprobe_path
     if duration_s is None:
         try:
             out = subprocess.run(
-                [ffmpeg_path.replace("ffmpeg", "ffprobe"), "-v", "error",
+                [_ffprobe_path(ffmpeg_path), "-v", "error",
                  "-show_entries", "format=duration", "-of", "csv=p=0", str(clip)],
                 capture_output=True, text=True, timeout=30)
             duration_s = float((out.stdout or "").strip())

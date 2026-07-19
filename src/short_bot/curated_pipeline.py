@@ -182,6 +182,18 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
         # kanalın TONUNA gerçekten uyuyor mu (DUYGU=dokunaklı, mizah=komik) yargıla; UYMUYORSA
         # klip YANLIŞ kanalda → atla (oto: sıradaki aday; manuel: net neden). Fail-open (None→devam).
         _tone = getattr(reel, "curated_tone", "mizah")
+
+        # POST-İNDİRME SÜRE KAPISI (denetim M3): harici kaynaklar (redgifs/streamable/gfycat) gem
+        # duration=0 raporlayıp SEÇİM süre-filtrelerini (min-süre) ATLIYORDU → 5sn'lik derp DUYGU'ya
+        # seçilebiliyordu (short 934 dersi 'zorlama'). GERÇEK indirilmiş süreyle doğrula: tona göre
+        # çok kısaysa (mikro-dram/espri kurulamaz) atla. Objektif → seen'e yaz (tekrar denenmez).
+        _min_s = CURATED_DUYGU_MIN_S if _tone == "duygu" else CURATED_MIZAH_MIN_S
+        if 0 < clip_dur < _min_s:
+            _remember("too-short")
+            raise CuratedClipError(
+                f"Klip çok kısa ({clip_dur:.0f}s < {_min_s}s, {_tone}) → atlanıyor "
+                f"(kurulum+tırmanma+ödül için yer yok).")
+
         from short_bot.reel_narration import judge_tone_fit
         _tf = judge_tone_fit(desc, _tone, backend=llm.backend, model=llm.model,
                              api_key=llm.api_key, claude_path=llm.claude_path)
