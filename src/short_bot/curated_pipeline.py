@@ -324,9 +324,12 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
             # hatırlat: yalnız beat sheet'teki GÖRÜNENİ anlat, uydurma geçmiş/sebep/varlık EKLEME.
             _reason = _clr.reason or "İzleyici olayı takip edemiyor."
             _cfb = (f"{_reason} DÜZELT: yukarıdaki 'WHAT IS ACTUALLY ON SCREEN' beat sheet'inde "
-                    f"GERÇEKTEN ne varsa YALNIZ onu, BASİT ve NET anlat. Uydurma geçmiş/sebep "
+                    f"GERÇEKTEN ne varsa YALNIZ onu, BASİT ve NET anlat. (a) Uydurma geçmiş/sebep "
                     f"('neden geç çıkar', 'gece yürürdü', 'çünkü şöyleydi') ve olmayan varlık "
-                    f"EKLEME. Kopuk sebep-sonuç kurma; her cümle sahnedeki ana bağlı olsun.")
+                    f"EKLEME; kopuk sebep-sonuç kurma. (b) ZORLAMA/ÜST ÜSTE BENZETME YIĞMA "
+                    f"('kaleci pozu', 'kanat gibi', 'cesaret kaydı' gibi sahneye oturmayan laflar "
+                    f"— short 1004): olayı DÜZ ve net anlat, EN FAZLA bir yerini bulan benzetme + "
+                    f"tek NET punchline. Her cümle sahnedeki ana bağlı ve gerçekten anlamlı olsun.")
             log.info(f"  kürate[netlik]: anlatım net DEĞİL ({_clr.reason or 'reason yok'}) "
                      f"→ direktif geri bildirimle yeniden yazılıyor")
             narration = write_curated_narration(
