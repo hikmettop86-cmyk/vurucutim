@@ -1033,7 +1033,11 @@ def test_clean_pool_prechecks_existing_gems(tmp_path, monkeypatch):
 
     fake = SimpleNamespace(backend="google_studio", model="m", api_key=None, claude_path="")
     monkeypatch.setattr(pl, "resolve_ai_call", lambda *a, **k: fake)
-    monkeypatch.setattr(cr, "score_curiosity", lambda gems_, **k: gems_)   # thumbnail temiz
+    # thumbnail temiz — has_text'i AÇIKÇA False yaz: başka bir test modül seviyesinde
+    # score_curiosity'yi değiştirmiş olsa bile bu test onun kalıntısına bağlı kalmasın
+    # (tüm paketle koşulduğunda 'dirty' listesi dolup eleme sayısı kayıyordu).
+    monkeypatch.setattr(cr, "score_curiosity",
+                        lambda gems_, **k: [dict(g, has_text=False) for g in gems_])
     monkeypatch.setattr(rg, "download_clip",
                         lambda url, dest: (Path(dest).write_bytes(b"m"), Path(dest))[1])
     monkeypatch.setattr(cc, "judge_clip_quality",
@@ -1052,9 +1056,9 @@ def test_clean_pool_prechecks_existing_gems(tmp_path, monkeypatch):
     n = cp.clean_pool([channel], settings=SimpleNamespace(ffmpeg_path="ffmpeg"),
                       secrets={}, db_path=db)
 
-    assert n == 2, f"kirli cevherler havuzda kaldı (elenen={n})"
     kalan = [r["title"] for r in cp.list_pool(eng, "dayidiyorki")]
-    assert kalan == ["eski2"], f"havuzda yanlış cevher kaldı: {kalan}"
+    assert kalan == ["eski2"], f"havuzda yanlış cevher kaldı: {kalan} (elenen={n})"
+    assert n == 2, f"beklenenden farklı sayıda eleme (elenen={n}, kalan={kalan})"
 
 
 def test_auto_produce_logs_real_skip_reason(tmp_path, monkeypatch, caplog):

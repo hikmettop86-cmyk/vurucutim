@@ -244,6 +244,8 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
         # boşsa blok desc'e düşer (fail-open, mevcut davranış). tone-fit'ten SONRA: yalnız
         # tonu geçen klip için hesaplanır (boşuna vision harcanmaz).
         narr_desc = desc
+        # SÜRE HEDEFİ için ETKİN klip süresi — tekrar eden kuyruk düşülür (aşağıda).
+        clip_dur_eff = clip_dur
         if vision is not None:
             from short_bot.curated_clean import describe_clip_beats
             _beats = describe_clip_beats(clip, vision_call=vision,
@@ -254,8 +256,26 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
                 # yazıyordu ve 'anlatım neden böyle çıktı?' sorusu ancak klibi yeniden
                 # indirip vision harcayarak yanıtlanabiliyordu (short 1140 ve 1154'te iki
                 # kez gerekti; klip silinmişse imkânsız).
-                log.info(f"  kürate: zaman-sıralı beat sheet ({_beats.count(chr(10)) + 1} "
+                _n_slices = _beats.count(chr(10)) + 1
+                log.info(f"  kürate: zaman-sıralı beat sheet ({_n_slices} "
                          f"dilim) → anlatım footage sırasına oturur\n{_beats}")
+                # TEKRAR EDEN KUYRUK → SÜRE HEDEFİNDEN DÜŞ (short 1154: klip 62sn ama İKİ
+                # olay var; SON dilim ORTA'nın tekrarı). 62sn'den türeyen 41-45sn/75-88
+                # kelime hedefi modeli DOLGU yazmaya zorluyordu (mimik tarifi + uydurma
+                # detay) ve kapılar üç denemeyi de eledi. Kuyruğu düşünce hedef kısalıyor,
+                # anlatım iki olaya sığıyor. Klip yine BAŞTAN SONA oynar (yalnız daha
+                # hızlı) — görüntüden içerik ATILMAZ. Yargı alınamazsa süre dokunulmaz.
+                from short_bot.reel_narration import (effective_clip_seconds,
+                                                      judge_beat_novelty)
+                _nov = judge_beat_novelty(_beats, backend=llm.backend, model=llm.model,
+                                          api_key=llm.api_key, claude_path=llm.claude_path)
+                if _nov is not None and _nov.tail_repeats:
+                    clip_dur_eff = effective_clip_seconds(
+                        clip_dur, slices=_n_slices, tail_repeats=True)
+                    log.info(f"  kürate[kuyruk]: son dilim yeni olay taşımıyor "
+                             f"({_nov.new_slices}/{_n_slices} dilim yeni) → süre hedefi "
+                             f"{clip_dur:.0f}s yerine {clip_dur_eff:.0f}s üzerinden "
+                             f"(dolgu baskısı kaynağında kesiliyor)")
 
         # KALABALIK BAĞLAMI (vision'a ALTERNATİF): vision tek storyboard'dan aleti/olayı
         # kaçırabiliyor (short 923: pipeti görmedi, 'parmakla çöp çıkarıyor' dedi — oysa
@@ -294,7 +314,7 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
                 log.info(f"  kürate: dönüm anı ~%{round(reveal_frac*100)} → reveal çıpası "
                          f"(ödül cümlesi o kareye oturtulacak)")
 
-        target = curated_target(clip_dur, reel.target_duration_s)
+        target = curated_target(clip_dur_eff, reel.target_duration_s)
         log.info(f"  kürate: klip {clip_dur:.1f}s → video hedefi {target} (loop önleme)")
         narration = write_curated_narration(
             title_seed, narr_desc, channel=channel, subject="clip",

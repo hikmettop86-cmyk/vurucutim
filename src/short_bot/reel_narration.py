@@ -1298,6 +1298,61 @@ _CLARITY_TONE = {
 }
 
 
+# ── TEKRAR EDEN KUYRUK: süre hedefi "yeni olay" süresinden türesin ──────────────
+# SORUN (short 1154, ÜÇ üretim denemesi de elendi): klip 62sn ama içinde İKİ olay var
+# (gazeteyi söküp notları açığa çıkarma + ağlama); beat sheet'in SON dilimi ORTA'nın
+# tekrarı. Süre hedefi 62sn'den türeyince 41-45sn video / 75-88 kelime isteniyor —
+# o kadar kelimeyi iki olayla doldurmak imkânsız, model her denemede dolgu (mimik
+# tarifi) ya da uydurma detay ('şişeden bir yudum alıyor') ekledi ve kapılar eledi.
+# Kurallar dolguyu YAKALIYOR ama üretimi kurtarmıyor; baskıyı KAYNAĞINDA kesiyoruz:
+# tekrar eden kuyruk süre hesabından düşülür → daha kısa video, daha az kelime,
+# dolguya ihtiyaç yok. Klip yine BAŞTAN SONA oynar (yalnız daha hızlı) — içerik atılmaz.
+class BeatNovelty(_BaseModel):
+    """Beat sheet dilimlerinden kaçı YENİ olay gösteriyor."""
+    new_slices: int = 0        # yeni olay gösteren dilim sayısı
+    tail_repeats: bool = False  # son dilim öncekinin tekrarı mı (yeni olay yok)
+
+
+_NOVELTY_PROMPT = (
+    "Aşağıda bir video klibinin ZAMAN-SIRALI beat sheet'i var (her satır bir zaman dilimi).\n"
+    "{beats}\n\n"
+    "Kaç dilim YENİ bir OLAY gösteriyor? 'Yeni olay' = durum değişiyor (bir şey başlıyor, "
+    "bitiyor, ortaya çıkıyor, biri tepki veriyor). AYNI durumun sürmesi (aynı kişi aynı "
+    "pozda duruyor, aynı tepki devam ediyor, yalnız mimik/el detayı değişiyor) YENİ OLAY "
+    "DEĞİLDİR.\n"
+    "- new_slices: yeni olay gösteren dilim sayısı\n"
+    "- tail_repeats: SON dilim bir öncekiyle AYNI durumu mu sürdürüyor (yeni olay yok)?\n"
+    'SADECE JSON: {{"new_slices": <int>, "tail_repeats": <bool>}}'
+)
+
+
+def judge_beat_novelty(beats_text: str, *, backend: str = "claude_cli",
+                       model: str = "default", api_key: str | None = None,
+                       claude_path: str = "claude"):
+    """Beat sheet → kaç dilim yeni olay taşıyor (metin yargısı, ucuz backend).
+
+    Döner BeatNovelty ya da None (boş beat sheet / hata → fail-open: süre dokunulmaz)."""
+    if not (beats_text or "").strip():
+        return None
+    try:
+        return run_json(_NOVELTY_PROMPT.format(beats=beats_text[:1500]), BeatNovelty,
+                        claude_path=claude_path, model=model, backend=backend,
+                        api_key=api_key, retries=2, timeout_s=45)
+    except Exception as e:  # noqa: BLE001 — yargı yoksa süre olduğu gibi kalır
+        log.info(f"  kürate[kuyruk]: yenilik yargısı alınamadı ({e})")
+        return None
+
+
+def effective_clip_seconds(clip_dur_s: float, *, slices: int, tail_repeats: bool) -> float:
+    """Süre hedefi için ETKİN klip süresi — tekrar eden son dilim düşülür.
+
+    Yalnız KUYRUK düşülür (baş/orta değil): kuyruk yeni olay taşımadığı için anlatımda
+    karşılığı yoktur, ama görüntüde kalır (klip baştan sona oynar, sadece daha hızlı)."""
+    if not tail_repeats or slices < 2 or clip_dur_s <= 0:
+        return clip_dur_s
+    return clip_dur_s * (slices - 1) / slices
+
+
 def judge_narration_clarity(narration_text: str, clip_description: str, *, tone: str = "mizah",
                             backend: str = "claude_cli", model: str = "default",
                             api_key: str | None = None, claude_path: str = "claude",

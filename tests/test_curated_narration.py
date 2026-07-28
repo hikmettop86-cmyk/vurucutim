@@ -358,3 +358,38 @@ def test_clarity_gate_sees_title(monkeypatch):
                             tone="duygu", backend="openrouter", model="m", api_key="k",
                             title="Sophia's stepdad used to leave her a note every day")
     assert "note every day" in seen["prompt"], "başlık netlik kapısına geçmiyor"
+
+
+def test_judge_beat_novelty_detects_repeating_tail(monkeypatch):
+    """TEKRAR EDEN KUYRUK: beat sheet'in son dilimi yeni olay göstermiyorsa süre hedefi
+    onu SAYMAMALI — yoksa anlatım doldurulacak yer bulmak için dolgu üretir.
+
+    GERÇEK HATA (short 1154 klibi, ÜÇ üretim denemesi de elendi): klip 62sn ama içinde
+    İKİ olay var (gazeteyi söküp notları açığa çıkarma + ağlama). Beat sheet'in SON
+    dilimi ORTA'nın tekrarı ('hâlâ eli ağzında, öne eğilmiş'). Süre hedefi 62sn'den
+    türeyince 41-45sn video / 75-88 kelime isteniyor; o kadar kelimeyi iki olayla
+    doldurmak imkânsız → model her denemede ya mimik tarifi ya uydurma detay ekledi
+    ('şişeden bir yudum alıyor'), kapılar da haklı olarak eledi. Kurallar dolguyu
+    YAKALIYOR ama üretimi kurtarmıyor; baskıyı KAYNAĞINDA kesmek gerek."""
+    from short_bot.reel_narration import BeatNovelty, judge_beat_novelty
+
+    monkeypatch.setattr("short_bot.reel_narration.run_json",
+                        lambda prompt, schema, **kw: BeatNovelty(new_slices=2, tail_repeats=True))
+    r = judge_beat_novelty("BAŞ (0-20sn): …\nORTA (20-41sn): …\nSON (41-62sn): …",
+                           backend="openrouter", model="m", api_key="k")
+    assert r is not None and r.tail_repeats is True and r.new_slices == 2
+    # beat sheet yoksa yargılanmaz (fail-open)
+    assert judge_beat_novelty("  ", backend="openrouter", model="m") is None
+
+
+def test_effective_clip_seconds_drops_repeating_tail():
+    """Tekrar eden kuyruk süre hesabından düşülür; düşmüyorsa süre aynı kalır."""
+    from short_bot.reel_narration import effective_clip_seconds
+
+    # 62sn / 3 dilim, son dilim tekrar → 2/3'ü sayılır
+    assert abs(effective_clip_seconds(62.0, slices=3, tail_repeats=True) - 41.3) < 0.5
+    # tekrar yok → dokunma
+    assert effective_clip_seconds(62.0, slices=3, tail_repeats=False) == 62.0
+    # tek dilim / bozuk girdi → dokunma (bölme hatası olmasın)
+    assert effective_clip_seconds(20.0, slices=1, tail_repeats=True) == 20.0
+    assert effective_clip_seconds(0.0, slices=3, tail_repeats=True) == 0.0
