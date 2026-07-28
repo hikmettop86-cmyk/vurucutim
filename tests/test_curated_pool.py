@@ -1096,3 +1096,32 @@ def test_auto_produce_logs_real_skip_reason(tmp_path, monkeypatch, caplog):
     metin = "\n".join(r.message for r in caplog.records)
     assert "indirilemedi" not in metin, f"yanlış eleme etiketi hâlâ var:\n{metin}"
     assert "sıradan/zayıf" in metin, "gerçek eleme nedeni loglanmıyor"
+
+
+def test_produce_curated_logs_beat_sheet_content(tmp_path, monkeypatch, caplog):
+    """BEAT SHEET LOGLANMALI (gözlemlenebilirlik).
+
+    Anlatımın TEK kaynağı beat sheet'tir, ama koşu logu yalnız '3 dilim' yazıyordu.
+    'Anlatım neden böyle çıktı?' sorusunu yanıtlamak için beat sheet'i SONRADAN elle
+    üretmek gerekti (short 1140 ve 1154'te iki kez) — bu, klibi yeniden indirip vision
+    harcamak demek ve klip silinmişse imkânsız. İçeriği loga yaz."""
+    import logging
+
+    import short_bot.curated_clean as cc
+    import short_bot.curated_pipeline as cpl
+
+    channel, settings = _mock_produce_chain(monkeypatch, tmp_path)
+    monkeypatch.setattr(cc, "describe_clip_beats", lambda clip, **k: (
+        "BAŞ (0-20sn): adam kağıtları duvara yapıştırıyor\n"
+        "ORTA (20-41sn): yüzünü ellerine gömüp ağlıyor\n"
+        "SON (41-62sn): eli ağzında öne eğilmiş duruyor"))
+
+    with caplog.at_level(logging.INFO):
+        cpl.produce_curated({"video_url": "https://v.redd.it/bs1/DASH.mp4", "title": "t"},
+                            channel, settings=settings, secrets={},
+                            db_path=tmp_path / "db.sqlite", output_root=tmp_path,
+                            music_root=tmp_path, templates_dir=tmp_path)
+
+    metin = "\n".join(r.message for r in caplog.records)
+    assert "duvara yapıştırıyor" in metin, \
+        f"beat sheet İÇERİĞİ loglanmıyor — anlatımın kaynağı görünmez kalıyor:\n{metin}"

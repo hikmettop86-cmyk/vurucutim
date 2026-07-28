@@ -289,3 +289,47 @@ def test_curated_prompt_requires_payoff_and_loop_callback():
     assert "geri çağır" in low, "kapanışta hook'a geri çağrı (loop callback) kuralı yok"
     assert "yalnızca yem" in low or "sadece yem" in low, \
         "kapanışın yalnız yemden ibaret olamayacağı söylenmiyor"
+
+
+def test_curated_prompt_anchors_hook_to_first_frame():
+    """HOOK EKRANDA GÖRÜNENİ İŞARET ETMELİ (short 1154).
+
+    Anlatım şöyle başlıyordu: 'Ortaokulda bir kız, kapısında her sabah aynı notu
+    buluyordu' — ekranda ortaokul da kız da kapı da YOK; şapkalı bir adam duvara kağıt
+    yapıştırıyor. Bilgi başlıktan geldiği için sadakat kapısı 'uydurma değil' deyip
+    geçirdi, ama DOĞRU olması EKRANDA olması demek değil: izleyici ilk saniyede
+    'kız nerede?' diye düşünüyor ve kayıyor. Geçmiş/bağlam 2. cümleden itibaren serbest."""
+    from short_bot.reel_narration import build_curated_prompt
+    ch = SimpleNamespace(language="tr",
+                         reel=ReelConfig(enabled=True, voice_id="v", persona=""))
+    low = build_curated_prompt("t", "d", channel=ch, tone="duygu").replace(
+        "İ", "i").replace("I", "ı").lower()
+    assert "ilk kare" in low or "ilk saniye" in low, "hook'u ekrana bağlayan kural yok"
+    assert "geçmiş" in low and "hook" in low, "geçmişin hook'ta yasak olduğu söylenmiyor"
+
+
+def test_curated_prompt_bans_filler_beats():
+    """DOLGU BEAT YASAĞI: beat OLAY anlatır, mimik/el hareketi TARİF etmez (short 1154).
+
+    Klip 62sn ama içinde iki olay var (notları duvara yapıştırma + ağlama); beat sheet'in
+    SON dilimi zaten tekrar ('eli ağzında, öne eğilmiş'). Şablon üç beat yazdırdığı için
+    üçüncüsü dolguya dönüştü: 'Elini ağzından an ayırıp titretse de hemen geri götürüyor,
+    başını eğip o duygunun içinde eriyor.' — hikâyeyi ilerletmiyor, aynı anı tekrar
+    tarif ediyor. Az olaylı klipte cümle UZATMAK değil KISALTMAK gerekir."""
+    from short_bot.reel_narration import build_curated_prompt
+    ch = SimpleNamespace(language="tr",
+                         reel=ReelConfig(enabled=True, voice_id="v", persona=""))
+    low = build_curated_prompt("t", "d", channel=ch, tone="duygu").replace(
+        "İ", "i").replace("I", "ı").lower()
+    assert "dolgu" in low, "dolgu cümle yasağı yok"
+    assert "mimik" in low or "el hareketi" in low, \
+        "mimik/el hareketi tarifinin beat sayılmadığı söylenmiyor"
+
+
+def test_clarity_prompt_catches_filler_sentence():
+    """NETLİK KAPISI dolguyu da yakalamalı: metin kendi içinde tutarlı olduğu için
+    (short 1154) 'clear' geçiyordu — oysa bir cümle hiç yeni bilgi taşımıyordu."""
+    from short_bot.reel_narration import _CLARITY_PROMPT
+    low = _CLARITY_PROMPT.replace("İ", "i").replace("I", "ı").lower()
+    assert "yeni bilgi" in low or "dolgu" in low, \
+        "netlik kapısı 'yeni bilgi taşımayan cümle' ölçütünü sormuyor"

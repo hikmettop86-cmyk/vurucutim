@@ -890,6 +890,26 @@ RULES:
   gibi yanlış ikame UYDURMA. Örn. 'saves a turtle using a straw' = balıkçı pipeti KURTARMAK
   için kullanır (pipeti burundan çıkarmak DEĞİL). Vision görsel detay (renk, poz, ortam)
   için; olayın ÖZÜ + AMACI başlık+yorumdan gelir.
+- 🎬 HOOK EKRANDAKİ İLK KAREYİ İŞARET ETSİN (short 1154, YAPMA): İlk cümle izleyicinin
+  O ANDA GÖRDÜĞÜ şeye bağlanmalı ("Bu adam duvara ne yapıştırıyor?" gibi). Ekranda
+  OLMAYAN bir geçmiş/mekân/kişiyle AÇMA — bilgi başlıktan doğru olsa bile. Gerçek
+  örnek-hata: ekranda şapkalı bir adam duvara kağıt yapıştırırken anlatım 'Ortaokulda
+  bir kız, kapısında her sabah aynı notu buluyordu' diye açtı; ekranda ne ortaokul ne
+  kız ne kapı vardı → izleyici 'kız nerede?' deyip kaydı. GEÇMİŞ/BAĞLAM 2. CÜMLEDEN
+  İTİBAREN serbest: önce gördüğünü söyle, sonra hikâyeyi aç.
+- ⛔ DOLGU CÜMLE YASAK (short 1154, YAPMA): Her beat YENİ bir OLAY/BİLGİ taşımalı.
+  Mimik, el hareketi, duruş TARİFİ beat DEĞİLDİR — aynı anı farklı kelimelerle
+  tekrarlamaktır. Gerçek örnek-hata: 'Elini ağzından an ayırıp titretse de hemen geri
+  götürüyor, başını eğip o duygunun içinde eriyor.' — hikâye hiç ilerlemiyor.
+  Klipte 3 ayrı olay YOKSA cümleleri UZATMA, KISALT: iki gerçek olay + güçlü kapanış,
+  üç şişirilmiş cümleden iyidir. (Bütçenin ALT sınırı yeterlidir; üst sınırı doldurmak
+  ZORUNDA değilsin.)
+  ⚠️ TEKRAR EDEN DİLİM: Beat sheet'in bir dilimi bir öncekiyle AYNI durumu gösteriyorsa
+  (yeni olay yok, aynı tepki sürüyor — ör. ORTA 'ağlıyor', SON 'hâlâ eli ağzında öne
+  eğilmiş'), o dilime AYRI bir tarif beat'i YAZMA. İki dilimi TEK beat'te birleştir ve
+  boşalan cümleyi olayın ANLAMINA ayır: bu an neyi kanıtlıyor, kimin için ne ifade
+  ediyor, izleyicinin bilmediği hangi detay bunu ağırlaştırıyor. Ekranda tekrar eden
+  şeyi kelimede de tekrar etme.
 - ⛔ ABARTI SONUCU TERS ÇEVİREMEZ (short 1146, YAPMA): Duygu, gerilim, benzetme SERBEST —
   ama olayın SONUCU ekranda ne ise ODUR. 'Neredeyse düştü' ≠ 'düştü'; 'zorlandı' ≠
   'başaramadı'; 'sendeledi' ≠ 'yığıldı'; 'kaçmaya çalıştı' ≠ 'kaçtı'. GERÇEK örnek-hata:
@@ -1226,10 +1246,15 @@ _CLARITY_PROMPT = (
     "1) İzleyici NE OLDUĞUNU net anlıyor mu (kim / ne yapıyor / asıl an)?\n"
     "2) Benzetmeler/laflar sahneye OTURUYOR mu, yoksa ZORLAMA / kopuk / üst üste yığılmış mı?\n"
     "{tone_rule}\n"
+    "3) Her cümle YENİ bir olay/bilgi taşıyor mu, yoksa biri DOLGU mu (aynı anı farklı "
+    "kelimelerle tekrar eden mimik/el hareketi/duruş TARİFİ)?\n"
     "clear=false DE eğer: bağlamsız/anlamsız cümle var; VEYA benzetmeler sahneyle ZAYIF bağlı/"
     "zorlama ve ÜST ÜSTE yığılmış (ör. basit bir düşüşe alakasız 'kaleci pozu / kanat gibi / "
     "cesaret kaydı gitti' arka arkaya — short 1004); VEYA {tone_fail}; VEYA asıl olayı hiç "
-    "anlatmıyor.\n"
+    "anlatmıyor; VEYA cümlelerden biri DOLGU: hikâyeyi ilerletmiyor, yalnız bir mimiği "
+    "tarif ediyor (gerçek örnek-hata, short 1154: 'Elini ağzından an ayırıp titretse de "
+    "hemen geri götürüyor, başını eğip o duygunun içinde eriyor.' — bir önceki cümlenin "
+    "anlattığı ağlama anını YENİDEN tarif ediyor, yeni bilgi YOK).\n"
     "SERBEST (clear=true): {tone_ok}, YERİNİ BULAN tek-iki keskin benzetme + NET olay. Amaç: "
     "zorlama-laf yığınını/kopukluğu elemek, İYİ anlatımı DEĞİL. Şüphede clear=TRUE.\n"
     "- clear: hem NET hem tona uygun İŞLİYOR mu?\n"

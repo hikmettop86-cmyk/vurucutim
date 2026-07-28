@@ -250,8 +250,12 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
                                          ffmpeg_path=settings.ffmpeg_path, duration_s=clip_dur)
             if _beats:
                 narr_desc = _beats
+                # İÇERİĞİ DE LOGLA: anlatımın TEK kaynağı bu metin. Eskiden yalnız '3 dilim'
+                # yazıyordu ve 'anlatım neden böyle çıktı?' sorusu ancak klibi yeniden
+                # indirip vision harcayarak yanıtlanabiliyordu (short 1140 ve 1154'te iki
+                # kez gerekti; klip silinmişse imkânsız).
                 log.info(f"  kürate: zaman-sıralı beat sheet ({_beats.count(chr(10)) + 1} "
-                         f"dilim) → anlatım footage sırasına oturur")
+                         f"dilim) → anlatım footage sırasına oturur\n{_beats}")
 
         # KALABALIK BAĞLAMI (vision'a ALTERNATİF): vision tek storyboard'dan aleti/olayı
         # kaçırabiliyor (short 923: pipeti görmedi, 'parmakla çöp çıkarıyor' dedi — oysa
