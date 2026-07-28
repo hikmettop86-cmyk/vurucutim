@@ -367,3 +367,36 @@ def test_faith_prompt_rejects_outcome_flipping_exaggeration():
     low = _norm(_FAITH_PROMPT)
     assert "neredeyse" in low, "'neredeyse düştü' → 'düştü' çevirme yasağı yok"
     assert "sonuc" in low.replace("ç", "c"), "sonucu ters çevirme kuralı yok"
+
+
+def test_storyboard_prompt_asks_action_direction():
+    """EYLEMİN YÖNÜ SORULMALI (short 1154/1156 — kullanıcı: 'senaryo hep alakasız').
+
+    GERÇEK HATA: klipte adam duvarı kaplayan gazeteleri SÖKÜYOR ve altından üvey kızının
+    bıraktığı sarı notlar çıkıyor (0.3s'de duvar tamamen gazete, 19.5s'de tamamen not).
+    Beat sheet bunu TERS okudu: 'presses them flat against the wall' (yapıştırıyor).
+    Anlatım o yanlışı devraldı, iki ayrı üretimde de 'duvara kağıt yapıştırıyor/dolduruyor'
+    dedi — izleyici için hikâyenin tamamı ters döndü (sürprizi HAZIRLAYAN mı, kendisine
+    hazırlananı AÇAN mı).
+
+    Storyboard'da hareket yönü tek kareden okunamaz; İLK ve SON kare karşılaştırılmalı:
+    ekranda ne ÇOĞALDI, ne EKSİLDİ. Ekleme/çıkarma, takma/sökme, açma/kapama çiftlerinde
+    yönü ters yazmak en sık vision hatası."""
+    from short_bot.footage_matcher import _STORYBOARD_PROMPT
+
+    low = _STORYBOARD_PROMPT.replace("İ", "i").replace("I", "ı").lower()
+    assert "yön" in low, "eylemin yönü sorulmuyor"
+    assert "ilk" in low and "son" in low, "ilk/son kare karşılaştırması istenmiyor"
+    assert "sök" in low or "çıkar" in low, "ekleme/çıkarma çifti örneklenmiyor"
+
+
+def test_faith_prompt_checks_action_direction():
+    """SADAKAT KAPISI da yönü sorgulamalı — beat sheet yanılırsa ikinci savunma odur.
+
+    short 1156: kapı ilk denemede yönü DOĞRU yakaladı ('SÖKÜP açığa çıkarıyor') ama
+    yeniden yazım gene 'dolduruyor' dedi ve ikinci yargı bu sefer 'sadık' geçti.
+    Yön ölçütü açıkça yazılmadığı için yargı denemeden denemeye oynuyor."""
+    from short_bot.curated_clean import _FAITH_PROMPT
+
+    low = _FAITH_PROMPT.replace("İ", "i").replace("I", "ı").lower()
+    assert "yön" in low, "sadakat kapısı eylemin yönünü sormuyor"
