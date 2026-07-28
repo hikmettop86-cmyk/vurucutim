@@ -738,13 +738,19 @@ def auto_produce_curated(channel, *, settings, secrets, db_path, output_root,
             log.info(f"  kürate[oto]: watermark'lı → atlandı ({e})")
             continue
         except CuratedClipError as e:
-            log.info(f"  kürate[oto]: indirilemedi → atlandı ({e})")
+            # ETİKET NÖTR OLMALI: CuratedClipError yalnız 'indirilemedi' değil — ton
+            # uyumsuzluğu, sıradan/zayıf klip, ses-yükü, uydurma/anlaşılmaz anlatım ve
+            # final QA reddi de bunu atıyor. Eski 'indirilemedi → atlandı' etiketi
+            # operatörü ağ hatası aramaya yönlendiriyordu (koşu 1327 izlenirken yakalandı:
+            # neden 'izlenme-skoru 4<6' iken satır 'indirilemedi' diyordu). Gerçek neden
+            # zaten istisna metninde — etiket onu ezmesin.
+            log.info(f"  kürate[oto]: aday elendi → sıradakine geçiliyor ({e})")
             continue
         except Exception as e:  # noqa: BLE001 — GÜVENLİK AĞI (denetim bulgusu): beklenmedik bir
             # hata (render/ffmpeg/vision) tek adayda patlarsa TÜM run'ı ÖLDÜRMESİN; logla, sıradaki
             # adaya geç. Geçici hata seen'e YAZILMAZ (tekrar denenebilir).
             log.warning(f"  kürate[oto]: beklenmedik hata ({type(e).__name__}: {e}) → sıradaki aday")
             continue
-    log.warning("  kürate[oto]: denenen adayların hepsi elendi (watermark/indirilemez) "
-                "→ temiz cevher yok")
+    log.warning("  kürate[oto]: denenen adayların hepsi elendi (temizlik/kalite/ton/anlatım "
+                "kapıları — nedenler yukarıdaki satırlarda) → temiz cevher yok")
     return None, None

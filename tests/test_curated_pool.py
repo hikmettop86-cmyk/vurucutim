@@ -1055,3 +1055,44 @@ def test_clean_pool_prechecks_existing_gems(tmp_path, monkeypatch):
     assert n == 2, f"kirli cevherler havuzda kaldı (elenen={n})"
     kalan = [r["title"] for r in cp.list_pool(eng, "dayidiyorki")]
     assert kalan == ["eski2"], f"havuzda yanlış cevher kaldı: {kalan}"
+
+
+def test_auto_produce_logs_real_skip_reason(tmp_path, monkeypatch, caplog):
+    """ELEME ETİKETİ DOĞRU OLMALI: CuratedClipError yalnız 'indirilemedi' demek değil.
+
+    Canlı koşu 1327'de izlenirken yakalandı: klip kalite kapısından düştüğü hâlde
+    (izlenme-skoru 4) log satırı 'indirilemedi → atlandı' yazıyordu. Aynı istisna ton
+    uyumsuzluğu, ses-yükü, uydurma/anlaşılmaz anlatım ve final QA reddinde de atılıyor —
+    operatör ağ hatası sanıp yanlış yerde arıyor."""
+    import logging
+    from types import SimpleNamespace
+
+    import short_bot.curated_pipeline as cpl
+    import short_bot.pipeline as pl
+    import short_bot.reddit_gems as rg
+
+    gems = [{"video_url": "https://v.redd.it/z1/DASH.mp4", "title": "zayif klip",
+             "permalink": "https://reddit.com/r/aww/1", "sub": "aww", "ups": 9000,
+             "comments": 30, "duration": 40, "orient": "DİKEY"}]
+    monkeypatch.setattr(rg, "find_gems", lambda *a, **k: gems)
+    monkeypatch.setattr(pl, "resolve_ai_call",
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("vision yok")))
+
+    def _boom(*a, **k):
+        raise cpl.CuratedClipError("Klip sıradan/zayıf (izlenme-skoru 4<6) → atlanıyor")
+
+    monkeypatch.setattr(cpl, "produce_curated", _boom)
+
+    reel = SimpleNamespace(curated_tone="duygu", subreddits=[], curated_time="week",
+                           curated_min_ups=500, curated_max_duration=90)
+    channel = SimpleNamespace(slug="dayidiyorki", reel=reel)
+    with caplog.at_level(logging.INFO):
+        cpl.auto_produce_curated(
+            channel, settings=SimpleNamespace(ffmpeg_path="ffmpeg"),
+            secrets={"reddit_client_id": "x", "reddit_client_secret": "y"},
+            db_path=tmp_path / "db.sqlite", output_root=tmp_path,
+            music_root=tmp_path, templates_dir=tmp_path)
+
+    metin = "\n".join(r.message for r in caplog.records)
+    assert "indirilemedi" not in metin, f"yanlış eleme etiketi hâlâ var:\n{metin}"
+    assert "sıradan/zayıf" in metin, "gerçek eleme nedeni loglanmıyor"
