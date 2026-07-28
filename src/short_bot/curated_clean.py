@@ -198,10 +198,14 @@ class ClipQuality(BaseModel):
     # sayıp REDDEDİP KALICI blacklist'liyordu (denetim bulgusu) — tek vision hıçkırığı = klip kaybı.
     engaging: bool           # gerçekten dikkat çekici / durdurur / paylaşılası mı
     score: int               # 1 (sıradan, kaydırılır) .. 10 (kesin viral, durdurur)
+    # SES-YÜKÜ (kullanıcı: 'anlamsız videolar'): orijinal ses ATILIP Türkçe TTS basılıyor —
+    # yükü seste olan klip (kahkaha/diyalog/müzik) sessiz izlenince sıradanlaşır. Default True
+    # (eski/boş yanıt fail-open: alanı dönmeyen model klip kaybettirmesin).
+    works_muted: bool = True  # klip SES OLMADAN da anlaşılır/etkileyici mi
     reason: str = ""
 
 
-def _quality_prompt(tone: str) -> str:
+def _quality_prompt(tone: str, title: str = "") -> str:
     if tone == "duygu":
         lens = "GERÇEKTEN DOKUNAKLI/duygusal (içini ısıtan, gözünü dolduran)"
     elif tone == "karma":
@@ -210,20 +214,42 @@ def _quality_prompt(tone: str) -> str:
                 "bu DÜŞÜKtür (tatmin değil, rahatsız edici)")
     else:
         lens = "GERÇEKTEN komik/şaşırtıcı/çarpıcı ('vay!', kahkaha, 'nasıl yani?!')"
+    # BAŞLIK = OLAYIN KİMLİĞİ (tone-fit'e başlık besleme düzeltmesiyle aynı gerekçe).
+    # Kapı başlıksızken kareyi ÇIPLAK yorumluyor: 'pistte koşan adam' → anlamsız → q=3.
+    # Oysa aynı kare başlıkla 'geçit arabasını kapmaya koşan pilot' oluyor. Başlık kapının
+    # GÖRDÜĞÜ eylemi ÇÖZMESİNİ sağlar — görsel çıtayı DÜŞÜRMEZ (aşağıdaki uyarı bunu bağlar).
+    basliksiz = not (title or "").strip()
+    baslik_blok = "" if basliksiz else (
+        f"\nKLİBİN BAŞLIĞI (olayın kimliği): {title.strip()}\n"
+        "BAŞLIK NE İÇİN, NE İÇİN DEĞİL:\n"
+        "  • İÇİN: karede GÖRDÜĞÜN eylemi doğru ÇÖZMEK. Kim, neyi, neden yapıyor — bunu "
+        "bilmeden sıradan görünen bir hareket (bir tokalaşmanın geri çevrilmesi, birinin "
+        "aniden koşması, bir nesnenin kapılması) aslında olayın TEPESİ olabilir.\n"
+        "  • İÇİN DEĞİL: GÖRSEL olarak ÖLÜ bir klibi kurtarmak. Başlık ne kadar ilginç olursa "
+        "olsun, 9 karede İZLENECEK BİR ŞEY OLMUYORSA (konuşan kafalar, yürüyen insanlar, "
+        "durağan sahne) bu yine DÜŞÜKTÜR — anlatım metni klibi kurtaramaz, izleyici görüntüyü "
+        "görür. Başlığın vaat ettiği anı KARELERDE ARA; yoksa DÜŞÜK ver.\n")
     return (
-        "Bu, bir kısa video klibinin GERÇEK 6 karesi (storyboard, zaman-sıralı, tek ızgara) — "
+        "Bu, bir kısa video klibinin GERÇEK 9 karesi (storyboard, zaman-sıralı, tek ızgara) — "
         "klibin BAŞTAN SONA ne olduğunu gösteriyor.\n"
+        f"{baslik_blok}"
         f"Bu klip {lens} bir AN taşıyor mu — birini KAYDIRMAYI durdurup izleten, paylaştıran? "
         "Yoksa SIRADAN / rutin / unutulur mu?\n"
-        "DÜŞÜK (score 1-4) sayılanlar: rutin spor anı/düşmesi, sıradan tepki, 'olabilir ama "
-        "özel değil', olayın ne olduğu belirsiz, izleyiciyi durduracak bir tepe YOK.\n"
+        "DÜŞÜK (score 1-4) sayılanlar: HİKÂYESİ OLMAYAN rutin spor/oyun anı (sıradan bir "
+        "düşme, olağan bir müsabaka anı), sıradan tepki, 'olabilir ama özel değil', olayın ne "
+        "olduğu belirsiz, izleyiciyi durduracak bir tepe YOK.\n"
         "YÜKSEK (score 7-10): net bir çarpıcı/komik/dokunaklı TEPE var, ilk 2 saniyede "
         "kanca, sonuna kadar 'ne olacak' merakı.\n"
-        "DİKKAT: bir kapak aldatıcı olabilir — SEN 6 karenin TÜMÜNE bakıp GERÇEK olayı yargıla, "
+        "DİKKAT: bir kapak aldatıcı olabilir — SEN 9 karenin TÜMÜNE bakıp GERÇEK olayı yargıla, "
         "'aksiyon gibi görünüyor'a kanma.\n"
+        "ÖNEMLİ: bu video SESSİZ yayınlanacak (orijinal ses atılıp Türkçe anlatım basılıyor). "
+        "Klibin etkisi SESE dayanıyorsa (kahkaha sesi, diyalog/konuşma esprisi, müzik/şarkı anı) "
+        "ve görüntü TEK BAŞINA sıradansa → works_muted=false.\n"
         "- engaging: gerçekten durdurup izleten/paylaşılası mı?\n"
         "- score: 1-10 izlenme-değerliliği.\n"
-        'SADECE JSON: {"engaging": <bool>, "score": <1-10>, "reason": "<çok kısa>"}'
+        "- works_muted: SES OLMADAN da anlaşılır ve etkileyici mi?\n"
+        'SADECE JSON: {"engaging": <bool>, "score": <1-10>, "works_muted": <bool>, '
+        '"reason": "<çok kısa>"}'
     )
 
 
@@ -239,8 +265,13 @@ class NarrationCheck(BaseModel):
 
 
 _FAITH_PROMPT = (
-    "Aşağıda bir video klibinin GERÇEK 6 karesi (storyboard, zaman-sıralı) ve o klip için "
+    "Aşağıda bir video klibinin GERÇEK 9 karesi (storyboard, zaman-sıralı) ve o klip için "
     "yazılmış Türkçe bir ANLATIM var.\n"
+    # BAŞLIK = poster'ın kendi tarifi. Kareler kişilerin KİM OLDUĞUNU (gelin mi kızı mı,
+    # arkadaş mı akraba mı) söyleyemez — o bilgi yalnız başlıkta. Başlıksız yargıç rol
+    # uydurmasını göremez (short 1140). Aynı kalıp judge_clip_quality/tone-fit'te de var.
+    "KLİBİN KENDİ BAŞLIĞI (poster'ın tarifi — kişilerin KİM olduğu konusunda KARELERDEN "
+    "daha güvenilir): {title}\n"
     "ANLATIM:\n---\n{narr}\n---\n"
     "Bu anlatım, karelerdeki ÖZNE ve TEMEL OLAYLA örtüşüyor mu? Şu 3 durumda 'faithful=false' de:\n"
     "  1) Tamamen FARKLI özne (anlatım 'köpek/futbol' der ama karelerde kedi var) VEYA\n"
@@ -249,11 +280,34 @@ _FAITH_PROMPT = (
     "KİŞİ ya da onun yaptığı bir eylem ekliyorsa (örn. 'yolda bir YENGEÇ buldu' ama karelerde "
     "yengeç yok; 'yavrusunu getirdi' ama yavru yok; 'ikinci bir köpek' ama tek köpek var). "
     "İkinci bir hayvan/nesne/kişi ve onunla ilgili alt-olay UYDURMAK = sadık DEĞİL.\n"
+    "  4) GÖRÜNMEYEN DEĞİŞİM: anlatım bir DEĞİŞİM/GEÇİŞ ANI iddia ediyor ama karelerde o "
+    "değişim YOK — durum baştan sona aynı. Sonuç durumundan GERİYE DÖNÜK olay uydurma: "
+    "bir şey ilk kareden beri öyleyse, onu 'az önce oldu' diye anlatmak sadık DEĞİL "
+    "(örn. anne ilk kareden beri cübbeli yatıyor ve oğlun kepi hiç başından çıkmıyorken "
+    "'oğlu kepini çıkarıp annesine giydirdi' demek). Kareler o anı gösteriyorsa serbest.\n"
+    "  5) UYDURMA ROL / AKRABALIK / KİMLİK: anlatım ekrandaki kişilere BAŞLIĞIN ve "
+    "karelerin desteklemediği bir kimlik ya da ilişki atıyorsa sadık DEĞİL. Kişi SAYISI "
+    "doğru olsa bile hikâye değişir. GERÇEK örnek-hata (short 1140): düğünde tekerlekli "
+    "sandalyedeki DAMAT ve onunla dans eden GELİN var, başlık 'Have you some friends like "
+    "he does' (onu kaldıranlar ARKADAŞLARI) — anlatım ise 'ayakta duramayan bir BABA, "
+    "KIZININ kollarında dans etti' dedi ve ayrıca 'gelin ile damat' diye AYRI bir çift "
+    "icat edip kendi içinde çelişti. Baba/kız, karı/koca, anne/oğul gibi akrabalık ya da "
+    "'sağdıç/damat/gelin' gibi rol iddiaları BAŞLIK veya kareler AÇIKÇA gösteriyorsa "
+    "serbest; göstermiyorsa UYDURMA. Anlatım aynı kişiyi iki farklı kimlikle anıyorsa "
+    "(hem 'damat' hem 'baba') bu da sadık DEĞİL.\n"
+    "  6) ABARTI SONUCU TERS ÇEVİRMİŞ: duygu/gerilim/benzetme serbesttir AMA olayın SONUCU "
+    "karelerde ne ise odur. 'Neredeyse düştü' ≠ 'düştü', 'zorlandı' ≠ 'başaramadı', "
+    "'sendeledi' ≠ 'yığıldı', 'kaçmaya çalıştı' ≠ 'kaçtı'. GERÇEK örnek-hata (short 1146): "
+    "karelerde üç adam sendeleyip savruluyor ama ÜÇÜ DE AYAKTA KALIYOR ve gülüyor; anlatım "
+    "'bacakları boşaldı, sarsılarak YIĞILDI' dedi → sadık DEĞİL. Denemenin başarılı mı "
+    "başarısız mı bittiği, kimin ayakta kaldığı, bir şeyin düşüp düşmediği KARELERDEN "
+    "okunur; anlatım bunun TERSİNİ söylüyorsa faithful=false.\n"
     "ŞUNLAR faithful=false YAPMAZ (SERBEST): mizah, abartı, lakap, benzetme, iç ses, öznenin ne "
     "'hissettiği', küçük sıra/aşama farkı — bunlar YORUM, yeni FİZİKSEL VARLIK değil. Ayrım: "
-    "duygu/yorum serbest AMA ekranda olmayan somut bir şey/canlı EKLEMEK yasak.\n"
+    "duygu/yorum serbest AMA ekranda olmayan somut bir şey/canlı EKLEMEK ya da olayın "
+    "SONUCUNU tersine çevirmek yasak.\n"
     "Kareler küçük/belirsizse ve ANLATIMDA uydurma varlık YOKSA → faithful=TRUE (şüphede sadık).\n"
-    "- faithful: özne+temel olay örtüşüyor VE uydurulmuş varlık/alt-olay YOK mu?\n"
+    "- faithful: özne+temel olay örtüşüyor VE uydurulmuş varlık/alt-olay/değişim/rol YOK mu?\n"
     "- mismatch: sadık değilse tek cümle (Türkçe) — özellikle uydurma varlığı ADIYLA söyle "
     "(örn. 'anlatımdaki yengeç ekranda yok').\n"
     'SADECE JSON: {{"faithful": <bool>, "mismatch": "<...>"}}'
@@ -261,10 +315,13 @@ _FAITH_PROMPT = (
 
 
 def verify_curated_narration(clip, narration_text: str, *, vision_call,
-                             ffmpeg_path: str = "ffmpeg"):
-    """Storyboard (gerçek 6 kare) + anlatım → anlatım gerçek olaya sadık mı, uydurma olay
+                             ffmpeg_path: str = "ffmpeg", title: str = ""):
+    """Storyboard (gerçek 9 kare) + anlatım → anlatım gerçek olaya sadık mı, uydurma olay
     var mı. Döner NarrationCheck ya da None (kare/vision hatası → fail-open, çağıran sadık
-    sayar). Mizah/abartı serbest; yalnız uydurma OLAY yakalanır."""
+    sayar). Mizah/abartı serbest; yalnız uydurma OLAY yakalanır.
+
+    ``title``: klibin kendi başlığı — kişilerin KİM olduğunu (arkadaş mı kızı mı) kareler
+    söyleyemez, uydurma rol/akrabalık ancak başlıkla yargılanır (short 1140)."""
     from short_bot.claude_cli import run_json
     from short_bot.reel import _storyboard_frames
     if not (narration_text or "").strip():
@@ -272,8 +329,9 @@ def verify_curated_narration(clip, narration_text: str, *, vision_call,
     try:
         with tempfile.TemporaryDirectory() as td:
             board = Path(td) / "faith_board.jpg"
-            # sadakat yargısı ince sıra/özne farkına bakar → daha net kare (short 962)
-            if not _storyboard_frames(clip, board, ffmpeg_path, frame_w=384):
+            # sadakat yargısı ince sıra/özne farkına bakar → daha net kare (short 962) +
+            # 3×3=9 kare: seyrek örneklem uydurma/eksik özne yargısını yanıltıyordu (bkz. D).
+            if not _storyboard_frames(clip, board, ffmpeg_path, cols=3, rows=3, frame_w=384):
                 return None
             if not board.exists() or board.stat().st_size == 0:
                 return None
@@ -283,7 +341,9 @@ def verify_curated_narration(clip, narration_text: str, *, vision_call,
             last: Exception | None = None
             for _ in range(2):
                 try:
-                    return run_json(_FAITH_PROMPT.format(narr=narration_text[:900]), NarrationCheck,
+                    return run_json(_FAITH_PROMPT.format(narr=narration_text[:900],
+                                                         title=(title or "(başlık yok)")[:300]),
+                                    NarrationCheck,
                                     claude_path=vision_call.claude_path, model=vision_call.model,
                                     backend=vision_call.backend, api_key=vision_call.api_key,
                                     image_path=board, retries=2, timeout_s=45)
@@ -297,24 +357,113 @@ def verify_curated_narration(clip, narration_text: str, *, vision_call,
 
 
 def judge_clip_quality(clip, *, vision_call, ffmpeg_path: str = "ffmpeg",
-                       tone: str = "mizah"):
-    """Storyboard (GERÇEK 6 kare) → klip izlenesi mi yoksa sıradan mı. Döner ClipQuality
-    ya da None (kare/vision hatası → çağıran fail-open kararı verir)."""
+                       tone: str = "mizah", title: str = ""):
+    """Storyboard (GERÇEK 9 kare) → klip izlenesi mi yoksa sıradan mı. Döner ClipQuality
+    ya da None (kare/vision hatası → çağıran fail-open kararı verir).
+
+    ``title``: klibin kaynak başlığı. Kapının kareyi ÇIPLAK yorumlamasını önler (bkz.
+    _quality_prompt) — verilmezse prompt bire bir eski hâlinde kalır (sıfır regresyon)."""
     from short_bot.claude_cli import run_json
     from short_bot.reel import _storyboard_frames
     try:
         with tempfile.TemporaryDirectory() as td:
             board = Path(td) / "q_board.jpg"
-            if not _storyboard_frames(clip, board, ffmpeg_path, frame_w=384):
+            # 3×3=9 kare (6 değil): seyrek örneklem klibin asıl öznesini kaçırabiliyor
+            # (çöpçü klibinde köpek 6 kareye hiç düşmedi → vision 'çamaşır sepeti' dedi).
+            if not _storyboard_frames(clip, board, ffmpeg_path, cols=3, rows=3, frame_w=384):
                 return None
             if not board.exists() or board.stat().st_size == 0:
                 return None
-            return run_json(_quality_prompt(tone), ClipQuality,
+            return run_json(_quality_prompt(tone, title), ClipQuality,
                             claude_path=vision_call.claude_path, model=vision_call.model,
                             backend=vision_call.backend, api_key=vision_call.api_key,
                             image_path=board, retries=1, timeout_s=45)
     except Exception as e:  # noqa: BLE001
         log.info(f"  kürate[kalite]: yargı hatası ({e})")
+        return None
+
+
+# ── FİNAL QA KAPISI (bitmiş ürünü kimse izlemiyordu) ─────────────────────────
+# Kullanıcı: 'vision/senaryo tutarsızlığı, sahne senkronu → zevksiz/anlamsız videolar
+# çıkabiliyor'. Tüm kapılar render ÖNCESİ proxy'lerde (ham klip + metin) çalışıyordu;
+# render'ın eklediği bütün (kesim + altyazı çipleri + tempo + vurgular) hiçbir yargıdan
+# geçmiyordu. Bu yargı BİTMİŞ videonun storyboard'ına + anlatım metnine bakıp 'yayınlanır
+# mı' der — üst-akıştaki her hatayı (yanlış tarif, kopuk senaryo, ton kayması) tek noktada,
+# gerçek ürün üzerinde yakalar.
+class FinalVideoQA(BaseModel):
+    """Bitmiş (render edilmiş) short'un storyboard yargısı — yayınlanabilir mi."""
+    # ZORUNLU alanlar (bkz. ClipQuality): boş/yarım yanıt → ValidationError → None →
+    # çağıran fail-open (tek vision hıçkırığı tamamlanmış renderı çöpe atmasın).
+    watchable: bool          # izleyici sonuna kadar izler mi — bütün ANLAMLI mı
+    score: int               # 1 (anlamsız/kopuk) .. 10 (kesin yayınlanır)
+    sync_ok: bool = True     # anlatım/altyazı ekrandaki olayla örtüşüyor mu
+    tone_ok: bool = True     # içerik kanal tonuna uygun mu
+    reason: str = ""
+
+
+def _final_qa_prompt(tone: str, narration_text: str) -> str:
+    if tone == "duygu":
+        lens = "DUYGUSAL/DOKUNAKLI (içini ısıtan, gözünü dolduran)"
+    elif tone == "karma":
+        lens = "KARMA/'oh olsun' (hak edilmiş, tatmin edici hafif comeuppance)"
+    else:
+        lens = "KOMİK/ŞAŞIRTICI (kahkaha, 'vay be', beklenmedik)"
+    return (
+        "Bu, YAYINLANMAK üzere üretilmiş DİKEY bir kısa videonun GERÇEK 9 karesi "
+        "(storyboard, zaman-sıralı, tek ızgara). Videoya Türkçe anlatım altyazı çipleri ve "
+        "görsel vurgular render EDİLMİŞ durumda — gördüğün, izleyicinin göreceği bitmiş ürün.\n"
+        f"Videonun TÜM ANLATIM METNİ:\n---\n{narration_text}\n---\n"
+        f"Kanalın tonu: {lens}.\n"
+        "Yayın editörü gibi yargıla:\n"
+        "- watchable: bir izleyici bunu SONUNA KADAR izler mi — görüntü + anlatım birlikte "
+        "ANLAMLI, takip edilebilir bir bütün mü? (Kopuk/anlamsız/sıkıcıysa false.)\n"
+        "- sync_ok: anlatım/altyazı EKRANDAKİ olayla örtüşüyor mu? (Görüntüyle alakasız şey "
+        "anlatıyorsa false.)\n"
+        "- tone_ok: içerik bu kanal tonuna oturuyor mu?\n"
+        "- score: 1-10 genel yayın kalitesi (1=anlamsız/zevksiz, 10=kesin yayınlanır).\n"
+        'SADECE JSON: {"watchable": <bool>, "score": <1-10>, "sync_ok": <bool>, '
+        '"tone_ok": <bool>, "reason": "<çok kısa TR>"}'
+    )
+
+
+def judge_final_video(video_path, narration_text: str, *, vision_call,
+                      ffmpeg_path: str = "ffmpeg", tone: str = "mizah", log=None):
+    """BİTMİŞ videonun storyboard'ı (9 kare, altyazı/vurgular dahil) + anlatım metni →
+    'yayınlanır mı' yargısı. Döner FinalVideoQA ya da None (kare/vision hatası →
+    çağıran fail-open kararı verir; render tek hıçkırıkla çöpe atılmaz).
+
+    ``log``: KOŞU logger'ı. Bu modülün kendi logger'ı koşu dosyasına bağlı DEĞİL —
+    verilmezse yargıç arızası koşu logunda hiç görünmez (short 1077: yargılanmamış
+    video 'kapıdan geçti' sanıldı)."""
+    from short_bot.claude_cli import run_json
+    from short_bot.reel import _storyboard_frames
+    _log = log or globals()["log"]
+    try:
+        with tempfile.TemporaryDirectory() as td:
+            board = Path(td) / "fqa_board.jpg"
+            if not _storyboard_frames(video_path, board, ffmpeg_path,
+                                      cols=3, rows=3, frame_w=384):
+                _log.warning("  kürate[final-qa]: storyboard kurulamadı → yargı YOK")
+                return None
+            if not board.exists() or board.stat().st_size == 0:
+                _log.warning("  kürate[final-qa]: storyboard boş → yargı YOK")
+                return None
+            # Geçici vision hatasına karşı ek tur (bkz. verify_curated_narration): None yalnız
+            # gerçekten doğrulanamayınca dönsün.
+            last: Exception | None = None
+            for _ in range(2):
+                try:
+                    return run_json(_final_qa_prompt(tone, (narration_text or "")[:900]),
+                                    FinalVideoQA,
+                                    claude_path=vision_call.claude_path, model=vision_call.model,
+                                    backend=vision_call.backend, api_key=vision_call.api_key,
+                                    image_path=board, retries=2, timeout_s=45)
+                except Exception as e:  # noqa: BLE001 — geçici → tekrar dene
+                    last = e
+            _log.warning(f"  kürate[final-qa]: yargı doğrulanamadı ({last})")
+            return None
+    except Exception as e:  # noqa: BLE001
+        _log.warning(f"  kürate[final-qa]: yargı hatası ({e})")
         return None
 
 
@@ -342,6 +491,65 @@ _SCENE_SPLIT_PROMPT = (
     "- transition_frame: yeni sahnenin İLK göründüğü kare numarası (1-{n}); tek sahneyse 0.\n"
     'SADECE JSON: {{"multi_scene": <bool>, "transition_frame": <int>}}'
 )
+
+
+# ── REVEAL ÇIPASI (ödül anı ses ile görüntüde AYNI saniyede olsun) ───────────
+# SORUN (short 1078): klipte anne çocuğu ~%41'de tanıyıp sarılıyor; anlatım ödülü
+# ~%61'de söylüyor. İzleyici kucaklaşmayı GÖRDÜKTEN sonra "kendi oğludur" cümlesini
+# duyuyor → reveal ıskalanıyor, merak eğrisi düşüyor. detect_scene_split yalnız MEKÂN
+# değişimini sayıyor (tek mekânda dönen bu klipte None döndü). Burada aranan şey farklı:
+# mekân değil DURUM değişiyor (arama → kavuşma). Bulunan oran render'da fit_clip_with_anchor
+# ile ses tarafındaki ödül cümlesine çakıştırılır.
+class RevealAnchor(BaseModel):
+    """Storyboard vision yargısı — klipte ödül/dönüm anı var mı, hangi karede başlıyor."""
+    has_turn: bool = False
+    turn_frame: int = 0      # dönümün İLK göründüğü kare (1..N); yoksa 0
+
+
+_REVEAL_ANCHOR_PROMPT = (
+    "Bu bir kısa video klibinin STORYBOARD'ı (zaman-sıralı {n} kare, soldan sağa, sonra "
+    "alt sıra). Klibin ÖDÜL/DÖNÜM anını bul: kurulumun bitip olayın DEĞİŞTİĞİ an — "
+    "aranan şeyin bulunduğu, kavuşmanın/yardımın/sürprizin/tepkinin BAŞLADIĞI ilk kare "
+    "(örn. arama biter ve sarılma başlar; hayvan kurtarılır; şaka patlar).\n"
+    "ÖNEMLİ: Kurulum karelerini (hazırlık, bekleme, arama) sayma — yalnız durumun "
+    "değiştiği İLK kareyi ver. Kamera hareketi/zoom dönüm DEĞİLDİR. Baştan sona aynı "
+    "durum sürüyorsa has_turn=false.\n"
+    "- has_turn: net bir dönüm/ödül anı var mı?\n"
+    "- turn_frame: dönümün İLK göründüğü kare numarası (1-{n}); yoksa 0.\n"
+    'SADECE JSON: {{"has_turn": <bool>, "turn_frame": <int>}}'
+)
+
+
+def detect_reveal_anchor(clip, *, vision_call, ffmpeg_path: str = "ffmpeg",
+                         cols: int = 3, rows: int = 3):
+    """Storyboard → klipte ödül/dönüm anının ORANI (0-1) ya da None.
+
+    None (çıpa yok, mevcut davranış): dönüm yok / kare uçlarda (1. veya son kare —
+    kurulum ya da bitiş yok demektir, çıpa zorlamak görüntüyü bozar) / vision hatası."""
+    from short_bot.claude_cli import run_json
+    from short_bot.reel import _storyboard_frames
+    n = cols * rows
+    try:
+        with tempfile.TemporaryDirectory() as td:
+            board = Path(td) / "reveal_board.jpg"
+            if not _storyboard_frames(clip, board, ffmpeg_path, cols=cols, rows=rows,
+                                      frame_w=384):
+                return None
+            if not board.exists() or board.stat().st_size == 0:
+                return None
+            res = run_json(_REVEAL_ANCHOR_PROMPT.format(n=n), RevealAnchor,
+                           claude_path=vision_call.claude_path, model=vision_call.model,
+                           backend=vision_call.backend, api_key=vision_call.api_key,
+                           image_path=board, retries=1, timeout_s=45)
+    except Exception as e:  # noqa: BLE001
+        log.info(f"  kürate[çıpa]: dönüm anı tespiti hatası ({e})")
+        return None
+    tf = res.turn_frame
+    if not res.has_turn or tf < 2 or tf > n:
+        return None
+    # Kare k'nın ORTASI ≈ (k-0.5)/n oranı. [0.2, 0.8]'e sıkıştır: uçtaki çıpa
+    # parçalardan birini aşırı gerer (hız sınırı zaten reddeder, boşuna vision harcanmasın).
+    return max(0.2, min(0.8, (tf - 0.5) / n))
 
 
 def detect_scene_split(clip, *, vision_call, ffmpeg_path: str = "ffmpeg",

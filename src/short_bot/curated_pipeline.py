@@ -27,6 +27,9 @@ CURATED_MIZAH_MIN_S = 15
 # judge_clip_quality GERÇEK storyboard'dan izlenme-değeri yargılar → engaging=False veya bundan
 # düşük skor = sıradan/zayıf → oto-üretimde ATLA (DUYGU_MIN_SCORE'un tüm-tonlar/storyboard karşılığı).
 CURATED_QUALITY_MIN = 6
+# FİNAL QA eşiği (kullanıcı: 'zevksiz/anlamsız videolar çıkabiliyor'): bitmiş (render edilmiş)
+# video storyboard'dan 'yayınlanır mı' yargısı — bundan düşükse dosya silinir, klip atlanır.
+FINAL_QA_MIN = 6
 
 
 class CuratedWatermarkError(RuntimeError):
@@ -110,6 +113,11 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
         try:
             clip = download_clip(video_url, td / "src.mp4")
         except Exception as e:  # noqa: BLE001 — 403/404/ağ → skippable (sıradaki aday)
+            # KALICI ÖLÜ KLİP: v.redd.it 403/404/410 = post silinmiş/medya gitmiş — hatırla,
+            # yoksa aynı klip her koşuda en-iyi-aday seçilip yeniden 403 alıyor (tek güçlü
+            # adaysa koşu hep 'temiz cevher yok'a kilitleniyor). Timeout/5xx/ağ = geçici → hatırlama.
+            if getattr(getattr(e, "response", None), "status_code", None) in (403, 404, 410):
+                _remember("gone")
             raise CuratedClipError(f"klip indirilemedi ({video_url}): {e}") from e
         # TEMİZLİK (SP4): hafif/kenar watermark → delogo (yazılı klip de kullanılabilir);
         # ağır kaplama temizlenmez. Kanal flag'i kapalıysa atlanır.
@@ -211,12 +219,21 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
         if vision is not None:
             from short_bot.curated_clean import judge_clip_quality
             _q = judge_clip_quality(clip, vision_call=vision,
-                                    ffmpeg_path=settings.ffmpeg_path, tone=_tone)
+                                    ffmpeg_path=settings.ffmpeg_path, tone=_tone,
+                                    title=gem.get("title", ""))
             if _q is not None and (not _q.engaging or _q.score < CURATED_QUALITY_MIN):
                 _remember("mundane")
                 raise CuratedClipError(
                     f"Klip sıradan/zayıf (izlenme-skoru {_q.score}<{CURATED_QUALITY_MIN}: "
                     f"{_q.reason}) → atlanıyor (izlenesi/güçlü klip seç).")
+            # SES-YÜKÜ KAPISI (kullanıcı: 'anlamsız videolar'): klibin etkisi SESTE ise
+            # (kahkaha/diyalog/müzik — contagiouslaughter sınıfı) sessiz izlenince sıradanlaşır;
+            # biz orijinal sesi atıp TTS basıyoruz → bu klip üretilmez. Klip özelliği KALICI.
+            if _q is not None and not getattr(_q, "works_muted", True):
+                _remember("audio-payload")
+                raise CuratedClipError(
+                    f"Klibin yükü SESTE ({_q.reason or 'kahkaha/diyalog'}) — orijinal ses "
+                    f"atılıyor, sessiz hâli sıradan → atlanıyor (görsel-taşıyan klip seç).")
 
         # ZAMAN-SIRALI BEAT SHEET (kullanıcı short 990: 'sahneler ile cümleler oturmuyor'):
         # _describe_clip tüm klibi TEK BLOK özetliyor → zaman çizgisi eriyor, anlatıcı ödülü
@@ -260,6 +277,19 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
                 log.info(f"  kürate: 2 sahneli klip → geçiş ~%{round(scene_split*100)} "
                          f"(anlatım tempolanacak)")
 
+        # REVEAL ÇIPASI: klipteki ödül/dönüm anının oranı → render'da anlatımın ödül
+        # cümlesiyle ÇAKIŞTIRILIR (short 1078: kucaklaşma ~%41'de görünüyor, anlatım
+        # ~%61'de söylüyordu). 2 sahneli klipte geçiş ZATEN dönüm anıdır → o oranı
+        # yeniden kullan (boşuna vision harcama); tek sahnede ayrı tespit gerekir.
+        reveal_frac = scene_split
+        if vision is not None and reveal_frac is None:
+            from short_bot.curated_clean import detect_reveal_anchor
+            reveal_frac = detect_reveal_anchor(clip, vision_call=vision,
+                                               ffmpeg_path=settings.ffmpeg_path)
+            if reveal_frac is not None:
+                log.info(f"  kürate: dönüm anı ~%{round(reveal_frac*100)} → reveal çıpası "
+                         f"(ödül cümlesi o kareye oturtulacak)")
+
         target = curated_target(clip_dur, reel.target_duration_s)
         log.info(f"  kürate: klip {clip_dur:.1f}s → video hedefi {target} (loop önleme)")
         narration = write_curated_narration(
@@ -267,8 +297,10 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
             claude_path=narr_llm.claude_path, model=narr_llm.model,
             backend=narr_llm.backend, api_key=narr_llm.api_key,
             seed=seed, target_duration_s=target, scene_split=scene_split,
-            comments=comments)
-        log.info(f"  kürate: senaryo {narration.word_count()} kelime | "
+            comments=comments, reveal_frac=reveal_frac)
+        from short_bot.reel_narration import budget_unit as _bu
+        _unit = "karakter" if _bu(channel.language) == "characters" else "kelime"
+        log.info(f"  kürate: senaryo {narration.word_count()} {_unit} | "
                  f"başlık='{narration.title}' kapak='{narration.cover_title}'")
 
         # SADAKAT KAPISI (kullanıcı: 'teyit edecek yapı lazım'): anlatım GERÇEK videoyu mu
@@ -277,7 +309,8 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
         if vision is not None:
             from short_bot.curated_clean import verify_curated_narration
             _chk = verify_curated_narration(clip, narration.full_text(),
-                                            vision_call=vision, ffmpeg_path=settings.ffmpeg_path)
+                                            vision_call=vision, ffmpeg_path=settings.ffmpeg_path,
+                                            title=gem.get("title", ""))
             # not-faithful İSE yeniden yaz — mismatch BOŞ OLSA BİLE (denetim bulgusu: zayıf model
             # 'faithful=false, mismatch=""' dönünce eski AND-guard rewrite'ı ATLAYIP uydurma
             # anlatımı YAYINLIYORDU). Reason boşsa jenerik geri bildirim ver.
@@ -295,10 +328,11 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
                     claude_path=narr_llm.claude_path, model=narr_llm.model,
                     backend=narr_llm.backend, api_key=narr_llm.api_key,
                     seed=seed, target_duration_s=target, scene_split=scene_split,
-                    comments=comments, feedback=_fb)
+                    comments=comments, feedback=_fb, reveal_frac=reveal_frac)
                 _chk2 = verify_curated_narration(clip, narration.full_text(),
                                                  vision_call=vision,
-                                                 ffmpeg_path=settings.ffmpeg_path)
+                                                 ffmpeg_path=settings.ffmpeg_path,
+                                                 title=gem.get("title", ""))
                 if _chk2 is not None and not _chk2.faithful:
                     # KALICI UYDURMA → çöp YAYINLAMA, klibi ATLA (denetim 999: direktif rewrite'a
                     # rağmen uydurma kalırsa fail-open çöpü basıyordu). Oto-loop sıradaki adaya
@@ -337,15 +371,98 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
                 claude_path=narr_llm.claude_path, model=narr_llm.model,
                 backend=narr_llm.backend, api_key=narr_llm.api_key,
                 seed=seed, target_duration_s=target, scene_split=scene_split,
-                comments=comments, feedback=f"ANLAŞILIRLIK: {_cfb}")
+                comments=comments, feedback=f"ANLAŞILIRLIK: {_cfb}",
+                reveal_frac=reveal_frac)
             _clr2 = judge_narration_clarity(narration.full_text(), narr_desc, tone=_tone,
                                             backend=llm.backend, model=llm.model, api_key=llm.api_key,
                                             claude_path=llm.claude_path)
             if _clr2 is not None and not _clr2.clear:
-                log.warning(f"  kürate[netlik]: yeniden yazım da net değil ({_clr2.reason}) "
-                            f"— yine de üretiliyor (fail-open)")
+                # FAIL-CLOSED (kullanıcı: 'anlamsız videolar çıkabiliyor'): iki denemede de
+                # net değilse ÇÖP YAYINLAMA — klibi atla (sadakat kapısıyla aynı sözleşme).
+                # seen'e YAZMA: klip iyi olabilir, anlatım şanssız çıktı — sonraki koşuda
+                # (farklı seed) düzgün anlatılabilir; kalıcı blacklist haksız olur.
+                _r2 = _clr2.reason or "izleyici olayı takip edemiyor"
+                raise CuratedClipError(
+                    f"Anlatım iki denemede de NET değil ({_r2}) → atlanıyor "
+                    f"(çöp yayınlanmaz, klip hatırlanmaz).")
+            log.info("  kürate[netlik]: yeniden yazım NET ✓")
+
+        # DİL KAPISI — YALNIZ TÜRKÇE DIŞI KANALLAR (operatör metni okuyamıyor).
+        #
+        # Buraya kadarki iki kapı bu boşluğu KAPATMAZ: sadakat kapısı anlatımı GÖRÜNTÜYLE
+        # karşılaştırır, netlik kapısı MANTIĞA bakar. Hedef dilde bozuk ama tutarlı bir
+        # cümle ikisini de geçer — ve Türkçe kanalda operatörün yakaladığı o kusuru burada
+        # yakalayacak kimse yok. Bu yüzden yerli-okur yargısı KAPI (fail-closed), geri
+        # çeviri ise PENCERE (fail-open, panelde gösterilir).
+        back_tr = ""
+        if channel.language != "tr":
+            from short_bot.lang_review import back_translate, judge_native_text
+            def _judge_native():
+                return judge_native_text(narration.full_text(), language=channel.language,
+                                         backend=llm.backend, model=llm.model,
+                                         api_key=llm.api_key, claude_path=llm.claude_path)
+
+            _nat = _judge_native()
+            # ONARIM TURU SAYISI. Yargıç her çağrıda YALNIZ EN KÖTÜ tek kusuru bildiriyor
+            # (prompt öyle istiyor: net ve uygulanabilir olsun). Yani iki kusurlu bir
+            # metin tek onarımla temizlenemez — ölçüldü (aday 71): 1. onarım '支え続ける'i
+            # düzeltti, hemen ardından CTA kalıbı işaretlendi ve klip kaybedildi.
+            # KAPI GEVŞEMİYOR: video yine 'doğal' yargısını almadan çıkamıyor; değişen
+            # tek şey iyi bir klibi kaç denemede kurtarmaya çalıştığımız.
+            _LANG_REPAIRS = 2
+            _try = 0
+            while _nat is not None and not _nat.natural and _try < _LANG_REPAIRS:
+                _try += 1
+                _iss = _nat.issue or "Metin hedef dilde doğal değil."
+                # ONARIM, YENİDEN YAZIM DEĞİL. Ölçüldü (2026-07-24, iki klip): her
+                # yeniden yazım SIFIRDAN yeni bir taslak üretiyor ve YENİ bir dil kusuru
+                # getiriyor (1. deneme nezaket karışıklığı → 2. deneme farklı bir çeviri
+                # kokusu) — yani yakınsamıyor, klip boşuna kaybediliyor. Modele önceki
+                # metni geri verip SADECE işaretlenen ifadeyi değiştirmesini söylemek
+                # yakınsayan tek yol.
+                _prev = narration.full_text()
+                _lfb = (f"DİL ONARIMI (yeniden yazım DEĞİL).\n\n"
+                        f"ÖNCEKİ METİN:\n{_prev}\n\n"
+                        f"YERLİ OKUR ŞUNU İŞARETLEDİ: {_iss}\n\n"
+                        f"YAP: yukarıdaki metni AYNEN yeniden üret, YALNIZCA işaretlenen "
+                        f"ifadeyi ana dili o dil olan birinin söyleyeceği hâliyle değiştir. "
+                        f"Başka hiçbir cümleyi, kelimeyi, sırayı ya da noktalamayı DEĞİŞTİRME. "
+                        # KRİTİK: bu kapı EN SONDA; tetiklediği yeniden yazım sadakat ve
+                        # netlik kapılarından BİR DAHA GEÇMİYOR. Yani burada eklenen bir
+                        # uydurma kimseye yakalanmaz. Kilidi geri bildirime koyuyoruz.
+                        f"Anlatılan olaylar, sıraları, sayılar ve ton AYNEN kalsın — yeni "
+                        f"olay/varlık/detay EKLEME, hiçbirini çıkarma. Yeni bir taslak "
+                        f"yazma; bu bir DÜZELTMEDİR.")
+                log.info(f"  kürate[dil]: anlatım {channel.language} dilinde DOĞAL değil "
+                         f"({_iss}) → onarım {_try}/{_LANG_REPAIRS}")
+                narration = write_curated_narration(
+                    title_seed, narr_desc, channel=channel, subject="clip",
+                    claude_path=narr_llm.claude_path, model=narr_llm.model,
+                    backend=narr_llm.backend, api_key=narr_llm.api_key,
+                    seed=seed, target_duration_s=target, scene_split=scene_split,
+                    comments=comments, feedback=_lfb, reveal_frac=reveal_frac)
+                _nat = _judge_native()
+
+            if _nat is not None and not _nat.natural:
+                # FAIL-CLOSED: operatör bu kusuru göremez, sonradan da fark etmez.
+                # seen'e YAZMA — klip iyi, anlatım şanssız çıktı (netlik kapısıyla aynı).
+                raise CuratedClipError(
+                    f"Anlatım {_LANG_REPAIRS} onarımda da {channel.language} dilinde doğal "
+                    f"değil ({_nat.issue or 'gerekçe yok'}) → atlanıyor.")
+            elif _nat is not None and _try:
+                log.info(f"  kürate[dil]: onarım sonrası DOĞAL ✓ ({_try} tur)")
+            elif _nat is None:
+                log.warning("  kürate[dil]: yerli okur YARGILAYAMADI → metin yargısız "
+                            "geçiyor (fail-open) — geri çeviriden elle kontrol et")
             else:
-                log.info("  kürate[netlik]: yeniden yazım NET ✓")
+                log.info("  kürate[dil]: anlatım doğal ✓")
+
+            # PENCERE: anlatımın Türkçesi. Kapı değil — patlarsa üretim sürer.
+            back_tr = back_translate(narration.full_text(), language=channel.language,
+                                     backend=llm.backend, model=llm.model,
+                                     api_key=llm.api_key, claude_path=llm.claude_path)
+            if back_tr:
+                log.info(f"  kürate[dil] geri çeviri: {back_tr}")
 
         try:
             music = pick_music(Path(music_root), mood=reel.music_mood,
@@ -363,8 +480,37 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
             llm_claude_path=llm.claude_path, llm_model=llm.model,
             llm_backend=llm.backend, llm_api_key=llm.api_key,
             vision_call=vision, seed=seed, assets_root=Path(music_root).parent,
-            curated_clip=clip, curated_narration=narration)
+            curated_clip=clip, curated_narration=narration,
+            curated_reveal_frac=reveal_frac)
         render_ms = int((time.perf_counter() - t0) * 1000)
+
+    # FİNAL QA KAPISI (kullanıcı: 'zevksiz/anlamsız videolar çıkabiliyor'): buraya kadarki
+    # tüm kapılar render ÖNCESİ proxy'lerde (ham klip storyboard'ı + metin) çalıştı — bitmiş
+    # ürünü (kesim + altyazı çipleri + tempo + vurgular) kimse izlemiyordu. BİTMİŞ videoyu
+    # vision'la yargıla; izlenmez/senkronsuz/ton-dışıysa dosyayı sil, Short kaydı AÇMA, klibi
+    # atla. None (vision hıçkırığı) → fail-open: tüm kapılardan geçmiş render çöpe atılmaz.
+    # seen'e YAZMA: klip iyi olabilir, anlatım/kurgu şanssız çıktı (sonraki koşu farklı seed).
+    if vision is not None:
+        from short_bot.curated_clean import judge_final_video
+        _fq = judge_final_video(out_path, narration.full_text(), vision_call=vision,
+                                ffmpeg_path=settings.ffmpeg_path, tone=_tone, log=log)
+        if _fq is not None and (not _fq.watchable or not _fq.sync_ok or not _fq.tone_ok
+                                or _fq.score < FINAL_QA_MIN):
+            try:
+                Path(out_path).unlink(missing_ok=True)
+            except Exception:  # noqa: BLE001 — silinemese de kayıt açılmaz
+                pass
+            raise CuratedClipError(
+                f"FİNAL QA: bitmiş video yayınlanabilir değil (skor {_fq.score}, "
+                f"izlenir={_fq.watchable}, senkron={_fq.sync_ok}, ton={_fq.tone_ok}: "
+                f"{_fq.reason}) → dosya silindi, klip atlanıyor (çöp yayınlanmaz).")
+        if _fq is not None:
+            log.info(f"  kürate[final-qa]: yayınlanabilir ✓ (skor {_fq.score})")
+        else:
+            # Fail-open KORUNUR (render çöpe atılmaz) ama SESSİZ DEĞİL: bu video
+            # yayına yargılanmadan gitti, operatör elle baksın (short 1077).
+            log.warning("  kürate[final-qa]: YARGILANAMADI → video yargısız kaydediliyor "
+                        "(fail-open) — elle kontrol et")
 
     # Short kaydı: /shorts'ta görünür + mevcut yükleme yolu kullanılabilir.
     # script_json yükleme anında YT başlık/açıklamasını besler (bkz. youtube route).
@@ -373,16 +519,24 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
         "header_top": narration.cover_title or narration.hook,
         "header_bottom": "",
         "body_paragraph": narration.full_text(),
+        # Türkçe DIŞI kanallarda anlatımın Türkçesi — panelde yan yana gösterilir.
+        # Operatörün videoyu YAYINLAMADAN ÖNCE "bu ne diyor" sorusunu yanıtlayabilmesi
+        # için tek yol bu (bkz. lang_review). Türkçe kanalda boş kalır.
+        "body_paragraph_tr": back_tr,
         "title": seo,
         # İngilizce başlık → YouTube çok-dilli başlık (küresel Shorts akışı). Boşsa yok sayılır.
         "title_en": (getattr(narration, "title_en", "") or "")[:100],
         "source_permalink": gem.get("permalink", ""),
         "source_video_url": video_url,   # dedup: aynı klip iki kez üretilmesin
     }, ensure_ascii=False)
+    # SÜRE = YAYINLANAN videonun süresi, kaynak klibin değil. Kürate klibi setpts ile
+    # videoya oturtuluyor (hızlandırma/yavaşlatma) → ikisi tutmuyor: short 1140'ta panel
+    # 55sn gösteriyordu, video 41.3sn'ydi. Ölçülemezse (ffprobe hıçkırığı) kaynak süreye düş.
+    _pub_dur = _clip_duration_s(out_path, settings.ffmpeg_path) or clip_dur
     eng = init_db(db_path)
     short_id = record_short(
         eng, channel=channel.slug, rss_item_guid=None, title=seo,
-        file_path=str(out_path), duration_s=int(round(clip_dur)) or None,
+        file_path=str(out_path), duration_s=int(round(_pub_dur)) or None,
         script_json=script_json, render_ms=render_ms)
     log.info(f"  kürate: Short kaydedildi id={short_id} → {out_path.name}")
     _remember("produced")   # elenen-hafızası: üretileni de hatırla (çift üretimi önler)
@@ -461,6 +615,7 @@ def auto_produce_curated(channel, *, settings, secrets, db_path, output_root,
     # bir daha İNDİRİLİP vision'la kontrol edilmez (funnel israfı biter). Yalnız KALICI yargılar
     # hafızada; geçici indirme/vision hatası kaydedilmez → tekrar denenir.
     from short_bot.curated_pool import clip_key as _pool_clip_key
+    from short_bot.curated_pool import mark_seen as _mark_seen
     from short_bot.curated_pool import seen_keys
     from short_bot.db import init_db as _init_db
     _seen = seen_keys(_init_db(db_path), channel.slug)
@@ -504,6 +659,29 @@ def auto_produce_curated(channel, *, settings, secrets, db_path, output_root,
         fresh = score_curiosity(fresh, vision_call=_vis, top_n=60, tone=tone, log=log)
     except Exception as e:  # noqa: BLE001 — skor düşerse engagement sırası (fail-open)
         log.info(f"  kürate[oto]: ton-skoru atlandı ({e})")
+
+    def _remember_scored():
+        """Skor-aşaması KALICI yargılarını hafızaya yaz (kullanıcı: 'milyonlarca video var,
+        bulamıyor'). Eskiden yalnız üretim-aşaması yargıları seen'e yazılıyordu (~1-3/koşu) →
+        top-60 skor penceresi her koşu AYNI (ay-topu statik) klipleri yeniden skorluyor, 1100+
+        taze aday pencereye hiç giremiyordu. Yazılı-kapak + eşik-altı skor kalıcıdır (thumbnail
+        değişmez) → hatırla; seen büyüyünce pencere rotasyonu (year/all) da devreye girer.
+        Geçici skor hatası (score_err) yazılMAZ. Idempotent (OR IGNORE) — iki kez çağrılabilir."""
+        try:
+            _eng = _init_db(db_path)
+            _weak = (lambda c: c < DUYGU_MIN_SCORE) if tone == "duygu" else (lambda c: c <= 3)
+            for g in gems:
+                _k = _pool_clip_key(g.get("video_url", ""))
+                if not _k or _k in _seen or g.get("score_err"):
+                    continue
+                _c = g.get("curiosity")
+                if g.get("has_text"):
+                    _mark_seen(_eng, channel.slug, _k, "heavy-text")
+                elif _c is not None and _weak(_c):
+                    _mark_seen(_eng, channel.slug, _k, "weak-score")
+        except Exception as e:  # noqa: BLE001 — hafıza best-effort, koşuyu düşürmez
+            log.info(f"  kürate[oto]: skor-yargısı hafızaya yazılamadı ({e})")
+
     if tone == "duygu":
         # EŞİK: güçlü duygusal klip yoksa ÜRETME (zayıf derp'i zorlama — short 934 dersi).
         # AMA yalnız vision GERÇEKTEN skorladıysa: skorlama çökerse (hepsi curiosity=None) sert
@@ -532,6 +710,7 @@ def auto_produce_curated(channel, *, settings, secrets, db_path, output_root,
             best = max((g.get("curiosity") or 0) for g in fresh) if fresh else 0
             log.warning(f"  kürate[oto]: yeterince güçlü duygusal klip yok (en iyi skor "
                         f"{best}<{DUYGU_MIN_SCORE}, derin tier dahil) → üretim atlandı")
+            _remember_scored()   # boş koşuda da elenenler hatırlansın (pencere tıkanmasın)
             return None, None
         else:
             log.info("  kürate[oto]: vision skorlanamadı → engagement sırasıyla deneniyor "
@@ -543,6 +722,7 @@ def auto_produce_curated(channel, *, settings, secrets, db_path, output_root,
         _kept = [g for g in fresh if (g.get("curiosity") is None or g.get("curiosity") > 3)]
         if _kept:
             fresh = _kept
+    _remember_scored()   # üretime geçmeden elenenleri hatırla (sonraki koşu taze dilim görsün)
     # En iyi adayları sırayla dene; WATERMARK'LI (temizlenemeyen) olanı ATLA → temiz video.
     # 8→20: DUYGU kaynakları (r/MadeMeSmile) watermark-yoğun repost; derin havuzda temiz olanı
     # bulana kadar dene (kirli aday watermark kapısında ~8sn'de erken elenir, pahalı değil).

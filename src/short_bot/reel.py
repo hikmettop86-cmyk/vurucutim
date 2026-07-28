@@ -263,6 +263,30 @@ def _clip_duration_s(clip, ffmpeg_path: str) -> float:
 #    TRIM'lenir (yine contiguous). İdeal: anlatım≈klip (N≈L) → kat≈1, doğal hızda oynar.
 CURATED_MAX_SLOWDOWN = 2.7
 CURATED_MAX_SPEEDUP = 1.8
+# Ödül anını hizalamak için ödül cümlesinden ÖNCE eklenebilecek EN ÇOK sessizlik.
+# Üstü izleyiciyi kaçırır (dramatik nefes değil, ölü hava) — o noktada çıpadan vazgeçip
+# klibi kırpmadan tek katsayıyla oynatmak daha iyi.
+CURATED_REVEAL_PAUSE_MAX_S = 1.5
+
+
+def curated_reveal_pause_s(*, clip_reveal_s: float, reveal_dst_s: float,
+                           base_s: float, max_s: float,
+                           max_speedup: float = CURATED_MAX_SPEEDUP) -> float:
+    """Ödül cümlesinden önce eklenecek duraklama — çıpayı hız sınırına SOKACAK kadar.
+
+    ``clip_reveal_s``: klipteki dönüm anı (klip zamanı, sabit).
+    ``reveal_dst_s``: anlatımdaki ödül anı (video zamanı, duraklamadan önce).
+
+    Çıpa ancak ``reveal_dst_s >= clip_reveal_s / max_speedup`` iken uygulanabilir
+    (kurulumu daha fazla hızlandırmak görüntüyü bozar). Aradaki eksik kadar sessizlik
+    eklersek çıpa erişilebilir hale gelir ve TAM hizayı o kurar.
+
+    NOT (short 1145 ölçümü): duraklama farkı TEK BAŞINA kapatamaz — eklenen her saniye
+    videoyu da uzattığı için klipteki dönüm de öteleniyor (net kazanç yalnız
+    1-reveal_frac kadar; o koşuda tam hiza 22.6sn sessizlik isterdi). Bu yüzden hedef
+    farkı kapatmak değil, çıpayı UYGULANABİLİR kılmak."""
+    need = clip_reveal_s / max_speedup - reveal_dst_s
+    return max(base_s, min(max_s, need))
 
 
 def _curated_vertical_pad(clip, ffmpeg_path: str, out_path):
@@ -326,6 +350,69 @@ def _slow_clip_to(clip, target_s: float, ffmpeg_path: str, out_path):
     return None
 
 
+def fit_clip_with_anchor(clip, *, target_s: float, anchor_src_s: float,
+                         anchor_dst_s: float, ffmpeg_path: str, out_path):
+    """Klibi ÇIPALI oturt: ``anchor_src_s`` (klipteki dönüm anı) videoda
+    ``anchor_dst_s``'ye (anlatımın ödül cümlesine) denk gelsin.
+
+    Klip çıpadan İKİYE bölünür; her parça kendi hedef süresine setpts ile oturtulur.
+    Parça içinde hız SABİT (doğal görünür), yalnız çıpada değişir — o an zaten sahnenin
+    döndüğü an olduğu için gözü tırmalamaz.
+
+    None döner (çağıran tek-katsayılı ``_slow_clip_to``'ya düşer):
+      • çıpa klibin dışında/ucunda, süre okunamadı,
+      • gereken hız CURATED_MAX_SPEEDUP/SLOWDOWN sınırlarını aşıyor (görüntüyü
+        bozmaktansa çıpasız kal),
+      • ffmpeg hatası.
+    """
+    import subprocess
+    dur = _clip_duration_s(clip, ffmpeg_path)
+    if dur <= 0 or target_s <= 0:
+        return None
+    # Çıpa uçlara çok yakınsa bölmenin anlamı yok (parçalardan biri neredeyse boş).
+    if anchor_src_s < 0.5 or anchor_src_s > dur - 0.5:
+        return None
+    if anchor_dst_s < 0.5 or anchor_dst_s > target_s - 0.5:
+        return None
+    lo, hi = 1.0 / CURATED_MAX_SPEEDUP, CURATED_MAX_SLOWDOWN
+    # KURULUM KIRPMA YOK (short 1140 — kullanıcı: 'görüntü ses ve senaryoda uyumsuzluk').
+    # Eskiden dönüm geç gelirse çıpayı hız sınırına sığdırmak için kurulumun BAŞI kırpılıyordu
+    # (koşu 1251'de %7.5, ama 1140'ta 5.4s, başka koşuda 11.7s — çıpalı üretimlerin ~%30'u).
+    # Kırpılan bölüm anlatımın 1. cümlesinin anlattığı AÇILIŞ ANIydı (1140: gelin tekerlekli
+    # sandalyedeki damadı kucaklıyor) → izleyici 'gelin…' altyazısını okurken ekranda gelin YOK.
+    # KÖK: anlatım KIRPILMAMIŞ klipten yazılıyor; kırpma render'da sonradan yapılıyor ve
+    # anlatıma geri bildirilmiyor — iki taraf arasında sözleşme yok. Çıpa KOZMETİK (zamanlama),
+    # anlatım-görüntü uyumu ise ÜRÜNÜN kendisi → çıpalı oturtma İÇERİK ATMAZ; sığmıyorsa
+    # vazgeçer (çağıran tek-katsayılı _slow_clip_to'ya düşer, tüm klip sırayla oynar).
+    # Ödülü klibin dönüm oranına DENK yazdırmak artık anlatım tarafının işi: bkz.
+    # build_curated_prompt REVEAL-SENKRON kuralı (reveal_frac → 'ödül cümlen ~%X'te başlasın').
+    f_a = anchor_dst_s / anchor_src_s
+    # KUYRUK KIRPMA: ödülden sonrası hedeften uzunsa fazlalık harcanabilir (payoff geçti).
+    # Kaynağı sınıra kadar hızlandır, kalanı at (_slow_clip_to'nun trim mantığı).
+    dst_b = target_s - anchor_dst_s
+    src_b_all = dur - anchor_src_s
+    f_b = dst_b / src_b_all
+    end = dur
+    if f_b < lo:
+        end = anchor_src_s + dst_b / lo             # kuyruğu kes
+        f_b = lo
+    if not (lo <= f_a <= hi and lo <= f_b <= hi):
+        return None
+    try:
+        fc = (f"[0:v]trim=0:{anchor_src_s:.3f},setpts={f_a:.4f}*(PTS-STARTPTS)[a];"
+              f"[0:v]trim={anchor_src_s:.3f}:{end:.3f},setpts={f_b:.4f}*(PTS-STARTPTS)[b];"
+              f"[a][b]concat=n=2:v=1[out]")
+        cmd = [ffmpeg_path, "-v", "error", "-y", "-i", str(clip),
+               "-filter_complex", fc, "-map", "[out]", "-an", "-r", "30",
+               "-preset", "veryfast", "-t", f"{target_s:.2f}", str(out_path)]
+        subprocess.run(cmd, capture_output=True, timeout=240)
+        if Path(out_path).exists() and Path(out_path).stat().st_size > 0:
+            return out_path
+    except Exception as e:  # noqa: BLE001 — çıpa KOZMETİK: başarısızsa çıpasız devam
+        log.info(f"  kürate: çıpalı oturtma başarısız ({e}) → tek katsayıya düşülüyor")
+    return None
+
+
 def _storyboard_frames(clip, out_path, ffmpeg_path: str, *, cols: int = 3, rows: int = 2,
                        frame_w: int = 256) -> bool:
     """Klipten cols×rows kareyi ZAMAN-eşit örnekleyip tek ızgara görsele diz (PIL).
@@ -365,7 +452,24 @@ def _storyboard_frames(clip, out_path, ffmpeg_path: str, *, cols: int = 3, rows:
             for idx, im in enumerate(imgs):
                 r, c = divmod(idx, cols)
                 grid.paste(im.resize((w, h)), (c * w, r * h))
-            grid.save(out_path, "JPEG", quality=88)   # 75→88: ince detay/altyazı okunur kalsın
+            # 75→88: ince detay/altyazı okunur kalsın. AMA pano CLI'nin @dosya iliştirme
+            # sınırını (CLI_IMAGE_MAX_BYTES) aşarsa görsel SESSİZCE düşer ve yargıç kör
+            # karar verir (short 1077: 324KB pano hiç ulaşmadı, final QA uydurdu). Bu
+            # yüzden kaliteyi bütçeye SIĞANA kadar kademeli düşür — kör yargıdansa biraz
+            # daha sıkışık kare.
+            # Gerçek footage q70'te rahat sığar; küçültme yalnız patolojik (gürültülü)
+            # kaynakta devreye girer — o hâlde bile kör yargıya düşmeyelim.
+            from short_bot.claude_cli import CLI_IMAGE_MAX_BYTES
+            for quality, shrink in ((88, 1.0), (70, 1.0), (55, 1.0), (45, 0.8), (35, 0.65)):
+                img = (grid if shrink == 1.0 else
+                       grid.resize((max(64, int(grid.width * shrink)),
+                                    max(64, int(grid.height * shrink)))))
+                img.save(out_path, "JPEG", quality=quality)
+                if Path(out_path).stat().st_size <= CLI_IMAGE_MAX_BYTES:
+                    if quality != 88:
+                        log.info(f"  storyboard: kalite {quality} ölçek {shrink} "
+                                 f"(bütçeye sığdırıldı, {Path(out_path).stat().st_size} bayt)")
+                    return True
             return True
         except Exception:  # noqa: BLE001
             return False
@@ -485,6 +589,7 @@ def produce_reel_video(
     on_narration=None,   # callback(narration): açık kapıyı çağırana bildir (ark zinciri)
     curated_clip=None,        # KÜRATE: hazır indirilmiş tek klip (footage aranmaz)
     curated_narration=None,   # KÜRATE: dışarıda yazılmış ReelNarration (write_curated_narration)
+    curated_reveal_frac=None,  # KÜRATE: klipteki dönüm anının oranı (0-1) → reveal çıpası
 ) -> Path:
     reel = getattr(channel, "reel", None)
     if reel is None or not reel.enabled:
@@ -715,15 +820,29 @@ def produce_reel_video(
     peak_seg = narration.peak_segment()
     pause_at = (timeline.seg_spans[peak_seg][0]
                 if words and 0 < peak_seg < len(timeline.seg_spans) else 0.0)
+    pause_s = REVEAL_PAUSE_S
+    # KÜRATE SES-TARAFI HİZALAMA: duraklamayı, klipteki dönümü ödül anına çakıştıran
+    # çıpayı UYGULANABİLİR kılacak kadar uzat. Çıpa yalnız hız sınırı içinde çalışır;
+    # ödül anı klipteki dönüme göre erken kalırsa (short 1145: 0.73sn eksikti) çıpa
+    # düşüyor ve ödül kayıyordu. Eksik kadar sessizlik ödülü geciktirir → çıpa girer.
+    if (curated_clip is not None and curated_reveal_frac is not None
+            and words and 0 < peak_seg < len(timeline.seg_spans)):
+        _ps0, _ps1 = timeline.seg_spans[peak_seg]
+        _cl = _clip_duration_s(Path(curated_clip), ffmpeg_path)
+        if _cl > 0:
+            pause_s = curated_reveal_pause_s(
+                clip_reveal_s=float(curated_reveal_frac) * _cl,
+                reveal_dst_s=(_ps0 + _ps1) / 2.0,
+                base_s=REVEAL_PAUSE_S, max_s=CURATED_REVEAL_PAUSE_MAX_S)
     if pause_at >= MIN_PAUSE_AT_S:
         paused = work_dir / "narration_paced.mp3"
         try:
             mp3 = d.insert_pause(mp3, paused, at_s=pause_at,
-                                 dur_s=REVEAL_PAUSE_S, ffmpeg_path=ffmpeg_path)
-            words = shift_words(words, pause_at, REVEAL_PAUSE_S)
-            duration_s += REVEAL_PAUSE_S
+                                 dur_s=pause_s, ffmpeg_path=ffmpeg_path)
+            words = shift_words(words, pause_at, pause_s)
+            duration_s += pause_s
             timeline = build_reel_timeline(narration, words, duration_s=duration_s)
-            log.info(f"  reel[ses] tepe öncesi {REVEAL_PAUSE_S:.2f}sn duraklama "
+            log.info(f"  reel[ses] tepe öncesi {pause_s:.2f}sn duraklama "
                      f"@ {pause_at:.1f}s (beat {narration.peak_beat})")
         except Exception as e:   # duraklama KOZMETİK — üretimi düşürmemeli
             log.warning(f"  reel: tepe duraklaması eklenemedi ({e}) → duraklamasız devam")
@@ -828,8 +947,37 @@ def produce_reel_video(
         if _pad is not None:
             log.info("  kürate: yatay klip → 9:16 blur-pad (tüm aksiyon görünür, crop yok)")
             _cc = Path(_pad)
-        _slow = _slow_clip_to(_cc, duration_s + 0.4, ffmpeg_path,
-                              work_dir / "curated_slow.mp4")
+        # REVEAL ÇIPASI: klipteki dönüm anını (curated_reveal_frac) anlatımın ÖDÜL
+        # cümlesine çakıştır. Hedef, o cümlenin BAŞI DEĞİL ORTASIDIR: reveal cümle
+        # boyunca gerçekleşir ("…omuz omuza sarılıp tek vücut gibi AYAĞA KALKTI" —
+        # ölçüm short 1145: cümle 14.0s'de başlıyor, ödül kelimesi 20.7s'de). Cümle
+        # başını hedeflemek görüntüyü sesin ÖNÜNE geçirir; ortası her iki yöne de
+        # dengeli düşer. Duraklama hesabı (yukarıda) AYNI hedefi kullanır — ikisi
+        # ayrışırsa ses tarafı çıpayı boşuna kovalar.
+        # Çıpa uygulanamazsa (hız sınırı/uçlar) tek-katsayılı yola düşülür: klip
+        # kırpılmadan baştan sona oynar (bkz. fit_clip_with_anchor, short 1140).
+        _anchored = None
+        if curated_reveal_frac is not None:
+            _pk = narration.peak_segment()
+            if 0 < _pk < len(timeline.seg_spans):
+                _src = float(curated_reveal_frac) * _clip_duration_s(_cc, ffmpeg_path)
+                _ds0, _ds1 = timeline.seg_spans[_pk]
+                _dst = (float(_ds0) + float(_ds1)) / 2.0
+                _anchored = fit_clip_with_anchor(
+                    _cc, target_s=duration_s + 0.4, anchor_src_s=_src, anchor_dst_s=_dst,
+                    ffmpeg_path=ffmpeg_path, out_path=work_dir / "curated_anchor.mp4")
+                if _anchored is not None:
+                    log.info(f"  kürate: reveal çıpası ✓ klipteki dönüm {_src:.1f}s → "
+                             f"ödül cümlesi {_dst:.1f}s (ses ve görüntü aynı anda)")
+                else:
+                    log.info(f"  kürate: reveal çıpası uygulanamadı (dönüm {_src:.1f}s → "
+                             f"{_dst:.1f}s hız sınırı dışında) → tek katsayı")
+        if _anchored is not None:
+            _cc = Path(_anchored)      # çıpalı klip zaten hedef süreye oturdu
+            _slow = None
+        else:
+            _slow = _slow_clip_to(_cc, duration_s + 0.4, ffmpeg_path,
+                                  work_dir / "curated_slow.mp4")
         if _slow is not None:
             _new_d = _clip_duration_s(Path(_slow), ffmpeg_path)
             log.info(f"  kürate: klip {_orig_d:.1f}s → {_new_d:.1f}s "

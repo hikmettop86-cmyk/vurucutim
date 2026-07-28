@@ -9,7 +9,9 @@ import logging
 import re
 
 from short_bot.claude_cli import run_json
+from short_bot.locale import CJK_LANGUAGES, narration_style_rule
 from short_bot.reel_models import ReelNarration
+from short_bot.text_normalize import current_language
 from short_bot.lang_pack import load_pack
 from short_bot.reel_factcheck import (check_narration, fact_feedback,
                                       rewrite_cover_title)
@@ -35,22 +37,100 @@ _PROMPT_LANGUAGE_NAMES = {
     "de": "German",
     "es": "Spanish",
     "fr": "French",
+    "ja": "Japanese",
 }
 
 
-def reel_word_budget(target_duration_s: tuple[int, int]) -> tuple[int, int]:
+# CJK'de "kelime" ÖLÇÜLEBİLİR BİR BİRİM DEĞİL (boşluk yok) ve konuşma hızı da farklı.
+# ÖLÇÜLDÜ (2026-07-24, Japonca deneme videosu, ai33 'Yoshiki'): 158 karakter → 28.775sn
+# ses = 5.49 karakter/sn. Türkçe formülünü (1.80 kelime/sn) Japoncaya uygulamak modele
+# yaklaşık İKİ KATI metin yazdırır: video hedefi aşar, tepe kayar, klip loop'a girer.
+CHARS_PER_SECOND: dict[str, float] = {"ja": 5.49, "zh": 5.49}
+
+
+# CJK kapanışının EKRAN bütçesi. Kapanış `.big` elementinde 104px ile, 960px genişlikte
+# bir kutuda çizilir; CJK glifleri tam genişlik (1em) olduğu için satıra ~9 karakter
+# sığar. 30 karakter ≈ 3 satır — gönderge cümlesi + CTA çiftini taşır ama duvar olmaz.
+#
+# NEDEN KODDA: prompt kuralı (≤25) YETMEDİ, model 42 karakter yazdı ve videonun son
+# %35'i statik metin duvarı oldu (Short 1090, ekranda ölçüldü). Kullanıcı kararı
+# (2026-07-24): metni kodla kırp — kapanış konuşulan metin olduğu için ses de kısalır.
+CJK_CLOSE_MAX = 30
+
+# Cümle sonu işaretleri: kesme YALNIZ buralardan olur.
+_CJK_SENT_END = "。！？"
+
+
+def trim_cjk_close(close: str, language: str) -> str:
+    """CJK kapanışını ekran bütçesine sığdır — BAŞTAN tam cümle atarak.
+
+    Son cümle (CTA oradadır) her zaman korunur. Tek cümle bile bütçeyi aşıyorsa
+    olduğu gibi bırakılır: yarım cümle basmak uzun cümleden kötüdür.
+    CJK dışı dillerde metne dokunulmaz."""
+    if language not in CJK_LANGUAGES or len(close) <= CJK_CLOSE_MAX:
+        return close
+    # Cümlelere böl; işaret cümleyle kalsın.
+    parts: list[str] = []
+    cur = ""
+    for ch in close:
+        cur += ch
+        if ch in _CJK_SENT_END:
+            parts.append(cur)
+            cur = ""
+    if cur:
+        parts.append(cur)
+    if len(parts) <= 1:
+        return close
+    # SONDAN geriye doğru sığdığı kadarını al; en az bir cümle her hâlükârda kalır.
+    kept: list[str] = [parts[-1]]
+    for p in reversed(parts[:-1]):
+        if len(p) + sum(len(k) for k in kept) > CJK_CLOSE_MAX:
+            break
+        kept.insert(0, p)
+    return "".join(kept)
+
+
+def budget_unit(language: str) -> str:
+    """Bütçenin birimi — prompt'a bu yazılır ("50 words" / "165 characters")."""
+    return "characters" if language in CJK_LANGUAGES else "words"
+
+
+def reel_word_budget(target_duration_s: tuple[int, int],
+                     language: str | None = None) -> tuple[int, int]:
+    """Hedef süre → senaryo uzunluk bütçesi, DİLİN BİRİMİNDE.
+
+    ``language`` verilmezse aktif dil bağlamından okunur (pipeline kanalın dilini
+    kurar) — zinciri elden ele taşımak gerekmesin, biri unutursa sessizce bozulmasın."""
+    lang = language if language is not None else current_language()
     lo, hi = target_duration_s
+    rate = CHARS_PER_SECOND.get(lang) if lang in CJK_LANGUAGES else None
+    if rate is not None:
+        return int(lo * rate), int(hi * rate)
     return int(lo * WORDS_PER_SECOND), int(hi * WORDS_PER_SECOND)
 
 
 def _language_name(code: str) -> str:
-    return _PROMPT_LANGUAGE_NAMES.get(code, "Turkish")
+    """Prompt'a yazılacak İngilizce dil adı. Bilinmeyen dilde HATA — Türkçeye DÜŞMEZ.
+
+    Eski hâli ``.get(code, "Turkish")`` idi ve bu sessiz bir tuzaktı: tabloya eklenmemiş
+    bir dil için kanalın sesi/fontu/altyazısı hedef dilde hazır olsa bile ANLATICI TÜRKÇE
+    YAZARDI. Hata yok, log yok — sadece çöp çıktı. (Japonca kanal kurulurken yakalandı.)"""
+    try:
+        return _PROMPT_LANGUAGE_NAMES[code]
+    except KeyError:
+        raise ValueError(
+            f"senaryo prompt'u için bilinmeyen dil: {code!r}. "
+            f"reel_narration._PROMPT_LANGUAGE_NAMES'e ekleyin — Türkçeye düşmek, "
+            f"kanalı sessizce yanlış dilde çalıştırmak demektir.") from None
 
 
 def build_reel_prompt(topic: str, channel, hook_patterns=None, seed: int = 0) -> str:
-    lo_w, hi_w = reel_word_budget(channel.reel.target_duration_s)
+    lo_w, hi_w = reel_word_budget(channel.reel.target_duration_s, channel.language)
     lo_s, hi_s = channel.reel.target_duration_s
     lang = _language_name(channel.language)
+    # Bütçe birimi dile bağlı (CJK'de karakter) — sayıyı yazıp birimi 'words' demek,
+    # modele Japoncada 3 kat metin yazdırırdı. Bkz. budget_unit / CHARS_PER_SECOND.
+    unit = budget_unit(channel.language)
     # Yönergeler ve yasaklı kalıplar DİL PAKETİNDEN gelir: Almanca kanalın anlatım
     # LLM'ine Türkçe yönerge ve Türkçe örnek cümle vermek dil sızıntısı davetiyesidir.
     pack = load_pack(channel.language)
@@ -219,7 +299,7 @@ OUTPUT a JSON object:
 - "mood": one of "upbeat" | "neutral" | "calm"
 
 HARD RULES:
-- TOTAL spoken words across hook + beats + close: between {lo_w} and {hi_w}.
+- TOTAL spoken {unit} across hook + beats + close: between {lo_w} and {hi_w}.
 - Every visual_query / hook_visual / close_visual must be a real, findable
   stock-footage subject: a PHYSICAL, VISIBLE thing (person, animal, object, place,
   machine, natural phenomenon). NEVER an abstract concept ("auto-cannibalism",
@@ -598,18 +678,82 @@ class _CuratedDraft(_BaseModel):
     cover_title: str = ""
 
 
+# ── YORUM-YEMİ (CTA) STİLLERİ — ton başına havuz, seed'e göre rotasyon ───────
+# SORUN (kullanıcı: 'senaryo sonu hep tek düze, dokunduysa kalp bırak gibi şablon
+# mantığı olmamalı'). ÖLÇÜM: DUYGU tonlu 7 kürate short'un 7'si de 'yorumlara bir kalp
+# bırak' ile bitti. KÖK: cta_hint TEK bir LİTERAL örnek cümle veriyordu — model örneği
+# talimat değil ŞABLON sanıp kopyalıyordu.
+# ÇÖZÜM: persona.signature_style'ın kanıtlanmış deseni — ton başına stil HAVUZU + seed
+# rotasyonu. Stiller LİTERAL CÜMLE DEĞİL, TALİMAT (kopyalanacak metin yok). Havuzda
+# 'yem YOK, sahneyi kapat' seçeneği de var: her videonun CTA ile bitmesi de bir şablondur.
+CURATED_CTA_STYLES: dict[str, list[str]] = {
+    "duygu": [
+        "izleyiciye o ana dair GERÇEK bir soru sor (evet/hayır değil, düşündüren): "
+        "'sence o an aklından ne geçti?' gibi — kendi cümlenle, klibe özgü",
+        "izleyiciyi KENDİ hayatına bağla: bu sahnenin hatırlattığı benzer anı sorsun "
+        "('senin için böyle yapan biri var mı?') — klibin somut detayıyla bağla",
+        "YEM YOK: son vuruşu söyle ve SUS. Sahneyi kapatan sakin, dokunaklı tek cümle — "
+        "izleyiciden hiçbir şey İSTEME (her videonun istekle bitmesi de şablondur)",
+        "izleyiciyi bu anı BİRİYLE paylaşmaya çağır (etiketle/gönder) — ama kalıp cümle "
+        "değil, bu klibe özgü bir gerekçeyle",
+        "kısa bir onaylatma iste ama SAYI/TARAF üzerinden: 'kaç kişi bunu görünce "
+        "aynı şeyi hissetti?' tadında, kendi sözcüklerinle",
+    ],
+    "karma": [
+        "izleyiciye hak-ediş sorusu sor ('sence müstahak mıydı?') — kendi cümlenle",
+        "izleyiciyi taraf tutmaya çağır: haklı kim, yorumlara yazsın",
+        "YEM YOK: 'oh olsun'u söyleyip kapat — istek yok, tok bir kapanış",
+        "benzer bir sahne gördü mü diye sor (kendi hikâyesini anlatsın)",
+    ],
+    "mizah": [
+        "izleyiciye doğal bir soru/kışkırtma at ('sen olsan ne yapardın?') — persona sesiyle, "
+        "kendi cümlenle",
+        "izleyiciyi tanıdığı bir tipe bağla ('senin çevrende de var mı böyle biri?')",
+        "YEM YOK: punchline'ı patlat ve bitir — istek yok (her video istekle bitmesin)",
+        "izleyiciyi iddiaya çağır: bunu kim yapardı, etiketlesin",
+        "kısa bir 'haklı mıyım?' onaylatması — kalıp değil, klibe özgü espriyle",
+    ],
+}
+
+
+def curated_cta_style(seed: int, tone: str = "mizah") -> str:
+    """Bu videonun yorum-yemi stili (talimat). Ton havuzundan seed rotasyonu —
+    aynı klip → aynı stil (tekrarlanabilir), ardışık klipler → farklı stil."""
+    pool = CURATED_CTA_STYLES.get(tone) or CURATED_CTA_STYLES["mizah"]
+    return pool[_cta_rot(seed, len(pool))]
+
+
+def _cta_rot(seed: int, n: int) -> int:
+    """Tuzlanmış hash rotasyonu (persona._rot deseni): CTA ekseni imza/açılış
+    eksenleriyle KİLİTLENMESİN — yoksa 'imza X olan her video aynı CTA'yı alır'."""
+    import hashlib
+    h = hashlib.sha1(f"{seed}:cta".encode("utf-8")).hexdigest()
+    return int(h[:8], 16) % max(1, n)
+
+
 def build_curated_prompt(title: str, clip_description: str, *, channel,
                          target_duration_s=None, scene_split: float | None = None,
-                         comments=None, tone: str = "mizah") -> str:
+                         comments=None, tone: str = "mizah",
+                         reveal_frac: float | None = None, seed: int = 0) -> str:
     """Tek GERÇEK klip için persona senaryosu prompt'u (uydurma yasağı).
 
+    ``reveal_frac``: klipteki ödül/dönüm anının oranı (0-1) → ödül cümlesi metnin AYNI
+    oranında başlasın (bkz. REVEAL-SENKRON; short 1140).
     ``scene_split``: klip 2 sahneliyse İLK sahnenin bittiği oran (0-1, vision tespiti).
     ``comments``: üst Reddit yorumları — vision'a ALTERNATİF gerçek sinyal.
     ``tone``: 'mizah' (mahalle mizahı) | 'duygu' (duygusal mikro-dram — kahramanlık/kurtarma)."""
     td = tuple(target_duration_s) if target_duration_s else channel.reel.target_duration_s
     lo_s, hi_s = td
-    lo_w, hi_w = reel_word_budget(td)
+    lo_w, hi_w = reel_word_budget(td, channel.language)
     lang = _language_name(channel.language)
+    # Bütçenin BİRİMİ dile bağlı: Japoncada "kelime" ölçülemez (boşluk yok) ve konuşma
+    # hızı farklı — modele kelime sınırı vermek videoyu ~2 kat uzatıyordu (bkz.
+    # CHARS_PER_SECOND, ölçüm 2026-07-24).
+    unit = budget_unit(channel.language)
+    rate_hint = (f"TTS reads ~{CHARS_PER_SECOND[channel.language]:.1f} {unit}/s"
+                 if unit == "characters" else "TTS reads ~1.95 words/s")
+    # Dile özgü anlatım kuralı (Japoncada kayıt tutarlılığı). Türkçede boş → prompt aynı.
+    lang_style = narration_style_rule(channel.language)
     _duygu = (tone == "duygu")
     # TON KURALI: mizah → güldür; duygu → gerilim + sıcak çözüm; karma → tatmin edici 'oh olsun'.
     if _duygu:
@@ -619,19 +763,18 @@ def build_curated_prompt(title: str, clip_description: str, *, channel,
             "… üzereydi, ama…'). Hayvana NİYET/kahramanlık/sadakat/şefkat ata (antropomorfik: "
             "'sanki koruyordu', 'pes etmedi', 'onu asla bırakmadı'). Mahalle-argosu, şaka, "
             "ironi YASAK. Ton: sıcak + gerilimli; final DUYGUSAL çözüm (kurtuluş/kavuşma/sadakat).")
-        cta_hint = "izleyiciye içten çağrı ('Bu dokunduysa yorumlara bir kalp bırak.')"
     elif tone == "karma":
         tone_rule = (
             "- ⚖️ KARMA / 'OH OLSUN' — mahalle ağzıyla TATMİN EDİCİ adalet yorumu (aşağıdaki EN "
             "ÖNCELİKLİ KARMA KURALI'na uy). Kurulum: biri kaba/kuralsız/kibirli; final: hak ettiği "
             "hafif karşılık → 'buldu belasını'. GÜVENLİK: ciddi zarara/kana SEVİNME, kurbanı "
             "aşağılama; hedef KÖTÜ DAVRANIŞ.")
-        cta_hint = "izleyiciye tatmin-onaylatan bir kışkırtma ('Sence de müstahak mı? Yaz bakalım.')"
     else:
         tone_rule = (
             "- GÜLDÜR — ama GERÇEK, ANLAMLI mizahla (aşağıdaki EN ÖNCELİKLİ MİZAH KURALI'na uy). "
             "Ekrandaki GERÇEK özneyi/aksiyonu KORU; yapay/resmi/belgesel dil YASAK.")
-        cta_hint = "izleyiciye doğal bir soru/kışkırtma ('Sen olsan ne yapardın?' gibi, persona sesiyle)"
+    # YORUM-YEMİ: literal örnek YOK (kopyalanıyordu) — seed'e göre dönen TALİMAT.
+    cta_hint = curated_cta_style(seed, tone)
     # KALABALIK BAĞLAMI: başlık + üst yorumlar olayın NE olduğunu anlatır (vision tek
     # storyboard'dan aleti/olayı kaçırabilir — short 923: pipeti görmeyip 'parmak' dedi).
     crowd = ""
@@ -656,6 +799,27 @@ def build_curated_prompt(title: str, clip_description: str, *, channel,
             f"'ardından', yeni mekân adı) ANCAK sözlerinin son ~%{s2}'sinde GEÇ. İkinci "
             f"sahneyi ERKEN anlatırsan izleyici onu HENÜZ görmüyor — ses görüntünün önüne "
             f"geçer, senkron bozulur. İlk sahneyi doyur, geçişi tam yerinde yap.")
+    # REVEAL-SENKRON (short 1140 — kullanıcı: 'görüntü ses ve senaryoda uyumsuzluk'):
+    # klipteki dönüm/ödül anının ORANINI yazara SÖYLE ki ödül cümlesini metnin aynı oranına
+    # koysun. Eskiden reveal_frac yalnız RENDER'a gidiyordu: yazar ödülü metnin %37'sine
+    # koyunca (klipte dönüm %61'de) render çıpayı hız sınırına sığdırmak için klibin BAŞINI
+    # kırpıyordu — anlatımın 1. cümlesinin anlattığı açılış anı yok oluyordu. Kaynağında
+    # çözülür: ödül doğru oranda yazılırsa çıpa kırpmadan oturur.
+    # scene_rule ZATEN aynı hizayı kuruyor (2 sahneli klipte reveal_frac = scene_split) →
+    # kuralı iki kez yazma, promptu şişirme.
+    reveal_rule = ""
+    if not scene_rule and reveal_frac is not None and 0.0 < reveal_frac < 1.0:
+        r1 = round(reveal_frac * 100)
+        setup_words = max(2, round(reveal_frac * hi_w))
+        reveal_rule = (
+            f"\n- ⏱ REVEAL-SENKRON (ÇOK ÖNEMLİ — ödül anı ses ve görüntüde AYNI saniyede "
+            f"olmalı): Bu klipte ödül/dönüm anı (aranan şeyin bulunduğu, kavuşmanın/yardımın/"
+            f"sürprizin BAŞLADIĞI an) klibin ~%{r1}'inde. Anlatımını buna GÖRE dengele: ödülü/"
+            f"şoku/çözümü açan cümle metnin ~%{r1}'inde BAŞLASIN (öncesinde ~{setup_words} "
+            f"kelimelik kurulum: kim, nerede, ne bekliyoruz). Ödülü DAHA ERKEN söylersen "
+            f"izleyici onu henüz GÖRMEZ (ses görüntünün önüne geçer); DAHA GEÇ söylersen "
+            f"kucaklaşmayı gördükten sonra duyar (reveal ıskalanır). Kurulumu bu orana kadar "
+            f"doyur — ekrandaki bekleyişi anlat, ödülü sakla.")
     # ZAMAN-SIRALI BEAT SHEET (kürate: clip_description = 'BAŞ/ORTA/SON (Xsn): …'): anlatımı
     # AYNI zaman-sırasına oturt ki cümleler ekrandaki ana denk gelsin (short 990). scene_rule
     # yalnız 2-sahnede tetikleniyordu; beat sheet TEK-sahne çok-olay için de sırayı zorlar.
@@ -684,13 +848,21 @@ RULES:
   gibi yanlış ikame UYDURMA. Örn. 'saves a turtle using a straw' = balıkçı pipeti KURTARMAK
   için kullanır (pipeti burundan çıkarmak DEĞİL). Vision görsel detay (renk, poz, ortam)
   için; olayın ÖZÜ + AMACI başlık+yorumdan gelir.
+- ⛔ ABARTI SONUCU TERS ÇEVİREMEZ (short 1146, YAPMA): Duygu, gerilim, benzetme SERBEST —
+  ama olayın SONUCU ekranda ne ise ODUR. 'Neredeyse düştü' ≠ 'düştü'; 'zorlandı' ≠
+  'başaramadı'; 'sendeledi' ≠ 'yığıldı'; 'kaçmaya çalıştı' ≠ 'kaçtı'. GERÇEK örnek-hata:
+  vision 'sendeleyip savruldular ama ÜÇÜ DE AYAKTA KALDI' diyordu; anlatım 'bacakları
+  boşaldı, sarsılarak YIĞILDI' yazdı — izleyici o saniyede ekranda ADAMLARI AYAKTA ve
+  GÜLERKEN görüyordu. Gerilimi KURULUMDA kur (ne olacak belirsizliği), sonucu DEĞİŞTİREREK
+  değil. Denemenin başarılı mı başarısız mı bittiği, kimin ayakta kaldığı, bir şeyin
+  düşüp düşmediği: vision ne diyorsa O.
 - ⛔ UYDURMA VARLIK KESİN YASAK (EN SIK HATA): Ekranda GÖRÜNMEYEN ikinci bir CANLI / NESNE / KİŞİ
   ya da onunla ilgili bir alt-olay EKLEME. Sahneyi 'zenginleştirmek' ya da kelime doldurmak için
   olmayan bir şey İCAT ETME. GERÇEK örnek-hata (short 999, YAPMA): kaplumbağa taşıyan adama dair
   anlatım araya 'yolda kaybolmuş bir YENGEÇ bulunca onu da taşıdı' diye UYDURULMUŞ bir yengeç
   soktu — karelerde yengeç YOKTU. Tek özneye/olaya SADIK KAL. Yalnız başlık+yorum+vision'ın
   BİLDİRDİĞİ varlıklar vardır; başkası YOK. (Duygu/abartı/lakap serbest — o YORUM; yeni fiziksel
-  varlık değil.){scene_rule}
+  varlık değil.){scene_rule}{reveal_rule}
 - ⛔ UYDURMA GEÇMİŞ/SEBEP DE YASAK (short 1000, YAPMA): Öznenin ekranda GÖRÜNMEYEN geçmişini,
   günlük rutinini ya da bir olayın SEBEBİNİ UYDURMA. Örnek-hata: kalabalıkta arabaya yürüyüp bir
   kadına sarılan adam için 'her maçtan sonra en son çıkardı', 'gece yarısı hep yalnız yürürdü',
@@ -726,19 +898,28 @@ RULES:
   * ÖDÜL — asıl 'aa!' anı ya da en komik vuruş — SON beat + close'ta gelir; BAŞTAN ele verme.
     Payoff sona saklanır ki izleyici sonuna kadar kalsın (loop mantığı).
 {tone_rule}
-- HARD WORD BUDGET: the whole spoken script (hook + 3 beats + close) must be {lo_w}-{hi_w}
-  words TOTAL and MUST NOT exceed {hi_w}. TTS reads ~1.95 words/s, so this is what keeps
-  the clip from LOOPING (video lands in {lo_s}-{hi_s}s). Count your words.
+- HARD LENGTH BUDGET: the whole spoken script (hook + 3 beats + close) must be {lo_w}-{hi_w}
+  {unit} TOTAL and MUST NOT exceed {hi_w}. {rate_hint}, so this is what keeps
+  the clip from LOOPING (video lands in {lo_s}-{hi_s}s). Count your {unit}.
 - Write EXACTLY 3 beats, each a FULL natural sentence (not clipped telegram-style). Aim
-  for the MIDDLE of the {lo_w}-{hi_w} word range — rich persona voice, not terse. In {lang}.
+  for the MIDDLE of the {lo_w}-{hi_w} {unit} range — rich persona voice, not terse. In {lang}.
+{lang_style}
 - "title" (YouTube başlığı): MERAK BOŞLUĞU başlığı — sonucu SPOILER YAPMA, merak uyandır +
   SONUNA 1 emoji (😳/😱/🤯/🥹/😲). Kalıp: "[Özne] [şaşırtan eylem]… 😳". Eski düz SEO-spoiler
   başlık ('Kaplumbağa Boğuluyor Balıkçı Kurtarıyor') YASAK — cevabı verme, sordur.
 - "title_en": AYNI başlığın İngilizcesi (aynı merak, aynı emoji) — küresel Shorts akışı için
   (YouTube çok-dilli başlık; 240 ülkeye açar). Örn: "Watch what this fisherman does… 😳".
 - "cover_title" (3-6 kelime ekran manşeti).
-- KAPANIŞ ('close'): SON vuruş (payoff — komik ya da duygusal, tona göre) + ARDINDAN kısa
-  bir YORUM-YEMİ: {cta_hint}. SAKIN 'Ozan der ki', beyit/şair kalıbı YAZMA — ozan YASAK.
+- KAPANIŞ ('close'): SON vuruş (payoff — komik ya da duygusal, tona göre) + BU VİDEONUN
+  YORUM-YEMİ STİLİ: {cta_hint}.
+  ⛔ KAPANIŞ ŞABLONU YASAK — hazır kapanış KALIPLARINI TEKRARLAMA. Bu kanalın ardışık
+  videoları hep aynı cümleyle bitiyordu; şu ve benzeri ezberler YASAK: 'dokunduysa
+  yorumlara bir kalp bırak', 'içinizi ısıttıysa', 'beğendiyseniz beğen', 'yorumlara
+  yazın', 'takipte kal'. Yemi BU klibin somut detayından türet ve KENDİ cümleni kur;
+  yukarıdaki stil bir TALİMATTIR, kopyalanacak hazır cümle DEĞİL.
+  UZUNLUK: 'close' EN FAZLA 120 KARAKTER (~12 kelime) — payoff + yem BUNA sığacak.
+  Sığmıyorsa yemi at, payoff'u koru (yem opsiyonel, payoff değil).
+  SAKIN 'Ozan der ki', beyit/şair kalıbı YAZMA — ozan YASAK.
 - mood: one of upbeat / neutral / calm.
 Output JSON ONLY: {{"hook": "...", "beats": ["...", "...", "..."], "close": "...",
   "mood": "upbeat", "title": "...", "title_en": "...", "cover_title": "..."}}
@@ -811,10 +992,13 @@ def write_curated_narration(title: str, clip_description: str, *, channel,
                             backend: str = "claude_cli", api_key: str | None = None,
                             seed: int = 0, target_duration_s=None,
                             scene_split: float | None = None,
-                            comments=None, feedback: str = "") -> ReelNarration:
+                            comments=None, feedback: str = "",
+                            reveal_frac: float | None = None) -> ReelNarration:
     """GERÇEK klibin başlığı + vision aksiyonundan persona senaryosu. visual_query'ler
     tek hazır klibe bağlı olduğu için ``subject``e sabitlenir (footage aranmaz).
 
+    ``reveal_frac``: klipteki ödül/dönüm anının oranı → ödül cümlesi metnin aynı oranına
+    yazılır (render'daki reveal çıpası klip kırpmadan oturur; bkz. short 1140).
     ``scene_split``: klip 2 sahneliyse geçiş oranı → anlatım temposu sahneye uydurulur.
     ``comments``: üst Reddit yorumları — olayı anlamak için vision'a ALTERNATİF gerçek
     sinyal (vision aleti/olayı kaçırırsa başlık+yorum yakalar; bkz. build_curated_prompt)."""
@@ -824,7 +1008,8 @@ def write_curated_narration(title: str, clip_description: str, *, channel,
     tone = getattr(reel, "curated_tone", "mizah")
     prompt = build_curated_prompt(title, clip_description, channel=channel,
                                   target_duration_s=target_duration_s,
-                                  scene_split=scene_split, comments=comments, tone=tone)
+                                  scene_split=scene_split, comments=comments, tone=tone,
+                                  reveal_frac=reveal_frac, seed=seed)
     if (feedback or "").strip():
         # SADAKAT ya da NETLİK kapısı yeniden-yazımı: önceki deneme reddedildi → sorunu düzelt.
         # Framing İKİSİNİ de karşılar: uydurma olay (sadakat) + kopuk/anlamsız anlatım (netlik).
@@ -871,15 +1056,27 @@ def write_curated_narration(title: str, clip_description: str, *, channel,
     # ozan yoksa hook/beat DEĞİŞMEZ (close için tam _strip_bard: tam cümle olsun).
     beats = [ReelBeat(text=_strip_bard_inline(t), visual_query=subj, keyword="")
              for t in draft.beats]
+    # CJK KAPANIŞ KIRPMASI. Prompt kuralı yetmiyor (model 42 karakter yazdı) ve fazlalık
+    # ekranda videonun son üçte birini statik metin duvarına çeviriyor. Kapanış KONUŞULAN
+    # metin olduğu için ses de kısalır — kullanıcı bunu bilerek seçti (2026-07-24).
+    # SESSİZ DEĞİL: kırpıldığında loglanır.
+    _close = _strip_bard(draft.close)
+    _close_fit = trim_cjk_close(_close, channel.language)
+    if _close_fit != _close:
+        log.info(f"  kürate[kapanış]: {len(_close)} karakter > {CJK_CLOSE_MAX} → baştan "
+                 f"tam cümle atıldı ({len(_close_fit)} karakter): {_close_fit}")
     narration = ReelNarration(
-        hook=_strip_bard_inline(draft.hook), beats=beats, close=_strip_bard(draft.close),
+        hook=_strip_bard_inline(draft.hook), beats=beats, close=_close_fit,
         mood=draft.mood, title=draft.title, title_en=getattr(draft, "title_en", ""),
         cover_title=draft.cover_title, hook_visual=subj, close_visual=subj)
     # BÜTÇE: taşarsa deterministik sığdır (SONDAN beat at, hook/tepe/close korunur).
     td2 = tuple(target_duration_s) if target_duration_s else channel.reel.target_duration_s
     lo_w, hi_w = reel_word_budget(td2)
     if narration.word_count() > hi_w:
-        log.info(f"  kürate[bütçe]: {narration.word_count()} kelime > {hi_w} → "
+        # Birim dile bağlı (CJK'de karakter) — logda 'kelime' yazmak sonraki teşhisi
+        # yanıltır ("215 kelime" Japoncada anlamsız bir sayıdır).
+        _u = "karakter" if budget_unit(channel.language) == "characters" else "kelime"
+        log.info(f"  kürate[bütçe]: {narration.word_count()} {_u} > {hi_w} → "
                  f"deterministik kısaltma")
         narration = fit_word_budget(narration, lo_w=lo_w, hi_w=hi_w)
     return narration
@@ -1060,6 +1257,12 @@ def _strip_bard(close: str) -> str:
     s = _BARD_TAIL_RE.sub("", _BARD_RE.sub("", close)).strip().rstrip(",;:—–- ")
     if not s:
         return close
-    if s[-1] not in ".!?":
-        s += "."
-    return s[0].upper() + s[1:]
+    # CJK'nin KENDİ cümle sonu işaretleri var (。！？). Onları tanımayan eski hâli
+    # ekrana "…聞かせてください。." bastı (Short 1089) — Japon noktasından sonra bir de
+    # ASCII nokta. Her Japonca videoda çıkıyordu.
+    cjk = current_language() in CJK_LANGUAGES
+    enders = "。！？!?" if cjk else ".!?"
+    if s[-1] not in enders:
+        s += "。" if cjk else "."
+    # .upper() kanji/kana'da zaten no-op; Japoncada büyük harf kavramı yok.
+    return s if cjk else s[0].upper() + s[1:]

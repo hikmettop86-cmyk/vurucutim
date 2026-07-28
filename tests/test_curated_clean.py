@@ -84,6 +84,135 @@ def test_crop_source_banner_edges_only(tmp_path):
     assert _h(top) < _h(src)
 
 
+def test_quality_and_faith_judges_use_dense_storyboard(monkeypatch, tmp_path):
+    """D) Kritik yargılar (kalite + sadakat) 6 değil ≥9 kare görmeli — 6-kare örneklem
+    klibin asıl öznesini kaçırabiliyor (çöpçü klibinde köpek hiç kareye düşmedi)."""
+    import short_bot.reel as reel_mod
+    from short_bot.curated_clean import judge_clip_quality, verify_curated_narration
+
+    calls = []
+
+    def _rec(clip, out, ffmpeg, *, cols=3, rows=2, frame_w=256):
+        calls.append(cols * rows)
+        return False   # storyboard kurulamadı → yargı None döner, vision hiç çağrılmaz
+
+    monkeypatch.setattr(reel_mod, "_storyboard_frames", _rec)
+
+    class _V:
+        claude_path = ""; model = ""; backend = "google_studio"; api_key = ""
+
+    assert judge_clip_quality(tmp_path / "c.mp4", vision_call=_V()) is None
+    assert verify_curated_narration(tmp_path / "c.mp4", "anlatım", vision_call=_V()) is None
+    assert len(calls) == 2 and all(n >= 9 for n in calls)
+
+
+def test_quality_prompt_asks_muted_watchability():
+    """C) Kalite prompt'u 'ses olmadan da işliyor mu' (works_muted) sorusunu SORMALI —
+    orijinal ses atılıyor; ses-yüklü klip (kahkaha/diyalog) sessiz izlenince sıradanlaşır."""
+    from short_bot.curated_clean import _quality_prompt
+    for tone in ("mizah", "duygu", "karma"):
+        assert "works_muted" in _quality_prompt(tone)
+
+
+def test_faith_prompt_rejects_unseen_action_inferred_backwards():
+    """C) SADAKAT: GÖRÜNMEYEN EYLEM de uydurmadır.
+
+    GERÇEK HATA (short 1077): anne karelerde BAŞTAN SONA cübbeli yatıyor, oğlun kepi
+    hiç başından çıkmıyor; anlatım ise 'oğlu kepini çıkarıp annesinin üstüne örttü,
+    mezuniyetini ona giydirdi' dedi. Yargıç 'sadık' geçti — çünkü kural yalnız
+    uydurma VARLIK arıyordu, sonuç durumundan geriye dönük uydurulan DEĞİŞİM'i değil.
+    """
+    from short_bot.curated_clean import _FAITH_PROMPT
+
+    def _norm(s: str) -> str:
+        # Türkçe tuzağı: "GERİYE".lower() → "geri̇ye" (İ, birleşik noktalı i'ye düşer)
+        return s.replace("İ", "i").replace("I", "ı").lower()
+
+    low = _norm(_FAITH_PROMPT)
+    assert "değişim" in low, "görünmeyen değişim/eylem kuralı yok"
+    assert "geriye dönük" in low, "sonuç durumundan geriye çıkarım yasağı yok"
+
+
+def test_faith_prompt_rejects_invented_roles_and_relations():
+    """D) SADAKAT: var olan kişilere UYDURMA ROL/İLİŞKİ atamak da uydurmadır.
+
+    GERÇEK HATA (short 1140, kullanıcı: 'senaryoda çelişkiler'): klipte tekerlekli
+    sandalyedeki DAMAT ve onunla dans eden GELİN var (Reddit başlığı: 'Have you some
+    friends like he does' — arkadaşları onu ayağa kaldırıyor). Anlatım ise 'Ayakta
+    duramayan bir BABA, o gece KIZININ kollarında dans etti' dedi ve aynı metinde
+    'gelin ile damat' diye ÜÇÜNCÜ bir çift icat etti — kendi içinde çelişti.
+    Yargıç 'sadık' geçti: kural yalnız olmayan VARLIK arıyordu, var olan kişiye
+    yanlış KİMLİK/AKRABALIK atamayı 'yorum' sayıyordu. Oysa izleyici için hikâyenin
+    ta kendisi değişiyor.
+    """
+    from short_bot.curated_clean import _FAITH_PROMPT
+
+    def _norm(s: str) -> str:
+        return s.replace("İ", "i").replace("I", "ı").lower()
+
+    low = _norm(_FAITH_PROMPT)
+    assert "akrabalık" in low or "ilişki" in low, "uydurma rol/ilişki kuralı yok"
+    assert "başlık" in low, "başlığın ilişkiyi belirlediği (arkadaş/kızı) uyarısı yok"
+
+
+def test_judge_final_video_reports_failure_to_given_logger(tmp_path, monkeypatch):
+    """B) Yargıç patlarsa NEDENİ koşu loguna düşsün — modül logger'ı koşu dosyasına
+    bağlı değil, bu yüzden çağıranın logger'ı kabul edilmeli."""
+    import short_bot.curated_clean as cc
+
+    import short_bot.claude_cli as cli
+
+    clip = tmp_path / "c.mp4"
+    _make_clip(clip)
+
+    def _boom(*a, **k):
+        raise RuntimeError("vision patladı")
+
+    monkeypatch.setattr(cli, "run_json", _boom)
+    seen = []
+
+    class _Log:
+        def info(self, msg, *a, **k):
+            seen.append(str(msg))
+
+        def warning(self, msg, *a, **k):
+            seen.append(str(msg))
+
+    class _V:
+        claude_path = ""; model = ""; backend = "google_studio"; api_key = ""
+
+    out = cc.judge_final_video(clip, "anlatım", vision_call=_V(),
+                               ffmpeg_path="ffmpeg", tone="duygu", log=_Log())
+    assert out is None
+    assert any("vision patladı" in m for m in seen), f"neden koşu loguna düşmedi: {seen}"
+
+
+def test_judge_final_video_builds_storyboard_and_returns(monkeypatch, tmp_path):
+    """A) judge_final_video: bitmiş videodan storyboard kurup vision'a anlatımla birlikte
+    sorar; yargıyı döndürür. Hata yolunda None (fail-open kararı çağıranın)."""
+    import short_bot.claude_cli as cli
+    from short_bot.curated_clean import FinalVideoQA, judge_final_video
+
+    src = tmp_path / "final.mp4"
+    _make_clip(src)
+    seen = {}
+
+    def _fake_run_json(prompt, schema, *, image_path=None, **k):
+        seen["prompt"] = prompt
+        assert image_path is not None and Path(image_path).exists()
+        return FinalVideoQA(watchable=True, score=8)
+
+    monkeypatch.setattr(cli, "run_json", _fake_run_json)
+
+    class _V:
+        claude_path = ""; model = ""; backend = "google_studio"; api_key = ""
+
+    q = judge_final_video(src, "yavru fil bakıcısına sarılıyor", vision_call=_V(),
+                          tone="duygu")
+    assert q is not None and q.watchable and q.score == 8
+    assert "yavru fil" in seen["prompt"]          # anlatım metni yargıya veriliyor
+
+
 def test_watermark_uncleanable_moving_vs_static():
     from short_bot.curated_clean import watermark_uncleanable
     # tek SABİT köşe → temizlenebilir
@@ -221,3 +350,20 @@ def test_describe_clip_beats_time_ordered(monkeypatch, tmp_path):
     assert out.index("BAŞ") < out.index("ORTA") < out.index("SON")
     # süre çok kısa / segment<2 → boş (fail-open, blok desc'e düşülür)
     assert describe_clip_beats(tmp_path / "c.mp4", vision_call=_V(), duration_s=3) == ""
+
+
+def test_faith_prompt_rejects_outcome_flipping_exaggeration():
+    """E) SADAKAT: abartı SERBEST ama olayın SONUCUNU ters çeviremez.
+
+    GERÇEK HATA (short 1146): vision 'sendeleyip savruldular ama üçü de AYAKTA KALDI'
+    diyordu; anlatım 'bacakları boşaldı, sarsılarak YIĞILDI' yazdı. Yargıç 'sadık' geçti
+    çünkü prompt abartıyı koşulsuz serbest bırakıyordu — oysa izleyici o saniyede
+    adamları ayakta ve gülerken görüyor. 'Neredeyse düştü' ≠ 'düştü'."""
+    from short_bot.curated_clean import _FAITH_PROMPT
+
+    def _norm(s: str) -> str:
+        return s.replace("İ", "i").replace("I", "ı").lower()
+
+    low = _norm(_FAITH_PROMPT)
+    assert "neredeyse" in low, "'neredeyse düştü' → 'düştü' çevirme yasağı yok"
+    assert "sonuc" in low.replace("ç", "c"), "sonucu ters çevirme kuralı yok"

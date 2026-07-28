@@ -109,3 +109,99 @@ def test_strip_bard_removes_ozan_leading_and_trailing():
 def test_humor_style_config_round_trips(tmp_path):
     from short_bot.config import ReelConfig
     assert ReelConfig(enabled=False).humor_style == ""      # varsayılan boş
+
+
+def test_curated_prompt_carries_reveal_position():
+    """REVEAL-SENKRON: klipteki dönüm ORANI prompt'a girmeli — ödül cümlesi metnin AYNI
+    oranında başlasın (short 1140).
+
+    KÖK: reveal_frac yalnız RENDER'a veriliyordu (fit_clip_with_anchor), anlatım yazarı
+    dönümün klibin neresinde olduğunu BİLMİYORDU. Yazar ödülü metnin %37'sine koyunca
+    (klipte dönüm %61'de) çıpa hız sınırına sığmadı ve klibin başı kırpıldı — anlatımın
+    1. cümlesinin anlattığı açılış anı yok oldu. Yazar oranı bilirse çıpa kırpmasız oturur.
+    """
+    from short_bot.reel_narration import build_curated_prompt
+    ch = SimpleNamespace(language="tr",
+                         reel=ReelConfig(enabled=True, voice_id="v", persona=""))
+    p = build_curated_prompt("t", "d", channel=ch, reveal_frac=0.61)
+    assert "REVEAL-SENKRON" in p and "%61" in p
+    # dönüm tespit edilmediyse kural YOK (mevcut davranış korunur)
+    assert "REVEAL-SENKRON" not in build_curated_prompt("t", "d", channel=ch)
+    # 2 sahneli klipte SAHNE-SENKRON zaten aynı hizayı kuruyor → kural İKİ KEZ yazılmaz
+    p2 = build_curated_prompt("t", "d", channel=ch, scene_split=0.5, reveal_frac=0.5)
+    assert "SAHNE-SENKRON" in p2 and "REVEAL-SENKRON" not in p2
+
+
+def test_write_curated_narration_passes_reveal_frac(monkeypatch):
+    """write_curated_narration reveal_frac'ı prompt'a geçirmeli (produce_curated → yazar)."""
+    from short_bot.reel_narration import write_curated_narration
+    ch = SimpleNamespace(language="tr",
+                         reel=ReelConfig(enabled=True, voice_id="v", persona=""))
+    seen = {}
+    draft = _CuratedDraft(hook="Hook cumlesi",
+                          beats=["Birinci beat", "Ikinci beat", "Ucuncu beat"],
+                          close="Kapanis cumlesi", mood="upbeat",
+                          title="Baslik", cover_title="Kapak")
+
+    def _fake(prompt, schema, **kw):
+        seen["prompt"] = prompt
+        return draft
+
+    monkeypatch.setattr("short_bot.reel_narration.run_json", _fake)
+    write_curated_narration("t", "d", channel=ch, subject="clip", reveal_frac=0.61)
+    assert "REVEAL-SENKRON" in seen["prompt"] and "%61" in seen["prompt"]
+
+
+def test_curated_cta_style_rotates_with_seed():
+    """YORUM-YEMİ ŞABLONU KIRILMALI (kullanıcı: 'senaryo sonu hep tek düze, dokunduysa
+    kalp bırak gibi şablon mantığı olmamalı').
+
+    ÖLÇÜM: DUYGU tonlu 7 kürate short'un 7'si de 'yorumlara bir kalp bırak' ile bitti.
+    KÖK: cta_hint TEK bir LİTERAL örnek veriyordu ('Bu dokunduysa yorumlara bir kalp
+    bırak.') — model onu kopyalıyordu. Çözüm persona.signature_style'ın kanıtlanmış
+    deseni: ton başına stil HAVUZU + seed rotasyonu (aynı klip → aynı stil, farklı
+    klip → farklı stil)."""
+    from short_bot.reel_narration import CURATED_CTA_STYLES, curated_cta_style
+
+    assert len(CURATED_CTA_STYLES["duygu"]) >= 4, "tek stil = yine şablon"
+    # deterministik: aynı seed + ton → aynı stil
+    assert curated_cta_style(7, "duygu") == curated_cta_style(7, "duygu")
+    # ardışık seed'ler farklı stil görmeli (formül kırılır)
+    got = {curated_cta_style(s, "duygu") for s in range(8)}
+    assert len(got) >= 3, f"seed rotasyonu çeşitlenmiyor: {len(got)} stil"
+    # her ton kendi havuzunu kullanır
+    assert curated_cta_style(0, "mizah") in CURATED_CTA_STYLES["mizah"]
+    assert curated_cta_style(0, "karma") in CURATED_CTA_STYLES["karma"]
+    # bilinmeyen ton → mizah havuzuna düş (çökme yok)
+    assert curated_cta_style(0, "bilinmeyen") in CURATED_CTA_STYLES["mizah"]
+
+
+def test_curated_prompt_bans_canned_closings_and_varies_by_seed():
+    """Prompt ARTIK literal 'kalp bırak' örneği vermemeli; kalıp yasağı taşımalı ve
+    seed'e göre farklı yorum-yemi talimatı üretmeli."""
+    from short_bot.reel_narration import build_curated_prompt
+    ch = SimpleNamespace(language="tr",
+                         reel=ReelConfig(enabled=True, voice_id="v", persona=""))
+    p0 = build_curated_prompt("t", "d", channel=ch, tone="duygu", seed=0)
+    p1 = build_curated_prompt("t", "d", channel=ch, tone="duygu", seed=1)
+
+    low = p0.replace("İ", "i").replace("I", "ı").lower()
+    # 'kalp bırak' artık ÖRNEK olarak değil, YASAK listesinde geçmeli
+    assert "kalıp" in low and "tekrarlama" in low, "kapanış şablonu yasağı yok"
+    _i = low.find("kalp bırak")
+    assert _i > 0 and "yasak" in low[max(0, _i - 400):_i + 200], \
+        "'kalp bırak' hâlâ taklit edilecek bir ÖRNEK olarak duruyor (yasak bağlamında değil)"
+    # seed değişince yorum-yemi talimatı da değişmeli
+    assert p0 != p1, "CTA seed'e göre çeşitlenmiyor → her video aynı kapanış"
+
+
+def test_curated_prompt_bans_outcome_flipping_exaggeration():
+    """ABARTI SONUCU TERS ÇEVİREMEZ (short 1146): beat sheet 'nearly falls backward …
+    end up standing' diyordu, anlatım 'bacakları boşaldı, sarsılarak YIĞILDI' yazdı —
+    ekranda 23.7s'de adamlar ayakta ve gülüyor. Abartı serbest ama SONUÇ değişemez."""
+    from short_bot.reel_narration import build_curated_prompt
+    ch = SimpleNamespace(language="tr",
+                         reel=ReelConfig(enabled=True, voice_id="v", persona=""))
+    low = build_curated_prompt("t", "d", channel=ch, tone="duygu").replace("İ", "i").lower()
+    assert "neredeyse" in low, "'neredeyse düştü' → 'düştü' çevirme yasağı yok"
+    assert "sonuc" in low.replace("ç", "c"), "sonucu değiştirme yasağı yok"
