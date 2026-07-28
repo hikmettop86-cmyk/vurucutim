@@ -393,3 +393,21 @@ def test_effective_clip_seconds_drops_repeating_tail():
     # tek dilim / bozuk girdi → dokunma (bölme hatası olmasın)
     assert effective_clip_seconds(20.0, slices=1, tail_repeats=True) == 20.0
     assert effective_clip_seconds(0.0, slices=3, tail_repeats=True) == 0.0
+
+
+def test_curated_prompt_limits_actions_and_bans_translationese():
+    """ÜSLUP: cümle başına en fazla iki eylem + çeviri kokusu yasağı (short 1161).
+
+    Üretim doğruydu ama iki üslup pürüzü vardı:
+    (a) 'Mavi montlu adam yaklaşıp küreği duvara dayasa da kedi çömelmiş halinden kalkıp
+        dar çıkıntıda ürkek adımlarla kayıyor, hala kenara tutunuyor.' — tek cümlede dört
+        eylem; altyazı kelime kelime aktığı için izleyici takip edemiyor.
+    (b) 'kürek bıçağının üstüne' — vision tarifi İngilizce ('paddle blade') ve terim
+        birebir çevrilmiş; Türkçede o parça 'kürek ucu'dur."""
+    from short_bot.reel_narration import build_curated_prompt
+    ch = SimpleNamespace(language="tr",
+                         reel=ReelConfig(enabled=True, voice_id="v", persona=""))
+    low = build_curated_prompt("t", "d", channel=ch, tone="duygu").replace(
+        "İ", "i").replace("I", "ı").lower()
+    assert "iki eylem" in low, "cümle başına eylem sınırı kuralı yok"
+    assert "çeviri" in low, "çeviri kokusu (birebir terim çevirisi) yasağı yok"

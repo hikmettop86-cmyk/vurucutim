@@ -897,6 +897,16 @@ RULES:
   bir kız, kapısında her sabah aynı notu buluyordu' diye açtı; ekranda ne ortaokul ne
   kız ne kapı vardı → izleyici 'kız nerede?' deyip kaydı. GEÇMİŞ/BAĞLAM 2. CÜMLEDEN
   İTİBAREN serbest: önce gördüğünü söyle, sonra hikâyeyi aç.
+- ✂️ CÜMLE BAŞINA EN FAZLA İKİ EYLEM (short 1161): Üç-dört eylemi virgülle/‑ip ekiyle
+  birbirine EKLEME. Altyazı kelime kelime aktığı için izleyici uzun zinciri takip edemez.
+  YAPMA: 'Mavi montlu adam yaklaşıp küreği duvara dayasa da kedi çömelmiş halinden kalkıp
+  dar çıkıntıda ürkek adımlarla kayıyor, hâlâ kenara tutunuyor.' (dört eylem tek cümlede)
+  YAP: iki kısa cümleye böl — hangi eylem ÖNEMLİYSE onu ayrı cümlede vurgula.
+- 🇹🇷 ÇEVİRİ KOKUSU YASAK (short 1161): Yukarıdaki sahne tarifi İNGİLİZCEDİR; terimleri
+  BİREBİR çevirme, Türkçede o şey NASIL anılıyorsa öyle yaz. YAPMA: 'paddle blade' →
+  'kürek bıçağı'. YAP: 'kürek ucu'. Aynısı 'ledge' (çıkıntı/kenar), 'frame' (çerçeve),
+  'blanket' (battaniye) gibi sözcükler için de geçerli — sözlük karşılığı değil,
+  konuşulan Türkçedeki karşılığı.
 - ⛔ DOLGU CÜMLE YASAK (short 1154, YAPMA): Her beat YENİ bir OLAY/BİLGİ taşımalı.
   Mimik, el hareketi, duruş TARİFİ beat DEĞİLDİR — aynı anı farklı kelimelerle
   tekrarlamaktır. Gerçek örnek-hata: 'Elini ağzından an ayırıp titretse de hemen geri
