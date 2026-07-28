@@ -1056,7 +1056,13 @@ def test_clean_pool_prechecks_existing_gems(tmp_path, monkeypatch):
     n = cp.clean_pool([channel], settings=SimpleNamespace(ffmpeg_path="ffmpeg"),
                       secrets={}, db_path=db)
 
-    kalan = [r["title"] for r in cp.list_pool(eng, "dayidiyorki")]
+    # TAZE bağlantıyla oku: clean_pool kendi engine'iyle UPDATE yaptı; testin eski
+    # engine'i (yukarıda insert için açılan) bazen o yazımı görmeden dönüyordu → flaky.
+    import sqlite3
+    con = sqlite3.connect(db)
+    kalan = [r[0] for r in con.execute(
+        "select title from pooled_gems where channel='dayidiyorki' and status='pending'")]
+    con.close()
     assert kalan == ["eski2"], f"havuzda yanlış cevher kaldı: {kalan} (elenen={n})"
     assert n == 2, f"beklenenden farklı sayıda eleme (elenen={n}, kalan={kalan})"
 
@@ -1173,3 +1179,64 @@ def test_auto_produce_stops_on_tts_outage(tmp_path, monkeypatch):
             db_path=tmp_path / "db.sqlite", output_root=tmp_path,
             music_root=tmp_path, templates_dir=tmp_path)
     assert calls["n"] == 1, f"servis arızasında {calls['n']} aday denendi (1 olmalıydı)"
+
+
+def test_produce_curated_skips_single_note_clip(tmp_path, monkeypatch):
+    """TEK-NOTALI KLİP ÜRETİLMEMELİ (short 1164 — kullanıcı: 'hiçbir anlam çıkaramadım').
+
+    Beat sheet'in ÜÇ dilimi de aynı şeyi anlattı: 'kedi kafeste parmaklıklara tutunuyor,
+    miyavlıyor'. Klipte olay yok — ne sahiplenme, ne çıkış, ne dönüş. Anlatım hikâyeyi
+    BAŞLIKTAN kurdu ('köpek yerine onunla döndüler') ama izleyici o dönüşü GÖRMEDİĞİ için
+    video anlamsız kaldı.
+
+    judge_beat_novelty zaten 'kaç dilim yeni olay taşıyor' hesaplıyordu; sonucu yalnız
+    kuyruk düşümü için kullanıyorduk. Tek durum varsa (new_slices<=1) klip hikâye
+    taşımıyor demektir → üretme, sıradaki adaya geç."""
+    import pytest
+
+    import short_bot.curated_clean as cc
+    import short_bot.curated_pipeline as cpl
+    import short_bot.reel_narration as rn
+    from short_bot.reel_narration import BeatNovelty
+
+    channel, settings = _mock_produce_chain(monkeypatch, tmp_path)
+    monkeypatch.setattr(cc, "describe_clip_beats", lambda clip, **k: (
+        "BAŞ (0-6sn): kedi kafeste parmaklıklara tutunup miyavlıyor\n"
+        "ORTA (6-12sn): kedi parmaklıklara tutunuyor, miyavlıyor\n"
+        "SON (12-18sn): kedi kafeste ayakta, parmaklıklara tutunuyor, miyavlıyor"))
+    monkeypatch.setattr(rn, "judge_beat_novelty",
+                        lambda *a, **k: BeatNovelty(new_slices=1, tail_repeats=True))
+
+    with pytest.raises(cpl.CuratedClipError, match="TEK NOTALI"):
+        cpl.produce_curated({"video_url": "https://v.redd.it/sn1/DASH.mp4", "title": "t"},
+                            channel, settings=settings, secrets={},
+                            db_path=tmp_path / "db.sqlite", output_root=tmp_path,
+                            music_root=tmp_path, templates_dir=tmp_path)
+
+
+def test_produce_curated_logs_novelty_verdict(tmp_path, monkeypatch, caplog):
+    """Yenilik yargısı HER ZAMAN loglanmalı — 1164'te sessiz kaldığı için tek-notalı
+    klibin neden geçtiği ancak sonradan anlaşıldı."""
+    import logging
+
+    import short_bot.curated_clean as cc
+    import short_bot.curated_pipeline as cpl
+    import short_bot.reel_narration as rn
+    from short_bot.reel_narration import BeatNovelty
+
+    channel, settings = _mock_produce_chain(monkeypatch, tmp_path)
+    monkeypatch.setattr(cc, "describe_clip_beats", lambda clip, **k: (
+        "BAŞ (0-6sn): adam kapıyı açıyor\nORTA (6-12sn): köpek koşarak geliyor\n"
+        "SON (12-18sn): ikisi sarılıyor"))
+    monkeypatch.setattr(rn, "judge_beat_novelty",
+                        lambda *a, **k: BeatNovelty(new_slices=3, tail_repeats=False))
+
+    with caplog.at_level(logging.INFO):
+        cpl.produce_curated({"video_url": "https://v.redd.it/nv1/DASH.mp4", "title": "t"},
+                            channel, settings=settings, secrets={},
+                            db_path=tmp_path / "db.sqlite", output_root=tmp_path,
+                            music_root=tmp_path, templates_dir=tmp_path)
+
+    metin = "\n".join(r.message for r in caplog.records)
+    assert "3/3" in metin or "yeni olay" in metin, \
+        f"yenilik yargısı loglanmıyor:\n{metin}"

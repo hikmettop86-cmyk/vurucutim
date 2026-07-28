@@ -272,6 +272,15 @@ _FAITH_PROMPT = (
     # uydurmasını göremez (short 1140). Aynı kalıp judge_clip_quality/tone-fit'te de var.
     "KLİBİN KENDİ BAŞLIĞI (poster'ın tarifi — kişilerin KİM olduğu konusunda KARELERDEN "
     "daha güvenilir): {title}\n"
+    # BAŞLIĞIN SINIRI (short 1164): başlık besleme kuralı fazla açıktı. Klip 18 saniye
+    # boyunca kafeste miyavlayan bir kediden ibaretti (ne sahiplenme, ne çıkış, ne dönüş);
+    # başlık 'Came for a dog and left with him' dediği için anlatım 'sonunda fark edildi,
+    # köpek yerine onunla döndüler' yazdı ve kapı 'başlıkta var' diye geçirdi. İzleyici o
+    # dönüşü GÖRMEDİĞİ için videodan hiçbir şey anlamadı.
+    "BAŞLIĞIN SINIRI: başlık, ekranda GÖRÜNEN şeyi adlandırabilir/açıklayabilir (kim kimin "
+    "nesi, elindeki nesne ne, olayın amacı ne). Ama ekranda HİÇ OLMAYAN bir olayı, SONUCU "
+    "ya da devamını anlattıramaz. Başlıkta olsa BİLE karelerde karşılığı yoksa o olay "
+    "anlatıma giremez — 'başlıkta yazıyor' bir savunma DEĞİLDİR.\n"
     "ANLATIM:\n---\n{narr}\n---\n"
     "Bu anlatım, karelerdeki ÖZNE ve TEMEL OLAYLA örtüşüyor mu? Şu 3 durumda 'faithful=false' de:\n"
     "  1) Tamamen FARKLI özne (anlatım 'köpek/futbol' der ama karelerde kedi var) VEYA\n"

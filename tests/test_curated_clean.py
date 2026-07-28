@@ -431,3 +431,26 @@ def test_describe_clip_beats_uses_dense_storyboard(monkeypatch, tmp_path):
     describe_clip_beats(clip, vision_call=_V(), ffmpeg_path="ffmpeg", duration_s=6.0)
     assert calls, "storyboard hiç kurulmadı"
     assert all(n >= 9 for n in calls), f"beat sheet seyrek örneklem kullanıyor: {calls}"
+
+
+def test_faith_prompt_title_cannot_justify_offscreen_outcome():
+    """BAŞLIK EKRANDAKİNİ AÇIKLAR, EKRANDA OLMAYAN OLAYI EKLEYEMEZ (short 1164).
+
+    short 1140/1154'te kapılara başlık besledim: kişilerin kim olduğu ve beat sheet'in
+    kaçırdığı detaylar ancak başlıktan okunuyordu ve o kural doğru işi yaptı (notlar
+    EKRANDAYDI, vision görememişti).
+
+    Ama kural fazla açıktı: short 1164'te klip 18 saniye boyunca kafeste miyavlayan bir
+    kediden ibaretti — ne sahiplenme, ne çıkış, ne dönüş vardı. Başlık 'Came for a dog
+    and left with him' dediği için anlatım 'Sonunda fark edildi; köpek yerine onunla
+    döndüler' yazdı ve kapı bunu 'başlıkta var' diye geçirdi. İzleyici o dönüşü
+    GÖRMEDİĞİ için videodan hiçbir şey anlamadı (kullanıcı bildirimi).
+
+    AYRIM: başlık ekranda GÖRÜNEN bir şeyi adlandırabilir/açıklayabilir; ekranda HİÇ
+    OLMAYAN bir olayı, sonucu ya da devamını anlattıramaz."""
+    from short_bot.curated_clean import _FAITH_PROMPT
+
+    low = _FAITH_PROMPT.replace("İ", "i").replace("I", "ı").lower()
+    assert "başlıkta olsa" in low, \
+        "'başlıkta olsa BİLE ekranda yoksa uydurmadır' kuralı yok"
+    assert "başlığın sınırı" in low, "başlığın rolü açıkça sınırlandırılmamış"

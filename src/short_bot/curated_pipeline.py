@@ -269,6 +269,22 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
                                                       judge_beat_novelty)
                 _nov = judge_beat_novelty(_beats, backend=llm.backend, model=llm.model,
                                           api_key=llm.api_key, claude_path=llm.claude_path)
+                # TEK-NOTALI KLİP KAPISI (short 1164 — kullanıcı: 'hiçbir anlam
+                # çıkaramadım'). Beat sheet'in ÜÇ dilimi de aynı şeyi anlatıyordu ('kedi
+                # kafeste parmaklıklara tutunup miyavlıyor'); klipte olay YOK — ne
+                # sahiplenme, ne çıkış, ne dönüş. Anlatım hikâyeyi BAŞLIKTAN kurdu
+                # ('köpek yerine onunla döndüler') ama izleyici o dönüşü GÖRMEDİĞİ için
+                # video anlamsız kaldı. Tek durum = hikâye yok → üretme, sıradaki adaya geç.
+                # (Yargı alınamazsa eleme YOK: fail-open, mevcut davranış.)
+                if _nov is not None:
+                    log.info(f"  kürate[yenilik]: {_nov.new_slices}/{_n_slices} dilim yeni "
+                             f"olay taşıyor (kuyruk tekrarı={_nov.tail_repeats})")
+                    if _nov.new_slices <= 1:
+                        _remember("single-note")
+                        raise CuratedClipError(
+                            f"Klip TEK NOTALI ({_nov.new_slices}/{_n_slices} dilim yeni "
+                            f"olay): baştan sona aynı durum sürüyor, anlatılacak hikâye "
+                            f"yok → atlanıyor (izleyici olay göremez).")
                 if _nov is not None and _nov.tail_repeats:
                     clip_dur_eff = effective_clip_seconds(
                         clip_dur, slices=_n_slices, tail_repeats=True)

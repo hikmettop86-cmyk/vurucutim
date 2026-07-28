@@ -1257,7 +1257,13 @@ _CLARITY_PROMPT = (
     # detay yazınca ('duvardan notlar çıkıyor'), o detay tarifte yok diye 'uydurma' sayıldı
     # ve klip iki denemede de elendi — yani eksik tarif İYİ anlatımı eledi.
     "KLİBİN KENDİ BAŞLIĞI (poster'ın tarifi — VİDEO satırı eksik kalırsa buraya bak; "
-    "başlıkta geçen bir detay UYDURMA SAYILMAZ): {title}\n\n"
+    "başlıkta geçen bir DETAY uydurma sayılmaz): {title}\n"
+    # BAŞLIĞIN SINIRI (short 1164): kural fazla açıktı — başlıktaki SONUÇ ekranda hiç
+    # yokken anlatılabiliyordu ('köpek yerine onunla döndüler', oysa klipte yalnız
+    # kafeste miyavlayan kedi var) ve izleyici hikâyeyi kuramıyordu.
+    "BAŞLIĞIN SINIRI: başlık ekranda GÖRÜNEN şeyi adlandırır/açıklar; ekranda HİÇ OLMAYAN "
+    "bir olayı, SONUCU ya da devamını anlattıramaz. Anlatım videoda karşılığı olmayan bir "
+    "sonucu (sahiplenme, kurtarma, kavuşma, dönüş) 'olmuş gibi' anlatıyorsa clear=false.\n\n"
     "ANLATIM:\n---\n{narr}\n---\n"
     "Bu anlatım NET, TUTARLI ve tona uygun İŞLİYOR mu? Şunlara bak:\n"
     "1) İzleyici NE OLDUĞUNU net anlıyor mu (kim / ne yapıyor / asıl an)?\n"
