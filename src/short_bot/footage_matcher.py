@@ -573,10 +573,15 @@ def locate_subject(clip_path, query, *, vision_call=None, ffmpeg_path="ffmpeg",
             f'SADECE JSON: {{"found": true|false, "discrete": true|false, '
             f'"confidence": 0.0..1.0, "x": 0.0..1.0, "y": 0.0..1.0}}'
         )
+        # retries=2: run_json İKİNCİ denemede bozuk JSON'u MODELE geri gösterip
+        # düzelttiriyor (retry_feedback). retries=1 o mekanizmayı hiç çalıştırmıyordu →
+        # 'locate_subject hatası: failed after 1 attempts: Expecting "," delimiter'
+        # (loglarda 11 kez) ve özne-farkında kadraj sessizce kayboluyordu (90 koşunun
+        # 25'inde 0/N). İkinci çağrı yalnız parse hatasında yapılır — nadir.
         v = run_json(prompt, _LocateVerdict, claude_path=vision_call.claude_path,
                      model=vision_call.model, backend=vision_call.backend,
                      api_key=vision_call.api_key, image_path=frame,
-                     retries=1, timeout_s=45)
+                     retries=2, timeout_s=45)
         x = min(1.0, max(0.0, float(v.x))); y = min(1.0, max(0.0, float(v.y)))
         conf = min(1.0, max(0.0, float(v.confidence)))
         return SubjectPos(found=bool(v.found), discrete=bool(v.discrete),

@@ -136,7 +136,11 @@ def plan_edit(narration, *, topic: str, n_cuts: int, library_index: dict,
                                persona_hint),
                        EditPlan, claude_path=llm_call.claude_path,
                        model=llm_call.model, backend=llm_call.backend,
-                       api_key=llm_call.api_key, retries=1, timeout_s=60)
+                       # retries=2: bozuk JSON'da run_json ikinci denemede hatayı modele
+                       # geri gösterip düzelttiriyor. retries=1 iken 'kurgucu başarısız'
+                       # 9 kez loglandı ve video seed-hash varyasyonuna düştü (kurgu
+                       # planı yok: SFX/tempo/efekt seçimi körlemesine).
+                       api_key=llm_call.api_key, retries=2, timeout_s=60)
     except Exception as e:
         log.warning(f"kurgucu başarısız ({e}) → seed-hash varyasyonu")
         return None

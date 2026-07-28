@@ -1129,3 +1129,47 @@ def test_produce_curated_logs_beat_sheet_content(tmp_path, monkeypatch, caplog):
     metin = "\n".join(r.message for r in caplog.records)
     assert "duvara yapıştırıyor" in metin, \
         f"beat sheet İÇERİĞİ loglanmıyor — anlatımın kaynağı görünmez kalıyor:\n{metin}"
+
+
+def test_auto_produce_stops_on_tts_outage(tmp_path, monkeypatch):
+    """TTS SERVİS ARIZASI KLİP-BAĞIMSIZDIR → sıradaki adaya GEÇME, koşuyu durdur.
+
+    ÖLÇÜM (gerçek koşular): ai33 preflight arızasında oto-üretim 'sıradaki aday' deyip
+    devam ediyordu. Servis çökükken sıradaki aday da AYNI hatayı alıyor — bir koşuda
+    20 aday denendi, 20 klip İNDİRİLDİ ve her biri için vision harcandı, hepsi boşa.
+    Klip suçsuz, servis arızalı: döngüyü kır, koşu net hatayla bitsin."""
+    from types import SimpleNamespace
+
+    import pytest
+
+    import short_bot.curated_pipeline as cpl
+    import short_bot.pipeline as pl
+    import short_bot.reddit_gems as rg
+    from short_bot.reel import TtsUnavailableError
+
+    gems = [{"video_url": f"https://v.redd.it/t{i}/DASH.mp4", "title": f"klip{i}",
+             "permalink": f"https://reddit.com/r/aww/{i}", "sub": "aww",
+             "ups": 9000 - i, "comments": 30, "duration": 40, "orient": "DİKEY"}
+            for i in range(5)]
+    monkeypatch.setattr(rg, "find_gems", lambda *a, **k: gems)
+    monkeypatch.setattr(pl, "resolve_ai_call",
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("vision yok")))
+
+    calls = {"n": 0}
+
+    def _boom(*a, **k):
+        calls["n"] += 1
+        raise TtsUnavailableError("ai33 preflight başarısız — servis yanıt vermiyor.")
+
+    monkeypatch.setattr(cpl, "produce_curated", _boom)
+
+    reel = SimpleNamespace(curated_tone="duygu", subreddits=[], curated_time="week",
+                           curated_min_ups=500, curated_max_duration=90)
+    channel = SimpleNamespace(slug="dayidiyorki", reel=reel)
+    with pytest.raises(TtsUnavailableError):
+        cpl.auto_produce_curated(
+            channel, settings=SimpleNamespace(ffmpeg_path="ffmpeg"),
+            secrets={"reddit_client_id": "x", "reddit_client_secret": "y"},
+            db_path=tmp_path / "db.sqlite", output_root=tmp_path,
+            music_root=tmp_path, templates_dir=tmp_path)
+    assert calls["n"] == 1, f"servis arızasında {calls['n']} aday denendi (1 olmalıydı)"

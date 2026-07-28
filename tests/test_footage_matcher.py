@@ -352,3 +352,46 @@ def test_gate_rejects_out_of_context_clip_metaphor_trap(monkeypatch):
                              context="bakteriyofaj virüsü bakteri avlar")
     assert ok is False
     assert "bakteriyofaj" in seen["prompt"]      # bağlam vision'a ulaştı
+
+
+def test_locate_subject_retries_broken_json(monkeypatch, tmp_path):
+    """BOZUK JSON'DA TEK DENEMEYLE PES ETME (loglarda 11 kez, kurgucuda 9 kez).
+
+    Log: 'locate_subject hatası: run_json failed after 1 attempts: Expecting ","
+    delimiter'. run_json ikinci denemede hatayı MODELE geri gösterip düzelttiriyor
+    (retry_feedback) — ama retries=1 olduğu için o mekanizma hiç çalışmıyordu.
+    Sonuç: özne-farkında kadraj sessizce kayboluyor (90 koşunun 25'inde 0/N)."""
+    from pathlib import Path
+
+    import short_bot.claude_cli as cli
+    from short_bot.footage_matcher import locate_subject
+
+    frame = tmp_path / "f.jpg"
+    try:
+        from PIL import Image
+        Image.new("RGB", (64, 64), "white").save(frame, "JPEG")
+    except Exception:  # noqa: BLE001
+        import pytest
+        pytest.skip("PIL yok")
+
+    calls = {"n": 0}
+
+    def _fake_invoke(prompt, **kw):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return '{"found": true, "discrete": true "confidence": 0.9, "x": 0.5, "y": 0.5}'
+        return '{"found": true, "discrete": true, "confidence": 0.9, "x": 0.5, "y": 0.5}'
+
+    monkeypatch.setattr(cli, "_invoke_with_fallback", _fake_invoke, raising=False)
+    monkeypatch.setattr(cli, "_invoke_primary", _fake_invoke, raising=False)
+    # kare çıkarma ffmpeg'e gitmesin — hazır kareyi ver
+    import short_bot.footage_matcher as fm
+    monkeypatch.setattr(fm, "_extract_cropped_frame",
+                        lambda clip, ffmpeg_path, out, **k: Path(frame))
+
+    class _V:
+        claude_path = ""; model = "m"; backend = "google_studio"; api_key = "k"
+
+    res = locate_subject(Path(tmp_path / "clip.mp4"), "kedi", vision_call=_V())
+    assert calls["n"] >= 2, "bozuk JSON sonrası ikinci deneme yapılmadı (retries=1)"
+    assert res is not None and res.found, "geri bildirimli deneme sonucu kullanılmadı"

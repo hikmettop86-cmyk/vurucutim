@@ -69,6 +69,15 @@ def _probe_s(path, ffmpeg_path: str = "ffmpeg") -> float:
     except Exception:
         return MAX_RISER_S
 
+class TtsUnavailableError(RuntimeError):
+    """TTS servisi (ai33) kullanılamıyor — arıza KLİBE DEĞİL SERVİSE ait.
+
+    Oto-üretim aday döngüsü bunu YAKALAYIP DURMALI: servis çökükken sıradaki aday da
+    aynı hatayı alır. ÖLÇÜM (gerçek koşu 20260721_110000_kaosdayi): 20 aday denendi,
+    20 klip İNDİRİLDİ ve her biri için vision harcandı — hepsi aynı ai33 arızasına
+    takıldı. Klip suçsuz olduğu için seen_clips'e de yazılmamalı."""
+
+
 _PREFLIGHT = {
     "no-key": "ai33 için AI33_API_KEY tanımlı değil (Ayarlar → API anahtarları).",
     "auth": "ai33 reddetti: AI33_API_KEY geçersiz ya da kredi bitmiş.",
@@ -656,7 +665,9 @@ def produce_reel_video(
                         f"{PREFLIGHT_RETRIES}) → {wait}sn sonra yeniden")
             _time.sleep(wait)
     if verdict != "healthy":
-        raise RuntimeError(_PREFLIGHT.get(verdict, f"ai33 preflight: {verdict}"))
+        # TtsUnavailableError: arıza SERVİSE ait, klibe değil → oto-üretim döngüsü
+        # sıradaki adayı denemek yerine DURSUN (bkz. sınıf yorumu: 20 boşa indirme).
+        raise TtsUnavailableError(_PREFLIGHT.get(verdict, f"ai33 preflight: {verdict}"))
     log.info("  reel: ai33 preflight healthy")
     _phase("preflight")
 

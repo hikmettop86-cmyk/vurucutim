@@ -621,6 +621,7 @@ def auto_produce_curated(channel, *, settings, secrets, db_path, output_root,
     Döner (short_id, out_path); taze cevher yoksa (None, None)."""
     from short_bot.reddit_gems import (DEFAULT_DUYGU_SUBS, DEFAULT_KARMA_SUBS,
                                         DEFAULT_SUBS, find_gems)
+    from short_bot.reel import TtsUnavailableError
     reel = channel.reel
     cid = secrets.get("reddit_client_id")
     csec = secrets.get("reddit_client_secret")
@@ -772,6 +773,14 @@ def auto_produce_curated(channel, *, settings, secrets, db_path, output_root,
             # zaten istisna metninde — etiket onu ezmesin.
             log.info(f"  kürate[oto]: aday elendi → sıradakine geçiliyor ({e})")
             continue
+        except TtsUnavailableError:
+            # SERVİS ARIZASI → DÖNGÜYÜ KIR. Arıza klibe değil ai33'e ait; sıradaki aday da
+            # aynı hatayı alır. ÖLÇÜM (koşu 20260721_110000_kaosdayi): 20 aday denendi,
+            # 20 klip indirildi + vision harcandı, hepsi aynı preflight arızasına takıldı.
+            # Klip suçsuz → seen_clips'e YAZILMAZ, koşu net hatayla biter.
+            log.warning("  kürate[oto]: TTS servisi kullanılamıyor → aday denemesi "
+                        "DURDURULDU (sıradaki aday da aynı hatayı alır)")
+            raise
         except Exception as e:  # noqa: BLE001 — GÜVENLİK AĞI (denetim bulgusu): beklenmedik bir
             # hata (render/ffmpeg/vision) tek adayda patlarsa TÜM run'ı ÖLDÜRMESİN; logla, sıradaki
             # adaya geç. Geçici hata seen'e YAZILMAZ (tekrar denenebilir).
