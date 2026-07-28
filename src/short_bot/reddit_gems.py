@@ -53,8 +53,15 @@ DEFAULT_KARMA_SUBS = [
 ]
 
 # İndirilebilir video kaynakları (yt-dlp bunları çözer).
-_VIDEO_DOMAINS = ("v.redd.it", "redgifs.com", "gfycat.com", "streamable.com",
-                  "i.imgur.com")
+# gfycat KALDIRILDI: servis 2023'te kapandı, tüm gfycat linkleri ölü. Listede durduğu
+# sürece her taramada aday oluyor, indirilmeye çalışılıyor ve boşa yt-dlp çağrısı
+# harcanıyordu (koşu 1339'da ölçüldü).
+_VIDEO_DOMAINS = ("v.redd.it", "redgifs.com", "streamable.com", "i.imgur.com")
+# RESİM uzantıları: i.imgur.com hem video (.gifv/.mp4) hem RESİM (.jpg/.png) barındırır.
+# Domain eşleşmesi tek başına yetmiyordu — koşu 1339'da üç adayın ikisi .jpg'ydi ve
+# 'klip indirilemedi' ile elendi (üstelik indirme hatası seen'e yazılmadığı için her
+# koşuda yeniden deneniyorlardı).
+_IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp", ".bmp", ".avif")
 
 
 def get_token(client_id: str, client_secret: str, *, user_agent: str = _UA) -> str:
@@ -88,6 +95,20 @@ def _thumb_of(post: dict) -> str:
     return th if th.startswith("http") else ""
 
 
+class DeadClipError(RuntimeError):
+    """Klip KALICI olarak indirilemez (desteklenmeyen/kapanmış servis, silinmiş video).
+
+    Çağıran bunu seen_clips'e 'gone' diye yazmalı — yoksa aynı ölü link HER taramada
+    yeniden aday olup yeniden indirilmeye çalışılır (koşu 1339'da ölçüldü). Geçici
+    hatalar (zaman aşımı, bağlantı, 5xx) bu sınıfa GİRMEZ: onlar tekrar denenmeli."""
+
+
+# yt-dlp stderr'inde bu işaretler varsa hata KALICIDIR (tekrar denemenin faydası yok).
+_DEAD_MARKERS = ("unsupported url", "video unavailable", "404", "not found",
+                 "has been removed", "no longer available", "does not exist",
+                 "account has been terminated", "private video")
+
+
 def _video_of(post: dict):
     """(video_url, duration, width, height) ya da None. Native + external kapsar."""
     p = _unwrap(post)
@@ -99,6 +120,9 @@ def _video_of(post: dict):
     # external (redgifs/gfycat/streamable/imgur-gifv) — yt-dlp indirir
     dom = (p.get("domain") or "").lower()
     url = p.get("url") or ""      # None-güvenli (bkz. _thumb_of)
+    # RESİM uzantısı → video DEĞİL (imgur aynı domainde ikisini de barındırır)
+    if url.split("?")[0].lower().endswith(_IMAGE_EXTS):
+        return None
     if any(dom.endswith(d) for d in _VIDEO_DOMAINS) or url.endswith(".gifv"):
         return (url, 0, None, None)
     if p.get("post_hint") in ("hosted:video", "rich:video"):
@@ -561,6 +585,15 @@ def download_clip(video_url: str, out_path, *, user_agent: str = _UA) -> "Path":
     except FileNotFoundError as e:
         raise RuntimeError("kürate: yt-dlp kurulu değil (external klip indirilemez)") from e
     except subprocess.CalledProcessError as e:
+        # KALICI mı GEÇİCİ mi: stderr'deki işarete bak. Kalıcıysa DeadClipError → çağıran
+        # seen_clips'e yazar ve bu link bir daha aday olmaz; geçiciyse normal RuntimeError
+        # (tekrar denensin, iyi klip haksız yere kara listeye girmesin).
+        _err = (e.stderr or b"")
+        _err = _err.decode("utf-8", "replace") if isinstance(_err, bytes) else str(_err)
+        if any(m in _err.lower() for m in _DEAD_MARKERS):
+            raise DeadClipError(
+                f"kürate: klip kalıcı olarak indirilemiyor ({video_url}): "
+                f"{_err.strip()[:160]}") from e
         raise RuntimeError(f"kürate: yt-dlp indirme başarısız: {e}") from e
     if not out_path.exists() or out_path.stat().st_size == 0:
         raise RuntimeError(f"kürate: klip indirilemedi: {video_url}")

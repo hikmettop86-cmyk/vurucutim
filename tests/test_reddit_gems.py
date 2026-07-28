@@ -175,3 +175,70 @@ def test_find_gems_window_rotation(monkeypatch):
                  listings=("top", "hot"))
     assert ("top", "month") in calls and ("top", "year") in calls
     assert ("hot", None) in calls          # /hot t'siz (taze)
+
+
+def test_video_of_rejects_image_urls_and_dead_hosts():
+    """RESİM ve ÖLÜ SERVİS aday havuzuna GİRMEMELİ (koşu 1339'da ölçüldü).
+
+    Üç aday üst üste 'klip indirilemedi' ile elendi ve hiçbiri video değildi:
+      i.imgur.com/73ZJIme.JPG   → resim
+      gfycat.com/WavyHelpless…  → gfycat 2023'te kapandı, tüm linkler ölü
+      i.imgur.com/kPkQTic.JPG   → resim
+    KÖK: _video_of yalnız DOMAIN'e bakıyordu (i.imgur.com listede) ama URL uzantısına
+    bakmıyordu; imgur'da video .gifv/.mp4'tür, .jpg/.png RESİMDİR.
+    Üstelik indirme hatası seen_clips'e yazılmıyor (yalnız HTTP 403/404/410 yazılıyor),
+    yani aynı ölü linkler HER KOŞUDA yeniden indirilmeye çalışılıyordu."""
+    from short_bot.reddit_gems import _video_of
+
+    # resim uzantıları → video DEĞİL
+    for ext in (".jpg", ".jpeg", ".png", ".webp"):
+        assert _video_of({"domain": "i.imgur.com",
+                          "url": f"https://i.imgur.com/abc{ext}"}) is None, ext
+    # gfycat kapandı → aday olmamalı
+    assert _video_of({"domain": "gfycat.com",
+                      "url": "https://gfycat.com/WavyHelplessChameleon"}) is None
+    # gerçek video biçimleri KABUL edilmeli (regresyon koruması)
+    assert _video_of({"domain": "i.imgur.com",
+                      "url": "https://i.imgur.com/abc.gifv"}) is not None
+    assert _video_of({"domain": "streamable.com",
+                      "url": "https://streamable.com/abc"}) is not None
+    # v.redd.it native video (fallback_url) → dokunulmaz
+    native = {"media": {"reddit_video": {"fallback_url": "https://v.redd.it/x/DASH_720.mp4",
+                                         "duration": 30}}}
+    assert _video_of(native) is not None
+
+
+def test_download_clip_marks_permanently_dead_links(tmp_path, monkeypatch):
+    """KALICI ölü link, GEÇİCİ ağ hatasından ayrılmalı — yoksa her koşuda yeniden denenir.
+
+    produce_curated indirme hatasında yalnız HTTP 403/404/410'u 'gone' diye hatırlıyor;
+    yt-dlp hatasında response nesnesi olmadığı için hiçbir şey hatırlanmıyordu. Sonuç:
+    ölü external linkler (kapanmış servis, silinmiş video) HER taramada yeniden aday
+    olup yeniden indirilmeye çalışılıyordu.
+
+    Ayrım stderr'den: 'Unsupported URL' / 'Video unavailable' / '404' KALICI;
+    zaman aşımı, bağlantı hatası, 5xx GEÇİCİ (tekrar denenmeli)."""
+    import subprocess
+
+    import pytest
+
+    import short_bot.reddit_gems as rg
+    from short_bot.reddit_gems import DeadClipError, download_clip
+
+    def _fake_run(cmd, **kw):
+        raise subprocess.CalledProcessError(
+            1, cmd, stderr=b"ERROR: Unsupported URL: https://gfycat.com/x")
+
+    monkeypatch.setattr(subprocess, "run", _fake_run)
+    with pytest.raises(DeadClipError):
+        download_clip("https://gfycat.com/x", tmp_path / "o.mp4")
+
+    def _fake_run_transient(cmd, **kw):
+        raise subprocess.CalledProcessError(
+            1, cmd, stderr=b"ERROR: Unable to download webpage: timed out")
+
+    monkeypatch.setattr(subprocess, "run", _fake_run_transient)
+    with pytest.raises(RuntimeError) as ei:
+        download_clip("https://streamable.com/x", tmp_path / "o2.mp4")
+    assert not isinstance(ei.value, DeadClipError), \
+        "geçici ağ hatası KALICI sayıldı — iyi klip haksız yere kara listeye girer"

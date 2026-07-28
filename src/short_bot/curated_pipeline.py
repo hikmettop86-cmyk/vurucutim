@@ -116,7 +116,14 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
             # KALICI ÖLÜ KLİP: v.redd.it 403/404/410 = post silinmiş/medya gitmiş — hatırla,
             # yoksa aynı klip her koşuda en-iyi-aday seçilip yeniden 403 alıyor (tek güçlü
             # adaysa koşu hep 'temiz cevher yok'a kilitleniyor). Timeout/5xx/ağ = geçici → hatırlama.
-            if getattr(getattr(e, "response", None), "status_code", None) in (403, 404, 410):
+            # DeadClipError: yt-dlp stderr'i KALICI dedi (desteklenmeyen/kapanmış servis,
+            # silinmiş video). Eskiden yalnız HTTP status'e bakılıyordu; yt-dlp yolunda
+            # response nesnesi olmadığı için hiçbir şey hatırlanmıyor ve aynı ölü link
+            # HER taramada yeniden indirilmeye çalışılıyordu (koşu 1339).
+            from short_bot.reddit_gems import DeadClipError as _DeadClip
+            if (isinstance(e, _DeadClip)
+                    or getattr(getattr(e, "response", None), "status_code", None)
+                    in (403, 404, 410)):
                 _remember("gone")
             raise CuratedClipError(f"klip indirilemedi ({video_url}): {e}") from e
         # TEMİZLİK (SP4): hafif/kenar watermark → delogo (yazılı klip de kullanılabilir);
