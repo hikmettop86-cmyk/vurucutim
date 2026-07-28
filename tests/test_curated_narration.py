@@ -333,3 +333,28 @@ def test_clarity_prompt_catches_filler_sentence():
     low = _CLARITY_PROMPT.replace("İ", "i").replace("I", "ı").lower()
     assert "yeni bilgi" in low or "dolgu" in low, \
         "netlik kapısı 'yeni bilgi taşımayan cümle' ölçütünü sormuyor"
+
+
+def test_clarity_gate_sees_title(monkeypatch):
+    """NETLİK KAPISI BAŞLIĞI GÖRMELİ — yoksa DOĞRU anlatımı uydurma sanıp eliyor.
+
+    GERÇEK HATA (short 1154 klibi): beat sheet duvarı 'bare tan wall with a framed
+    photograph' diye tarif etti (sarı notları kaçırdı). Anlatım — başlıktan bilerek,
+    DOĞRU olarak — 'duvardan notlar çıkıyor' dedi. Netlik kapısı bunu beat sheet'te
+    göremeyince 'sahnede olmayan detay uyduruluyor' deyip reddetti; iki denemede de
+    reddedilince klip komple elendi. Sadakat kapısına başlık beslenmişti (short 1140),
+    netlik kapısına beslenmemişti — aynı körlük.
+    """
+    from short_bot.reel_narration import judge_narration_clarity, NarrationClarity
+
+    seen = {}
+
+    def _fake(prompt, schema, **kw):
+        seen["prompt"] = prompt
+        return NarrationClarity(clear=True)
+
+    monkeypatch.setattr("short_bot.reel_narration.run_json", _fake)
+    judge_narration_clarity("anlatım metni", "bare wall with a framed photograph",
+                            tone="duygu", backend="openrouter", model="m", api_key="k",
+                            title="Sophia's stepdad used to leave her a note every day")
+    assert "note every day" in seen["prompt"], "başlık netlik kapısına geçmiyor"

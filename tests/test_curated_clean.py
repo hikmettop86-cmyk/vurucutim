@@ -400,3 +400,34 @@ def test_faith_prompt_checks_action_direction():
 
     low = _FAITH_PROMPT.replace("İ", "i").replace("I", "ı").lower()
     assert "yön" in low, "sadakat kapısı eylemin yönünü sormuyor"
+
+
+def test_describe_clip_beats_uses_dense_storyboard(monkeypatch, tmp_path):
+    """BEAT SHEET 6 DEĞİL ≥9 KARE GÖRMELİ — seyrek örneklem detayı kaçırıyor.
+
+    GERÇEK HATA (short 1154 klibi): BAŞ dilimi 20 saniye ve o dilimde adam gazeteyi
+    söküp altındaki SARI NOT duvarını açığa çıkarıyor. 6 kareyle vision duvarı
+    'bare tan wall with a framed photograph' diye tarif etti — notları hiç görmedi.
+    Sonuç: anlatım (DOĞRU olarak) 'notlar çıkıyor' deyince netlik kapısı bunu beat
+    sheet'te olmadığı için UYDURMA sayıp reddetti — yani eksik beat sheet İYİ anlatımı
+    eledi. Sadakat kapısı aynı klipte 9 kareyle bakıp yönü/detayı doğru okumuştu
+    (bkz. test_quality_and_faith_judges_use_dense_storyboard — aynı ders)."""
+    import short_bot.reel as reel_mod
+    from short_bot.curated_clean import describe_clip_beats
+
+    calls = []
+
+    def _rec(clip, out, ffmpeg, *, cols=3, rows=2, frame_w=256):
+        calls.append(cols * rows)
+        return False   # storyboard kurulamadı → dilim atlanır, vision hiç çağrılmaz
+
+    monkeypatch.setattr(reel_mod, "_storyboard_frames", _rec)
+
+    class _V:
+        claude_path = ""; model = ""; backend = "google_studio"; api_key = ""
+
+    clip = tmp_path / "c.mp4"
+    _make_clip(clip)          # gerçek klip: segment kesimi ffmpeg ile yapılıyor
+    describe_clip_beats(clip, vision_call=_V(), ffmpeg_path="ffmpeg", duration_s=6.0)
+    assert calls, "storyboard hiç kurulmadı"
+    assert all(n >= 9 for n in calls), f"beat sheet seyrek örneklem kullanıyor: {calls}"

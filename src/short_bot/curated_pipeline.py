@@ -355,7 +355,8 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
         from short_bot.reel_narration import judge_narration_clarity
         _clr = judge_narration_clarity(narration.full_text(), narr_desc, tone=_tone,
                                        backend=llm.backend, model=llm.model, api_key=llm.api_key,
-                                       claude_path=llm.claude_path)
+                                       claude_path=llm.claude_path,
+                                       title=gem.get("title", ""))
         if _clr is not None and not _clr.clear:  # reason BOŞ olsa bile yeniden yaz (denetim)
             # DİREKTİF + VISION-ANCHORED (denetim short 1000: netlik yakaladı ama rewrite yine
             # kopuk hikâye yazdı → fail-open yayınladı). Modele NET emir + neyin GERÇEK olduğunu
@@ -379,7 +380,8 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
                 reveal_frac=reveal_frac)
             _clr2 = judge_narration_clarity(narration.full_text(), narr_desc, tone=_tone,
                                             backend=llm.backend, model=llm.model, api_key=llm.api_key,
-                                            claude_path=llm.claude_path)
+                                            claude_path=llm.claude_path,
+                                            title=gem.get("title", ""))
             if _clr2 is not None and not _clr2.clear:
                 # FAIL-CLOSED (kullanıcı: 'anlamsız videolar çıkabiliyor'): iki denemede de
                 # net değilse ÇÖP YAYINLAMA — klibi atla (sadakat kapısıyla aynı sözleşme).

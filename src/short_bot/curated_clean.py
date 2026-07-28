@@ -642,10 +642,19 @@ def describe_clip_beats(clip, *, vision_call, ffmpeg_path: str = "ffmpeg",
                 if not seg.exists() or seg.stat().st_size == 0:
                     continue
                 from short_bot.reel import _storyboard_frames
-                if not _storyboard_frames(seg, board, ffmpeg_path, cols=3, rows=2,
+                # 3×3=9 KARE (6 DEĞİL): seyrek örneklem dilim içindeki DEĞİŞİMİ kaçırıyor.
+                # GERÇEK HATA (short 1154 klibi): BAŞ dilimi 20 saniye ve o dilimde adam
+                # gazeteyi söküp altındaki SARI NOT duvarını açığa çıkarıyor; 6 kareyle
+                # vision duvarı 'bare tan wall with a framed photograph' diye tarif etti,
+                # notları hiç görmedi. Anlatım (DOĞRU olarak) 'notlar çıkıyor' deyince
+                # netlik kapısı beat sheet'te yok diye UYDURMA sayıp reddetti — eksik beat
+                # sheet İYİ anlatımı eledi. Sadakat/kalite yargıları aynı dersle zaten
+                # 9 kareye geçmişti (bkz. _storyboard_frames çağrıları orada).
+                if not _storyboard_frames(seg, board, ffmpeg_path, cols=3, rows=3,
                                           frame_w=384):
                     continue
-                desc, _static = describe_storyboard(board, vision_call=vision_call)
+                desc, _static = describe_storyboard(board, vision_call=vision_call,
+                                                    n_frames=9)
                 if desc and desc.strip():
                     lbl = labels[i] if i < len(labels) else f"B{i+1}"
                     beats.append(f"{lbl} ({int(s0)}-{int(s1)}sn): {desc.strip()}")

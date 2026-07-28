@@ -1241,7 +1241,14 @@ class NarrationClarity(_BaseModel):
 
 _CLARITY_PROMPT = (
     "Aşağıda bir kısa video için yazılmış Türkçe bir ANLATIM var ({tone_word} tonunda). Video "
-    "şunu gösteriyor:\nVİDEO: {desc}\n\nANLATIM:\n---\n{narr}\n---\n"
+    "şunu gösteriyor:\nVİDEO: {desc}\n"
+    # BAŞLIK ŞART: vision tarifi EKSİK olabiliyor (short 1154: beat sheet duvarı 'bare tan
+    # wall' sandı, üstündeki sarı notları hiç görmedi). Anlatım başlıktan bilerek DOĞRU bir
+    # detay yazınca ('duvardan notlar çıkıyor'), o detay tarifte yok diye 'uydurma' sayıldı
+    # ve klip iki denemede de elendi — yani eksik tarif İYİ anlatımı eledi.
+    "KLİBİN KENDİ BAŞLIĞI (poster'ın tarifi — VİDEO satırı eksik kalırsa buraya bak; "
+    "başlıkta geçen bir detay UYDURMA SAYILMAZ): {title}\n\n"
+    "ANLATIM:\n---\n{narr}\n---\n"
     "Bu anlatım NET, TUTARLI ve tona uygun İŞLİYOR mu? Şunlara bak:\n"
     "1) İzleyici NE OLDUĞUNU net anlıyor mu (kim / ne yapıyor / asıl an)?\n"
     "2) Benzetmeler/laflar sahneye OTURUYOR mu, yoksa ZORLAMA / kopuk / üst üste yığılmış mı?\n"
@@ -1293,7 +1300,8 @@ _CLARITY_TONE = {
 
 def judge_narration_clarity(narration_text: str, clip_description: str, *, tone: str = "mizah",
                             backend: str = "claude_cli", model: str = "default",
-                            api_key: str | None = None, claude_path: str = "claude"):
+                            api_key: str | None = None, claude_path: str = "claude",
+                            title: str = ""):
     """Anlatım NET + TUTARLI + TONA UYGUN mı (izleyici olayı anlar mı; mizah güldürüyor / duygu
     dokunuyor mu)? METİN-tabanlı ikinci-LLM yargısı (ucuz). ``tone`` MİZAH'ta komik-nokta, DUYGU'da
     duygusal-oturma arar (denetim 1005: tek-tip prompt DUYGU'yu 'komik değil' diye yanlış eliyordu).
@@ -1302,7 +1310,7 @@ def judge_narration_clarity(narration_text: str, clip_description: str, *, tone:
         return None
     _tk = _CLARITY_TONE.get(tone, _CLARITY_TONE["mizah"])
     prompt = _CLARITY_PROMPT.format(desc=(clip_description or "")[:600], narr=narration_text[:900],
-                                    **_tk)
+                                    title=(title or "(başlık yok)")[:300], **_tk)
     last: Exception | None = None
     for _ in range(2):
         try:
