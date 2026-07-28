@@ -925,3 +925,133 @@ def test_produce_curated_records_published_video_duration(tmp_path, monkeypatch)
     got = con.execute("select duration_s from shorts where id=?", (sid,)).fetchone()[0]
     con.close()
     assert got == 14, f"DB'ye yayınlanan videonun süresi değil {got}sn yazıldı"
+
+
+def test_collect_pool_prechecks_heavy_text_and_watermark(tmp_path, monkeypatch):
+    """HAVUZA ÖN-DENETİM: gömülü yazı / temizlenemez watermark havuza GİRMESİN.
+
+    ÖLÇÜM (dayidiyorki, 535 görülmüş klip): elemelerin %48'i heavy-text, %2'si
+    watermark. Bu iki kapı ancak operatör 'üret' dedikten SONRA, klip indirilince
+    çalışıyordu → panelde 'hazır' görünen cevherler üretimde eleniyordu (7/7).
+    Oysa collect_pool klibi ZATEN indirip kalite yargısı yapıyor; aynı klip elde
+    iken bu iki kontrolü de yapmamak için sebep yok — maliyet yalnız vision çağrısı.
+
+    Elenen klip seen_clips'e KALICI yazılır (bir daha indirilmesin): ikisi de klibin
+    değişmez özelliği.
+    """
+    from pathlib import Path
+    from types import SimpleNamespace
+
+    import short_bot.curated_clean as cc
+    import short_bot.curated_pool as cp
+    import short_bot.curated_rank as cr
+    import short_bot.pipeline as pl
+    import short_bot.reddit_gems as rg
+    from short_bot.curated_clean import ClipQuality, HeavyText, WatermarkDetect
+    from short_bot.db import init_db
+
+    gems = [
+        {"video_url": f"https://v.redd.it/p{i}/DASH.mp4", "title": f"klip{i}",
+         "permalink": f"https://reddit.com/r/aww/{i}", "sub": "aww",
+         "ups": 5000 - i * 100, "comments": 20, "duration": 30, "width": 1080,
+         "height": 1920, "orient": "DİKEY", "thumb": ""}
+        for i in range(3)
+    ]
+    monkeypatch.setattr(rg, "find_gems", lambda *a, **k: gems)
+    monkeypatch.setattr(rg, "fetch_popular", lambda *a, **k: [])
+    monkeypatch.setattr(rg, "download_clip",
+                        lambda url, dest: (Path(dest).write_bytes(b"m"), Path(dest))[1])
+    fake = SimpleNamespace(backend="google_studio", model="m", api_key=None, claude_path="")
+    monkeypatch.setattr(pl, "resolve_ai_call", lambda *a, **k: fake)
+    monkeypatch.setattr(cr, "score_curiosity",
+                        lambda gems_, **k: [dict(g, curiosity=9) for g in gems_])
+    monkeypatch.setattr(cc, "judge_clip_quality",
+                        lambda clip, **k: ClipQuality(engaging=True, score=9))
+    monkeypatch.setattr(cc, "detect_source_banner", lambda clip, **k: None)
+    monkeypatch.setattr(cc, "crop_source_banner", lambda clip, b, **k: None)
+
+    # p0 → temizlenemez watermark, p1 → gömülü altyazı, p2 → temiz
+    def _clean(clip, **k):
+        if "q0" in str(clip):
+            return clip, WatermarkDetect(present=True, regions=["moving"],
+                                         covers_subject=True)
+        return clip, WatermarkDetect(present=False)
+
+    def _heavy(clip, **k):
+        return HeavyText(heavy="q1" in str(clip), kinds=["subtitle"])
+
+    monkeypatch.setattr(cc, "clean_if_needed", _clean)
+    monkeypatch.setattr(cc, "detect_heavy_text", _heavy)
+
+    reel = SimpleNamespace(enabled=True, curated_tone="duygu", curated_min_ups=500,
+                           curated_max_duration=90, subreddits=[], curated_time="month",
+                           curated_include_popular=False)
+    channel = SimpleNamespace(slug="dayidiyorki", content_source="curated", reel=reel)
+    db = tmp_path / "pool.db"
+    added = cp.collect_pool(channel, settings=SimpleNamespace(ffmpeg_path="ffmpeg"),
+                            secrets={"reddit_client_id": "x", "reddit_client_secret": "y"},
+                            db_path=db)
+
+    assert added == 1, f"kirli klipler havuza girdi (eklenen={added})"
+    eng = init_db(db)
+    rows = cp.list_pool(eng, "dayidiyorki")
+    assert [r["title"] for r in rows] == ["klip2"], f"havuzda yanlış cevher: {rows}"
+    # ikisi de KALICI hatırlanmalı — bir daha indirilip yargılanmasın
+    assert cp.seen_keys(eng, "dayidiyorki") == {cp.clip_key(gems[0]["video_url"]),
+                                               cp.clip_key(gems[1]["video_url"])}
+
+
+def test_clean_pool_prechecks_existing_gems(tmp_path, monkeypatch):
+    """RETRO DENETİM: havuzda ZATEN duran cevherler de ön-denetimden geçmeli.
+
+    collect_pool'a ön-denetim eklemek yalnız YENİ cevherleri korur; operatörün panelde
+    gördüğü mevcut havuz (dayidiyorki'de 37 cevher) denetimsiz kalır ve üretimde
+    elenmeye devam eder — kullanıcının asıl şikâyeti buydu. clean_pool zaten her
+    cevheri İNDİRİP kalite yargılıyor; aynı klip elde iken watermark + gömülü yazı
+    kontrolü de yapılmalı."""
+    from pathlib import Path
+    from types import SimpleNamespace
+
+    import short_bot.curated_clean as cc
+    import short_bot.curated_pool as cp
+    import short_bot.curated_rank as cr
+    import short_bot.pipeline as pl
+    import short_bot.reddit_gems as rg
+    from short_bot.curated_clean import ClipQuality, HeavyText, WatermarkDetect
+    from short_bot.db import init_db, pooled_gems
+
+    db = tmp_path / "clean.db"
+    eng = init_db(db)
+    with eng.begin() as c:
+        for i in range(3):
+            c.execute(pooled_gems.insert().values(
+                channel="dayidiyorki", clip_key=f"vreddit:c{i}",
+                video_url=f"https://v.redd.it/c{i}/DASH.mp4", permalink=f"p{i}",
+                title=f"eski{i}", sub="aww", ups=1000, comments=5, duration=30,
+                width=1080, height=1920, orient="DİKEY", thumb="", score=9.0,
+                tone="duygu", status="pending"))
+
+    fake = SimpleNamespace(backend="google_studio", model="m", api_key=None, claude_path="")
+    monkeypatch.setattr(pl, "resolve_ai_call", lambda *a, **k: fake)
+    monkeypatch.setattr(cr, "score_curiosity", lambda gems_, **k: gems_)   # thumbnail temiz
+    monkeypatch.setattr(rg, "download_clip",
+                        lambda url, dest: (Path(dest).write_bytes(b"m"), Path(dest))[1])
+    monkeypatch.setattr(cc, "judge_clip_quality",
+                        lambda clip, **k: ClipQuality(engaging=True, score=9))
+    monkeypatch.setattr(cc, "detect_source_banner", lambda clip, **k: None)
+    monkeypatch.setattr(cc, "crop_source_banner", lambda clip, b, **k: None)
+    monkeypatch.setattr(cc, "clean_if_needed", lambda clip, **k: (
+        (clip, WatermarkDetect(present=True, regions=["moving"], covers_subject=True))
+        if "c0" in str(clip) else (clip, WatermarkDetect(present=False))))
+    monkeypatch.setattr(cc, "detect_heavy_text",
+                        lambda clip, **k: HeavyText(heavy="c1" in str(clip),
+                                                    kinds=["subtitle"]))
+
+    reel = SimpleNamespace(enabled=True, curated_tone="duygu")
+    channel = SimpleNamespace(slug="dayidiyorki", content_source="curated", reel=reel)
+    n = cp.clean_pool([channel], settings=SimpleNamespace(ffmpeg_path="ffmpeg"),
+                      secrets={}, db_path=db)
+
+    assert n == 2, f"kirli cevherler havuzda kaldı (elenen={n})"
+    kalan = [r["title"] for r in cp.list_pool(eng, "dayidiyorki")]
+    assert kalan == ["eski2"], f"havuzda yanlış cevher kaldı: {kalan}"

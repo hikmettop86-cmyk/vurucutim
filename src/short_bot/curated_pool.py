@@ -3,8 +3,14 @@ cevherleri ``pooled_gems`` tablosuna biriktirir; kullanıcı panelden bakıp 'Ü
 
 Bu, autopilot'un (auto_produce_curated) OTOMATİK-üret kısmını çıkarıp yerine İNSAN ONAYI
 koyan versiyon: pahalı otonom LLM ajanı DEĞİL — mevcut find_gems + tona-duyarlı
-score_curiosity + dedup'ın zamanlanmış (cron) hâli. Maliyet ~$0 (skor Google ücretsiz
-havuz, thumbnail üzerinden; klip İNMEZ — indirme/watermark üretim anında).
+score_curiosity + dedup'ın zamanlanmış (cron) hâli. Maliyet ~$0 (vision Google ücretsiz
+havuz).
+
+HAVUZA GİREN KLİP ÜRETİLEBİLİR OLMALI: skor thumbnail'dan yapılır ama en güçlü adaylar
+İNDİRİLİP storyboard kalite yargısından ve ÖN-DENETİMDEN (watermark + gömülü yazı, bkz.
+precheck_clip) geçer. Eskiden bu iki kontrol yalnız üretim anında yapılıyordu; operatör
+panelde 'hazır' görünen cevheri üretmeye kalkınca eleniyordu (ölçüm: elemelerin %48'i
+heavy-text). clean_pool aynı denetimi havuzda ZATEN duran cevherlere de uygular.
 """
 from __future__ import annotations
 
@@ -99,6 +105,49 @@ def _produced_keys(db_path) -> set:
     except Exception:  # noqa: BLE001
         pass
     return keys
+
+
+def precheck_clip(clip, *, vision_call, ffmpeg_path: str, work_dir, idx: int = 0,
+                  log=log) -> tuple:
+    """Havuz ÖN-DENETİMİ: watermark + kaynak bandı kırpma + gömülü yazı.
+
+    Döner ``(kullanılacak_klip, red_verdict)``; ``red_verdict`` boşsa klip temiz.
+    Verdict 'watermark' | 'heavy-text' — ikisi de klibin DEĞİŞMEZ özelliği, çağıran
+    seen_clips'e kalıcı yazabilir.
+
+    NEDEN (kullanıcı: 'havuzdaki cevherler üretimde eleniyor'): ÖLÇÜM (dayidiyorki,
+    535 klip) elemelerin %48'i heavy-text, %2'si watermark — ikisi de yalnız üretim
+    anında bakılıyordu. Oysa hem collect_pool hem clean_pool klibi ZATEN indiriyor;
+    aynı klip elde iken kontrol etmemek için sebep yok. Panelde 37 'hazır' cevher
+    varken denenen 7'sinin 7'si elenmişti.
+
+    SIRA ÜRETİMDEKİYLE AYNI (watermark → banner kırp → gömülü yazı): kırpılabilir bir
+    kaynak bandı önce kırpılmazsa 'gömülü yazı' sanılıp iyi klip haksız elenir.
+
+    FAIL-OPEN: vision hıçkırığında ('' , yani temiz) döner — geçici hata yüzünden
+    kalıcı blacklist yazmayız; üretimdeki fail-closed kapılar zaten yakalar."""
+    from short_bot.curated_clean import (clean_if_needed, crop_source_banner,
+                                         detect_heavy_text, detect_source_banner,
+                                         watermark_uncleanable)
+    try:
+        _c2, _wm = clean_if_needed(clip, vision_call=vision_call, ffmpeg_path=ffmpeg_path,
+                                   out_path=Path(work_dir) / f"w{idx}.mp4")
+        if _wm is not None and _wm.present and watermark_uncleanable(_wm):
+            return clip, "watermark"
+        if _c2 is not None:
+            clip = _c2
+        _nb = crop_source_banner(
+            clip,
+            detect_source_banner(clip, vision_call=vision_call, ffmpeg_path=ffmpeg_path),
+            ffmpeg_path=ffmpeg_path, out_path=Path(work_dir) / f"b{idx}.mp4")
+        if _nb is not None:
+            clip = _nb
+        _ht = detect_heavy_text(clip, vision_call=vision_call, ffmpeg_path=ffmpeg_path)
+        if _ht is not None and _ht.heavy:
+            return clip, "heavy-text"
+    except Exception as e:  # noqa: BLE001 — ön-denetim patlarsa klibi geçir (fail-open)
+        log.info(f"  havuz[ön-denetim]: kontrol hatası ({e}) → geçildi")
+    return clip, ""
 
 
 def collect_pool(channel, *, settings, secrets, db_path, log=log) -> int:
@@ -203,15 +252,26 @@ def collect_pool(channel, *, settings, secrets, db_path, log=log) -> int:
                 except Exception:  # noqa: BLE001 — inmezse (403 vs) atla
                     continue
                 judged += 1
+                # ÖN-DENETİM (watermark + gömülü yazı) — bkz. precheck_clip
+                clip, _drop = precheck_clip(clip, vision_call=vision,
+                                            ffmpeg_path=settings.ffmpeg_path,
+                                            work_dir=td, idx=judged, log=log)
+                if _drop:
+                    mark_seen(eng, channel.slug, clip_key(g.get("video_url", "")), _drop)
+                    log.info(f"  havuz[ön-denetim][{channel.slug}]: "
+                             f"'{(g.get('title') or '')[:34]}' {_drop} → elendi "
+                             f"(üretimde harcanmadan)")
+                    continue
                 q = judge_clip_quality(clip, vision_call=vision,
-                                       ffmpeg_path=settings.ffmpeg_path, tone=tone)
+                                       ffmpeg_path=settings.ffmpeg_path, tone=tone,
+                                       title=g.get("title", ""))
                 try:
                     Path(clip).unlink()          # yer aç (tarama başına 15 klip inebilir)
                 except Exception:  # noqa: BLE001
                     pass
                 if q is None:
                     verified.append(g)           # yargı hatası → fail-open (thumbnail skoruyla)
-                elif q.engaging and q.score >= QUALITY_MIN:
+                elif q.engaging and q.score >= QUALITY_MIN and getattr(q, "works_muted", True):
                     g["curiosity"] = q.score      # storyboard skoru (daha doğru) YERİNE geçer
                     verified.append(g)
                 else:
@@ -292,6 +352,7 @@ def clean_pool(channels, *, settings, secrets, db_path, log=log) -> int:
         clean = [g for g in gems if not g.get("has_text")]
         # 2) STORYBOARD KALİTE (indir + gerçek 6 kare): sıradan/rutin olanı ele
         mundane = 0
+        dirty_clip = 0
         dl_fail = none_ct = 0
         with tempfile.TemporaryDirectory() as td:
             for i, g in enumerate(clean):
@@ -302,8 +363,23 @@ def clean_pool(channels, *, settings, secrets, db_path, log=log) -> int:
                     log.info(f"  havuz[temizlik][{ch.slug}]: indirilemedi "
                              f"({str(e)[:40]}) → {(g.get('title') or '')[:24]}")
                     continue
+                # RETRO ÖN-DENETİM: havuzda ZATEN duran cevherler de watermark/gömülü yazı
+                # kontrolünden geçsin. collect_pool'daki denetim yalnız YENİ cevherleri
+                # korur; operatörün panelde gördüğü mevcut havuz denetimsiz kalırdı
+                # (kullanıcının asıl şikâyeti). Klip burada zaten indirilmiş durumda.
+                clip, _drop = precheck_clip(clip, vision_call=vision,
+                                            ffmpeg_path=settings.ffmpeg_path,
+                                            work_dir=td, idx=i, log=log)
+                if _drop:
+                    mark_pool(eng, g["_pool_id"], "skipped")
+                    mark_seen(eng, ch.slug, clip_key(g.get("video_url", "")), _drop)
+                    dirty_clip += 1
+                    log.info(f"  havuz[temizlik][{ch.slug}]: "
+                             f"'{(g.get('title') or '')[:30]}' {_drop} → elendi")
+                    continue
                 q = judge_clip_quality(clip, vision_call=vision,
-                                       ffmpeg_path=settings.ffmpeg_path, tone=tone)
+                                       ffmpeg_path=settings.ffmpeg_path, tone=tone,
+                                       title=g.get("title", ""))
                 try:
                     Path(clip).unlink()
                 except Exception:  # noqa: BLE001
@@ -311,7 +387,8 @@ def clean_pool(channels, *, settings, secrets, db_path, log=log) -> int:
                 if q is None:
                     none_ct += 1
                     continue
-                if not q.engaging or q.score < QUALITY_MIN:
+                if (not q.engaging or q.score < QUALITY_MIN
+                        or not getattr(q, "works_muted", True)):
                     mark_pool(eng, g["_pool_id"], "skipped")
                     mundane += 1
                     log.info(f"  havuz[temizlik][{ch.slug}]: '{(g.get('title') or '')[:30]}' "
@@ -319,9 +396,10 @@ def clean_pool(channels, *, settings, secrets, db_path, log=log) -> int:
         if dl_fail or none_ct:
             log.info(f"  havuz[temizlik][{ch.slug}]: {dl_fail} indirilemedi, "
                      f"{none_ct} vision-hatası (bunlar bırakıldı)")
-        total += len(dirty) + mundane
-        log.info(f"  havuz[temizlik][{ch.slug}]: {len(dirty)} yazılı + {mundane} sıradan "
-                 f"elendi / {len(gems)} tarandı → {len(gems) - len(dirty) - mundane} kaldı")
+        total += len(dirty) + mundane + dirty_clip
+        log.info(f"  havuz[temizlik][{ch.slug}]: {len(dirty)} yazılı kapak + {dirty_clip} "
+                 f"kirli klip + {mundane} sıradan elendi / {len(gems)} tarandı → "
+                 f"{len(gems) - len(dirty) - mundane - dirty_clip} kaldı")
     return total
 
 
