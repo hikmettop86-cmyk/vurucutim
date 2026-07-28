@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import threading
 import time
+from contextlib import contextmanager
 from pathlib import Path
 from typing import TypeVar
 
@@ -38,6 +39,14 @@ _CLI_LOCK = threading.Lock()
 # hang'inde OR'a DÜŞMEK YERİNE CLI tekrar denenir. OR yalnız CLI tüm denemelerde patlarsa
 # (plan uzun süre doygun) ya da CLI KURULU DEĞİLSE — son çare, nadir.
 _CLI_MAX_ATTEMPTS = 3
+
+# `claude -p` @dosya ile iliştirilen görselin ÜST SINIRI. ÖLÇÜLDÜ (2026-07-24, aynı
+# pano farklı sıkıştırmalarla): 239.437 bayt → 2/2 yanıt, 286.262 bayt → 0/2. Sınırın
+# ÜSTÜNDE görsel SESSİZCE düşüyor: modele yalnız dosya YOLU gidiyor, o da ya boş/araç-
+# çağrısı döndürüyor ya da metinden UYDURUP güvenli bir hüküm veriyor (short 1077:
+# final QA "senkron ✓, skor 8" dedi, ekranda ise anlatımla alakasız fuaye vardı).
+# Kör yargı sessiz olduğu için en tehlikeli arıza — bütçeyi aşanı küçültüyoruz.
+CLI_IMAGE_MAX_BYTES = 262_144
 
 
 def register_fallback(primary_backend: str, primary_model: str,
@@ -178,6 +187,56 @@ def _invoke_cli_with_retry(prompt: str, *, model: str, claude_path: str,
     raise ClaudeCliError("claude cli tüm denemelerde başarısız")
 
 
+@contextmanager
+def _attachable_image(image_path: "Path"):
+    """Görseli CLI'nin iliştirebileceği boyuta indir (gerekiyorsa) ve yolunu ver.
+
+    Bütçe altındaysa dosyaya DOKUNULMAZ. Üstündeyse kalite düşürülerek, gerekirse
+    küçültülerek geçici bir kopya üretilir. İndirilemiyorsa hata: kör yargı
+    (bkz. CLI_IMAGE_MAX_BYTES) sessizce yanlış karar ürettiği için gönderilmez.
+    """
+    import tempfile
+    src = Path(image_path)
+    if src.stat().st_size <= CLI_IMAGE_MAX_BYTES:
+        yield src
+        return
+    try:
+        from PIL import Image
+    except Exception as e:  # noqa: BLE001 — PIL yoksa küçültemeyiz
+        raise ClaudeCliError(
+            f"görsel {src.stat().st_size} bayt > {CLI_IMAGE_MAX_BYTES} sınırı ve "
+            f"küçültülemiyor (PIL yok) → CLI onu sessizce düşürürdü") from e
+    # MERDİVEN HEDEFE ULAŞANA KADAR İNER. Eski sabit liste (70/1.0 … 35/0.65) büyük ya da
+    # GÜRÜLTÜLÜ (JPEG'in sıkıştıramadığı) kapakları sınıra indiremiyordu ve çağıran adayı
+    # KÖR skorluyordu — gerçek koşu 1314/1327: 'cevher[merak]: skor hatası (görsel 262144
+    # bayt sınırına indirilemedi) → nötr 5'. Yargısız aday sabit 5 puan alınca merak
+    # sıralaması o adaylar için anlamsızlaşıyor, zayıf klip güçlünün önüne geçebiliyor.
+    # Önce kaliteyi düşür (detay korunur), yetmezse ölçeği kademeli kır; 256KB'a sığmayan
+    # bir kapak pratikte yok. Yine de sığmazsa hata TEŞHİS EDİLEBİLİR olsun (boyutlar).
+    steps = ((70, 1.0), (55, 1.0), (45, 1.0), (45, 0.8), (35, 0.65), (35, 0.5),
+             (30, 0.4), (25, 0.3), (25, 0.2))
+    with tempfile.TemporaryDirectory() as td:
+        son = 0
+        with Image.open(src) as im:
+            im = im.convert("RGB")
+            for quality, shrink in steps:
+                fitted = Path(td) / "fitted.jpg"
+                out = (im if shrink == 1.0 else
+                       im.resize((max(64, int(im.width * shrink)),
+                                  max(64, int(im.height * shrink)))))
+                out.save(fitted, "JPEG", quality=quality)
+                son = fitted.stat().st_size
+                if son <= CLI_IMAGE_MAX_BYTES:
+                    log.info(f"görsel {src.stat().st_size}→{son} bayt "
+                             f"(q={quality}, ölçek={shrink}) — CLI sınırına indirildi")
+                    yield fitted
+                    return
+        raise ClaudeCliError(
+            f"görsel {CLI_IMAGE_MAX_BYTES} bayt sınırına indirilemedi → gönderilmiyor "
+            f"(kör yargı yerine hata). kaynak={src.stat().st_size} bayt, "
+            f"en küçük deneme={son} bayt (q=25, ölçek=0.2)")
+
+
 def _invoke_primary(prompt: str, *, backend: str, model: str,
                     claude_path: str, api_key: str | None, timeout_s: int,
                     image_path: "Path | None" = None) -> str:
@@ -194,10 +253,15 @@ def _invoke_primary(prompt: str, *, backend: str, model: str,
                                           api_key=api_key, timeout_s=timeout_s,
                                           image_path=image_path)
     resolved_path = _resolve_claude_binary(claude_path)
-    effective_prompt = (
-        f"@{Path(image_path).absolute().as_posix()}\n\n{prompt}"
-        if image_path is not None else prompt
-    )
+    if image_path is not None:
+        # Bütçeyi aşan görsel CLI'ye ULAŞMAZ (sessizce düşer) → önce sığdır.
+        with _attachable_image(image_path) as fitted:
+            return _run_cli(resolved_path, model, timeout_s,
+                            f"@{fitted.absolute().as_posix()}\n\n{prompt}")
+    return _run_cli(resolved_path, model, timeout_s, prompt)
+
+
+def _run_cli(resolved_path: str, model: str, timeout_s: int, effective_prompt: str) -> str:
     # LEAN çağrı: `claude -p` normalde HER çağrıda tüm Claude Code ortamını bootstrap eder
     # (MCP sunucuları — NexLev 80+ araç, Chrome, Gmail; CLAUDE.md/skills/plugins/hooks; built-in
     # araçlar). Bizim kullanım saf metin→JSON üretimi; HİÇBİRİNE ihtiyaç yok. Bu bootstrap

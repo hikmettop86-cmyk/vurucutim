@@ -12,7 +12,12 @@ def test_vahsi_mizah_yuklenir():
     p = load_persona("vahsi_mizah", language="tr")
     assert p is not None
     assert p.slug == "vahsi_mizah"
-    assert "Aşık Kargayi" in p.few_shot   # ozan imzası — marka öğesi
+    # OZAN KALDIRILDI (kullanıcı: 'ozanı hep kaldır — sonunda ozan sözü saçma sapan';
+    # zorlama kafiye anlamsız mısralar üretiyordu). Bu test eskiden 'Aşık Kargayi'
+    # imzasını ARIYORDU ve kaldırma commit'inde güncellenmediği için kırık kalmıştı.
+    # Artık ters yönde koruma: few-shot dolu OLMALI ama ozan kalıbı GERİ GELMEMELİ.
+    assert len(p.few_shot) > 200 and "ÖRNEK" in p.few_shot
+    assert "Aşık" not in p.few_shot and "der ki" not in p.few_shot
     assert len(p.rules) >= 5
     assert p.humor_check is True
 
@@ -34,9 +39,11 @@ def test_persona_block_few_shot_ve_kurallari_icerir():
     from short_bot.persona import load_persona, persona_block
     p = load_persona("vahsi_mizah", language="tr")
     blok = persona_block(p)
-    assert "Aşık Kargayi" in blok            # few-shot örneği
+    assert "ÖRNEK" in blok                   # few-shot örneği bloğa giriyor
     assert "BÜRÜNDÜR" in blok                # kurallar
     assert "GERÇEK" in blok
+    # OZAN KALDIRILDI: blok artık imzayı DEĞİL, yasağını taşımalı (bkz. yukarıdaki test)
+    assert "ozan beyti YAZMA" in blok
 
 
 def test_signature_style_seed_ile_doner():
