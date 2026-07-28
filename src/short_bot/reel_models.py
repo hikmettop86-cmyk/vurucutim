@@ -10,7 +10,9 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from short_bot.caption_align import align_to_asr
-from short_bot.text_normalize import strip_non_turkish_diacritics
+from short_bot.locale import CJK_LANGUAGES
+from short_bot.text_normalize import (current_language, split_words,
+                                      strip_non_turkish_diacritics)
 
 
 def _cumleler(s: str) -> list[str]:
@@ -21,12 +23,23 @@ def _cumleler(s: str) -> list[str]:
 
 
 def _content_words(s: str) -> set[str]:
-    """Anlam taşıyan sözcükler (ek/edat gürültüsü elenir).
+    """Anlam taşıyan sözcüklerin KÖKLERİ (ek/edat gürültüsü elenir).
 
     İki denetim de buna dayanır: close_echoes_hook (loop) ve open_loop_spoken (takas).
-    """
+
+    KÖK KIRPMA ŞART (ölçüm: 5 kapanışın 2'si yanlış 'geri çağırmıyor' aldı): Türkçe
+    sondan eklemeli bir dil, tam kelime eşleştirmek yanlış negatif üretiyor —
+    'damat'/'damadı' (ünsüz yumuşaması), 'dostları'/'dostluktu', 'ayakta'/'ayakları'
+    aynı kökten olduğu hâlde eşleşmiyordu. 5+ harfli sözcükleri ilk 4 harfe indiriyoruz:
+    bu üç çifti de yakalar, 'gelin'/'gelmek' ve 'yalnız'/'yalan' gibi farklı kökleri
+    ayrı tutar. Latin dışı yazılarda (CJK) sözcük zaten kısa/ayrık — dokunulmaz."""
     import re
-    return {w for w in re.findall(r"\w+", (s or "").lower()) if len(w) >= 4}
+    out: set[str] = set()
+    for w in re.findall(r"\w+", (s or "").lower()):
+        if len(w) < 4:
+            continue
+        out.add(w[:4] if len(w) >= 5 else w)
+    return out
 
 
 class ReelBeat(BaseModel):
@@ -328,7 +341,16 @@ class ReelNarration(BaseModel):
         return " ".join(self.segments())
 
     def word_count(self) -> int:
-        return len(self.full_text().split())
+        """Senaryonun UZUNLUK BÜTÇESİ cinsinden ölçüsü — dile duyarlı.
+
+        Adı 'word' ama CJK'de birim KARAKTERDİR (bkz. reel_narration.budget_unit):
+        Japoncada boşluk yok, ``split()`` tüm anlatımı ~5 'kelime' sayardı ve her
+        sınırın altında kalırdı — yani kısaltma emniyeti (fit_word_budget) o dilde
+        HİÇ çalışmazdı. Ölçü ile bütçe aynı birimde olmak zorunda."""
+        text = self.full_text()
+        if current_language() in CJK_LANGUAGES:
+            return len("".join(text.split()))
+        return len(text.split())
 
 
 @dataclass(frozen=True)
@@ -359,7 +381,9 @@ def build_reel_timeline(narration: "ReelNarration", asr_words: list[TimedWord],
     words_flat: list[str] = []
     segs_flat: list[int] = []
     for seg_idx, seg_text in enumerate(narration.segments()):
-        for w in seg_text.split():
+        # split() DEĞİL: boşluksuz yazan dillerde (ja/zh) tüm cümle tek "kelime"
+        # olur ve karaoke altyazı blok hâlinde yanar (bkz. text_normalize).
+        for w in split_words(seg_text):
             words_flat.append(w)
             segs_flat.append(seg_idx)
 

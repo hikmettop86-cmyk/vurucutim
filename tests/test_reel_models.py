@@ -223,3 +223,41 @@ def test_clip_order_permutasyon_degilse_bosalir():
     assert _narr(clip_order=[0, 0, 1]).clip_order == []     # tekrar → geçersiz
     assert _narr(clip_order=[0, 1]).clip_order == []        # eksik → geçersiz
     assert _narr(clip_order=[0, 1, 5]).clip_order == []     # aralık dışı → geçersiz
+
+
+def test_content_words_matches_turkish_suffixed_forms():
+    """LOOP DENETİMİ TÜRKÇE EKLERİNİ GÖRMELİ (ölçüm: 5 kapanışın 2'si yanlış 'YOK').
+
+    _content_words TAM kelime eşleştiriyordu; Türkçe sondan eklemeli bir dil olduğu
+    için 'damat' ile 'damadı', 'dostları' ile 'dostluktu' eşleşmiyordu. Sonuç:
+    close_echoes_hook gerçekte hook'u geri çağıran kapanışlara 'geri çağırmıyor'
+    uyarısı veriyordu — operatöre yanlış sinyal, üstelik open_loop_spoken da aynı
+    fonksiyona dayanıyor.
+    """
+    from short_bot.reel_models import _content_words
+
+    # gerçek koşu çiftleri (check_close ölçümü, seed 5 ve 2)
+    assert _content_words("damadı ayakta tutan kollar") & _content_words(
+        "Bu damat kendi ayakları üstünde duramıyordu")
+    assert _content_words("Damadı ayakta tutan bu dostluktu") & _content_words(
+        "yanında öyle dostları vardı")
+    # alakasız metinler EŞLEŞMEMELİ (kök kırpma yanlış pozitif üretmesin)
+    assert not (_content_words("Bu kedi kutuda uyuyor")
+                & _content_words("Sence kaç kişi bunu görünce güldü"))
+
+
+def test_close_echoes_hook_tolerates_suffixes():
+    from short_bot.reel_models import ReelBeat, ReelNarration
+
+    def _n(hook, close):
+        return ReelNarration(
+            hook=hook,
+            beats=[ReelBeat(text="Birinci beat cumlesi burada", visual_query="clip"),
+                   ReelBeat(text="Ikinci beat cumlesi burada", visual_query="clip"),
+                   ReelBeat(text="Ucuncu beat cumlesi burada", visual_query="clip")],
+            close=close, mood="upbeat")
+
+    assert _n("Bu damat kendi ayakları üstünde duramıyordu",
+              "Düğün bitti ama damadı ayakta tutan o kollar hiç açılmadı.").close_echoes_hook()
+    assert not _n("Bu kedi kutunun içinde mışıl mışıl uyuyor",
+                  "Sence kaç kişi bunu görünce güldü?").close_echoes_hook()

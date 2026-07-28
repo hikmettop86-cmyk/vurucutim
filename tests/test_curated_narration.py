@@ -205,3 +205,87 @@ def test_curated_prompt_bans_outcome_flipping_exaggeration():
     low = build_curated_prompt("t", "d", channel=ch, tone="duygu").replace("İ", "i").lower()
     assert "neredeyse" in low, "'neredeyse düştü' → 'düştü' çevirme yasağı yok"
     assert "sonuc" in low.replace("ç", "c"), "sonucu değiştirme yasağı yok"
+
+
+def test_fit_close_chars_keeps_payoff_drops_bait():
+    """KAPANIŞ ŞEMASI ÜRETİMİ DÜŞÜRMESİN (gerçek koşu 1320): model 'close' alanına
+    120 karakteri aşan bir kapanış yazdı, geri bildirimli 2. denemede de aştı →
+    run_json ValidationError → klip indirilmiş, vision harcanmış hâlde TÜM üretim çöpe.
+
+    CJK'de deterministik kırpma vardı (trim_cjk_close) ama YALNIZ CJK dillerinde;
+    Türkçede kod tarafında hiçbir güvenlik ağı yoktu. Kırpma BAŞTAN korur: payoff
+    (hikâyenin son vuruşu) kalır, yorum-yemi düşer — yem zaten opsiyonel (CTA
+    havuzunda 'yem yok' stili de var), payoff değil."""
+    from short_bot.reel_narration import fit_close_chars
+
+    # sınır içindeyse dokunma
+    kisa = "O gece damat dostlarının bacaklarıyla yürüdü."
+    assert fit_close_chars(kisa, 120) == kisa
+
+    # payoff + uzun yem → yem düşer, payoff kalır
+    uzun = ("O gece damat kendi ayaklarıyla değil, dostlarının bacaklarıyla yürüdü. "
+            "Bu sahne senin de içini ısıttıysa yorumlara mutlaka bir kalp bırak ve "
+            "bu videoyu böyle bir dostu olan herkese gönder.")
+    out = fit_close_chars(uzun, 120)
+    assert len(out) <= 120
+    assert out.startswith("O gece damat"), f"payoff düştü: {out}"
+    assert "kalp bırak" not in out
+
+    # tek cümle bile uzunsa kelime sınırında kesilir, yarım kelime kalmaz
+    tek = "Bu damat " + "uzun " * 40 + "yürüdü."
+    out2 = fit_close_chars(tek, 120)
+    assert len(out2) <= 120 and out2.endswith(".")
+    assert not out2.rstrip(".").endswith("uz"), "kelime ortasından kesilmiş"
+
+    # boş/kısa girdi güvenli
+    assert fit_close_chars("", 120) == ""
+
+
+def test_curated_draft_schema_tolerates_long_close():
+    """Şema artık uzun kapanışta PATLAMAMALI — kod tarafı budayacak. (Şema hâlâ absürt
+    uzunluğu reddeder; amaç üretimi ayakta tutmak.)"""
+    from short_bot.reel_narration import _CuratedDraft
+    d = _CuratedDraft(hook="Hook cumlesi burada", beats=["Bir beat", "Iki beat", "Uc beat"],
+                      close="A" * 300, mood="upbeat")
+    assert len(d.close) == 300
+
+
+def test_write_curated_narration_trims_overlong_close(monkeypatch):
+    """Uçtan uca: model uzun kapanış yazsa bile üretim SÜRER ve close sınıra iner."""
+    from short_bot.reel_models import CLOSE_MAX_CHARS
+    from short_bot.reel_narration import write_curated_narration
+    ch = SimpleNamespace(language="tr",
+                         reel=ReelConfig(enabled=True, voice_id="v", persona=""))
+    draft = _CuratedDraft(
+        hook="Bu damat ayaga kalkamiyordu",
+        beats=["Birinci beat cumlesi", "Ikinci beat cumlesi", "Ucuncu beat cumlesi"],
+        close=("O gece damat dostlarinin bacaklariyla yurudu. Bu sahne senin de icini "
+               "isittiysa yorumlara mutlaka bir kalp birak ve herkese gonder."),
+        mood="upbeat", title="Baslik", cover_title="Kapak")
+    monkeypatch.setattr("short_bot.reel_narration.run_json", lambda *a, **k: draft)
+    n = write_curated_narration("t", "d", channel=ch, subject="clip")
+    assert len(n.close) <= CLOSE_MAX_CHARS
+    assert n.close.startswith("O gece damat")
+
+
+def test_curated_prompt_requires_payoff_and_loop_callback():
+    """KAPANIŞ İKİ İŞİ DE YAPMALI: payoff (son vuruş) + hook'a geri çağrı (loop).
+
+    ÖLÇÜM (short 1150): kapanış yalnızca yemden ibaret çıktı — 'Senin yanında böyle
+    biri var mı?'. Payoff yok, hook'la ortak sözcük yok → close_echoes_hook denetimi
+    'video biter, izleyici döngüye girmez' uyarısı verdi. KÖK: ana reel promptu
+    callback'i AÇIKÇA istiyor (bkz. build_reel_prompt), kürate promptu hiç istemiyordu;
+    denetim ise ikisine de uygulanıyor.
+
+    Yem OPSİYONEL, payoff DEĞİL — fit_close_chars taşmada yemi düşürüp payoff'u
+    koruyor; prompt da aynı önceliği söylemeli."""
+    from short_bot.reel_narration import build_curated_prompt
+    ch = SimpleNamespace(language="tr",
+                         reel=ReelConfig(enabled=True, voice_id="v", persona=""))
+    # Türkçe tuzağı: "GERİ".lower() → "geri̇" (İ, birleşik noktalı i'ye düşer);
+    # "YALNIZCA".lower() → "yalnizca" (I, ı DEĞİL i olur). Projedeki _norm deseni.
+    p = build_curated_prompt("t", "d", channel=ch, tone="duygu")
+    low = p.replace("İ", "i").replace("I", "ı").lower()
+    assert "geri çağır" in low, "kapanışta hook'a geri çağrı (loop callback) kuralı yok"
+    assert "yalnızca yem" in low or "sadece yem" in low, \
+        "kapanışın yalnız yemden ibaret olamayacağı söylenmiyor"

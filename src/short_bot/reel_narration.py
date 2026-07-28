@@ -10,7 +10,7 @@ import re
 
 from short_bot.claude_cli import run_json
 from short_bot.locale import CJK_LANGUAGES, narration_style_rule
-from short_bot.reel_models import ReelNarration
+from short_bot.reel_models import CLOSE_MAX_CHARS, ReelNarration
 from short_bot.text_normalize import current_language
 from short_bot.lang_pack import load_pack
 from short_bot.reel_factcheck import (check_narration, fact_feedback,
@@ -59,6 +59,44 @@ CJK_CLOSE_MAX = 30
 
 # Cümle sonu işaretleri: kesme YALNIZ buralardan olur.
 _CJK_SENT_END = "。！？"
+
+
+def fit_close_chars(close: str, max_chars: int) -> str:
+    """Kapanışı karakter bütçesine sığdır — BAŞTAN tam cümle tutarak.
+
+    NEDEN KODDA (gerçek koşu 1320): prompt kuralı ('en fazla 120 karakter') YETMEDİ,
+    model aştı ve geri bildirimli 2. denemede de aştı → _CuratedDraft ValidationError →
+    klip indirilmiş, vision harcanmış hâlde TÜM üretim çöpe gitti. CJK'de bu güvenlik
+    ağı vardı (trim_cjk_close) ama yalnız CJK dillerinde.
+
+    PAYOFF KORUNUR, YEM DÜŞER: baştan alırız çünkü hikâyenin son vuruşu ilk cümledir;
+    yorum-yemi opsiyoneldir (CTA havuzunda 'yem yok' stili de var). CJK'de tersi
+    geçerli (bütçe 30 karakter, oraya yalnız CTA sığar) — o yüzden ayrı fonksiyon.
+
+    Tek cümle bile bütçeyi aşıyorsa kelime sınırından kesilir (yarım kelime bırakmaz)
+    ve nokta ile kapatılır: TTS düzgün okusun, ekranda yarım kelime durmasın."""
+    import re as _re
+    s = (close or "").strip()
+    if len(s) <= max_chars:
+        return s
+    parts = [p for p in _re.split(r"(?<=[.!?…])\s+", s) if p.strip()]
+    kept: list[str] = []
+    for p in parts:
+        cand = (" ".join(kept + [p])).strip()
+        if kept and len(cand) > max_chars:
+            break
+        kept.append(p)
+        if len(cand) >= max_chars:
+            break
+    out = " ".join(kept).strip()
+    if out and len(out) <= max_chars:
+        return out
+    # Tek cümle bile sığmadı → kelime sınırından kes, nokta ile kapat.
+    cut = s[:max_chars].rstrip()
+    if " " in cut:
+        cut = cut[:cut.rfind(" ")].rstrip()
+    cut = cut.rstrip(",;:-–—").rstrip()
+    return (cut + ".") if cut and not cut.endswith((".", "!", "?", "…")) else cut
 
 
 def trim_cjk_close(close: str, language: str) -> str:
@@ -671,7 +709,11 @@ class _CuratedDraft(_BaseModel):
     katı doğrulaması yerine sade metin — beat'ler sonradan resmileşir."""
     hook: str = _Field(min_length=3, max_length=140)
     beats: list[str] = _Field(min_length=3, max_length=5)
-    close: str = _Field(min_length=3, max_length=120)
+    # ŞEMA ÜRETİMİ DÜŞÜRMESİN: sınır GEVŞEK (120 → 400). Model kapanışı uzun yazarsa
+    # eskiden ValidationError üretimi komple çöpe atıyordu (koşu 1320); artık kod tarafı
+    # deterministik buduyor (fit_close_chars, CLOSE_MAX_CHARS'a). 400 yalnız absürt
+    # uzunluğa karşı emniyet supabı.
+    close: str = _Field(min_length=3, max_length=400)
     mood: str = "upbeat"
     title: str = ""
     title_en: str = ""      # İngilizce başlık (YouTube çok-dilli → küresel Shorts akışı)
@@ -912,6 +954,14 @@ RULES:
 - "cover_title" (3-6 kelime ekran manşeti).
 - KAPANIŞ ('close'): SON vuruş (payoff — komik ya da duygusal, tona göre) + BU VİDEONUN
   YORUM-YEMİ STİLİ: {cta_hint}.
+  ⚠️ ÖNCE PAYOFF: 'close' YALNIZCA YEMDEN İBARET OLAMAZ. Olayı bağlayan son vuruş
+  cümlesi ŞART; yem ondan sonra gelir (ve 'yem yok' stilinde hiç gelmez). Gerçek
+  hata (short 1150): kapanış sadece 'Senin yanında böyle biri var mı?' oldu — hikâye
+  bağlanmadan bitti.
+  🔁 LOOP GERİ ÇAĞRISI: payoff cümlesi HOOK'un anahtar sözcüğünü (özne ya da eylem —
+  'damat', 'ayağa kalkmak' gibi) GERİ ÇAĞIRSIN. Böylece video başa dönmüş hissi verir
+  ve izleyici tekrar izler; her tekrar ayrı bir izlenmedir. Yer kaplamaz, sadece
+  DOĞRU SÖZCÜĞÜ seç: hook'ta kullandığın kelimeyi kapanışta bir kez daha kullan.
   ⛔ KAPANIŞ ŞABLONU YASAK — hazır kapanış KALIPLARINI TEKRARLAMA. Bu kanalın ardışık
   videoları hep aynı cümleyle bitiyordu; şu ve benzeri ezberler YASAK: 'dokunduysa
   yorumlara bir kalp bırak', 'içinizi ısıttıysa', 'beğendiyseniz beğen', 'yorumlara
@@ -1065,6 +1115,13 @@ def write_curated_narration(title: str, clip_description: str, *, channel,
     if _close_fit != _close:
         log.info(f"  kürate[kapanış]: {len(_close)} karakter > {CJK_CLOSE_MAX} → baştan "
                  f"tam cümle atıldı ({len(_close_fit)} karakter): {_close_fit}")
+    # TÜM DİLLER: ekran/şema bütçesine sığdır (payoff kalır, yem düşer). Şema artık
+    # gevşek olduğu için budama BURADA yapılmazsa ReelNarration.close patlar.
+    _close_cap = fit_close_chars(_close_fit, CLOSE_MAX_CHARS)
+    if _close_cap != _close_fit:
+        log.info(f"  kürate[kapanış]: {len(_close_fit)} karakter > {CLOSE_MAX_CHARS} → "
+                 f"yorum-yemi düşürüldü ({len(_close_cap)} karakter): {_close_cap}")
+    _close_fit = _close_cap
     narration = ReelNarration(
         hook=_strip_bard_inline(draft.hook), beats=beats, close=_close_fit,
         mood=draft.mood, title=draft.title, title_en=getattr(draft, "title_en", ""),
