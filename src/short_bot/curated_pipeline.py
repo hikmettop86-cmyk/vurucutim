@@ -30,6 +30,15 @@ CURATED_QUALITY_MIN = 6
 # FİNAL QA eşiği (kullanıcı: 'zevksiz/anlamsız videolar çıkabiliyor'): bitmiş (render edilmiş)
 # video storyboard'dan 'yayınlanır mı' yargısı — bundan düşükse dosya silinir, klip atlanır.
 FINAL_QA_MIN = 6
+# SENKRON BAYRAĞI TEK BAŞINA SİLDİRMEZ (koşu 1434 yanlış pozitifi). Final QA tüm videodan
+# 9 kare örnekliyor; yargıcın gördüğü kare eni ~307px (ölçüldü). Annesine yapışmış yavru
+# tembel hayvan bu çözünürlükte annenin tüylerine karışıyor → yargıç 'kavuşma ekranda yok'
+# dedi, oysa kareler elle incelenince kavuşma NETTİ. Kare SAYISINI artırmak çözüm değil:
+# pano bütçesi (CLI_IMAGE_MAX_BYTES) sabit olduğu için 4 sütun kare enini 307→249'a
+# DÜŞÜRÜYOR — yani daha çok kare, daha KÖR yargıç. Bunun yerine: senkron şüphesi ancak
+# video bütün olarak da zayıfsa siler; yargıç videoyu bu skordan güçlü buluyorsa
+# tek bir kare-eşleşme şüphesi tamamlanmış renderı çöpe atmaz (uyarı loglanır).
+FINAL_QA_SYNC_OVERRIDE = 8
 
 
 class CuratedWatermarkError(RuntimeError):
@@ -444,82 +453,92 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
                     f"(çöp yayınlanmaz, klip hatırlanmaz).")
             log.info("  kürate[netlik]: yeniden yazım NET ✓")
 
-        # DİL KAPISI — YALNIZ TÜRKÇE DIŞI KANALLAR (operatör metni okuyamıyor).
+        # DİL KAPISI — TÜM DİLLER (Türkçe DAHİL).
         #
         # Buraya kadarki iki kapı bu boşluğu KAPATMAZ: sadakat kapısı anlatımı GÖRÜNTÜYLE
-        # karşılaştırır, netlik kapısı MANTIĞA bakar. Hedef dilde bozuk ama tutarlı bir
-        # cümle ikisini de geçer — ve Türkçe kanalda operatörün yakaladığı o kusuru burada
-        # yakalayacak kimse yok. Bu yüzden yerli-okur yargısı KAPI (fail-closed), geri
-        # çeviri ise PENCERE (fail-open, panelde gösterilir).
-        back_tr = ""
-        if channel.language != "tr":
-            from short_bot.lang_review import back_translate, judge_native_text
-            def _judge_native():
-                return judge_native_text(narration.full_text(), language=channel.language,
-                                         backend=llm.backend, model=llm.model,
-                                         api_key=llm.api_key, claude_path=llm.claude_path)
+        # karşılaştırır, netlik kapısı MANTIĞA bakar. Bozuk ama tutarlı bir cümle ikisini
+        # de geçer. Bu yüzden yerli-okur yargısı KAPI (fail-closed), geri çeviri ise
+        # PENCERE (fail-open, panelde gösterilir; Türkçede boş döner — çevrilecek şey yok).
+        #
+        # NEDEN ARTIK TÜRKÇEDE DE: kapı 'operatör hedef dili okuyamıyor' gerekçesiyle
+        # yalnız tr DIŞI kanallarda çalışıyordu — varsayım, Türkçe metni operatörün
+        # okuyacağıydı. Oto-üretimde kimse okumuyor: koşu 1434'te anlatım 'Kimsenin
+        # bırakmadığı o minik el gerek yok, sen de birine sıkı sarıl.' diye BOZUK bir
+        # cümleyle bitti, netlik kapısı geçirdi (o mantığa/dolguya bakar, gramere değil)
+        # ve kusuru yalnız final QA tesadüfen yakaladı. Dil doğruluğu dilden bağımsızdır.
+        from short_bot.lang_review import back_translate, judge_native_text
 
-            _nat = _judge_native()
-            # ONARIM TURU SAYISI. Yargıç her çağrıda YALNIZ EN KÖTÜ tek kusuru bildiriyor
-            # (prompt öyle istiyor: net ve uygulanabilir olsun). Yani iki kusurlu bir
-            # metin tek onarımla temizlenemez — ölçüldü (aday 71): 1. onarım '支え続ける'i
-            # düzeltti, hemen ardından CTA kalıbı işaretlendi ve klip kaybedildi.
-            # KAPI GEVŞEMİYOR: video yine 'doğal' yargısını almadan çıkamıyor; değişen
-            # tek şey iyi bir klibi kaç denemede kurtarmaya çalıştığımız.
-            _LANG_REPAIRS = 2
-            _try = 0
-            while _nat is not None and not _nat.natural and _try < _LANG_REPAIRS:
-                _try += 1
-                _iss = _nat.issue or "Metin hedef dilde doğal değil."
-                # ONARIM, YENİDEN YAZIM DEĞİL. Ölçüldü (2026-07-24, iki klip): her
-                # yeniden yazım SIFIRDAN yeni bir taslak üretiyor ve YENİ bir dil kusuru
-                # getiriyor (1. deneme nezaket karışıklığı → 2. deneme farklı bir çeviri
-                # kokusu) — yani yakınsamıyor, klip boşuna kaybediliyor. Modele önceki
-                # metni geri verip SADECE işaretlenen ifadeyi değiştirmesini söylemek
-                # yakınsayan tek yol.
-                _prev = narration.full_text()
-                _lfb = (f"DİL ONARIMI (yeniden yazım DEĞİL).\n\n"
-                        f"ÖNCEKİ METİN:\n{_prev}\n\n"
-                        f"YERLİ OKUR ŞUNU İŞARETLEDİ: {_iss}\n\n"
-                        f"YAP: yukarıdaki metni AYNEN yeniden üret, YALNIZCA işaretlenen "
-                        f"ifadeyi ana dili o dil olan birinin söyleyeceği hâliyle değiştir. "
-                        f"Başka hiçbir cümleyi, kelimeyi, sırayı ya da noktalamayı DEĞİŞTİRME. "
-                        # KRİTİK: bu kapı EN SONDA; tetiklediği yeniden yazım sadakat ve
-                        # netlik kapılarından BİR DAHA GEÇMİYOR. Yani burada eklenen bir
-                        # uydurma kimseye yakalanmaz. Kilidi geri bildirime koyuyoruz.
-                        f"Anlatılan olaylar, sıraları, sayılar ve ton AYNEN kalsın — yeni "
-                        f"olay/varlık/detay EKLEME, hiçbirini çıkarma. Yeni bir taslak "
-                        f"yazma; bu bir DÜZELTMEDİR.")
-                log.info(f"  kürate[dil]: anlatım {channel.language} dilinde DOĞAL değil "
-                         f"({_iss}) → onarım {_try}/{_LANG_REPAIRS}")
-                narration = write_curated_narration(
-                    title_seed, narr_desc, channel=channel, subject="clip",
-                    claude_path=narr_llm.claude_path, model=narr_llm.model,
-                    backend=narr_llm.backend, api_key=narr_llm.api_key,
-                    seed=seed, target_duration_s=target, scene_split=scene_split,
-                    comments=comments, feedback=_lfb, reveal_frac=reveal_frac)
-                _nat = _judge_native()
-
-            if _nat is not None and not _nat.natural:
-                # FAIL-CLOSED: operatör bu kusuru göremez, sonradan da fark etmez.
-                # seen'e YAZMA — klip iyi, anlatım şanssız çıktı (netlik kapısıyla aynı).
-                raise CuratedClipError(
-                    f"Anlatım {_LANG_REPAIRS} onarımda da {channel.language} dilinde doğal "
-                    f"değil ({_nat.issue or 'gerekçe yok'}) → atlanıyor.")
-            elif _nat is not None and _try:
-                log.info(f"  kürate[dil]: onarım sonrası DOĞAL ✓ ({_try} tur)")
-            elif _nat is None:
-                log.warning("  kürate[dil]: yerli okur YARGILAYAMADI → metin yargısız "
-                            "geçiyor (fail-open) — geri çeviriden elle kontrol et")
-            else:
-                log.info("  kürate[dil]: anlatım doğal ✓")
-
-            # PENCERE: anlatımın Türkçesi. Kapı değil — patlarsa üretim sürer.
-            back_tr = back_translate(narration.full_text(), language=channel.language,
+        def _judge_native():
+            # audit_text: EKRAN MANŞETİ de dil denetiminden geçsin — aynı kusuru taşıyor
+            # olabiliyor (short 1257: anlatımda 'bir zamanlar kurtardığı bu el' ortaç
+            # hatası vardı ve kapak 'Bir Zamanlar Kurtardığı Sincap' aynı hatayı
+            # tekrarlıyordu). Onarım turu narration'ı yeniden yazınca kapak da düzelir.
+            return judge_native_text(narration.audit_text(), language=channel.language,
                                      backend=llm.backend, model=llm.model,
                                      api_key=llm.api_key, claude_path=llm.claude_path)
-            if back_tr:
-                log.info(f"  kürate[dil] geri çeviri: {back_tr}")
+
+        _nat = _judge_native()
+        # ONARIM TURU SAYISI. Yargıç her çağrıda YALNIZ EN KÖTÜ tek kusuru bildiriyor
+        # (prompt öyle istiyor: net ve uygulanabilir olsun). Yani iki kusurlu bir
+        # metin tek onarımla temizlenemez — ölçüldü (aday 71): 1. onarım '支え続ける'i
+        # düzeltti, hemen ardından CTA kalıbı işaretlendi ve klip kaybedildi.
+        # KAPI GEVŞEMİYOR: video yine 'doğal' yargısını almadan çıkamıyor; değişen
+        # tek şey iyi bir klibi kaç denemede kurtarmaya çalıştığımız.
+        _LANG_REPAIRS = 2
+        _try = 0
+        while _nat is not None and not _nat.natural and _try < _LANG_REPAIRS:
+            _try += 1
+            _iss = _nat.issue or "Metin hedef dilde doğal değil."
+            # ONARIM, YENİDEN YAZIM DEĞİL. Ölçüldü (2026-07-24, iki klip): her
+            # yeniden yazım SIFIRDAN yeni bir taslak üretiyor ve YENİ bir dil kusuru
+            # getiriyor (1. deneme nezaket karışıklığı → 2. deneme farklı bir çeviri
+            # kokusu) — yani yakınsamıyor, klip boşuna kaybediliyor. Modele önceki
+            # metni geri verip SADECE işaretlenen ifadeyi değiştirmesini söylemek
+            # yakınsayan tek yol.
+            _prev = narration.full_text()
+            _lfb = (f"DİL ONARIMI (yeniden yazım DEĞİL).\n\n"
+                    f"ÖNCEKİ METİN:\n{_prev}\n\n"
+                    f"YERLİ OKUR ŞUNU İŞARETLEDİ: {_iss}\n\n"
+                    f"YAP: yukarıdaki metni AYNEN yeniden üret, YALNIZCA işaretlenen "
+                    f"ifadeyi ana dili o dil olan birinin söyleyeceği hâliyle değiştir. "
+                    f"Başka hiçbir cümleyi, kelimeyi, sırayı ya da noktalamayı DEĞİŞTİRME. "
+                    # KRİTİK: bu kapı EN SONDA; tetiklediği yeniden yazım sadakat ve
+                    # netlik kapılarından BİR DAHA GEÇMİYOR. Yani burada eklenen bir
+                    # uydurma kimseye yakalanmaz. Kilidi geri bildirime koyuyoruz.
+                    f"Anlatılan olaylar, sıraları, sayılar ve ton AYNEN kalsın — yeni "
+                    f"olay/varlık/detay EKLEME, hiçbirini çıkarma. Yeni bir taslak "
+                    f"yazma; bu bir DÜZELTMEDİR.")
+            log.info(f"  kürate[dil]: anlatım {channel.language} dilinde DOĞAL değil "
+                     f"({_iss}) → onarım {_try}/{_LANG_REPAIRS}")
+            narration = write_curated_narration(
+                title_seed, narr_desc, channel=channel, subject="clip",
+                claude_path=narr_llm.claude_path, model=narr_llm.model,
+                backend=narr_llm.backend, api_key=narr_llm.api_key,
+                seed=seed, target_duration_s=target, scene_split=scene_split,
+                comments=comments, feedback=_lfb, reveal_frac=reveal_frac)
+            _nat = _judge_native()
+
+        if _nat is not None and not _nat.natural:
+            # FAIL-CLOSED: bozuk cümle yayınlanmaz (netlik kapısıyla aynı sözleşme).
+            # seen'e YAZMA — klip iyi, anlatım şanssız çıktı.
+            raise CuratedClipError(
+                f"Anlatım {_LANG_REPAIRS} onarımda da {channel.language} dilinde doğal "
+                f"değil ({_nat.issue or 'gerekçe yok'}) → atlanıyor.")
+        elif _nat is not None and _try:
+            log.info(f"  kürate[dil]: onarım sonrası DOĞAL ✓ ({_try} tur)")
+        elif _nat is None:
+            log.warning("  kürate[dil]: yerli okur YARGILAYAMADI → metin yargısız "
+                        "geçiyor (fail-open) — elle kontrol et")
+        else:
+            log.info("  kürate[dil]: anlatım doğal ✓")
+
+        # PENCERE: anlatımın Türkçesi (yalnız tr DIŞI kanallarda; Türkçede boş döner —
+        # çevrilecek bir şey yok, çağrı da yapılmaz). Kapı değil — patlarsa üretim sürer.
+        back_tr = back_translate(narration.full_text(), language=channel.language,
+                                 backend=llm.backend, model=llm.model,
+                                 api_key=llm.api_key, claude_path=llm.claude_path)
+        if back_tr:
+            log.info(f"  kürate[dil] geri çeviri: {back_tr}")
 
         try:
             music = pick_music(Path(music_root), mood=reel.music_mood,
@@ -553,7 +572,13 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
         # manşetin iddiasını görüntüyle karşılaştırabilsin (sadakat kapısıyla aynı gerekçe).
         _fq = judge_final_video(out_path, narration.audit_text(), vision_call=vision,
                                 ffmpeg_path=settings.ffmpeg_path, tone=_tone, log=log)
-        if _fq is not None and (not _fq.watchable or not _fq.sync_ok or not _fq.tone_ok
+        # sync_ok=False YALNIZ video bütün olarak da zayıfken siler (bkz. FINAL_QA_SYNC_OVERRIDE).
+        _sync_kill = _fq is not None and not _fq.sync_ok and _fq.score < FINAL_QA_SYNC_OVERRIDE
+        if _fq is not None and not _fq.sync_ok and not _sync_kill:
+            log.warning(f"  kürate[final-qa]: senkron ŞÜPHELİ ({_fq.reason}) ama video "
+                        f"bütün olarak güçlü (skor {_fq.score}) → yayınlanıyor. Seyrek "
+                        f"örneklemde küçük/kaynaşan özne yanlış okunabiliyor — elle bak.")
+        if _fq is not None and (not _fq.watchable or _sync_kill or not _fq.tone_ok
                                 or _fq.score < FINAL_QA_MIN):
             try:
                 Path(out_path).unlink(missing_ok=True)

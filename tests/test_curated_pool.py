@@ -689,25 +689,41 @@ def _ja_channel(channel):
     return channel
 
 
-def test_language_gate_skipped_for_turkish_channel(tmp_path, monkeypatch):
-    """Türkçe kanalda yerli-okur ÇAĞRILMAZ — gereksiz LLM çağrısı = boşa para."""
+def test_turkish_channel_judged_but_not_back_translated(tmp_path, monkeypatch):
+    """Türkçe kanalda YERLİ-OKUR ÇALIŞIR ama GERİ ÇEVİRİ çalışmaz.
+
+    Bu test eskiden bunun TERSİNİ savunuyordu ('Türkçede yerli-okur çağrılmaz — gereksiz
+    LLM çağrısı = boşa para'). Gerekçe koşu 1434'te çürüdü: anlatım 'Kimsenin bırakmadığı
+    o minik el gerek yok, sen de birine sıkı sarıl.' diye BOZUK bir cümleyle bitti ve
+    hiçbir kapı yakalamadı — netlik kapısı mantığa/dolguya bakar, gramere değil. Varsayım
+    'Türkçeyi operatör okur'du; oto-üretimde kimse okumuyor.
+
+    Geri çeviri ise Türkçede hâlâ gereksiz (kaynak zaten Türkçe) — o çağrı yapılmamalı,
+    yani maliyet kaygısı tümden atılmıyor, yalnız KAPI için ödeniyor."""
     import short_bot.curated_pipeline as cpl
     import short_bot.lang_review as lr
 
-    called = {"n": 0}
+    called = {"judge": 0, "back": 0}
 
     def _judge(*a, **k):
-        called["n"] += 1
+        called["judge"] += 1
         return lr.NativeVerdict(natural=True)
+
+    def _back(*a, **k):
+        called["back"] += 1
+        return ""
 
     channel, settings = _mock_produce_chain(monkeypatch, tmp_path)
     monkeypatch.setattr(lr, "judge_native_text", _judge)
-    monkeypatch.setattr(lr, "back_translate", lambda *a, **k: "")
+    monkeypatch.setattr(lr, "back_translate", _back)
 
     cpl.produce_curated({"video_url": "https://v.redd.it/tr1/DASH.mp4", "title": "t"},
                         channel, settings=settings, secrets={}, db_path=tmp_path / "db.sqlite",
                         output_root=tmp_path, music_root=tmp_path, templates_dir=tmp_path)
-    assert called["n"] == 0
+    assert called["judge"] == 1, "Türkçe metin dil kapısından geçmiyor"
+    # back_translate ÇAĞRILABİLİR ama Türkçede LLM'e gitmez (fonksiyon başında "" döner);
+    # burada gerçek fonksiyonun sözleşmesini ayrıca doğrula.
+    assert lr.back_translate("bir metin", language="tr") == ""
 
 
 def test_language_gate_runs_for_foreign_channel(tmp_path, monkeypatch):
@@ -1293,3 +1309,82 @@ def test_produce_curated_audits_titles_and_feeds_comments(tmp_path, monkeypatch)
     # yargıç yazarla AYNI kaynakları görüyor
     assert seen["comments"] and "lost her baby" in seen["comments"][0]
     assert seen["title"] == "A Chimp was born"
+
+
+def test_final_qa_sync_alone_does_not_delete_strong_video(tmp_path, monkeypatch):
+    """SENKRON BAYRAĞI TEK BAŞINA SİLDİRMEMELİ (koşu 1434 yanlış pozitifi).
+
+    Final QA tüm videodan 9 kare örnekliyor ve yargıcın gördüğü kare eni ~307px.
+    Annesine yapışmış yavru tembel hayvan bu çözünürlükte annenin tüylerine karışıyor →
+    yargıç 'kavuşma ekranda doğrulanmıyor' dedi. Kareleri ELLE inceledim: kavuşma NETTİ
+    (el yavruyu uzatıyor, son karelerde yavru annede, el kadraj dışında). Yani sync_ok
+    yanlıştı; video başka bir gerekçeyle (bozuk kapanış cümlesi) haklı olarak elendi ama
+    doğru karar YANLIŞ gerekçeyle verildi.
+
+    Kare sayısını artırmak çözüm DEĞİL — ölçüldü: bütçe sabit olduğu için 4 sütun kare
+    enini 307→249'a DÜŞÜRÜYOR. Çözüm: yargıç videoyu BÜTÜN olarak güçlü buluyorsa
+    (skor >= FINAL_QA_SYNC_OVERRIDE) tek bir kare-eşleşme şüphesi tamamlanmış renderı
+    çöpe atmasın; düşük skorda eskisi gibi silinir."""
+    from pathlib import Path
+
+    import pytest
+
+    import short_bot.curated_clean as cc
+    import short_bot.curated_pipeline as cpl
+    from short_bot.curated_clean import FinalVideoQA
+
+    # (a) senkron şüpheli AMA video bütün olarak güçlü → YAYINLANIR
+    channel, settings = _mock_produce_chain(monkeypatch, tmp_path)
+    monkeypatch.setattr(cc, "judge_final_video",
+                        lambda *a, **k: FinalVideoQA(watchable=True, score=8, sync_ok=False,
+                                                     tone_ok=True, reason="tek kare şüpheli"))
+    sid, out = cpl.produce_curated(
+        {"video_url": "https://v.redd.it/sy1/DASH.mp4", "title": "t"}, channel,
+        settings=settings, secrets={}, db_path=tmp_path / "db.sqlite",
+        output_root=tmp_path, music_root=tmp_path, templates_dir=tmp_path)
+    assert sid and Path(out).exists(), "güçlü video tek senkron şüphesiyle silindi"
+
+    # (b) senkron bozuk VE video zayıf → eskisi gibi SİLİNİR (gerçek kusur kaçmasın)
+    channel2, settings2 = _mock_produce_chain(monkeypatch, tmp_path)
+    monkeypatch.setattr(cc, "judge_final_video",
+                        lambda *a, **k: FinalVideoQA(watchable=True, score=5, sync_ok=False,
+                                                     tone_ok=True, reason="anlatım kaymış"))
+    with pytest.raises(cpl.CuratedClipError):
+        cpl.produce_curated(
+            {"video_url": "https://v.redd.it/sy2/DASH.mp4", "title": "t"}, channel2,
+            settings=settings2, secrets={}, db_path=tmp_path / "db2.sqlite",
+            output_root=tmp_path, music_root=tmp_path, templates_dir=tmp_path)
+
+
+def test_language_gate_runs_for_turkish_channels(tmp_path, monkeypatch):
+    """DİL KAPISI TÜRKÇEDE DE ÇALIŞMALI (koşu 1434: bozuk kapanış cümlesi yayına gidiyordu).
+
+    Üretilen metin: 'Kimsenin bırakmadığı o minik el gerek yok, sen de birine sıkı sarıl.'
+    — devrik değil, BOZUK. Netlik kapısı geçirdi (mantık/dolgu bakar, gramere bakmaz);
+    dil kapısı ise yalnız Türkçe DIŞI kanallarda çalışıyordu (gerekçe: operatör o dili
+    okuyamaz). Ama oto-üretimde Türkçe metni de kimse okumuyor — o videoyu yalnız final
+    QA tesadüfen yakaladı. Kapı dilden bağımsız olmalı."""
+    import pytest
+
+    import short_bot.curated_pipeline as cpl
+    import short_bot.lang_review as lr
+    from short_bot.lang_review import NativeVerdict
+
+    channel, settings = _mock_produce_chain(monkeypatch, tmp_path)
+    assert channel.language == "tr"
+    seen = {"n": 0}
+
+    def _judge(text, **k):
+        seen["n"] += 1
+        seen["lang"] = k.get("language")
+        return NativeVerdict(natural=False, issue="'gerek yok' ifadesi bozuk")
+
+    monkeypatch.setattr(lr, "judge_native_text", _judge)
+    # onarım turları da düzeltemezse fail-closed (tr dışı kanallarla aynı sözleşme)
+    with pytest.raises(cpl.CuratedClipError):
+        cpl.produce_curated(
+            {"video_url": "https://v.redd.it/lang1/DASH.mp4", "title": "t"}, channel,
+            settings=settings, secrets={}, db_path=tmp_path / "db.sqlite",
+            output_root=tmp_path, music_root=tmp_path, templates_dir=tmp_path)
+    assert seen["n"] >= 1, "Türkçe kanalda dil kapısı hiç çağrılmadı"
+    assert seen["lang"] == "tr"

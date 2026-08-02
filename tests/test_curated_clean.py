@@ -608,3 +608,21 @@ def test_final_qa_prompt_explains_screen_headline_label():
     assert "EKRAN MANŞETİ" in p, "manşet etiketi prompt'ta açıklanmıyor"
     assert "konuşul" in p.replace("İ", "i").replace("I", "ı").lower(), \
         "manşetin KONUŞULMADIĞI (yalnız ekranda durduğu) söylenmiyor"
+
+
+def test_native_judge_protects_deliberate_spoken_style():
+    """DİL KAPISI ARTIK TÜRKÇEDE DE ÇALIŞIYOR → kasti ÜSLUBU hata sanmamalı.
+
+    Persona sesi bilinçli olarak konuşma dilidir: devrik cümle, eksiltili anlatım,
+    samimi/mahalle ağzı, 'valla/abi' gibi hitaplar. Yerli-okur yargıcı bunları
+    'gramatik hata' sayarsa iyi anlatımlar fail-closed kapıdan elenir ve kanalın sesi
+    düzleşir. Kapı GERÇEK bozukluğu (anlamı çökmüş cümle, yanlış çekim) yakalamalı,
+    ÜSLUBU değil."""
+    from short_bot.lang_review import _JUDGE_PROMPT
+
+    low = _JUDGE_PROMPT.lower()
+    assert "spoken" in low, "konuşma dilinin beklendiği söylenmiyor"
+    assert "deliberate" in low or "colloquial" in low or "slang" in low, \
+        "kasti konuşma dili/argo için koruma yok"
+    assert "inverted" in low or "word order" in low, \
+        "devrik cümlenin hata sayılmayacağı belirtilmiyor"

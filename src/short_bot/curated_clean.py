@@ -504,8 +504,11 @@ def judge_final_video(video_path, narration_text: str, *, vision_call,
     try:
         with tempfile.TemporaryDirectory() as td:
             board = Path(td) / "fqa_board.jpg"
+            # frame_w 384→512: yargıcın GERÇEKTEN gördüğü kare eni 307→332px (ölçüldü,
+            # bütçe sığdırma sonrası). Sütun sayısı 3'te KALIR — 4 sütun kare enini
+            # 249'a düşürüp yargıcı körleştiriyor (koşu 1434 yanlış pozitifi).
             if not _storyboard_frames(video_path, board, ffmpeg_path,
-                                      cols=3, rows=3, frame_w=384):
+                                      cols=3, rows=3, frame_w=512):
                 _log.warning("  kürate[final-qa]: storyboard kurulamadı → yargı YOK")
                 return None
             if not board.exists() or board.stat().st_size == 0:
