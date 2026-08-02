@@ -865,14 +865,34 @@ def build_curated_prompt(title: str, clip_description: str, *, channel,
     # ZAMAN-SIRALI BEAT SHEET (kürate: clip_description = 'BAŞ/ORTA/SON (Xsn): …'): anlatımı
     # AYNI zaman-sırasına oturt ki cümleler ekrandaki ana denk gelsin (short 990). scene_rule
     # yalnız 2-sahnede tetikleniyordu; beat sheet TEK-sahne çok-olay için de sırayı zorlar.
+    # DİLİM-BAŞINA PAY (short 1216 — kullanıcı: 'görüntüyle alakasız senaryo'): SIRA dayatmak
+    # YETMEDİ. Eski kural 3. beat'in sahibini hiç söylemiyordu; yazar ORTA'nın beş olayını tek
+    # cümleye sıkıştırınca 'spor salonuna koşup havaya kaldırdı' görüntüden ~8sn önce okundu,
+    # SON dilimi (yeni ayakkabıyı GİYİP kutlama) ise hiç anlatılmadı — o ~14 saniyede jenerik
+    # moral aktı. TTS sabit hızda okur → metindeki oran = ekrandaki zaman; dilimler eşit süre
+    # olduğundan kelime payı da eşit dağıtılmalı (scene_rule'un kanıtlanmış kelime-bütçesi
+    # deseni, dilim başına).
     beat_rule = ""
     if "BAŞ (" in clip_description or "ORTA (" in clip_description:
+        _n = len(re.findall(r"(?:^|\n)(?:BAŞ|ORTA|SON|B\d+) \(", clip_description)) or 3
+        _pct = round(100 / _n)
+        _share = max(2, round(hi_w / _n))
+        _u = "karakter" if unit == "characters" else "kelime"
         beat_rule = (
-            "\n- ⏱ ZAMAN-SIRALI BEAT SHEET: Yukarıdaki tarif klibin ZAMAN dilimleridir "
-            "(BAŞ→ORTA→SON, saniyelerle). Anlatımını TAM bu sırayla kur: 1. beat BAŞ'takini, "
-            "2. beat ORTA'dakini, kapanış SON'dakini anlatsın. SON'daki ödülü/kavuşmayı/çözümü/"
-            "punchline'ı ERKEN AÇMA — izleyici onu HENÜZ görmüyor, ses görüntünün önüne geçer, "
-            "cümleler sahneyle oturmaz. Sıralamayı ASLA bozma; her beati kendi zaman dilimine yaz.")
+            f"\n- ⏱ ZAMAN-SIRALI BEAT SHEET (ÇOK ÖNEMLİ — her cümle ekrandaki ana denk "
+            f"gelmeli): Yukarıdaki tarif klibin EŞİT {_n} zaman dilimidir (BAŞ→ORTA→SON, "
+            f"saniyelerle). EŞLEME SABİT: hook + 1. beat SADECE BAŞ'ı, 2. beat SADECE "
+            f"ORTA'yı, 3. beat + close SON'u anlatır. PAY DA SABİT: TTS sabit hızda okur — "
+            f"her dilim sözlerinin ~%{_pct}'ini (~{_share} {_u}) almalı. Bir dilimde çok "
+            f"olay varsa hepsini TEK cümleye sıkıştırıp sonraki dilimin olayını ÖNE ÇEKME "
+            f"(ses görüntünün önüne geçer); az olay varsa o dilimi izleyicinin O ANDA "
+            f"gördüğü detayla doyur. SON'daki ödülü/kavuşmayı/çözümü/punchline'ı ERKEN "
+            f"AÇMA — izleyici onu HENÜZ görmüyor. ⚠️ KAPANIŞ SON'UN YERİNE GEÇMEZ: 3. beat "
+            f"SON diliminde GERÇEKTEN görüneni anlatmalı; moral/yorum-yemi cümlesi SON'un "
+            f"olayını anlatmanın YERİNE GEÇMEZ (gerçek hata, short 1216: klibin son üçte "
+            f"biri 'yeni ayakkabıyı giyip kutlama' idi, anlatım orada jenerik kapanış "
+            f"okudu — izleyici 'görüntüyle alakasız' dedi). TEKRAR EDEN DİLİM kuralı bu "
+            f"paydan ÖNCELİKLİDİR: tekrar eden dilime ayrı pay ayırma.")
     return f"""You are writing narration for a REAL short video clip we are RE-TELLING.
 
 REAL CONTEXT (the clip's own caption/title): {title}

@@ -194,13 +194,40 @@ _STORYBOARD_PROMPT = (
     'SADECE JSON: {{"content": "<English action description>", "is_static": <bool>}}'
 )
 
+# KÜRATE DİLİM BAĞLAMI (short 1216): başlıksız vision 'yeni Jordan'ları giyen' adamı
+# 'sırt çantalarını karıştırıyor' diye okudu → anlatımın tek kaynağı olan beat sheet'in
+# SON dilimi kullanılamaz çıktı, videonun son üçte biri anlatımsız kaldı. Başlık nesne/rol
+# TANIMA bağlamıdır (sadakat/kalite/netlik kapıları zaten alıyor — short 1140/1154 dersi).
+# KORUMA ŞART: başlık hikâyenin TAMAMINI anlatır, kareler yalnız BİR dilimdir — bağlam
+# arc-tamamlamaya (karede olmayan olayı başlıktan yazmaya) sızmamalı.
+_STORYBOARD_CONTEXT = (
+    '\nBAĞLAM (klibin kendi başlığı — YALNIZ TANIMAK için): "{ctx}"\n'
+    "Başlığı karelerdeki nesneleri/rolleri DOĞRU adlandırmak için kullan (kutudan çıkan "
+    "şeyin NE olduğu, kimin kime ne yaptığı; ör. 'çantaları karıştırıyor' sanılan hareket "
+    "aslında hediye gelen YENİ AYAKKABIYI GİYMEK olabilir). AMA bu karelerde GÖRÜNMEYEN "
+    "hiçbir olayı başlıktan EKLEME — başlık hikâyenin tamamını anlatır, bu kareler onun "
+    "yalnız BİR dilimidir; sadece bu karelerde olanı yaz.\n"
+)
 
-def describe_storyboard(path: "Path", *, vision_call, n_frames: int = 6):
+
+def describe_storyboard(path: "Path", *, vision_call, n_frames: int = 6,
+                        context: str = ""):
     """Storyboard ızgarasını vision ile tarif eder → (content, is_static).
 
     Klibin aksiyonunu (zaman içinde) yakalar; tek-kare tahmininden üstün. Vision yok /
-    hata → ("", False) (çağıran tek-kare yoluna düşer; üretim durmaz)."""
+    hata → ("", False) (çağıran tek-kare yoluna düşer; üretim durmaz).
+
+    ``context``: klibin kendi başlığı (kürate dilim tarifi) — nesne/rol TANIMA bağlamı,
+    korumalı enjekte edilir (bkz. _STORYBOARD_CONTEXT, short 1216). Boş → prompt bire bir
+    eski hâli (footage keşif yolu değişmez)."""
     from short_bot.claude_cli import run_json
+    prompt = _STORYBOARD_PROMPT.format(n=n_frames)
+    _ctx = (context or "").strip()
+    if _ctx:
+        # JSON talimatı EN SONDA kalsın diye bağlam ondan hemen önce girer.
+        _i = prompt.rfind("SADECE JSON")
+        _blk = _STORYBOARD_CONTEXT.format(ctx=_ctx[:300])
+        prompt = (prompt[:_i] + _blk + prompt[_i:]) if _i > 0 else prompt + _blk
     try:
         try:
             from PIL import Image
@@ -209,7 +236,7 @@ def describe_storyboard(path: "Path", *, vision_call, n_frames: int = 6):
             im.convert("RGB").save(path, "JPEG")
         except Exception:  # noqa: BLE001
             pass
-        v = run_json(_STORYBOARD_PROMPT.format(n=n_frames), _StoryboardDescription,
+        v = run_json(prompt, _StoryboardDescription,
                      claude_path=vision_call.claude_path, model=vision_call.model,
                      backend=vision_call.backend, api_key=vision_call.api_key,
                      image_path=path, retries=2, timeout_s=45)

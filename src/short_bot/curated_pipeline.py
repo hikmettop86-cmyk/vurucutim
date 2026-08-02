@@ -255,8 +255,11 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
         clip_dur_eff = clip_dur
         if vision is not None:
             from short_bot.curated_clean import describe_clip_beats
+            # title: dilim tarifçisine TANIMA bağlamı (short 1216 — 'ayakkabı giyme'
+            # başlıksız 'çanta karıştırma' okundu, SON dilimi anlatılamadı).
             _beats = describe_clip_beats(clip, vision_call=vision,
-                                         ffmpeg_path=settings.ffmpeg_path, duration_s=clip_dur)
+                                         ffmpeg_path=settings.ffmpeg_path, duration_s=clip_dur,
+                                         title=gem.get("title", ""))
             if _beats:
                 narr_desc = _beats
                 # İÇERİĞİ DE LOGLA: anlatımın TEK kaynağı bu metin. Eskiden yalnız '3 dilim'

@@ -433,8 +433,12 @@ def _final_qa_prompt(tone: str, narration_text: str) -> str:
         "Yayın editörü gibi yargıla:\n"
         "- watchable: bir izleyici bunu SONUNA KADAR izler mi — görüntü + anlatım birlikte "
         "ANLAMLI, takip edilebilir bir bütün mü? (Kopuk/anlamsız/sıkıcıysa false.)\n"
-        "- sync_ok: anlatım/altyazı EKRANDAKİ olayla örtüşüyor mu? (Görüntüyle alakasız şey "
-        "anlatıyorsa false.)\n"
+        "- sync_ok: KARE KARE kontrol et — her karenin İÇİNDEKİ altyazı çipini oku ve O "
+        "KAREDE görünenle karşılaştır. Altyazı o anda ekranda OLMAYAN bir olayı anlatıyorsa "
+        "false — olay klipte daha geç ya da erken oluyor olsa bile (gerçek hata, short 1216: "
+        "'öğrenciler etrafını sardı' altyazısı akarken ekranda adam TEK BAŞINA kutu "
+        "açıyordu → bu sync_ok=false olmalıydı). Videonun bir bölümünde altyazının hiç "
+        "anlatmadığı uzun bir olay akıyorsa da false.\n"
         "- tone_ok: içerik bu kanal tonuna oturuyor mu?\n"
         "- score: 1-10 genel yayın kalitesi (1=anlamsız/zevksiz, 10=kesin yayınlanır).\n"
         'SADECE JSON: {"watchable": <bool>, "score": <1-10>, "sync_ok": <bool>, '
@@ -609,11 +613,16 @@ def detect_scene_split(clip, *, vision_call, ffmpeg_path: str = "ffmpeg",
 # böl, her segment'i ayrı tarif et → anlatıcıya 'BAŞTA X, SONRA Y, SONUNDA Z; ödülü sona sakla'
 # beat listesi ver. Böylece cümleler ekrandaki ana denk gelir.
 def describe_clip_beats(clip, *, vision_call, ffmpeg_path: str = "ffmpeg",
-                        segments: int = 3, duration_s: float | None = None) -> str:
+                        segments: int = 3, duration_s: float | None = None,
+                        title: str = "") -> str:
     """Klibi ``segments`` eşit zaman dilimine böl, her dilimi AYRI storyboard'la tarif et →
     zaman-sıralı 'beat sheet' döndür (ör. 'BAŞ (0-12sn): …\\nORTA (12-23sn): …\\nSON …').
     Boş döner (fail-open): süre okunamaz / vision yok / tüm dilimler boş → çağıran tek-blok
-    _describe_clip'e düşer."""
+    _describe_clip'e düşer.
+
+    ``title``: klibin kaynak başlığı → dilim tarifçisine TANIMA bağlamı (short 1216: başlıksız
+    vision 'yeni ayakkabıyı giyme'yi 'çanta karıştırma' diye okudu → SON dilimi anlatılamadı).
+    Sadakat/kalite/netlik kapıları başlığı zaten alıyor; korumalı enjeksiyon describe_storyboard'da."""
     import subprocess
     from short_bot.footage_matcher import describe_storyboard
     from short_bot.reel import _ffprobe_path
@@ -663,7 +672,7 @@ def describe_clip_beats(clip, *, vision_call, ffmpeg_path: str = "ffmpeg",
                                           frame_w=384):
                     continue
                 desc, _static = describe_storyboard(board, vision_call=vision_call,
-                                                    n_frames=9)
+                                                    n_frames=9, context=title)
                 if desc and desc.strip():
                     lbl = labels[i] if i < len(labels) else f"B{i+1}"
                     beats.append(f"{lbl} ({int(s0)}-{int(s1)}sn): {desc.strip()}")

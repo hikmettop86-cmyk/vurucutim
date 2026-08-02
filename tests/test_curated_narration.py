@@ -395,6 +395,36 @@ def test_effective_clip_seconds_drops_repeating_tail():
     assert effective_clip_seconds(0.0, slices=3, tail_repeats=True) == 0.0
 
 
+def test_curated_prompt_beat_sheet_gives_slice_word_shares():
+    """BEAT SHEET'E SIRA YETMEZ, PAY DA ŞART (short 1216 — kullanıcı: 'görüntüyle
+    alakasız senaryo').
+
+    GERÇEK HATA: beat sheet SIRASI doğruydu ama kural yalnız sırayı dayatıyordu
+    ('1. beat BAŞ, 2. beat ORTA, kapanış SON') — 3. beat'in sahibi bile yoktu. Yazar
+    ORTA'nın beş olayını (kapak+kağıt+ayakkabı+salona yürüyüş+kaldırma) TEK cümleye
+    sıkıştırdı → 'spor salonuna koşup havaya kaldırdı' görüntüden ~8sn önce okundu,
+    kalabalık cümlesi de öne kaydı. SON dilimi (yeni ayakkabıyı GİYİP kutlama) hiç
+    anlatılmadı; o ~14 saniyede jenerik moral aktı → izleyici 'alakasız' dedi.
+    TTS sabit hızla okur → dilimler EŞİT süre ise kelime payı da EŞİT olmalı ve
+    SON'un sahibi 3. beat + close olmalı."""
+    from short_bot.reel_narration import build_curated_prompt, reel_word_budget
+    ch = SimpleNamespace(language="tr",
+                         reel=ReelConfig(enabled=True, voice_id="v", persona=""))
+    sheet = ("BAŞ (0-17sn): a man unwraps a gold gift box.\n"
+             "ORTA (17-35sn): he opens the lid and pulls out sneakers.\n"
+             "SON (35-52sn): he puts the shoes on; a crowd celebrates around him.")
+    p = build_curated_prompt("t", sheet, channel=ch, target_duration_s=(41, 45))
+    _, hi_w = reel_word_budget((41, 45), "tr")
+    share = max(2, round(hi_w / 3))
+    assert "3. beat" in p, "3. beat'in hangi dilimi anlatacağı söylenmiyor"
+    assert "%33" in p, "dilim-başına yüzde payı yok"
+    assert f"~{share} kelime" in p, "dilim-başına kelime payı yok"
+    assert "YERİNE GEÇMEZ" in p, \
+        "kapanış moralinin SON'un olayını anlatmayı ikame edemeyeceği söylenmiyor"
+    # beat sheet yoksa kural yazılmaz (blok tarif — mevcut davranış korunur)
+    assert "ZAMAN-SIRALI BEAT SHEET" not in build_curated_prompt("t", "d", channel=ch)
+
+
 def test_curated_prompt_limits_actions_and_bans_translationese():
     """ÜSLUP: cümle başına en fazla iki eylem + çeviri kokusu yasağı (short 1161).
 

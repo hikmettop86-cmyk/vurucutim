@@ -352,6 +352,88 @@ def test_describe_clip_beats_time_ordered(monkeypatch, tmp_path):
     assert describe_clip_beats(tmp_path / "c.mp4", vision_call=_V(), duration_s=3) == ""
 
 
+def test_describe_clip_beats_passes_title_to_describer(monkeypatch, tmp_path):
+    """DİLİM TARİFÇİSİ DE BAŞLIĞI GÖRMELİ (short 1216): SON dilimi 'yeni Jordan'ları
+    GİYİYOR' idi; başlıksız vision aynı kareleri 'sırt çantalarını karıştırıyor' diye
+    okudu. Anlatımın TEK kaynağı beat sheet olduğu için yazar o dilimi kullanamadı ve
+    videonun son üçte biri anlatımsız (jenerik moral) kaldı. Sadakat/kalite/netlik
+    kapıları başlığı ZATEN alıyor (short 1140/1154 dersi) — aynı körlük tarifçide de
+    vardı. Başlık TANIMA bağlamıdır; görünmeyen olayı ekletmez (prompt'taki koruma)."""
+    import subprocess
+    import short_bot.footage_matcher as fm
+    import short_bot.reel as reel
+    from short_bot.curated_clean import describe_clip_beats
+
+    def _fake_run(cmd, *a, **k):
+        try:
+            Path(cmd[-1]).write_bytes(b"x")
+        except Exception:  # noqa: BLE001
+            pass
+        class _R:
+            returncode = 0; stdout = ""; stderr = ""
+        return _R()
+    monkeypatch.setattr(subprocess, "run", _fake_run)
+    monkeypatch.setattr(reel, "_storyboard_frames",
+                        lambda clip, board, *a, **k: (Path(board).write_bytes(b"x") or True))
+    seen = []
+    monkeypatch.setattr(
+        fm, "describe_storyboard",
+        lambda board, **k: (seen.append(k.get("context", "")) or ("desc", False)))
+
+    class _V:
+        claude_path = ""; model = ""; backend = "google_studio"; api_key = ""
+
+    describe_clip_beats(tmp_path / "c.mp4", vision_call=_V(), duration_s=30, segments=3,
+                        title="Their gym teacher wore Jordan 13s he got in 1998")
+    assert len(seen) == 3 and all("Jordan 13" in c for c in seen), \
+        f"başlık dilim tarifçisine geçmiyor: {seen}"
+    # başlıksız çağrı → bağlam boş (mevcut çağıranlar için sıfır regresyon)
+    seen.clear()
+    describe_clip_beats(tmp_path / "c.mp4", vision_call=_V(), duration_s=30, segments=3)
+    assert len(seen) == 3 and all(not c for c in seen)
+
+
+def test_describe_storyboard_context_is_guarded(monkeypatch, tmp_path):
+    """describe_storyboard bağlamı KORUMALI enjekte eder: nesne/rol TANIMA için serbest,
+    karelerde GÖRÜNMEYEN olayı bağlamdan ekleme YASAK (arc-tamamlama sızıntısı olmasın).
+    Bağlamsız çağrıda prompt bire bir eski hâli (footage keşif yolu — sıfır regresyon)."""
+    import short_bot.claude_cli as cli
+    from short_bot.footage_matcher import _StoryboardDescription, describe_storyboard
+
+    seen = {}
+
+    def _fake(prompt, schema, **k):
+        seen["prompt"] = prompt
+        return _StoryboardDescription(content="desc", is_static=False)
+    monkeypatch.setattr(cli, "run_json", _fake)
+    board = tmp_path / "b.jpg"
+    board.write_bytes(b"x")
+
+    class _V:
+        claude_path = ""; model = ""; backend = "google_studio"; api_key = ""
+
+    describe_storyboard(board, vision_call=_V(), n_frames=9,
+                        context="Their gym teacher wore Jordan 13s")
+    assert "Jordan 13" in seen["prompt"], "bağlam prompt'a girmiyor"
+    assert "GÖRÜNMEYEN" in seen["prompt"], "bağlam korumasız (görünmeyen-olay yasağı yok)"
+    describe_storyboard(board, vision_call=_V(), n_frames=9)
+    assert "Jordan 13" not in seen["prompt"] and "BAĞLAM" not in seen["prompt"]
+
+
+def test_final_qa_prompt_demands_frame_by_frame_caption_check():
+    """FİNAL QA SENKRONU KARE KARE SORMALI (short 1216): global 'örtüşüyor mu?' sorusu
+    sync_ok=True geçirdi — oysa 'öğrenciler etrafını sardı' altyazısı akarken ekranda
+    adam TEK BAŞINA kutu açıyordu ve videonun son üçte biri (ayakkabıyı giyip kutlama)
+    altyazıda hiç yoktu. Kareler altyazı ÇİPLERİYLE render edilmiş → yargıç her karenin
+    içindeki altyazıyı O karenin görüntüsüyle karşılaştırabilir ve karşılaştırMALIDIR."""
+    from short_bot.curated_clean import _final_qa_prompt
+
+    p = _final_qa_prompt("duygu", "anlatım metni")
+    assert "KARE KARE" in p, "senkron yargısı kare-kare istenmiyor"
+    assert "geç" in p and "erken" in p, \
+        "olayın klipte başka anda olsa bile o karede yoksa false sayılacağı söylenmiyor"
+
+
 def test_faith_prompt_rejects_outcome_flipping_exaggeration():
     """E) SADAKAT: abartı SERBEST ama olayın SONUCUNU ters çeviremez.
 
