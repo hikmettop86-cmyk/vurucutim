@@ -1,9 +1,14 @@
-"""Türkçe DIŞI kanallarda anlatım dil denetimi: yerli okur yargısı + geri çeviri.
+"""Anlatım dil denetimi (TÜM diller): yerli okur yargısı + geri çeviri.
 
-NEDEN VAR: operatör hedef dili bilmiyor. Türkçe kanalda "bu anlatım anlamsız" diyebildiği
-geri bildirim döngüsü yabancı dilde KOPAR. Mevcut kapıların hiçbiri bu boşluğu kapatmaz:
-sadakat kapısı anlatımı GÖRÜNTÜYLE karşılaştırır, netlik kapısı MANTIĞA bakar — ikisi de
-metnin o dilde DOĞAL olup olmadığını sormaz. Bozuk ama tutarlı bir cümle ikisini de geçer.
+NEDEN VAR: mevcut kapıların hiçbiri metnin DİL olarak sağlam olup olmadığını sormaz —
+sadakat kapısı anlatımı GÖRÜNTÜYLE karşılaştırır, netlik kapısı MANTIĞA bakar. Bozuk ama
+tutarlı bir cümle ikisini de geçer.
+
+Kapı önce yalnız Türkçe DIŞI kanallarda çalışıyordu; gerekçe "operatör hedef dili bilmiyor,
+Türkçeyi zaten kendi okur" idi. Bu varsayım koşu 1434'te çürüdü: oto-üretimde Türkçe metni
+de kimse okumuyor ve anlatım "Kimsenin bırakmadığı o minik el gerek yok, sen de birine sıkı
+sarıl." diye BOZUK bir cümleyle yayına gitti. Dil doğruluğu dilden bağımsızdır → kapı artık
+her dilde çalışır. (Geri çeviri hâlâ yalnız tr DIŞI: Türkçede çevrilecek bir şey yok.)
 
 İki ayrı iş var ve biri diğerinin yerini TUTMAZ:
 
