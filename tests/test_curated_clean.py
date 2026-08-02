@@ -536,3 +536,75 @@ def test_faith_prompt_title_cannot_justify_offscreen_outcome():
     assert "başlıkta olsa" in low, \
         "'başlıkta olsa BİLE ekranda yoksa uydurmadır' kuralı yok"
     assert "başlığın sınırı" in low, "başlığın rolü açıkça sınırlandırılmamış"
+
+
+def test_faith_prompt_rejects_unsourced_backstory():
+    """KAYNAKSIZ SEBEP/GEÇMİŞ İDDİASI (short 1254 — gerçek kaçak).
+
+    Anlatım 'Doğumda nefes alamayıp veterinerde tutulmuştu' yazdı. Bu bilgi ne
+    karelerde, ne başlıkta ('A Chimp was born a couple days ago'), ne de dört üst
+    yorumda vardı — model kendisi doldurdu. Kapı geçirdi çünkü prompt'un yedi maddesi
+    de FİZİKSEL/GÖRSEL iddialara bakıyor (uydurma varlık, ters yön, ters sonuç, uydurma
+    rol); ekranda görünmeyen bir GEÇMİŞ/SEBEP iddiası hiçbirine girmiyor ve 'serbest'
+    listesindeki 'yorum/his' kategorisine yakın duruyor.
+
+    Sözleşme: anlatımdaki her OLGUSAL iddianın kaynağı ya EKRAN, ya BAŞLIK, ya
+    YORUMLAR olmalı; üçü de değilse uydurma. Duygu/yorum/benzetme serbest kalır."""
+    from short_bot.curated_clean import _FAITH_PROMPT
+
+    low = _FAITH_PROMPT.replace("İ", "i").replace("I", "ı").lower()
+    assert "geçmiş" in low or "sebep" in low, \
+        "kaynaksız geçmiş/sebep iddiası ölçütü yok"
+    assert "yorum" in low, "yargıca yorumların kaynak sayıldığı söylenmiyor"
+    # kaçağın kendisi örnek-hata olarak yazılı olmalı (diğer maddelerin deseni)
+    assert "veteriner" in low, "gerçek örnek-hata (short 1254) prompt'ta yok"
+
+
+def test_verify_curated_narration_feeds_comments_to_judge(monkeypatch, tmp_path):
+    """SADAKAT KAPISI YORUMLARI GÖRMELİ — yoksa neyin MEŞRU olduğunu bilemez.
+
+    Asimetri: yazar prompt'unda üst yorumlar 'ARKA-PLAN BAĞLAMI' olarak veriliyor
+    (short 923: vision pipeti kaçırınca yorumlar olayı kurtarıyor), ama denetleyici
+    onları hiç görmüyordu. Sonuç iki yönlü hata: (a) yorumdan gelen DOĞRU bilgi
+    'uydurma' sanılabilir, (b) yorumda OLMAYAN bir iddia meşru sanılabilir — 1254'te
+    ikincisi oldu. Yargıç aynı kaynakları görmeli ki 'bu iddia nereden geliyor?'
+    sorusunu sorabilsin."""
+    import short_bot.claude_cli as cli
+    from short_bot.curated_clean import NarrationCheck, verify_curated_narration
+
+    src = tmp_path / "c.mp4"
+    _make_clip(src)
+    seen = {}
+
+    def _fake(prompt, schema, *, image_path=None, **k):
+        seen["prompt"] = prompt
+        return NarrationCheck(faithful=True)
+    monkeypatch.setattr(cli, "run_json", _fake)
+
+    class _V:
+        claude_path = ""; model = ""; backend = "google_studio"; api_key = ""
+
+    verify_curated_narration(src, "anlatım metni", vision_call=_V(),
+                             title="A Chimp was born a couple days ago",
+                             comments=["Poor mama thought she had lost her baby",
+                                       "The way she picked up her baby"])
+    assert "lost her baby" in seen["prompt"], "yorumlar sadakat kapısına geçmiyor"
+    assert "Chimp was born" in seen["prompt"], "başlık sadakat kapısına geçmiyor"
+    # yorumsuz çağrı → yorum bloğu YAZILMAZ (mevcut çağıranlar için sıfır regresyon)
+    verify_curated_narration(src, "anlatım metni", vision_call=_V(), title="t")
+    assert "lost her baby" not in seen["prompt"]
+
+
+def test_final_qa_prompt_explains_screen_headline_label():
+    """FİNAL QA artık audit_text alıyor (kapak manşeti + başlık etiketli satırlar olarak).
+    Prompt bunun ne olduğunu SÖYLEMELİ — yoksa yargıç '[EKRAN MANŞETİ]' satırını
+    konuşulan anlatımın parçası sanıp senkron/uzunluk yargısını bozabilir. Manşet
+    karelerde ZATEN görünüyor; metinde etiketli görmek onu görüntüyle KARŞILAŞTIRMASINI
+    sağlar (short 1254: kapak 'İki Gün Sonra Kavuşma' diyordu, denetleyen yoktu)."""
+    from short_bot.curated_clean import _final_qa_prompt
+
+    p = _final_qa_prompt("duygu", "anlatım\n[EKRAN MANŞETİ (videonun ilk saniyelerinde "
+                                  "yazıyor)]: Kapak")
+    assert "EKRAN MANŞETİ" in p, "manşet etiketi prompt'ta açıklanmıyor"
+    assert "konuşul" in p.replace("İ", "i").replace("I", "ı").lower(), \
+        "manşetin KONUŞULMADIĞI (yalnız ekranda durduğu) söylenmiyor"

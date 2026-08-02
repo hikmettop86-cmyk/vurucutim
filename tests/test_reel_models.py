@@ -261,3 +261,29 @@ def test_close_echoes_hook_tolerates_suffixes():
               "Düğün bitti ama damadı ayakta tutan o kollar hiç açılmadı.").close_echoes_hook()
     assert not _n("Bu kedi kutunun içinde mışıl mışıl uyuyor",
                   "Sence kaç kişi bunu görünce güldü?").close_echoes_hook()
+
+
+def test_audit_text_covers_on_screen_titles_but_full_text_unchanged():
+    """DENETİM METNİ = KONUŞULAN + EKRANDA YAZAN (short 1254 boşluğu).
+
+    Sadakat/netlik kapılarına ``full_text()`` veriliyordu; o yalnız hook+beat+kapanışı
+    döndürür. Ama ``cover_title`` videonun ilk saniyelerinde EKRANDA duran bir MANŞET,
+    ``title`` da YouTube'a giden başlıktır — ikisi de izleyiciye bir İDDİA sunar ve
+    hiçbir kapıdan geçmiyordu. Konuşulan metin tertemizken kapak uydurma bir dram
+    ilan edebilirdi ('İki Gün Ayrı Kaldılar').
+
+    ``full_text()`` TTS'e ve kelime bütçesine gidiyor — ona DOKUNULMAZ; denetim ayrı
+    bir metin üzerinden yapılır."""
+    n = _narr(cover_title="Kapak Mansedi", title="Video basligi burada")
+    spoken = n.full_text()
+    audit = n.audit_text()
+
+    # konuşulan metin denetim metninin İÇİNDE, ama kendisi DEĞİŞMEDİ
+    assert spoken in audit
+    assert n.full_text() == " ".join(n.segments())
+    assert n.word_count() == len(spoken.split())   # bütçe ölçüsü etkilenmedi
+    # ekranda/başlıkta duran iddialar denetime GİRDİ, etiketli (yargıç ayırt edebilsin)
+    assert "Kapak Mansedi" in audit and "Video basligi burada" in audit
+    assert "EKRAN MANŞETİ" in audit and "VİDEO BAŞLIĞI" in audit
+    # başlık/kapak yoksa denetim metni konuşulan metnin AYNISI (sıfır regresyon)
+    assert _narr().audit_text() == _narr().full_text()

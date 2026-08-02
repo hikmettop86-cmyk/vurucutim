@@ -259,6 +259,11 @@ class _FakeNarration:
     def full_text(self):
         return "Kanca cümlesi burada. Olay şöyle oldu. Kapanış cümlesi."
 
+    def audit_text(self):
+        """Kapılara giden metin: konuşulan + EKRANDA YAZAN (bkz. ReelNarration.audit_text)."""
+        return (f"{self.full_text()}\n[EKRAN MANŞETİ]: {self.cover_title}\n"
+                f"[VİDEO BAŞLIĞI]: {self.title}")
+
     def word_count(self):
         return 8
 
@@ -1240,3 +1245,51 @@ def test_produce_curated_logs_novelty_verdict(tmp_path, monkeypatch, caplog):
     metin = "\n".join(r.message for r in caplog.records)
     assert "3/3" in metin or "yeni olay" in metin, \
         f"yenilik yargısı loglanmıyor:\n{metin}"
+
+
+def test_produce_curated_audits_titles_and_feeds_comments(tmp_path, monkeypatch):
+    """SADAKAT KAPISI: EKRANDA YAZANI da denetlemeli ve YORUMLARI görmeli (short 1254).
+
+    İki ayrı boşluk tek noktada birleşiyordu:
+      (a) kapıya ``full_text()`` veriliyordu → ekranda ilk saniyelerde duran kapak
+          manşeti ve YouTube başlığı HİÇBİR denetimden geçmiyordu. Konuşulan metin
+          sadık olsa bile kapak uydurma bir dram ilan edebiliyordu.
+      (b) yazar üst yorumları bağlam olarak görüyor ama yargıç görmüyordu → yargıç
+          bir iddianın meşru kaynaktan mı geldiğini bilemiyordu.
+    """
+    from pathlib import Path
+
+    import short_bot.curated_clean as cc
+    import short_bot.curated_pipeline as cpl
+    import short_bot.reddit_gems as rg
+    from short_bot.curated_clean import NarrationCheck
+
+    channel, settings = _mock_produce_chain(monkeypatch, tmp_path)
+    monkeypatch.setattr(rg, "fetch_top_comments",
+                        lambda *a, **k: ["mama thought she had lost her baby"])
+    seen = {}
+
+    def _capture(clip, text, **k):
+        seen["text"] = text
+        seen["comments"] = k.get("comments")
+        seen["title"] = k.get("title")
+        return NarrationCheck(faithful=True)
+
+    monkeypatch.setattr(cc, "verify_curated_narration", _capture)
+
+    cpl.produce_curated(
+        {"video_url": "https://v.redd.it/aud1/DASH.mp4", "title": "A Chimp was born",
+         "permalink": "https://reddit.com/r/MadeMeSmile/1"},
+        channel, settings=settings,
+        secrets={"reddit_client_id": "x", "reddit_client_secret": "y"},
+        db_path=tmp_path / "db.sqlite", output_root=tmp_path,
+        music_root=tmp_path, templates_dir=tmp_path)
+
+    # konuşulan metin hâlâ denetimde
+    assert "Kanca cümlesi burada" in seen["text"]
+    # EKRANDA YAZAN da denetimde (kapak + başlık)
+    assert "Kapak" in seen["text"], f"kapak manşeti denetime girmiyor: {seen['text']!r}"
+    assert "Test başlık" in seen["text"], "video başlığı denetime girmiyor"
+    # yargıç yazarla AYNI kaynakları görüyor
+    assert seen["comments"] and "lost her baby" in seen["comments"][0]
+    assert seen["title"] == "A Chimp was born"

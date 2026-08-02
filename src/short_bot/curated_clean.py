@@ -281,6 +281,11 @@ _FAITH_PROMPT = (
     "nesi, elindeki nesne ne, olayın amacı ne). Ama ekranda HİÇ OLMAYAN bir olayı, SONUCU "
     "ya da devamını anlattıramaz. Başlıkta olsa BİLE karelerde karşılığı yoksa o olay "
     "anlatıma giremez — 'başlıkta yazıyor' bir savunma DEĞİLDİR.\n"
+    # YORUMLAR = yazarın gördüğü ÜÇÜNCÜ kaynak. Yazar prompt'unda 'ARKA-PLAN BAĞLAMI'
+    # olarak veriliyor (short 923: vision pipeti kaçırınca yorumlar olayı kurtardı) ama
+    # DENETLEYİCİ görmüyordu. Asimetri iki yönlü hata üretir: yorumdan gelen DOĞRU bilgi
+    # 'uydurma' sanılır, ya da (short 1254) yorumda OLMAYAN bir iddia meşru sanılır.
+    "{comments}"
     "ANLATIM:\n---\n{narr}\n---\n"
     "Bu anlatım, karelerdeki ÖZNE ve TEMEL OLAYLA örtüşüyor mu? Şu 3 durumda 'faithful=false' de:\n"
     "  1) Tamamen FARKLI özne (anlatım 'köpek/futbol' der ama karelerde kedi var) VEYA\n"
@@ -318,12 +323,27 @@ _FAITH_PROMPT = (
     "'bacakları boşaldı, sarsılarak YIĞILDI' dedi → sadık DEĞİL. Denemenin başarılı mı "
     "başarısız mı bittiği, kimin ayakta kaldığı, bir şeyin düşüp düşmediği KARELERDEN "
     "okunur; anlatım bunun TERSİNİ söylüyorsa faithful=false.\n"
+    "  8) KAYNAKSIZ GEÇMİŞ \\ SEBEP \\ TEŞHİS: anlatım, ekranda GÖRÜNMEYEN bir GEÇMİŞ OLAYI, "
+    "SEBEP ya da DURUM bildiriyorsa (bir şeyin NEDEN olduğu, daha önce NE olduğu, kimin "
+    "nerede TUTULDUĞU/gittiği/hastalandığı), bunun kaynağı ya KARELER, ya BAŞLIK, ya da "
+    "YORUMLAR olmak ZORUNDA. Üçünde de yoksa UYDURMADIR → faithful=false. GERÇEK örnek-hata "
+    "(short 1254): başlık yalnız 'bir şempanze birkaç gün önce doğdu' diyor, yorumlar "
+    "'kavuşma' diyor; anlatım ise 'DOĞUMDA NEFES ALAMAYIP VETERİNERDE TUTULMUŞTU' diye bir "
+    "tıbbi geçmiş ekledi — bu bilgi ne karelerde ne başlıkta ne yorumlarda vardı. Kulağa "
+    "makul gelmesi, doğru olması demek DEĞİLDİR; kaynak YOKSA uydurmadır. (Yorumlar bir "
+    "şeyi söylüyorsa SERBEST — yazar onları bağlam olarak görüyor.)\n"
     "ŞUNLAR faithful=false YAPMAZ (SERBEST): mizah, abartı, lakap, benzetme, iç ses, öznenin ne "
     "'hissettiği', küçük sıra/aşama farkı — bunlar YORUM, yeni FİZİKSEL VARLIK değil. Ayrım: "
     "duygu/yorum serbest AMA ekranda olmayan somut bir şey/canlı EKLEMEK ya da olayın "
     "SONUCUNU tersine çevirmek yasak.\n"
+    "⚠️ HİS ile OLGU'yu KARIŞTIRMA (8. maddenin sınırı): 'annesi onu özlemişti', 'korkmuş "
+    "olmalı', 'içi rahatladı' gibi DUYGU okumaları YORUMDUR → serbest. Ama 'iki gündür "
+    "ayrıydılar', 'veterinerde tutuldu', 'sahibi onu sokakta bulmuştu' gibi OLAY/DURUM "
+    "bildiren cümleler OLGUDUR → kaynak ister. Ölçüt şu: cümle DOĞRU ya da YANLIŞ "
+    "olabilecek bir olgu mu bildiriyor, yoksa sahnenin duygusunu mu yorumluyor?\n"
     "Kareler küçük/belirsizse ve ANLATIMDA uydurma varlık YOKSA → faithful=TRUE (şüphede sadık).\n"
-    "- faithful: özne+temel olay örtüşüyor VE uydurulmuş varlık/alt-olay/değişim/rol YOK mu?\n"
+    "- faithful: özne+temel olay örtüşüyor VE uydurulmuş varlık/alt-olay/değişim/rol ile "
+    "kaynaksız geçmiş/sebep YOK mu?\n"
     "- mismatch: sadık değilse tek cümle (Türkçe) — özellikle uydurma varlığı ADIYLA söyle "
     "(örn. 'anlatımdaki yengeç ekranda yok').\n"
     'SADECE JSON: {{"faithful": <bool>, "mismatch": "<...>"}}'
@@ -331,13 +351,17 @@ _FAITH_PROMPT = (
 
 
 def verify_curated_narration(clip, narration_text: str, *, vision_call,
-                             ffmpeg_path: str = "ffmpeg", title: str = ""):
+                             ffmpeg_path: str = "ffmpeg", title: str = "",
+                             comments=None):
     """Storyboard (gerçek 9 kare) + anlatım → anlatım gerçek olaya sadık mı, uydurma olay
     var mı. Döner NarrationCheck ya da None (kare/vision hatası → fail-open, çağıran sadık
     sayar). Mizah/abartı serbest; yalnız uydurma OLAY yakalanır.
 
     ``title``: klibin kendi başlığı — kişilerin KİM olduğunu (arkadaş mı kızı mı) kareler
-    söyleyemez, uydurma rol/akrabalık ancak başlıkla yargılanır (short 1140)."""
+    söyleyemez, uydurma rol/akrabalık ancak başlıkla yargılanır (short 1140).
+    ``comments``: üst Reddit yorumları — YAZARIN gördüğü üçüncü kaynak. Yargıç da görmeli
+    ki bir iddianın MEŞRU mu (yorumda var) yoksa uydurma mı (hiçbir kaynakta yok) olduğunu
+    ayırabilsin; verilmezse yorum bloğu yazılmaz (short 1254)."""
     from short_bot.claude_cli import run_json
     from short_bot.reel import _storyboard_frames
     if not (narration_text or "").strip():
@@ -354,11 +378,22 @@ def verify_curated_narration(clip, narration_text: str, *, vision_call,
             # SADAKAT KAPISI geçici vision hatasında None dönüp sessizce ATLANMASIN (short 976:
             # verify None döndü → kapı fail-open → uydurma anlatım geçti). Burst-throttle'a karşı
             # ek tur → None yalnız gerçekten doğrulanamayınca (kapı o zaman sadık sayar).
+            _cl = [str(c).strip() for c in (comments or []) if str(c).strip()][:4]
+            _cblock = ""
+            if _cl:
+                _joined = "\n".join(f"  • {c[:300]}" for c in _cl)
+                _cblock = (
+                    f"KLİBİN ÜST YORUMLARI (yazarın da gördüğü bağlam — olayın NE olduğu "
+                    f"ve arka planı konusunda MEŞRU kaynak):\n{_joined}\n"
+                    f"YORUMLARIN SINIRI: yorumlar bir bilgiyi söylüyorsa anlatım onu "
+                    f"kullanabilir. Ama yorumlarda GEÇMEYEN bir olay/sebep/geçmiş, "
+                    f"karelerde ve başlıkta da yoksa UYDURMADIR (bkz. 8. madde).\n")
             last: Exception | None = None
             for _ in range(2):
                 try:
                     return run_json(_FAITH_PROMPT.format(narr=narration_text[:900],
-                                                         title=(title or "(başlık yok)")[:300]),
+                                                         title=(title or "(başlık yok)")[:300],
+                                                         comments=_cblock),
                                     NarrationCheck,
                                     claude_path=vision_call.claude_path, model=vision_call.model,
                                     backend=vision_call.backend, api_key=vision_call.api_key,
@@ -429,6 +464,14 @@ def _final_qa_prompt(tone: str, narration_text: str) -> str:
         "(storyboard, zaman-sıralı, tek ızgara). Videoya Türkçe anlatım altyazı çipleri ve "
         "görsel vurgular render EDİLMİŞ durumda — gördüğün, izleyicinin göreceği bitmiş ürün.\n"
         f"Videonun TÜM ANLATIM METNİ:\n---\n{narration_text}\n---\n"
+        # audit_text etiketleri (bkz. ReelNarration.audit_text): kapak manşeti KONUŞULMAZ,
+        # yalnız ekranda durur. Yargıç bunu bilmezse etiket satırını anlatımın parçası
+        # sanıp senkron/uzunluk yargısını bozar; bilirse manşeti görüntüyle KARŞILAŞTIRIR.
+        "NOT: '[EKRAN MANŞETİ …]' ve '[VİDEO BAŞLIĞI]' satırları KONUŞULMAZ — manşet "
+        "videonun ilk saniyelerinde EKRANDA yazar, başlık ise videonun dışındadır. "
+        "Bunları anlatım uzunluğuna SAYMA; ama manşet ekranda bir İDDİA sunduğu için "
+        "karelerdeki olayla çelişiyorsa (olmayan bir olayı/ayrılığı/sonucu ilan ediyorsa) "
+        "bu sync_ok=false sayılır.\n"
         f"Kanalın tonu: {lens}.\n"
         "Yayın editörü gibi yargıla:\n"
         "- watchable: bir izleyici bunu SONUNA KADAR izler mi — görüntü + anlatım birlikte "

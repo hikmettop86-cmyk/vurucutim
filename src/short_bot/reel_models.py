@@ -340,6 +340,27 @@ class ReelNarration(BaseModel):
     def full_text(self) -> str:
         return " ".join(self.segments())
 
+    def audit_text(self) -> str:
+        """KAPILARA verilecek metin: konuşulan anlatım + EKRANDA YAZAN iddialar.
+
+        ``full_text()`` yalnız KONUŞULANI döndürür (TTS ve kelime bütçesi onu kullanır —
+        oraya bir şey eklemek süreyi ve bütçeyi bozar). Ama ``cover_title`` videonun ilk
+        saniyelerinde ekranda duran bir MANŞET, ``title`` da YouTube başlığıdır; ikisi de
+        izleyiciye bir İDDİA sunar. Sadakat/QA kapıları full_text aldığı için bu iddialar
+        HİÇBİR denetimden geçmiyordu: konuşulan metin sadık olsa bile kapak uydurma bir
+        dram ilan edebiliyordu (short 1254: klipte yalnız doğum sonrası kucaklama varken
+        kapak 'İki Gün Sonra Kavuşma' diyordu).
+
+        Etiketli döner ki yargıç neyin KONUŞULDUĞUNU neyin EKRANDA YAZDIĞINI ayırabilsin.
+        Başlık/kapak boşsa full_text'in AYNISI (çağıranlar için sıfır regresyon)."""
+        parts = [self.full_text()]
+        if (self.cover_title or "").strip():
+            parts.append(f"[EKRAN MANŞETİ (videonun ilk saniyelerinde yazıyor)]: "
+                         f"{self.cover_title.strip()}")
+        if (self.title or "").strip():
+            parts.append(f"[VİDEO BAŞLIĞI]: {self.title.strip()}")
+        return "\n".join(parts)
+
     def word_count(self) -> int:
         """Senaryonun UZUNLUK BÜTÇESİ cinsinden ölçüsü — dile duyarlı.
 

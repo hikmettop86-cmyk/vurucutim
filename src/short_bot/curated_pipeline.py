@@ -358,9 +358,13 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
         # Storyboard + anlatıma bak; uydurmuşsa GERİ BİLDİRİMLE bir kez yeniden yaz. Fail-open.
         if vision is not None:
             from short_bot.curated_clean import verify_curated_narration
-            _chk = verify_curated_narration(clip, narration.full_text(),
+            # audit_text (full_text DEĞİL): ekranda duran kapak manşeti + YouTube başlığı da
+            # denetlensin — konuşulan metin sadıkken kapak uydurma dram ilan edebiliyordu.
+            # comments: yargıç YAZARIN gördüğü kaynakları görsün ki bir iddianın meşru mu
+            # (yorumda var) yoksa uydurma mı olduğunu ayırabilsin (short 1254).
+            _chk = verify_curated_narration(clip, narration.audit_text(),
                                             vision_call=vision, ffmpeg_path=settings.ffmpeg_path,
-                                            title=gem.get("title", ""))
+                                            title=gem.get("title", ""), comments=comments)
             # not-faithful İSE yeniden yaz — mismatch BOŞ OLSA BİLE (denetim bulgusu: zayıf model
             # 'faithful=false, mismatch=""' dönünce eski AND-guard rewrite'ı ATLAYIP uydurma
             # anlatımı YAYINLIYORDU). Reason boşsa jenerik geri bildirim ver.
@@ -379,10 +383,11 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
                     backend=narr_llm.backend, api_key=narr_llm.api_key,
                     seed=seed, target_duration_s=target, scene_split=scene_split,
                     comments=comments, feedback=_fb, reveal_frac=reveal_frac)
-                _chk2 = verify_curated_narration(clip, narration.full_text(),
+                _chk2 = verify_curated_narration(clip, narration.audit_text(),
                                                  vision_call=vision,
                                                  ffmpeg_path=settings.ffmpeg_path,
-                                                 title=gem.get("title", ""))
+                                                 title=gem.get("title", ""),
+                                                 comments=comments)
                 if _chk2 is not None and not _chk2.faithful:
                     # KALICI UYDURMA → çöp YAYINLAMA, klibi ATLA (denetim 999: direktif rewrite'a
                     # rağmen uydurma kalırsa fail-open çöpü basıyordu). Oto-loop sıradaki adaya
@@ -544,7 +549,9 @@ def produce_curated(gem: dict, channel, *, settings, secrets, db_path,
     # seen'e YAZMA: klip iyi olabilir, anlatım/kurgu şanssız çıktı (sonraki koşu farklı seed).
     if vision is not None:
         from short_bot.curated_clean import judge_final_video
-        _fq = judge_final_video(out_path, narration.full_text(), vision_call=vision,
+        # audit_text: kapak manşeti KARELERDE görünüyor → yargıç metinde de görsün ki
+        # manşetin iddiasını görüntüyle karşılaştırabilsin (sadakat kapısıyla aynı gerekçe).
+        _fq = judge_final_video(out_path, narration.audit_text(), vision_call=vision,
                                 ffmpeg_path=settings.ffmpeg_path, tone=_tone, log=log)
         if _fq is not None and (not _fq.watchable or not _fq.sync_ok or not _fq.tone_ok
                                 or _fq.score < FINAL_QA_MIN):
