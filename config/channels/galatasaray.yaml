@@ -1,0 +1,152 @@
+slug: galatasaray
+name: Galatasaray
+keywords:
+# Her anahtar AYRI Google News sorgusu atar (fetcher.fetch_rss). Tek
+# "galatasaray" sorgusu transfer haberleriyle doluyordu: 442 videoluk analizde
+# üretimin %50'si gelen-transferdi ve bu en zayıf kategoriydi (endeks 0.93,
+# alt %10'un %59'u). Aşağıdaki üç anahtar, analizde en yüksek performansı
+# veren ama havuza neredeyse hiç girmeyen konuları besler.
+- galatasaray
+- Galatasaray Şampiyonlar Ligi     # endeks 1.69, kanalın en iyi konusu (n=9)
+- Galatasaray başkan yönetim       # endeks 1.29
+- Galatasaray TFF ceza tahkim      # endeks 1.24
+# categories: script'in seçebileceği canonical konu etiketleri. Serbest metin
+# etiket learning/aggregator'ın kovalarını bölüyordu (aynı konuya "Transfer"
+# 210, "transfer" 138, "Futbol Transfer" 14 kez). Liste, ölçülen performans
+# ayrımlarını taşır — gelen/giden transfer ayrı, çünkü endeksleri farklı.
+categories:
+- transfer-gelen
+- transfer-giden
+- avrupa-kura
+- yonetim-baskan
+- hukuk-ceza
+- kadro-karari
+- mac-skor
+- oyuncu-sozu
+- magazin
+- rakip
+# Günlük kota: kanal 4 saatte bir üretiyor (≈6 video/gün). Kotayı dolduran
+# konunun adayı ELENMEZ, puanı 3.0 düşer — transfer dönemi gibi akışın tek
+# konuya kilitlendiği günlerde eleme üretimi durdururdu. Sınırlar analizdeki
+# performansa göre: gelen-transfer günde en çok 2 (eskiden fiilen 3'ü aşıyordu
+# ve endeksi 0.93'tü), hazırlık maçı/skor 1 (alt %10'un %15.9'u).
+category_quota_per_day:
+  transfer-gelen: 2
+  mac-skor: 1
+# Hazırlık maçı içeriği ölçülen en zayıf tür: 4 videonun medyanı 25.336 =
+# kanal medyanının %50'si (48.938 / 33.937 / 16.736 / 13.670 — dördü de
+# tutarlı biçimde düşük) ve alt %10'un %15,9'unu oluşturuyor. Tek kelime
+# "hazırlık" DEĞİL, iki kelimelik kalıp: "transfer hazırlığı" gibi meşru
+# haberleri elememeli. Filtre locale_fold ile Türkçe I/ı eşlemesi yapar.
+negative_keywords:
+- hazırlık maçı
+language: tr
+schedule_cron: 0 */4 * * *
+duration_s: 6
+min_score: 6.0
+max_candidates_per_run: 10
+max_age_hours: 24
+template: stadium
+colors:
+  primary: '#a30d2d'
+  accent: '#ffb81c'
+  bg_gradient:
+  - '#0a0a0a'
+  - '#3d0712'
+handle: '@galatasaray'
+output_dir: output/galatasaray
+enabled: true
+youtube:
+  auto_upload: false
+  ai_content: false
+  category_id: '17'
+  privacy_status: public
+  min_score_for_upload: 3.5
+  cron_preset: every_4h
+bg_video:
+  enabled: true
+  scale: 0.88
+  blur_px: 30
+  dim: 0.2
+trend_boost:
+  enabled: true
+  max_boost: 2.0
+  min_term_length: 4
+  fuzzy_threshold: 85
+  sources:
+  - google_daily
+bg_image_blur: 8
+dna:
+  archetype: stadium
+  palette:
+    primary: '#a30d2d'
+    accent: '#ffb81c'
+    bg_gradient:
+    - '#0a0a0a'
+    - '#3d0712'
+    body_bg:
+    - '#12060a'
+    - '#1f0810'
+    text_main: '#fff8e7'
+    text_muted: '#e8c56a'
+    header_top_color: ''
+    header_bottom_color: ''
+  fonts:
+    headline: Oswald
+    body: Inter
+    google_imports:
+    - Oswald:wght@600;700
+    - Inter:wght@400;600;800
+    size_headline_top: null
+    size_headline_bottom: null
+  tone:
+    voice: tutkulu, gururlu, militan, dinamik
+    style: tezahürat enerjili, kısa darbeli, taraftar dilinde
+    forbidden:
+    - soğuk akademik üslup
+    - rakibe hakaret
+    - küfür
+    - ironik küçümseme
+    - uzun teknik analiz
+    - duygusuz raporlama
+    # Ölçüm (442 video): "BOMBA" 42 manşette kullanılmış ve dönemin normalinin
+    # %18 ALTINDA kalmış; ünlem içeren 104 manşet %16 altında. Kalıp
+    # tekrarlandıkça yıpranıyor, sistemin bunu görecek mekanizması yoktu.
+    - '"BOMBA" ve "ŞOK BOMBASI" gibi yıpranmış manşet klişeleri'
+    - her manşeti ünlemle bitirmek
+    sentence_max_words: 14
+    paragraph_sentences:
+    - 3
+    - 4
+    body_max_chars: 280
+    headline_style_hint: 'Kısa, vurucu manşet: takım/oyuncu adı + aksiyon/sonuç (örn.
+      ''CİMBOM RAHAT KAZANDI'')'
+  banner_shape: slanted
+  highlight_style: underline
+  chip_style: rounded
+  category_icon: 🦁
+  search_query_template: Galatasaray {header_top} football match
+  persona_summary: Galatasaray taraftarının kalbinden konuşan, sarı-kırmızı tutkuyla
+    yanan kısa spor haberleri kanalı. Cimbom'un zaferlerini, transferlerini ve efsanelerini
+    militan bir gururla anlatır.
+  custom_css: '.stage{background:linear-gradient(135deg,#0A0A0A 0%,#3D0712 60%,#A30D2D
+    140%);position:relative;overflow:hidden}.stage::before{content:'''';position:absolute;inset:0;background-image:repeating-linear-gradient(45deg,rgba(255,184,28,0.04)
+    0 2px,transparent 2px 14px);pointer-events:none;mix-blend-mode:screen;z-index:1}.stage::after{content:''🦁'';position:absolute;top:-40px;right:-30px;font-size:280px;opacity:0.06;filter:grayscale(0.3)
+    drop-shadow(0 0 30px rgba(255,184,28,0.4));transform:rotate(-12deg);pointer-events:none;z-index:1}.header{filter:drop-shadow(0
+    4px 12px rgba(0,0,0,0.7))}.header .top{color:#FFB81C;text-shadow:0 2px 8px rgba(0,0,0,0.8);letter-spacing:0.04em;text-transform:uppercase;font-weight:700}.header
+    .bot{color:#FFF8E7;text-shadow:0 2px 10px rgba(163,13,45,0.7);letter-spacing:0.02em;font-weight:700}.header::before{content:'''';display:block;width:80px;height:5px;background:linear-gradient(90deg,#A30D2D
+    0%,#FFB81C 100%);margin-bottom:14px;border-radius:2px;box-shadow:0 0 16px rgba(255,184,28,0.5)}.body{background:linear-gradient(180deg,rgba(18,6,10,0.96)
+    0%,rgba(31,8,16,0.97) 100%);border-left:6px solid #FFB81C;border-radius:6px;padding-left:22px;color:#FFF8E7;box-shadow:0
+    8px 24px rgba(0,0,0,0.55),inset 0 1px 0 rgba(255,184,28,0.15);position:relative}.body::before{content:''⚽'';position:absolute;top:10px;right:14px;font-size:22px;opacity:0.4;filter:drop-shadow(0
+    0 6px rgba(255,184,28,0.6))}.body::first-letter{font-family:''Oswald'',sans-serif;font-size:1.4em;color:#FFB81C;font-weight:700;margin-right:3px}.persistent{background:linear-gradient(135deg,#A30D2D
+    0%,#7A0820 100%);color:#FFB81C;border:2px solid #FFB81C;border-radius:0;padding:6px
+    14px;font-family:''Oswald'',sans-serif;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;box-shadow:0
+    4px 14px rgba(163,13,45,0.6),inset 0 1px 0 rgba(255,255,255,0.15);clip-path:polygon(8px
+    0,100% 0,calc(100% - 8px) 100%,0 100%)}.persistent::before{content:''★ '';color:#FFB81C;text-shadow:0
+    0 8px rgba(255,184,28,0.9)}.photo{border:3px solid #FFB81C;border-radius:4px;box-shadow:0
+    12px 32px rgba(0,0,0,0.7);filter:contrast(1.08) saturate(1.15)}.progress{background:linear-gradient(90deg,#A30D2D
+    0%,#FFB81C 100%);box-shadow:0 0 12px rgba(255,184,28,0.5)}.handle{color:#FFB81C;font-family:''Oswald'',sans-serif;letter-spacing:0.08em;text-shadow:0
+    1px 4px rgba(0,0,0,0.8)}@keyframes gsPulse{0%,100%{opacity:0.06}50%{opacity:0.10}}.stage::after{animation:gsPulse
+    4s ease-in-out infinite}'
+  ui_badge: ⚽ CİMBOM ⚽
+  animation_style: none
