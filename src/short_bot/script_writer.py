@@ -85,6 +85,17 @@ ARCHETYPE_PROMPTS = {
 }
 
 
+# Şablonun GERÇEK manşet kapasitesi (ölçülmüş), Pydantic'in 25 karakterlik
+# kırpma sınırı değil. stadium'un 200px Oswald başlığı satır başına ~5 karakter
+# alıyor; iki kanalda 463 kırpılmamış manşet ölçüldü — galatasaray medyan 10 /
+# p90 16, fenerbahce medyan 9 / p90 11. Prompt 25 dediği için LLM 16 karakter
+# yazıyor, render reddediyor, 3 retry LLM çağrısı yanıyor ve sonunda kelime
+# ortadan kesiliyordu: galatasaray manşetlerinin %59'unda "…" var.
+# Ölçüm yapılmamış şablonlar eski 25 değerinde kalır.
+_HEADER_TOP_BUDGET = {"stadium": 14}
+_DEFAULT_HEADER_TOP_BUDGET = 25
+
+
 def build_script_prompt_for_channel(item: NewsItem, body: str, channel: ChannelConfig) -> str:
     """Channel-aware prompt: includes archetype instructions + tone block + language."""
     lang_name = LANGUAGE_NAMES.get(channel.language, channel.language)
@@ -103,6 +114,23 @@ TONE OF VOICE:
 - Body max: {t.body_max_chars} characters
 - Headline style: {t.headline_style_hint}
 """
+
+    # Canonical kategori listesi: serbest etiket learning/aggregator'ın konu
+    # kovalarını böldüğü için (aynı konuya "Transfer"/"transfer"/"Futbol
+    # Transfer") kanal bir liste tanımlayabilir. Tanımlamayanlar eski
+    # serbest davranışta kalır.
+    category_spec = "..."
+    category_rule = ""
+    if channel.categories:
+        allowed = " | ".join(channel.categories)
+        category_spec = f"<{allowed}>"
+        category_rule = (
+            f"\n- category: pick EXACTLY ONE from this list, verbatim: {allowed}. "
+            f"Do not invent a new label, do not translate it, do not change its case."
+        )
+
+    header_top_budget = _HEADER_TOP_BUDGET.get(
+        channel.template, _DEFAULT_HEADER_TOP_BUDGET)
 
     source = item.source or "—"
     return f"""You are writing a {lang_name} YouTube Shorts script.
@@ -123,16 +151,17 @@ Output STRICT JSON only:
   "photo_overlay":   "...",
   "body_paragraph":  "...",
   "highlights":      [{{"text": "<exact substring of body>", "color": "red"|"yellow"}}],
-  "category":        "...",
+  "category":        "{category_spec}",
   "mood":            "breaking" | "neutral" | "upbeat"
 }}
 
-Rules:
+Rules:{category_rule}
 - FACTUAL ACCURACY (critical): Use ONLY facts present in the ARTICLE BODY above. Do NOT invent or guess names, numbers, dates, ages, fees, scores, titles, records, or events. If a specific figure is not in the source, do not state one. Never attribute quotes or actions to people not named in the source. If the article is thin, write a shorter factual script instead of padding with fabricated details.
 - All text in {lang_name}, with proper diacritics
 - highlights[i].text must appear verbatim in body_paragraph
 - Stay within tone constraints if specified above
-- header_top: MAX 25 characters (hard limit, will be rejected otherwise)
+- header_top: MAX {header_top_budget} characters (hard limit, will be rejected otherwise).
+  Shorter is better — one strong word beats a truncated phrase.
 - header_bottom: MAX 35 characters (hard limit, will be rejected otherwise)
 """
 

@@ -152,3 +152,50 @@ def test_write_script_forwards_backend_and_api_key():
         write_script(item, "body", backend="openrouter", api_key="k")
     assert m.call_args.kwargs["backend"] == "openrouter"
     assert m.call_args.kwargs["api_key"] == "k"
+
+
+# --- Canonical kategori listesi ---------------------------------------------
+
+def test_prompt_pins_channel_categories_when_configured():
+    """Kanal canonical liste tanımlarsa LLM serbest etiket uyduramamalı.
+
+    Serbest metin kategori, learning/aggregator'ın kovalarını böler
+    (Transfer/transfer/Futbol Transfer aynı konuya üç ayrı etiket).
+    """
+    from dataclasses import replace
+    ch = replace(_channel(),
+                 categories=["transfer-gelen", "transfer-giden", "avrupa-kura"])
+    p = build_script_prompt_for_channel(_item(), "gövde", ch)
+    assert "transfer-gelen" in p
+    assert "transfer-giden" in p
+    assert "avrupa-kura" in p
+
+
+def test_prompt_without_categories_keeps_free_form():
+    """Liste tanımlamayan kanallar (çoğu) eskisi gibi serbest etiket verir."""
+    ch = _channel()
+    p = build_script_prompt_for_channel(_item(), "gövde", ch)
+    assert "transfer-gelen" not in p
+    assert '"category"' in p
+
+
+# --- Şablona göre manşet bütçesi ---------------------------------------------
+
+def test_stadium_prompt_uses_measured_header_budget():
+    """Prompt 25 karakter diyordu, stadium'un gerçek kapasitesi ~10.
+
+    İki kanalda 463 kırpılmamış manşet ölçüldü: galatasaray medyan 10 / p90 16,
+    fenerbahce medyan 9 / p90 11. LLM 25'e uyup 16 karakter yazıyor, render
+    reddediyor, 3 retry yanıyor ve manşetlerin %59'u kesik çıkıyordu.
+    """
+    ch = _channel(template="stadium")
+    p = build_script_prompt_for_channel(_item(), "gövde", ch)
+    assert "MAX 14 characters" in p
+    assert "MAX 25 characters" not in p
+
+
+def test_unmeasured_template_keeps_previous_budget():
+    """Ölçüm yapılmamış şablonlar eski davranışta kalır."""
+    ch = _channel(template="newscast")
+    p = build_script_prompt_for_channel(_item(), "gövde", ch)
+    assert "MAX 25 characters" in p

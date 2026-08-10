@@ -61,3 +61,27 @@ def test_recommendation_strictly_less_when_overflow():
                         f"(lines={cur_lines}, max={max_lines})"
                     )
                 assert rec >= 1
+
+
+def test_horizontal_overflow_shrinks_meaningfully_not_by_one_char():
+    """current-1 adımı 3 retry'lık bütçeyi tüketiyor, sonra truncate ediliyor.
+
+    Gerçek koşu (run 1611, stadium header_top): 16->15 -> LLM 14 yazdı ->
+    14->13 -> 13->12 -> "all retries failed -> truncate_to_fit". Yatay
+    taşmada oransal formül current'in ÜSTÜNE çıkıyor, cap=current-1 devreye
+    giriyor ve her tur yalnız 1 karakter kırpılıyor. Kanalın manşetlerinin
+    %59'u bu yüzden kesik ("SOYUNMA…", "GERİ…").
+    """
+    rec = _compute_recommended_chars(
+        current_chars=16, current_lines=3, max_lines=4, has_overflow=True
+    )
+    assert rec <= 14, f"recommended={rec}: 16 karakterden en az 2 kırpılmalı"
+    assert rec >= 1
+
+
+def test_horizontal_shrink_is_proportional_for_long_headlines():
+    """Uzun manşette 1 karakterlik adım daha da yetersiz."""
+    rec = _compute_recommended_chars(
+        current_chars=40, current_lines=1, max_lines=4, has_overflow=True
+    )
+    assert rec <= 34, f"recommended={rec}: 40 karakterde ~%15 kırpma beklenir"

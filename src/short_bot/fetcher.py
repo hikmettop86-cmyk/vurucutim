@@ -30,19 +30,41 @@ def fetch_rss(
     backoff: float = 1.0,
     timeout: int = 15,
 ) -> list[NewsItem]:
-    url = build_rss_url(keywords, locale)
-    last_err: Exception | None = None
+    """Her anahtar için AYRI sorgu at, sonuçları guid'e göre tekilleştir.
 
+    Anahtarları `+OR+` ile tek sorguda birleştirmek havuzu genişletmiyor,
+    daraltıyor: ölçümde q=galatasaray 110 sonuç verirken aynı sorguya 3 terim
+    daha OR'lanınca 100'e düştü. Buna karşılık "Galatasaray Şampiyonlar Ligi"
+    AYRI sorgu olarak atıldığında dönen 99 haberin 91'i ana havuzda yoktu.
+    Kanal tek anahtar kullanıyorsa (mevcut tüm kanallar) davranış değişmez —
+    tek sorgu, aynı URL.
+    """
+    if not keywords:
+        raise ValueError("keywords boş olamaz")
+
+    merged: dict[str, NewsItem] = {}
+    for keyword in keywords:
+        for item in _fetch_query(
+            build_rss_url([keyword], locale),
+            max_retries=max_retries, backoff=backoff, timeout=timeout,
+        ):
+            # İlk gören kazanır: aynı haber birden çok sorgudan dönebilir.
+            merged.setdefault(item.guid, item)
+    return list(merged.values())
+
+
+def _fetch_query(
+    url: str, *, max_retries: int, backoff: float, timeout: int,
+) -> list[NewsItem]:
+    """Tek sorgu + retry. Kalıcı hatada [] döner (diğer anahtarlar sürsün)."""
     for attempt in range(max_retries):
         try:
             r = requests.get(url, timeout=timeout, headers={"User-Agent": "short-bot/0.1"})
             r.raise_for_status()
             return _parse_feed(r.content)
-        except Exception as e:
-            last_err = e
+        except Exception:
             if attempt < max_retries - 1:
                 time.sleep(backoff * (2 ** attempt))
-
     return []
 
 

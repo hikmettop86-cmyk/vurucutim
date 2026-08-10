@@ -146,7 +146,15 @@ def _compute_recommended_chars(
         return current_chars
     # Same proportional formula as before, integer division for stability.
     target = (current_chars * max_lines * 9) // (current_lines * 10)
-    cap = max(1, current_chars - 1)
+    # YATAY taşmada (satır sayısı bütçe içinde ama genişlik aşılmış) oransal
+    # formül current'in ÜSTÜNE çıkar ve eski cap=current-1 her turda yalnız 1
+    # karakter kırpardı. 3 retry'lık bütçe 3 karakter ilerletiyordu; gerçek
+    # koşuda 16->15->14->13 diye gidip truncate'e düşüyordu ve kanal
+    # manşetlerinin %59'u kesik çıkıyordu. Yatay durumda sabit oranlı (%15)
+    # kırpma uygula — dikey taşmada oransal formül zaten doğru daralıyor.
+    cap = max(1, (current_chars * 85) // 100)
+    if cap >= current_chars:            # çok kısa metinlerde oran yuvarlanır
+        cap = current_chars - 1
     return max(1, min(target, cap))
 
 
