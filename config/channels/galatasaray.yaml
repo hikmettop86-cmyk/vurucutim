@@ -25,13 +25,16 @@ categories:
 - oyuncu-sozu
 - magazin
 - rakip
-# Günlük kota: kanal 4 saatte bir üretiyor (≈6 video/gün). Kotayı dolduran
-# konunun adayı ELENMEZ, puanı 3.0 düşer — transfer dönemi gibi akışın tek
-# konuya kilitlendiği günlerde eleme üretimi durdururdu. Sınırlar analizdeki
-# performansa göre: gelen-transfer günde en çok 2 (eskiden fiilen 3'ü aşıyordu
-# ve endeksi 0.93'tü), hazırlık maçı/skor 1 (alt %10'un %15.9'u).
+# Kotayı dolduran konunun adayı ELENMEZ, puanı düşer (taban = min_score).
+# GEVŞETİLDİ (aynı gün, daha temiz ölçümle): ilk sınır transfer-gelen=2 idi ve
+# tüm-dönem + anahtar-kelime eşleşmesine dayanıyordu (endeks 0.93). Canonical
+# etiketli dönemde zaman-normalize ölçüm farklı söylüyor (n=150):
+# transfer-giden 1.01, transfer-gelen 0.99, mac-skor 0.89, kadro-karari 0.63.
+# Yani gelen-transfer ORTALAMA performanslı; sert kota üretimi kadro-karari
+# gibi daha zayıf konulara itiyordu. Sınır çeşitlilik için korunuyor ama
+# gevşetildi. kadro-karari (0.63) n=4 ile kotalanmadı — örneklem çok küçük.
 category_quota_per_day:
-  transfer-gelen: 2
+  transfer-gelen: 3
   mac-skor: 1
 # Hazırlık maçı içeriği ölçülen en zayıf tür: 4 videonun medyanı 25.336 =
 # kanal medyanının %50'si (48.938 / 33.937 / 16.736 / 13.670 — dördü de

@@ -1,0 +1,142 @@
+slug: fenerbahce
+name: Fenerbahçe
+keywords:
+# Galatasaray'a eklenen Şampiyonlar Ligi / yönetim anahtarları BURAYA
+# EKLENMEDİ: 257 videoluk kendi ölçümü ters çıktı — avrupa-kura endeksi FB'de
+# 0.43 (GS'de 1.69), yani üretimi zayıf konuya yöneltirdi. FB'nin en iyi konusu
+# giden-transfer (1.20) ve o zaten mevcut sorgudan geliyor; ek anahtarı veri
+# desteklemiyor.
+- Fenerbahçe
+categories:
+- transfer-gelen
+- transfer-giden
+- avrupa-kura
+- yonetim-baskan
+- hukuk-ceza
+- kadro-karari
+- mac-skor
+- oyuncu-sozu
+- magazin
+- rakip
+# Kota YALNIZ performansı kanıtlı düşük konulara konur. Canonical etiketli
+# dönemde, zaman-normalize endeks (n=142): transfer-giden 1.20, transfer-gelen
+# 1.07, rakip 1.04, mac-skor 1.00, kadro-karari 0.78, yonetim-baskan 0.70,
+# avrupa-kura 0.42. Yani FB'de gelen-transfer üretimin yarısı olmasına rağmen
+# ortalamanın ÜSTÜNDE — kısıtlamak zarar verirdi. Kısıtlanan tek konu, dokuz
+# videoyla ölçülmüş ve kanalın açık ara en zayıfı olan avrupa-kura (GS'de aynı
+# konu 1.69 ile en iyisiydi; Fenerbahçe Şampiyonlar Ligi'nde değil).
+category_quota_per_day:
+  avrupa-kura: 1
+# Hazırlık maçı FB'de de dipte (n=1, medyan 9.666 = kanal medyanının %23'ü);
+# GS'de 4 videoda %50 ile doğrulanmıştı.
+negative_keywords:
+- hazırlık maçı
+language: tr
+schedule_cron: 0 */4 * * *
+duration_s: 6
+min_score: 6.0
+max_candidates_per_run: 10
+max_age_hours: 24
+template: stadium
+colors:
+  primary: '#a30d2d'
+  accent: '#ffb81c'
+  bg_gradient:
+  - '#0a0a0a'
+  - '#3d0712'
+handle: '@fenerbahce'
+output_dir: output/fenerbahce
+enabled: true
+youtube:
+  auto_upload: false
+  ai_content: true
+  category_id: '24'
+  privacy_status: public
+  min_score_for_upload: 8.0
+  cron_preset: every_4h
+bg_video:
+  enabled: true
+  scale: 0.88
+  blur_px: 30
+  dim: 0.4
+trend_boost:
+  enabled: false
+  max_boost: 2.0
+  min_term_length: 4
+  fuzzy_threshold: 85
+dna:
+  archetype: stadium
+  palette:
+    primary: '#a30d2d'
+    accent: '#ffb81c'
+    bg_gradient:
+    - '#0a0a0a'
+    - '#3d0712'
+    body_bg:
+    - '#12060a'
+    - '#1f0810'
+    text_main: '#fff8e7'
+    text_muted: '#e8c56a'
+    header_top_color: ''
+    header_bottom_color: ''
+  fonts:
+    headline: Oswald
+    body: Inter
+    google_imports:
+    - Oswald:wght@500;600;700
+    - Inter:wght@400;700;900
+    size_headline_top: null
+    size_headline_bottom: null
+  tone:
+    voice: coşkulu, tutkulu, dinamik, taraftar ruhlu
+    style: vurucu, kısa, enerjik
+    forbidden:
+    - rakip takımı öven ifadeler
+    - soğuk ve mesafeli resmi dil
+    - uzun akademik cümleler
+    - kararsız ve temkinli üslup
+    - asılsız transfer dedikodusunu kesin haber gibi sunmak
+    # Ölçüm (257 video): ünlemli 47 manşet kanal medyanının %79'unda kaldı.
+    # DİKKAT — Galatasaray'a konan "BOMBA" yasağı buraya KONMADI: GS'de 42 kez
+    # kullanılıp yıpranmışken (%82) FB'de 12 kullanımla hâlâ %195 getiriyor.
+    # Klişe yasağı kanal-özel ölçümle konur, kopyalanmaz.
+    - her manşeti ünlemle bitirmek
+    sentence_max_words: 14
+    paragraph_sentences:
+    - 1
+    - 3
+    body_max_chars: 220
+    headline_style_hint: Kısa, büyük harf ve duygu yüklü; oyuncu/takım adı + çarpıcı
+      gelişme (örn. 'FENERBAHÇE'DEN DEV HAMLE')
+  banner_shape: slanted
+  highlight_style: bg-flat
+  chip_style: pill
+  category_icon: ⚽
+  search_query_template: '{header_top} {category} football match'
+  persona_summary: Fenerbahçe taraftarının nabzını tutan, coşkulu ve tutkulu bir spor
+    kanalı. Sarı-lacivert gündemi, transferleri ve maç anlarını kısa, vurucu ve enerjik
+    bir dille aktarır.
+  custom_css: "/* === Fenerbahce stadium DNA === */\n.stage{\n  background:\n    repeating-linear-gradient(135deg,\
+    \ rgba(255,210,0,0.05) 0 2px, transparent 2px 18px),\n    linear-gradient(160deg,\
+    \ #0E2A6E 0%, #08174A 100%);\n}\n/* Tribun enerjisi: keskin sari vurgu + solid\
+    \ okunur baslik */\n.header{\n  border-left:6px solid #FFD200;\n  padding-left:14px;\n\
+    }\n.header .top{\n  color:#FFD200;\n  letter-spacing:0.5px;\n  text-shadow:0 2px\
+    \ 8px rgba(0,0,0,0.6);\n}\n.header .bot{\n  color:#FFFFFF;\n  letter-spacing:0.5px;\n\
+    \  text-shadow:0 2px 8px rgba(0,0,0,0.6);\n}\n/* Govde: yuksek opaklik, lacivert\
+    \ zemin, sari ust serit */\n.body{\n  background:rgba(8,23,74,0.94);\n  color:#FFFFFF;\n\
+    \  border-radius:10px;\n  border-top:3px solid #FFD200;\n  box-shadow:0 6px 18px\
+    \ rgba(0,0,0,0.45);\n}\n.body::first-letter{\n  color:#FFD200;\n  font-weight:900;\n\
+    }\n/* Marker vurgu: sari highlight */\n.hl, mark{\n  background:linear-gradient(transparent\
+    \ 55%, rgba(255,210,0,0.55) 55%);\n  color:#FFFFFF;\n  padding:0 2px;\n}\n/* Chip:\
+    \ hap formu, sari cerceve, nabiz atan glow */\n.persistent{\n  background:linear-gradient(90deg,\
+    \ #0E2A6E, #08174A);\n  color:#FFD200;\n  border:1px solid rgba(255,210,0,0.45);\n\
+    \  border-radius:999px;\n  box-shadow:0 3px 10px rgba(0,0,0,0.4);\n  animation:fbPulse\
+    \ 2.4s ease-in-out infinite;\n}\n.persistent::before{\n  content:\"\\26BD \";\n\
+    \  filter:drop-shadow(0 1px 2px rgba(0,0,0,0.5));\n}\n/* Fotograf: sari cerceve\
+    \ + canli renk */\n.photo{\n  border:3px solid #FFD200;\n  border-radius:8px;\n\
+    \  filter:saturate(1.12) contrast(1.05);\n  box-shadow:0 8px 22px rgba(0,0,0,0.5);\n\
+    }\n.progress{ background:rgba(255,210,0,0.28); }\n.handle{ color:#AEBEE8; }\n\
+    @keyframes fbPulse{\n  0%,100%{ box-shadow:0 3px 10px rgba(0,0,0,0.4); }\n  50%{\
+    \ box-shadow:0 3px 16px rgba(255,210,0,0.38); }\n}"
+  ui_badge: 💛💙 FENERBAHÇE
+  animation_style: none
