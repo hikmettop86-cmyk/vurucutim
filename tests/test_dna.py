@@ -556,3 +556,47 @@ def test_generate_dna_for_video_forwards_backend_and_api_key():
         )
     assert m.call_args.kwargs["backend"] == "openrouter"
     assert m.call_args.kwargs["api_key"] == "k"
+
+
+# --- Konu kategorileri -------------------------------------------------------
+
+def test_dna_carries_topic_categories():
+    """Yeni kanal canonical kategori listesiyle doğmalı.
+
+    Kategori listesi olmadan kota ve öğrenme ipucu çalışmaz: script serbest
+    etiket yazar, aggregator'ın kovaları bölünür. Liste kanala ÖZEL olmalı —
+    iki futbol kanalının ölçümü bile ters yönlerde çıktı.
+    """
+    from short_bot.dna import DnaSpec, DnaPalette, DnaFonts, DnaTone
+    spec = DnaSpec(
+        archetype="newscast",
+        palette=DnaPalette(primary="#000000", accent="#ffffff",
+                           bg_gradient=["#000000", "#111111"],
+                           body_bg=["#000000", "#111111"]),
+        fonts=DnaFonts(),
+        tone=DnaTone(voice="v", style="s"),
+        persona_summary="x",
+        categories=["yeni-urun", "sirket-haberi", "duzenleme"],
+    )
+    assert spec.categories == ["yeni-urun", "sirket-haberi", "duzenleme"]
+
+
+def test_dna_categories_default_empty():
+    """Eski DNA kayıtları alansız yüklenebilmeli."""
+    from short_bot.dna import DnaSpec, DnaPalette, DnaFonts, DnaTone
+    spec = DnaSpec(
+        archetype="newscast",
+        palette=DnaPalette(primary="#000000", accent="#ffffff",
+                           bg_gradient=["#000000", "#111111"],
+                           body_bg=["#000000", "#111111"]),
+        fonts=DnaFonts(), tone=DnaTone(voice="v", style="s"),
+        persona_summary="x",
+    )
+    assert spec.categories == []
+
+
+def test_dna_prompt_asks_for_categories():
+    """Üretim prompt'u kategori listesini istemeli."""
+    from short_bot.dna import build_dna_prompt
+    p = build_dna_prompt("Teknoloji Haberleri", ["teknoloji"], "tr", "newscast")
+    assert "categories" in p

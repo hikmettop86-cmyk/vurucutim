@@ -57,6 +57,66 @@ def _cmd_list(args) -> int:
     return 0
 
 
+def _add_analyze(sub):
+    p = sub.add_parser(
+        "analyze",
+        help="Kanalın yayın verisinden ayar önerileri çıkar (kota, klişe, manşet)")
+    p.add_argument("--channel", required=True, help="Kanal slug")
+    p.add_argument("--data-dir", default="data")
+    p.set_defaults(func=_cmd_analyze)
+
+
+def _cmd_analyze(args) -> int:
+    """Ayarları veriyle belirlemek için rapor. ÖNERİLERİ UYGULAMAZ.
+
+    Kanal ayarları kopyalanamaz: iki futbol kanalının ölçümü ters yönlerde
+    çıktı (avrupa-kura GS'de 1.69 / FB'de 0.42; "BOMBA" GS'de %82 / FB'de
+    %195). Standart olan yöntem, değerler değil.
+    """
+    from short_bot.channel_audit import audit_channel
+
+    eng = init_db(Path(args.data_dir) / "short_bot.sqlite")
+    rapor = audit_channel(eng, args.channel)
+
+    if not rapor["sample_size"]:
+        print(f"{args.channel}: yayınlanmış video verisi yok "
+              f"(en az ~30 video biriktikten sonra anlamlı olur)")
+        return 0
+
+    print(f"=== {args.channel} — {rapor['sample_size']} yayınlanmış video ===\n")
+
+    print("KONU PERFORMANSI (endeks 1.00 = kendi döneminin medyanı)")
+    if rapor["topics"]:
+        for t in rapor["topics"]:
+            print(f"  {t['category']:<20} n={t['n']:>3}  endeks={t['index']:>5.2f}"
+                  f"  medyan={t['median_views']:>8,}")
+    else:
+        print("  (yeterli örneklem yok)")
+
+    kirpma = rapor["headline_truncation"]
+    print(f"\nMANŞET KIRPMA: %{kirpma['rate'] * 100:.0f} "
+          f"({kirpma['truncated']}/{kirpma['total']})")
+    if kirpma["rate"] > 0.25:
+        print("  → prompt'taki karakter bütçesi şablonun gerçek kapasitesini aşıyor")
+
+    if rapor["worn_phrases"]:
+        print("\nYIPRANMIŞ MANŞET KALIPLARI (çok kullanılmış, ortalamanın altında)")
+        for w in rapor["worn_phrases"]:
+            print(f"  {w['phrase']:<20} {w['uses']:>3} kullanım  endeks={w['index']:>5.2f}")
+
+    print("\nKOTA ÖNERİSİ")
+    if rapor["quota_suggestions"]:
+        print("  category_quota_per_day:")
+        for q in rapor["quota_suggestions"]:
+            print(f"    {q['category']}: {q['suggested_limit']}"
+                  f"   # endeks {q['index']}, n={q['n']}")
+    else:
+        print("  (kanıtlı zayıf konu yok — kota gerekmiyor)")
+    print("\nNot: öneriler uygulanmadı. Küçük örneklem yanıltabilir; "
+          "n değerine bakarak karar ver.")
+    return 0
+
+
 def _add_pool(sub):
     p = sub.add_parser("pool", help="Kürate havuzunu doldur (Reddit tara → skorla → biriktir)")
     p.add_argument("--channel", default="", help="Kanal slug (boş = tüm kürate kanallar)")
@@ -213,10 +273,24 @@ def _cmd_create_channel(args) -> int:
         handle=f"@{slug}", output_dir=f"output/{slug}",
         enabled=True,
         language=args.language, dna=dna, script_model=None,
+        # Kanal canonical kategori listesiyle doğar: liste olmadan script
+        # serbest etiket yazar, konu kovaları bölünür ve ne kota ne öğrenme
+        # ipucu çalışır. KOTA İSE BOŞ BAŞLAR — veri olmadan sınır koymak
+        # tahmindir; "en çok üretilene kota koy" varsayımı ölçümle çürüdü
+        # (iki kanalda da o konu ortalama performanslı çıktı). Sınırlar
+        # ~30 video sonra `short-bot analyze --channel <slug>` çıktısıyla
+        # konur.
+        categories=list(dna.categories),
     )
     save_channel(yaml_path, cfg)
     print(f"  wrote {yaml_path}")
     print(f"\nChannel '{slug}' created. Try:\n  python -m short_bot run --channel {slug} --max 1")
+    if dna.categories:
+        print(f"  categories: {', '.join(dna.categories)}")
+    print(f"\n~30 video biriktikten sonra ayarları VERİYLE belirle:\n"
+          f"  python -m short_bot analyze --channel {slug}\n"
+          f"  (kota, yıpranmış manşet kalıpları, manşet bütçesi önerir — "
+          f"başka kanalın ayarlarını kopyalama, ölçümler ters çıkabiliyor)")
     return 0
 
 
@@ -450,6 +524,7 @@ def main(argv: list[str] | None = None) -> int:
     _add_run(sub)
     _add_init(sub)
     _add_list(sub)
+    _add_analyze(sub)
     _add_pool(sub)
     _add_create_channel(sub)
     _add_regenerate_dna(sub)

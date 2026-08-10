@@ -162,6 +162,13 @@ class DnaSpec(BaseModel):
     banner_shape: Literal["flat", "ribbon", "slanted", "sharp"] = "flat"
     highlight_style: Literal["bg-flat", "underline", "marker", "neon"] = "bg-flat"
     chip_style: Literal["rounded", "sharp", "pill"] = "rounded"
+    # categories: kanalın canonical konu etiketleri. Boş liste = script serbest
+    # etiket yazar (eski davranış). Dolu olduğunda hem script hem puanlayıcı
+    # listeyi kullanır; kota ve öğrenme ipucu ancak bu sayede çalışır — serbest
+    # etiket aynı konuyu birden çok kovaya bölüyor ("Transfer" 210, "transfer"
+    # 138, "Futbol Transfer" 14). Liste kanala ÖZEL üretilir: iki futbol
+    # kanalının ölçümü bile ters yönlerde çıktı, kopyalanamaz.
+    categories: list[str] = Field(default_factory=list, max_length=12)
     category_icon: str = ""
     search_query_template: str = "{header_top} {header_bottom} {category}"
     persona_summary: str = Field(max_length=400)
@@ -312,6 +319,10 @@ kanala özel görsel zenginlik için ek bir CSS bloğu yaz.
   "banner_shape": "...",
   "highlight_style": "...",
   "chip_style": "...",
+  "categories": ["<8-10 canonical konu etiketi, kebab-case, bu kanalın haber
+                 akışını KAPSAYICI biçimde bölen; birbirinden performans olarak
+                 AYRIŞMASI beklenen ayrımları ayrı tut (ör. gelen/giden ayrı).
+                 Genel geçer 'haber', 'gundem' gibi etiket koyma>"],
   "category_icon": "...",
   "search_query_template": "...",
   "persona_summary": "<1-2 cümle, max 400 karakter>",
