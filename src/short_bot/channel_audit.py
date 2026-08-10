@@ -15,7 +15,7 @@ from __future__ import annotations
 import re
 import statistics as st
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable
 
 # Zaman penceresi: videonun endeksi, ±KOMSU_GUN içinde yayınlanmış videoların
@@ -116,6 +116,51 @@ def worn_phrases(rows: Iterable[dict], *, min_uses: int = _MIN_USES,
         })
     out.sort(key=lambda x: x["index"])
     return out
+
+
+def _taze_mi(pub, cutoff: datetime) -> bool:
+    if pub is None:
+        return False
+    if isinstance(pub, str):
+        pub = datetime.fromisoformat(pub)
+    if pub.tzinfo is None:
+        pub = pub.replace(tzinfo=timezone.utc)
+    return pub >= cutoff
+
+
+def keyword_health(keywords: list[str], locale: str, *,
+                   max_age_hours: int = 24, fetch=None) -> list[dict]:
+    """Anahtar başına: kaç sonuç dönüyor, kaçı taze, kaçı ana havuzda YOK.
+
+    Havuzun DOLU görünmesi anahtarın çalıştığı anlamına gelmiyor: ölçümde iki
+    anahtar 148 sonuç döndürüp bunların hiçbiri son 24 saatte değildi.
+
+    İlk anahtar referans havuzdur — ek anahtarlar yalnızca onun DIŞINDA kalan
+    haberlerle değerlendirilir, çünkü ana sorgunun zaten getirdiği haberi
+    tekrar getirmek havuzu genişletmez.
+    """
+    fetch = fetch or _google_news_fetch
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
+    ana_guid: set[str] = set()
+    out = []
+    for sira, k in enumerate(keywords):
+        items = fetch(k, locale)
+        taze = [i for i in items if _taze_mi(i.pub_date, cutoff)]
+        if sira == 0:
+            ana_guid = {i.guid for i in items}
+            karar, net = "ana havuz", len(taze)
+        else:
+            net = len([i for i in taze if i.guid not in ana_guid])
+            karar = "ölü" if not taze else ("gereksiz" if not net else "sağlıklı")
+        out.append({"keyword": k, "total": len(items), "fresh": len(taze),
+                    "net": net, "verdict": karar})
+    return out
+
+
+def _google_news_fetch(keyword: str, locale: str):
+    from short_bot.fetcher import _fetch_query, build_rss_url
+    return _fetch_query(build_rss_url([keyword], locale),
+                        max_retries=2, backoff=1.0, timeout=15)
 
 
 def headline_truncation_rate(rows: Iterable[dict]) -> dict[str, Any]:

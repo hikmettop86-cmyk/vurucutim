@@ -78,6 +78,74 @@ def test_worn_phrases_folds_turkish_case():
     assert worn["hazirlik"]["uses"] == 10
 
 
+# --- Anahtar sağlığı ---------------------------------------------------------
+
+def _haber(guid, *, saat_once=1):
+    from datetime import timezone
+    from short_bot.models import NewsItem
+    return NewsItem(
+        guid=guid, title=f"baslik {guid}", link=f"http://x/{guid}", source=None,
+        pub_date=datetime.now(timezone.utc) - timedelta(hours=saat_once),
+        thumb_url=None, description=None)
+
+
+def test_keyword_health_flags_keyword_with_no_fresh_news():
+    """Taze haber getirmeyen anahtar ölüdür.
+
+    Gerçek hata: "Galatasaray başkan yönetim" ve "Galatasaray TFF ceza tahkim"
+    100 ve 48 sonuç döndürüyordu ama 148'inin HİÇBİRİ son 24 saatte değildi —
+    üç kelimelik sorgular Google News'te dar eşleşip arşiv döndürüyor. Havuz
+    dolu göründüğü için aylarca fark edilmedi.
+    """
+    from short_bot.channel_audit import keyword_health
+    besleme = {"ana": [_haber("a1"), _haber("a2")],
+               "olu": [_haber("x1", saat_once=200), _haber("x2", saat_once=300)]}
+    out = {r["keyword"]: r for r in
+           keyword_health(["ana", "olu"], "hl=tr", fetch=lambda k, loc: besleme[k])}
+
+    assert out["olu"]["total"] == 2
+    assert out["olu"]["fresh"] == 0
+    assert out["olu"]["verdict"] == "ölü"
+
+
+def test_keyword_health_discounts_news_already_in_the_main_pool():
+    """Taze haber getirmek yetmez — ana sorguda zaten varsa katkısı yoktur.
+
+    İlk anahtar referans havuzdur; ek anahtarlar yalnızca ONUN dışında kalan
+    haberlerle değerlendirilir. Bu ayrım olmadan örtüşen bir anahtar sağlıklı
+    görünür.
+    """
+    from short_bot.channel_audit import keyword_health
+    ortak = _haber("ortak")
+    besleme = {"ana": [ortak, _haber("a2")], "kopya": [ortak]}
+    out = {r["keyword"]: r for r in
+           keyword_health(["ana", "kopya"], "hl=tr", fetch=lambda k, loc: besleme[k])}
+
+    assert out["kopya"]["fresh"] == 1
+    assert out["kopya"]["net"] == 0
+    assert out["kopya"]["verdict"] == "gereksiz"
+
+
+def test_keyword_health_credits_only_coverage_the_main_pool_misses():
+    from short_bot.channel_audit import keyword_health
+    besleme = {"ana": [_haber("a1")], "iyi": [_haber("b1"), _haber("b2")]}
+    out = {r["keyword"]: r for r in
+           keyword_health(["ana", "iyi"], "hl=tr", fetch=lambda k, loc: besleme[k])}
+
+    assert out["iyi"]["net"] == 2
+    assert out["iyi"]["verdict"] == "sağlıklı"
+
+
+def test_keyword_health_marks_first_keyword_as_the_reference_pool():
+    """İlk anahtarın 'net'i kendisine göre ölçülemez — o ana havuzun kendisi."""
+    from short_bot.channel_audit import keyword_health
+    besleme = {"ana": [_haber("a1"), _haber("a2")]}
+    out = keyword_health(["ana"], "hl=tr", fetch=lambda k, loc: besleme[k])
+
+    assert out[0]["verdict"] == "ana havuz"
+    assert out[0]["net"] == 2
+
+
 # --- Manşet kırpması ---------------------------------------------------------
 
 def test_headline_truncation_rate():
@@ -182,6 +250,68 @@ def test_cli_analyze_prints_report(tmp_path, capsys):
     assert "zayif-konu" in out
     assert "guclu-konu" in out
     assert "bomba" in out.lower()       # yıpranmış kalıp raporlanmalı
+
+
+def _kanal_yaz(tmp_path, *, keywords="['ana', 'olu']"):
+    kanal_dir = tmp_path / "channels"
+    kanal_dir.mkdir(exist_ok=True)
+    (kanal_dir / "c.yaml").write_text(
+        f"slug: c\nname: C\nkeywords: {keywords}\nlanguage: tr\n"
+        "schedule_cron: '0 * * * *'\nduration_s: 6\nmin_score: 6.0\n"
+        "max_candidates_per_run: 10\nmax_age_hours: 24\ntemplate: default\n"
+        "colors:\n  primary: '#111111'\n  accent: '#222222'\n"
+        "  bg_gradient: ['#111111', '#222222']\n"
+        "handle: '@c'\noutput_dir: output/c\nenabled: true\n", encoding="utf-8")
+
+
+def test_cli_analyze_reports_dead_keywords(tmp_path, capsys, monkeypatch):
+    """Ölü anahtar elle bulunmuş bir hataydı; analyze onu tekrarlanabilir kılar.
+
+    Aynı tuzak her çok anahtarlı kanalda var ve sessiz: havuz dolu görünür,
+    yalnız o anahtardan hiç TAZE haber gelmez.
+    """
+    from short_bot import channel_audit
+    from short_bot.cli import main
+    from short_bot.db import init_db
+    eng = init_db(tmp_path / "short_bot.sqlite")
+    for i in range(6):
+        _publish(eng, "c", f"haber {i}", "konu", 50_000, gun=i)
+    _kanal_yaz(tmp_path)
+    monkeypatch.setattr(channel_audit, "keyword_health", lambda kws, loc, **kw: [
+        {"keyword": "ana", "total": 110, "fresh": 87, "net": 87,
+         "verdict": "ana havuz"},
+        {"keyword": "olu", "total": 48, "fresh": 0, "net": 0, "verdict": "ölü"},
+    ])
+
+    rc = main(["analyze", "--channel", "c", "--data-dir", str(tmp_path),
+               "--config-dir", str(tmp_path)])
+    out = capsys.readouterr().out
+
+    assert rc == 0
+    assert "olu" in out
+    assert "ölü" in out
+
+
+def test_cli_analyze_survives_keyword_probe_failure(tmp_path, capsys, monkeypatch):
+    """Anahtar ölçümü ağ ister — hatası raporun geri kalanını düşürmemeli."""
+    from short_bot import channel_audit
+    from short_bot.cli import main
+    from short_bot.db import init_db
+    eng = init_db(tmp_path / "short_bot.sqlite")
+    for i in range(6):
+        _publish(eng, "c", f"haber {i}", "konu", 50_000, gun=i)
+    _kanal_yaz(tmp_path)
+
+    def patla(*a, **k):
+        raise OSError("ağ yok")
+    monkeypatch.setattr(channel_audit, "keyword_health", patla)
+
+    rc = main(["analyze", "--channel", "c", "--data-dir", str(tmp_path),
+               "--config-dir", str(tmp_path)])
+    out = capsys.readouterr().out
+
+    assert rc == 0
+    assert "konu" in out, "konu performansı yine de basılmalı"
 
 
 def test_cli_analyze_empty_channel_exits_cleanly(tmp_path, capsys):

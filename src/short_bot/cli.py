@@ -63,6 +63,8 @@ def _add_analyze(sub):
         help="Kanalın yayın verisinden ayar önerileri çıkar (kota, klişe, manşet)")
     p.add_argument("--channel", required=True, help="Kanal slug")
     p.add_argument("--data-dir", default="data")
+    p.add_argument("--config-dir", default="config",
+                   help="Config kökü — anahtar sağlığı ölçümü için")
     p.set_defaults(func=_cmd_analyze)
 
 
@@ -112,9 +114,49 @@ def _cmd_analyze(args) -> int:
                   f"   # endeks {q['index']}, n={q['n']}")
     else:
         print("  (kanıtlı zayıf konu yok — kota gerekmiyor)")
+
+    _print_keyword_health(args)
+
     print("\nNot: öneriler uygulanmadı. Küçük örneklem yanıltabilir; "
           "n değerine bakarak karar ver.")
     return 0
+
+
+def _print_keyword_health(args) -> None:
+    """Anahtarların canlı beslemedeki durumu. Ağ gerektirir — fail-open.
+
+    Kanal üç koşu üst üste hiçbir şey üretmedi ve sebebi anahtarlardı: iki
+    anahtar 148 sonuç döndürüyordu ama hiçbiri son 24 saatte değildi. Havuz
+    dolu göründüğü için aylarca fark edilmedi; elle ölçmek gerekti. Bu bölüm
+    o ölçümü tekrarlanabilir kılar.
+    """
+    from short_bot import channel_audit
+    from short_bot.config import load_channel
+
+    try:
+        kanal_yolu = Path(args.config_dir) / "channels" / f"{args.channel}.yaml"
+        cfg = load_channel(kanal_yolu)
+        if not cfg.keywords:
+            return
+        max_age = cfg.max_age_hours or 24
+        satirlar = channel_audit.keyword_health(
+            cfg.keywords, cfg.rss_locale, max_age_hours=max_age)
+    except Exception as e:  # noqa: BLE001 -- ağ/config hatası raporu düşürmesin
+        print(f"\nANAHTAR SAĞLIĞI\n  (ölçülemedi: {e})")
+        return
+
+    print(f"\nANAHTAR SAĞLIĞI (son {max_age}s canlı besleme)")
+    for r in satirlar:
+        print(f"  {r['keyword']:<32} {r['total']:>4} sonuç  "
+              f"{r['fresh']:>3} taze  {r['net']:>3} net  → {r['verdict']}")
+    olu = [r for r in satirlar if r["verdict"] in ("ölü", "gereksiz")]
+    if olu:
+        print("  → şu anahtar(lar) havuza katkı vermiyor: "
+              + ", ".join(r["keyword"] for r in olu))
+        print("    çok kelimeli sorgular Google News'te dar eşleşip arşiv "
+              "döndürür; daha kısa terim dene")
+        print("    (ikame bulunamazsa kaldır — o konunun haberi çıktığında "
+              "ana sorgu zaten yakalar)")
 
 
 def _add_pool(sub):
