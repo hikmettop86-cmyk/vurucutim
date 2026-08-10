@@ -51,6 +51,7 @@ from sqlalchemy import and_, select
 from sqlalchemy.engine import Engine
 
 from short_bot.db import shorts, youtube_uploads, youtube_video_stats
+from short_bot.topic_taxonomy import normalize_category
 
 
 _MIN_VIEWS_FOR_WATCH_LEADERS = 5      # ignore noise from <5-view videos
@@ -88,7 +89,13 @@ def compute_channel_insights(
                 shorts.join(youtube_uploads, youtube_uploads.c.short_id == shorts.c.id)
             )
             .where(shorts.c.channel == channel)
-            .where(shorts.c.deleted_at.is_(None))
+            # deleted_at'e BAKILMAZ: panelin "sil" düğmesi videoyu YouTube'dan
+            # kaldırmaz, sadece listeden gizler. Yayındaki video izlenmeye
+            # devam ettiği sürece performans verisi geçerlidir. Bu filtre
+            # yüzünden panelde "tümünü sil" yapılan kanallarda sample_size 0'a
+            # düşüyor ve scorer aylarca hiç geri besleme almıyordu (galatasaray:
+            # 695 short'un 694'ü deleted_at'liydi). status=="success" koşulu
+            # zaten yalnız gerçekten yayınlanmışları bırakıyor.
             .where(youtube_uploads.c.status == "success")
             .where(youtube_uploads.c.uploaded_at >= cutoff)
         ).all()
@@ -111,6 +118,14 @@ def compute_channel_insights(
                     )
                     .where(youtube_video_stats.c.video_id.in_(vids))
                 ).all()
+            # views/likes/comments KÜMÜLATİF: son snapshot doğru değeri taşır.
+            # avg_view_duration_s / watch_time_min ise PENCERE-bazlı: video
+            # sönünce pencerede 1-2 izlenme kalıyor ve biri döngüde bırakırsa
+            # ortalama uçuyor (gerçek kayıt: 6sn'lik short'ta 198s ortalama =
+            # %3300 watch, ama o pencerede yalnız ~1.8 izlenme vardı — bu
+            # scorer'a "en iyi örnek" diye gidiyordu). Bu yüzden izlenme
+            # metrikleri videonun EN YOĞUN izlendiği pencereden alınır.
+            peak_window: dict[str, dict[str, float]] = {}
             for s in srows:
                 prev = stats_by_vid.get(s.video_id)
                 if prev is None or s.snapshot_date > prev["snapshot_date"]:
@@ -122,6 +137,17 @@ def compute_channel_insights(
                         "avg_view_duration_s": float(s.avg_view_duration_s or 0.0),
                         "watch_time_min": float(s.watch_time_min or 0.0),
                     }
+                watch_min = float(s.watch_time_min or 0.0)
+                peak = peak_window.get(s.video_id)
+                if peak is None or watch_min > peak["watch_time_min"]:
+                    peak_window[s.video_id] = {
+                        "watch_time_min": watch_min,
+                        "avg_view_duration_s": float(s.avg_view_duration_s or 0.0),
+                    }
+            for vid, peak in peak_window.items():
+                if vid in stats_by_vid:
+                    stats_by_vid[vid]["avg_view_duration_s"] = peak["avg_view_duration_s"]
+                    stats_by_vid[vid]["watch_time_min"] = peak["watch_time_min"]
 
     enriched: list[dict[str, Any]] = []
     now = datetime.now(timezone.utc)
@@ -156,7 +182,7 @@ def compute_channel_insights(
             "watch_pct": watch_pct,
             "eng_rate": eng_rate,
             "age_days": age_days,
-            "category": (sc.get("category") or "?").strip() or "?",
+            "category": normalize_category(sc.get("category")),
             "mood": (sc.get("mood") or "?").strip() or "?",
             "has_stats": r.video_id in stats_by_vid,
         })
@@ -183,7 +209,14 @@ def compute_channel_insights(
             "avg_watch_pct": sum(x["watch_pct"] for x in items) / n,
             "total_views": sum(x["views"] for x in items),
         })
-    top_categories.sort(key=lambda x: x["total_views"], reverse=True)
+    # ORTALAMAYA göre sırala, toplama göre değil. Toplam sıralaması en ÇOK
+    # ÜRETİLEN konuyu "en iyi" gibi gösteriyordu ve scorer'a tam ters sinyal
+    # gidiyordu: galatasaray'da transfer-gelen (n=98, medyan 43.957) hint'in
+    # başındaydı, avrupa-kura (n=2, medyan 97.927 — kanalın en iyisi) ilk 3'e
+    # bile giremiyordu. Bu, doygunluk döngüsünü besliyor: çok üret → hint'te
+    # üste çık → daha çok üretil. n değeri hint'te gösterildiği için küçük
+    # örneklemi model yine de tartabilir.
+    top_categories.sort(key=lambda x: x["avg_views"], reverse=True)
     top_categories = top_categories[:_TOP_CATEGORIES]
 
     # By mood (include all moods; usually <=3 anyway)

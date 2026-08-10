@@ -98,12 +98,13 @@ def test_groups_by_category_filters_n1(tmp_path):
                           views=500, avg_view_duration_s=2.0)  # n=1, filtered
 
     out = compute_channel_insights(eng, "c")
+    # Kategoriler normalize edilmiş (küçük harf) anahtarla gruplanır.
     cats = {c["category"]: c for c in out["top_categories"]}
-    assert "Dünya" in cats
-    assert cats["Dünya"]["n"] == 2
-    assert cats["Dünya"]["total_views"] == 3000
+    assert "dünya" in cats
+    assert cats["dünya"]["n"] == 2
+    assert cats["dünya"]["total_views"] == 3000
     # Spor has n=1 → excluded
-    assert "Spor" not in cats
+    assert "spor" not in cats
 
 
 def test_top_view_examples_sorted_desc(tmp_path):
@@ -205,3 +206,118 @@ def test_channel_isolation(tmp_path):
     assert out_beta["sample_size"] == 1
     assert out_alpha["top_view_examples"][0]["title"] == "A1"
     assert out_beta["top_view_examples"][0]["title"] == "B1"
+
+
+# --- Soft-delete ------------------------------------------------------------
+
+def _soft_delete(eng, short_id: int) -> None:
+    from short_bot.db import shorts as shorts_tbl
+    with eng.begin() as conn:
+        conn.execute(
+            shorts_tbl.update()
+            .where(shorts_tbl.c.id == short_id)
+            .values(deleted_at=datetime.now(timezone.utc))
+        )
+
+
+def test_soft_deleted_short_still_counted_when_published(tmp_path):
+    """Panelden 'sil' videoyu YouTube'dan KALDIRMAZ — sadece listeden gizler.
+
+    Gerçek olay: panelde 'tümünü sil' yapıldığı için galatasaray'ın 695
+    short'undan 694'ü deleted_at aldı; aggregator hepsini eleyince sample_size
+    0'a düştü ve scorer üç aydır hiç geri besleme almadı. Yayındaki video
+    izlenmeye devam ettiği sürece performans verisi geçerlidir.
+    """
+    eng = init_db(tmp_path / "x.sqlite")
+    sid = _add_short_with_stats(eng, short_id_expected=1, channel="c",
+                                title="Silinmis", category="X", mood="breaking",
+                                views=50000, avg_view_duration_s=8.0)
+    _soft_delete(eng, sid)
+
+    out = compute_channel_insights(eng, "c")
+    assert out["sample_size"] == 1
+    assert out["upload_count"] == 1
+    assert out["top_view_examples"][0]["title"] == "Silinmis"
+
+
+# --- Kategori normalizasyonu -------------------------------------------------
+
+def test_category_case_variants_group_together(tmp_path):
+    """LLM aynı konuyu 'Transfer'/'transfer' diye yazınca kova bölünüyordu.
+
+    Bölünme n<2 eşiğine takılıp kategoriyi ipucundan tamamen düşürüyordu.
+    """
+    eng = init_db(tmp_path / "x.sqlite")
+    _add_short_with_stats(eng, short_id_expected=1, channel="c",
+                          title="T1", category="Transfer", mood="breaking",
+                          views=1000, avg_view_duration_s=3.0)
+    _add_short_with_stats(eng, short_id_expected=2, channel="c",
+                          title="T2", category="transfer", mood="breaking",
+                          views=2000, avg_view_duration_s=3.0)
+    _add_short_with_stats(eng, short_id_expected=3, channel="c",
+                          title="T3", category="TRANSFER", mood="breaking",
+                          views=3000, avg_view_duration_s=3.0)
+
+    out = compute_channel_insights(eng, "c")
+    assert len(out["top_categories"]) == 1
+    cat = out["top_categories"][0]
+    assert cat["n"] == 3
+    assert cat["total_views"] == 6000
+
+
+# --- watch% örneklem güvenilirliği ------------------------------------------
+
+def test_watch_pct_uses_peak_window_not_last_snapshot(tmp_path):
+    """watch% videonun izlendiği dönemden alınmalı, söndükten sonrasından değil.
+
+    views kümülatif ama avg_view_duration_s PENCERE-bazlı. Video eskiyince
+    pencerede 1-2 izlenme kalıyor ve biri döngüde bırakırsa ortalama uçuyor:
+    gerçek kayıtta 6sn'lik short %3300 watch gösterdi (198s ortalama, ama o
+    pencerede yalnız ~1.8 izlenme vardı) ve scorer'a "en iyi örnek" diye
+    gitti.
+    """
+    eng = init_db(tmp_path / "x.sqlite")
+    sid = _add_short_with_stats(eng, short_id_expected=1, channel="c",
+                                title="Zirve", category="X", mood="breaking",
+                                views=50000, avg_view_duration_s=9.0,
+                                duration_s=6)
+    # Aynı videoya, DAHA SONRAKİ tarihli cılız pencere: 2 izlenme, biri loopta
+    from short_bot.db import upsert_video_stats
+    upsert_video_stats(
+        eng, video_id=f"V-{sid}",
+        snapshot_date=date.today() + timedelta(days=1),
+        views=50010, likes=1000, comments=250,
+        watch_time_min=6.0, avg_view_duration_s=198.0,
+    )
+
+    out = compute_channel_insights(eng, "c")
+    leader = out["watch_pct_leaders"][0]
+    assert leader["watch_pct"] == pytest.approx(150.0, abs=0.1)
+    # views yine de kümülatif son değeri korumalı
+    assert leader["views"] == 50010
+
+
+def test_categories_ranked_by_average_not_total_views(tmp_path):
+    """Sıralama total_views'daydı: en ÇOK ÜRETİLEN konu "en iyi" görünüyordu.
+
+    Gerçek veri: avrupa-kura medyan 97.927 ile kanalın en iyi kategorisi ama
+    n=2 olduğu için hint'in ilk 3'üne giremiyordu; transfer-gelen n=98 ile
+    başa geçiyordu (medyan 43.957). Bu, scorer'a "çok ürettiğin konu iyidir"
+    diye geri besleme yapıp doygunluk döngüsünü besliyor.
+    """
+    eng = init_db(tmp_path / "x.sqlite")
+    # doymus: 20 video x 5.000 = 100.000 toplam, ortalama 5.000
+    for i in range(20):
+        _add_short_with_stats(eng, short_id_expected=i, channel="c",
+                              title=f"cok{i}", category="doymus", mood="breaking",
+                              views=5000, avg_view_duration_s=3.0)
+    # verimli: 2 video x 30.000 = 60.000 toplam, ortalama 30.000
+    for i in range(2):
+        _add_short_with_stats(eng, short_id_expected=100 + i, channel="c",
+                              title=f"az{i}", category="verimli", mood="breaking",
+                              views=30000, avg_view_duration_s=9.0)
+
+    out = compute_channel_insights(eng, "c")
+    cats = {c["category"]: c for c in out["top_categories"]}
+    assert cats["doymus"]["total_views"] > cats["verimli"]["total_views"]
+    assert out["top_categories"][0]["category"] == "verimli"
