@@ -1,0 +1,175 @@
+# latidoblanco'nun 6sn SESSİZ kart sürümü. Marka DNA'sı (palet, font, taç
+# filigranı, custom_css, persona_summary) latidoblanco.yaml'dan config
+# katmanıyla birebir türetildi — iki kanal aynı görünür, formatları ayrışır:
+# latidoblanco = 6sn kart + 35-50sn fanatik yorum (ölçülen çıktı 39-42sn),
+# bu kanal = yalnız kart. voice bloğu YOK; pipeline sessiz akışa düşer.
+slug: latidoblanco-flash
+name: Latido Blanco Flash
+keywords:
+# ÖLÇÜLDÜ (channel_audit.keyword_health, hl=es, son 24s / ana havuzda olmayan
+# net katkı). İspanyolca arz Türkçeden çok daha bol: denenen sekiz adayın
+# HEPSİ sağlıklı çıktı, yani anahtar seçimi burada "hangisi haber getiriyor"
+# değil "ana havuz zaten neyle dolu" sorusu.
+- Real Madrid                   # 76 taze / 76 net — ana havuz
+- Real Madrid Mourinho          # 64 taze / 45 net — teknik direktör kararları
+- Real Madrid Champions         # 25 taze / 15 net — avrupa geceleri
+- Real Madrid Florentino Pérez  # 15 taze / 12 net — kulüp/başkanlık
+# "Real Madrid fichajes" (58 taze / 34 net) ÖLÇÜLDÜ ama ALINMADI: ana havuzun
+# 30 manşetlik örneğinde zaten transfer ve forma-numarası hakimdi, ikinci bir
+# transfer sorgusu pencereyi tek konuya kilitlerdi. Galatasaray analizinde
+# (442 video) gelen-transfer en zayıf kategoriydi ve üretimin %64'üydü.
+# "Real Madrid Xabi Alonso" da denendi (9 net) ve DÜŞTÜ: havuz teknik
+# direktörün Mourinho olduğunu gösterdi — anahtar varsayımla değil manşetle
+# seçildi.
+language: es
+# Boş saat dilimi: galatasaray+fenerbahce 0/4/8/12/16/20, latidoblanco tek
+# saatler, aslangundem-plus :30. Çakışma önemsiz değil — eşzamanlı koşu daha
+# önce whisper'ı exit 127 ile öldürmüştü.
+schedule_cron: 0 2-22/4 * * *
+duration_s: 6
+# 7.0 latidoblanco'dan devralındı ve KANITLI: tek anahtarla ~53 saatte 21
+# video verdi. Dört anahtarla arz daha da genişledi, eşiği gevşetmek için
+# sebep yok.
+min_score: 7.0
+max_candidates_per_run: 10
+max_age_hours: 24
+template: stadium
+colors:
+  primary: '#00529f'
+  accent: '#febe10'
+  bg_gradient:
+  - '#050505'
+  - '#0a1a3a'
+handle: '@latidoblancoflash'
+output_dir: output/latidoblanco-flash
+enabled: false
+negative_keywords:
+- en directo
+- en vivo
+- minuto a minuto
+- así te lo contamos
+# categories: canonical konu etiketleri. Serbest metin etiket learning ve
+# aggregator'ın kovalarını bölüyordu (aynı konuya "Transfer"/"transfer"/
+# "Futbol Transfer"). Liste galatasaray'ın ölçülmüş ayrımlarını İspanyolcaya
+# taşıyor — gelen/giden transfer ayrı, çünkü orada endeksleri farklıydı.
+# GEÇİCİ: bu kanalın kendi performans verisi yok (YouTube'a bağlı değil), o
+# yüzden KOTA KONULMADI. Kota ancak kanıtlı zayıf konuya konur; galatasaray'da
+# ilk kota en çok üretilene konulmuş ve üretimi daha zayıf konulara itmişti.
+categories:
+- fichaje-llega
+- fichaje-sale
+- europa-champions
+- club-directiva
+- justicia-sancion
+- decision-plantilla
+- partido-resultado
+- palabra-jugador
+- extradeportivo
+- rival
+script_model: opus
+youtube:
+  auto_upload: false
+  ai_content: false
+  category_id: '17'
+  privacy_status: public
+  min_score_for_upload: 3.5
+  cron_preset: custom
+bg_video:
+  enabled: true
+  scale: 0.88
+  blur_px: 30
+  dim: 0.2
+trend_boost:
+  enabled: true
+  max_boost: 2.0
+  min_term_length: 4
+  fuzzy_threshold: 85
+  sources:
+  - google_daily
+bg_image_blur: 8
+dna:
+  archetype: stadium
+  palette:
+    primary: '#00529f'
+    accent: '#febe10'
+    bg_gradient:
+    - '#050505'
+    - '#0a1a3a'
+    body_bg:
+    - '#060a18'
+    - '#0c1a38'
+    text_main: '#ffffff'
+    text_muted: '#c9d6ea'
+    header_top_color: ''
+    header_bottom_color: ''
+  fonts:
+    headline: Anton
+    body: Inter
+    google_imports:
+    - Anton
+    - Inter:wght@400;600;800
+    size_headline_top: 96
+    size_headline_bottom: 52
+  tone:
+    voice: apasionado, orgulloso, eléctrico, madridista
+    style: frases cortas y contundentes, energía de grada, lenguaje de aficionado
+    forbidden:
+    - insultar o menospreciar al rival
+    - tono académico frío y distante
+    - análisis táctico largo
+    - presentar un rumor de fichaje como hecho confirmado
+    - ironía burlona
+    - palabrotas
+    sentence_max_words: 10
+    paragraph_sentences:
+    - 3
+    - 4
+    body_max_chars: 155
+    headline_style_hint: 'Titular MUY corto: MÁXIMO 12 CARACTERES con espacios. Nombre
+      + acción, sin artículos. Ej: ''MANO DURA'', ''NOCHE MÁGICA'', ''BOMBA'''
+  banner_shape: slanted
+  highlight_style: underline
+  chip_style: rounded
+  categories: []
+  category_icon: 👑
+  search_query_template: Real Madrid {header_top} football match
+  persona_summary: Canal de noticias cortas que late con el corazón del madridismo.
+    Cuenta las victorias, los fichajes y las leyendas del Real Madrid con orgullo
+    de grada, en frases breves y eléctricas.
+  custom_css: "/* === Latido Blanco stadium DNA === */\n.stage{\n  background:\n \
+    \   repeating-linear-gradient(45deg, rgba(254,190,16,0.045) 0 2px, transparent\
+    \ 2px 16px),\n    linear-gradient(150deg, #050505 0%, #0a1a3a 65%, #00529f 145%);\n\
+    \  position:relative;\n  overflow:hidden;\n}\n/* Corona del Madrid: filigrana\
+    \ gigante y tenue */\n.stage::after{\n  content:'\U0001F451';\n  position:absolute;\n\
+    \  top:-50px;\n  right:-34px;\n  font-size:270px;\n  opacity:0.07;\n  filter:grayscale(0.25)\
+    \ drop-shadow(0 0 30px rgba(254,190,16,0.45));\n  transform:rotate(-10deg);\n\
+    \  pointer-events:none;\n  z-index:1;\n  animation:lbPulse 4.5s ease-in-out infinite;\n\
+    }\n.header{ filter:drop-shadow(0 4px 12px rgba(0,0,0,0.7)); }\n/* Franja blanco\
+    \ -> oro sobre el titular */\n.header::before{\n  content:'';\n  display:block;\n\
+    \  width:88px;\n  height:5px;\n  background:linear-gradient(90deg, #ffffff 0%,\
+    \ #febe10 100%);\n  margin-bottom:14px;\n  border-radius:2px;\n  box-shadow:0\
+    \ 0 16px rgba(254,190,16,0.5);\n}\n.header .top{\n  color:#febe10;\n  text-transform:uppercase;\n\
+    \  letter-spacing:0.015em;\n  text-shadow:0 2px 8px rgba(0,0,0,0.85);\n}\n.header\
+    \ .bot{\n  color:#ffffff;\n  letter-spacing:0.02em;\n  text-shadow:0 2px 10px\
+    \ rgba(0,82,159,0.75);\n}\n.body{\n  background:linear-gradient(180deg, rgba(6,10,24,0.96)\
+    \ 0%, rgba(12,26,56,0.97) 100%);\n  border-left:6px solid #febe10;\n  border-radius:6px;\n\
+    \  padding-left:22px;\n  color:#ffffff;\n  box-shadow:0 8px 24px rgba(0,0,0,0.55),\
+    \ inset 0 1px 0 rgba(254,190,16,0.15);\n  position:relative;\n}\n.body::before{\n\
+    \  content:'⚽';\n  position:absolute;\n  top:10px;\n  right:14px;\n  font-size:22px;\n\
+    \  opacity:0.4;\n  filter:drop-shadow(0 0 6px rgba(254,190,16,0.6));\n}\n.body::first-letter{\n\
+    \  font-family:'Anton',sans-serif;\n  font-size:1.4em;\n  color:#febe10;\n  margin-right:3px;\n\
+    }\n.hl, mark{\n  background:linear-gradient(transparent 58%, rgba(254,190,16,0.5)\
+    \ 58%);\n  color:#ffffff;\n  padding:0 2px;\n}\n.persistent{\n  background:linear-gradient(135deg,\
+    \ #00529f 0%, #003a72 100%);\n  color:#febe10;\n  border:2px solid #febe10;\n\
+    \  border-radius:8px;\n  padding:6px 16px;\n  font-family:'Anton',sans-serif;\n\
+    \  letter-spacing:0.1em;\n  text-transform:uppercase;\n  box-shadow:0 4px 14px\
+    \ rgba(0,82,159,0.6), inset 0 1px 0 rgba(255,255,255,0.18);\n}\n.persistent::before{\n\
+    \  content:'★ ';\n  color:#ffffff;\n  text-shadow:0 0 8px rgba(254,190,16,0.9);\n\
+    }\n.photo{\n  border:3px solid #febe10;\n  border-radius:4px;\n  box-shadow:0\
+    \ 12px 32px rgba(0,0,0,0.7);\n  filter:contrast(1.07) saturate(1.12);\n}\n.progress{\n\
+    \  background:linear-gradient(90deg, #ffffff 0%, #febe10 100%);\n  box-shadow:0\
+    \ 0 12px rgba(254,190,16,0.5);\n}\n.handle{\n  color:#febe10;\n  font-family:'Anton',sans-serif;\n\
+    \  letter-spacing:0.07em;\n  text-shadow:0 1px 4px rgba(0,0,0,0.8);\n}\n@keyframes\
+    \ lbPulse{ 0%,100%{opacity:0.07} 50%{opacity:0.11} }\n"
+  ui_badge: 👑 ¡HALA MADRID!
+  animation_style: none
