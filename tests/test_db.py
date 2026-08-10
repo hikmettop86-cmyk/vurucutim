@@ -173,3 +173,45 @@ def test_cleanup_zombie_runs_handles_missing_lock_gracefully(tmp_path):
     n = cleanup_zombie_runs(eng, lock_dir=lock_dir, age_minutes=60)
     assert n == 1
 
+
+
+# --- Kategori kotası sayımı --------------------------------------------------
+
+def _short_with_category(eng, channel, guid, category, *, hours_ago=1):
+    import json
+    from short_bot.db import shorts
+    sid = record_short(
+        eng, channel=channel, rss_item_guid=guid, title=guid,
+        file_path="x.mp4", duration_s=6,
+        script_json=json.dumps({"category": category}), render_ms=1,
+    )
+    ts = datetime.now(timezone.utc) - timedelta(hours=hours_ago)
+    with eng.begin() as conn:
+        conn.execute(shorts.update().where(shorts.c.id == sid).values(created_at=ts))
+    return sid
+
+
+def test_count_recent_categories_groups_and_normalizes(tmp_path):
+    """Kota kararı için son pencerede hangi konudan kaç video üretildiği.
+
+    Yazım farkları katlanmalı: aynı konu "Transfer"/"transfer" diye
+    kaydedilirse kota iki ayrı kovaya bölünüp hiç dolmazdı.
+    """
+    from short_bot.db import count_recent_categories
+    eng = init_db(tmp_path / "x.sqlite")
+    _short_with_category(eng, "c", "g1", "transfer-gelen")
+    _short_with_category(eng, "c", "g2", "Transfer-Gelen")
+    _short_with_category(eng, "c", "g3", "avrupa-kura")
+
+    counts = count_recent_categories(eng, "c", hours=24)
+    assert counts == {"transfer-gelen": 2, "avrupa-kura": 1}
+
+
+def test_count_recent_categories_respects_window_and_channel(tmp_path):
+    from short_bot.db import count_recent_categories
+    eng = init_db(tmp_path / "x.sqlite")
+    _short_with_category(eng, "c", "g1", "transfer-gelen", hours_ago=1)
+    _short_with_category(eng, "c", "g2", "transfer-gelen", hours_ago=48)   # pencere dışı
+    _short_with_category(eng, "other", "g3", "transfer-gelen", hours_ago=1)  # başka kanal
+
+    assert count_recent_categories(eng, "c", hours=24) == {"transfer-gelen": 1}

@@ -61,7 +61,7 @@ def test_negative_keywords_filter_drops_matches():
                  link="x", description="", source="x",
                  pub_date=None, thumb_url=None),
     ]
-    out = _filter_negative_keywords(items, ["wwe", "wrestling"])
+    out = _filter_negative_keywords(items, ["wwe", "wrestling"], "en")
     assert len(out) == 1
     assert out[0].guid == "2"
 
@@ -71,7 +71,7 @@ def test_negative_keywords_empty_list_keeps_all():
     from short_bot.models import NewsItem
     items = [NewsItem(guid="1", title="A", link="x", description="",
                        source="x", pub_date=None, thumb_url=None)]
-    assert _filter_negative_keywords(items, []) == items
+    assert _filter_negative_keywords(items, [], "en") == items
 
 
 def test_negative_keywords_substring_match():
@@ -80,5 +80,5 @@ def test_negative_keywords_substring_match():
     from short_bot.models import NewsItem
     items = [NewsItem(guid="1", title="The wrestler returns", link="x",
                        description="", source="x", pub_date=None, thumb_url=None)]
-    out = _filter_negative_keywords(items, ["wrestl"])
+    out = _filter_negative_keywords(items, ["wrestl"], "en")
     assert out == []

@@ -202,3 +202,103 @@ def test_score_items_raises_on_openrouter_key_missing_real_flow():
         with pytest.raises(OpenRouterError):
             score_items(items, claude_path="claude", backend="openrouter",
                         api_key=None, model="x")
+
+
+# --- Etkileşim ekseni --------------------------------------------------------
+
+def test_prompt_prefers_conflict_over_speculation_in_all_languages():
+    """Puanlayıcı yalnız 'ilginçlik' soruyordu; ölçüm başka bir eksen gösterdi.
+
+    442 videoluk analiz: ÇATIŞMA çerçevesi (ret/şart/kriz) endeks 1.43,
+    BELİRSİZLİK çerçevesi (gündemde/ilgileniyor/'... mi?') 0.88. Aynı önemdeki
+    iki haberden hangisinin seçildiği bu farkı doğrudan belirliyor.
+    """
+    from short_bot.topic_taxonomy import normalize_category
+    for lang in ("tr", "en", "de"):
+        p = build_scoring_prompt([_item("g1", "T")],
+                                 channel=_channel("K", ["x"], language=lang))
+        # normalize_category: "İ".lower() birleşik nokta bırakır, düz .lower()
+        # ile "ETKİLEŞİM" araması sessizce başarısız olur.
+        low = normalize_category(p)
+        assert "etkileşim" in low or "engagement" in low or "interaktion" in low, lang
+        # Somut sinyaller prompt'ta adlandırılmalı, soyut "engagement" yetmez
+        assert any(w in low for w in ("redd", "reject", "abgelehnt")), lang
+
+
+def test_prompt_without_channel_keeps_legacy_shape():
+    """Kanal bağlamı olmayan eski çağrılar değişmez."""
+    p = build_scoring_prompt([_item("g1", "T")])
+    assert "etkileşim" not in p.lower()
+
+
+# --- Kategori ataması (kota tavanının önkoşulu) ------------------------------
+
+def test_scorer_assigns_category_when_channel_defines_list():
+    """Seçim anında haberin konusu bilinmiyordu; kota tavanı buna dayanıyor.
+
+    Kategori yalnız script yazılırken (seçimden SONRA) belirleniyordu, bu
+    yüzden 'aynı konudan günde en fazla N' kuralı uygulanamıyordu.
+    """
+    from dataclasses import replace
+    from short_bot.scorer import _ScoreResponse
+    ch = replace(_channel("K", ["galatasaray"]),
+                 categories=["transfer-gelen", "avrupa-kura"])
+    fake = _ScoreResponse(scores=[
+        {"guid": "g1", "score": 8.0, "reasoning": "r", "category": "avrupa-kura"},
+    ])
+    with patch("short_bot.scorer.run_json", return_value=fake):
+        out = score_items([_item("g1", "Kura çekildi")], channel=ch)
+    assert out[0].category == "avrupa-kura"
+
+
+def test_scorer_category_empty_when_channel_has_no_list():
+    """Liste tanımlamayan kanallarda kategori boş kalır, kota devre dışı."""
+    from short_bot.scorer import _ScoreResponse
+    fake = _ScoreResponse(scores=[{"guid": "g1", "score": 8.0, "reasoning": "r"}])
+    with patch("short_bot.scorer.run_json", return_value=fake):
+        out = score_items([_item("g1", "T")], channel=_channel("K", ["x"]))
+    assert out[0].category == ""
+
+
+# --- Kategori kotası ---------------------------------------------------------
+
+def _scored(guid, score, category):
+    from short_bot.models import ScoredItem
+    return ScoredItem(item=_item(guid, guid), score=score, reasoning="",
+                      category=category)
+
+
+def test_quota_penalizes_saturated_category():
+    """Üretimin %50'si tek kategorideydi (gelen-transfer) ve o en zayıf
+    performanslı kategoriydi. Kota dolduysa aday puanı düşmeli."""
+    from short_bot.scorer import apply_category_quota
+    scored = [_scored("g1", 8.0, "transfer-gelen"), _scored("g2", 7.0, "avrupa-kura")]
+    out = {s.item.guid: s for s in apply_category_quota(
+        scored, produced={"transfer-gelen": 3}, quota={"transfer-gelen": 3})}
+    assert out["g1"].score == 5.0     # 8.0 - 3.0 ceza
+    assert out["g2"].score == 7.0     # kotası yok, dokunulmaz
+
+
+def test_quota_leaves_category_below_limit_untouched():
+    from short_bot.scorer import apply_category_quota
+    scored = [_scored("g1", 8.0, "transfer-gelen")]
+    out = apply_category_quota(scored, produced={"transfer-gelen": 2},
+                               quota={"transfer-gelen": 3})
+    assert out[0].score == 8.0
+
+
+def test_quota_is_noop_without_category_or_quota():
+    """Liste tanımlamayan kanallar etkilenmez."""
+    from short_bot.scorer import apply_category_quota
+    scored = [_scored("g1", 8.0, "")]
+    assert apply_category_quota(scored, produced={}, quota={})[0].score == 8.0
+    assert apply_category_quota(scored, produced={"x": 9}, quota={"x": 1})[0].score == 8.0
+
+
+def test_quota_penalty_never_goes_below_zero():
+    """Ceza puanı negatife düşürmemeli — min_score karşılaştırması bozulur."""
+    from short_bot.scorer import apply_category_quota
+    scored = [_scored("g1", 1.0, "transfer-gelen")]
+    out = apply_category_quota(scored, produced={"transfer-gelen": 5},
+                               quota={"transfer-gelen": 1})
+    assert out[0].score == 0.0

@@ -1,12 +1,14 @@
 """LLM-based interestingness scorer (0-10) per news item."""
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
 from short_bot.claude_cli import OpenRouterError, run_json
 from short_bot.models import NewsItem, ScoredItem
+from short_bot.topic_taxonomy import normalize_category
 
 if TYPE_CHECKING:
     from short_bot.config import ChannelConfig
@@ -16,6 +18,8 @@ class _ItemScore(BaseModel):
     guid: str
     score: float = Field(ge=0, le=10)
     reasoning: str = Field(max_length=200)
+    # Yalnız kanal canonical liste tanımladığında istenir; aksi halde boş.
+    category: str = Field(default="", max_length=40)
 
 
 class _ScoreResponse(BaseModel):
@@ -35,6 +39,14 @@ Aşağıdaki haber başlıklarını bu KANALA UYGUNLUK ve ilginçlik açısında
 - 1-4: Sıkıcı, teknik, lokal
 - 0:   KONU DIŞI (kanalın anahtar kelimeleriyle alakasız) — başlık ne kadar çekici olursa olsun 0-3 ver
 
+ETKİLEŞİM EKSENİ (eşit önemdeki iki haber arasında bunu kullan):
+- YUKARI çek: çatışma/karar taşıyanlar — teklif REDDİ, şart koşma, kriz, veto,
+  taviz vermeme, kesinleşmiş karar, resmi açıklama, ilgili kişinin kendi sözü
+- AŞAĞI çek: sonucu olmayan spekülasyon — "gündemde", "radarda", "ilgileniyor",
+  "izliyor", "... mi?" türü belirsiz temaslar
+Ölçüm: bu kanalda çatışma/karar çerçeveli haberler ortalamanın %43 üstünde,
+belirsiz spekülasyon %12 altında performans gösterdi.
+
 Başlıklar:
 {listing}
 
@@ -53,6 +65,15 @@ Score the news headlines below from 0-10 based on RELEVANCE TO THIS CHANNEL and 
 - 1-4: Boring, technical, hyperlocal
 - 0:   OFF-TOPIC (unrelated to channel keywords) — even if the headline sounds catchy, score 0-3
 
+ENGAGEMENT AXIS (use this to break ties between equally important stories):
+- Score UP: conflict or decision — offer REJECTED, demands/conditions, crisis,
+  veto, refusal to budge, a settled decision, official statement, a direct quote
+  from the person involved
+- Score DOWN: speculation with no outcome — "linked with", "on the radar",
+  "interested in", "monitoring", "will he join?" style vague contact
+Measured: on this channel, conflict/decision framing performed 43% above the
+median while vague speculation landed 12% below.
+
 Headlines:
 {listing}
 
@@ -70,6 +91,15 @@ Bewerte die folgenden Schlagzeilen von 0-10 nach RELEVANZ FÜR DIESEN KANAL und 
 - 5-6: Nur am Rande relevant oder oberflächlich
 - 1-4: Langweilig, technisch, lokal
 - 0:   OFF-TOPIC (nicht verwandt mit Kanal-Schlüsselwörtern) — egal wie spannend die Schlagzeile klingt, gib 0-3
+
+INTERAKTIONS-ACHSE (bei gleich wichtigen Meldungen entscheidet diese):
+- HÖHER bewerten: Konflikt/Entscheidung — Angebot ABGELEHNT, Bedingungen, Krise,
+  Veto, keine Zugeständnisse, feststehende Entscheidung, offizielle Erklärung,
+  wörtliches Zitat der beteiligten Person
+- NIEDRIGER bewerten: folgenlose Spekulation — "im Gespräch", "auf dem Radar",
+  "interessiert", "beobachtet", "kommt er?"-Andeutungen
+Gemessen: Konflikt-/Entscheidungsrahmen lag auf diesem Kanal 43% über dem
+Median, vage Spekulation 12% darunter.
 
 Schlagzeilen:
 {listing}
@@ -105,6 +135,16 @@ def build_scoring_prompt(
         keywords=keywords_str,
         listing=listing,
     )
+    # Canonical kategori: kanal liste tanımladıysa her başlık için konu iste.
+    # Konu bilgisi seçim anında gerekiyor (kota tavanı buna dayanıyor) —
+    # script'in kendi kategorisi seçimden SONRA yazılıyor, yani geç kalıyor.
+    if channel.categories:
+        allowed = " | ".join(channel.categories)
+        base = base + (
+            f"\n\nAyrıca her başlığa bu listeden BİR kategori ata (birebir, "
+            f"listeden başka değer yazma): {allowed}\n"
+            f'JSON alanı: "category": "<listeden biri>"'
+        )
     # Optional performance-feedback hint. format_scorer_hint returns "" when
     # the insight set is too sparse (<5 samples) so callers can pass freely
     # without worrying about anchoring on noise.
@@ -165,7 +205,41 @@ def score_items(
             item = by_guid.get(s.guid)
             if item is None:
                 continue
-            out.append(ScoredItem(item=item, score=s.score, reasoning=s.reasoning))
+            out.append(ScoredItem(item=item, score=s.score,
+                                  reasoning=s.reasoning,
+                                  category=normalize_category(s.category)
+                                           if s.category else ""))
+    return out
+
+
+_QUOTA_PENALTY = 3.0
+
+
+def apply_category_quota(
+    scored: list[ScoredItem],
+    *,
+    produced: dict[str, int],
+    quota: dict[str, int],
+    penalty: float = _QUOTA_PENALTY,
+) -> list[ScoredItem]:
+    """Kotasını doldurmuş kategorilerdeki adayların puanını düşür.
+
+    ELEMEK yerine CEZA veriyoruz: transfer dönemi gibi haber akışının tek
+    konuya kilitlendiği günlerde eleme üretimi tamamen durdururdu. Ceza ise
+    "başka konu varsa onu seç, hiç yoksa yine de üret" davranışı verir.
+
+    `produced`: son pencerede o kategoriden kaç video üretildiği.
+    `quota`: kategori başına üst sınır. Listede olmayan kategori sınırsızdır.
+    """
+    if not quota:
+        return scored
+    out: list[ScoredItem] = []
+    for s in scored:
+        limit = quota.get(s.category) if s.category else None
+        if limit is not None and produced.get(s.category, 0) >= limit:
+            out.append(replace(s, score=max(0.0, s.score - penalty)))
+        else:
+            out.append(s)
     return out
 
 

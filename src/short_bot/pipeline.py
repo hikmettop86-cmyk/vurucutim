@@ -58,6 +58,9 @@ from short_bot.generated_db import (
 from short_bot.image_picker import pick_image_for_generator
 import os
 import secrets as _secrets_mod  # avoid shadowing the local `secrets_path` var
+from dataclasses import replace as _dc_replace
+
+from short_bot.text_normalize import locale_fold
 import short_bot.pexels as _pexels_mod
 from short_bot.pexels import (
     load_secrets as _load_secrets,
@@ -87,17 +90,62 @@ def _is_recent(pub_date: datetime | None, cutoff: datetime) -> bool:
     return aware >= cutoff
 
 
-def _filter_negative_keywords(items: list, negative_keywords: list[str]) -> list:
-    """Drop items whose title contains any negative keyword (case-insensitive substring)."""
+def _filter_negative_keywords(items: list, negative_keywords: list[str],
+                              language: str) -> list:
+    """Başlığında negatif anahtar kelime geçen haberleri eler.
+
+    KÜÇÜLTME DİLE DUYARLI olmalı: Python'un `.lower()`'ı "CANLI" → "canli"
+    (noktalı i) verir, anahtar kelime ise "canlı"dır (noktasız ı) — eşleşmez ve
+    filtre SESSİZCE hiçbir şey elemez. Aslan Gündem+'a 'canlı' eklendiği hâlde
+    "CANLI | Galatasaray alıyor" başlıklı canlı blog geçip gitti (ölçüldü).
+    locale_fold Türkçede I/İ eşlemesini yapar, başka dillerde casefold'a düşer
+    (Almancada 'I'nin küçüğü 'ı' değildir).
+
+    `language` ZORUNLU, varsayılanı yok: Türkçe eşlemesini İspanyolca başlığa
+    uygulamak "EN DIRECTO"yu "en dırecto" yapar ve 'en directo' HİÇ eşleşmez —
+    yani yanlış bir varsayılan, filtrenin çalıştığını sanırken sıfır şey elemesi
+    demektir.
+    """
     if not negative_keywords:
         return items
-    needles = [k.strip().lower() for k in negative_keywords if k.strip()]
+    needles = [locale_fold(k.strip(), language)
+               for k in negative_keywords if k.strip()]
     if not needles:
         return items
     return [
         i for i in items
-        if not any(n in i.title.lower() for n in needles)
+        if not any(n in locale_fold(i.title, language) for n in needles)
     ]
+
+
+def _apply_category_quota(
+    scored: list[ScoredItem],
+    *,
+    channel: ChannelConfig,
+    eng,
+    log: logging.Logger,
+) -> list[ScoredItem]:
+    """Günlük kotasını doldurmuş konuların aday puanını düşür.
+
+    Puanlayıcı havuzun konu dağılımını olduğu gibi yayına geçiriyordu: 442
+    videoluk analizde üretimin %50'si gelen-transferdi ve o en zayıf
+    performanslı kategoriydi. Kota, aynı konunun art arda seçilmesini kırar.
+    Kotası olmayan kanallarda hiçbir etkisi yok.
+    """
+    if not channel.category_quota_per_day:
+        return scored
+    from short_bot.db import count_recent_categories
+    from short_bot.scorer import apply_category_quota
+
+    produced = count_recent_categories(eng, channel.slug, hours=24)
+    out = apply_category_quota(scored, produced=produced,
+                               quota=channel.category_quota_per_day)
+    doymus = [c for c, limit in channel.category_quota_per_day.items()
+              if produced.get(c, 0) >= limit]
+    if doymus:
+        log.info(f"  [kota] doymuş konu(lar) geri çekildi: {', '.join(doymus)} "
+                 f"(son 24s üretim: {produced})")
+    return out
 
 
 def _apply_trend_boost(
@@ -690,10 +738,10 @@ def _produce_from_item(
     `finish_run(eng, run_id, status='no_candidates', ...)` çağırMAKLA
     yükümlüdür; aksi halde run satırı açık kalır.
 
-    NOT: mark_processed burada embedding OLMADAN çağrılır (yalnızca guid+title).
-    Feed/manuel yol için embedding-dedup bilinçli olarak kapsam dışıdır; GUID +
-    fuzzy-title dedup yeterli kabul edildi. Embedding-dedup paritesi (çok-kaynak
-    aynı haber) gelecek bir iyileştirmedir.
+    NOT: mark_processed burada RSS + üretilmiş-manşet embedding'iyle çağrılır —
+    yani bu yoldan üretilen videolar da sonraki koşuların çok-kaynak dedup'ına
+    katkı verir. (Eskiden yalnız guid+title yazılıyordu ve bu, panelden üretilen
+    her video için dedup geçmişinde kör bir satır bırakıyordu.)
     """
     secrets_path = current_app_secrets_path()
     secrets = _load_secrets(secrets_path)
@@ -704,6 +752,11 @@ def _produce_from_item(
                         or settings.claude_models.get("default", "haiku"))
     else:
         script_model = script_call.model
+    # Kanal modeli ANLATIMA da geçsin. script_call aşağıda _render_and_compose'a,
+    # oradan write_narration'a veriliyordu ve kanal ayarını GÖRMÜYORDU: aynı
+    # kanalın haber kartı channel.script_model ile, seslendirme anlatımı ise
+    # settings'teki modelle yazılıyordu.
+    script_call = _dc_replace(script_call, model=script_model)
 
     article_url = item.link
     if _is_google_news_url(article_url):
@@ -825,7 +878,28 @@ def _produce_from_item(
         render_ms = int((time.perf_counter() - t0) * 1000)
         log.info(f"  → {out_path.name} ({render_ms}ms)")
 
-    mark_processed(eng, item.guid, item.title, channel.slug)
+    # ÇOK-KAYNAK DEDUP PARİTESİ: bu kol (feed/manuel) eskiden embedding'siz
+    # kaydediyordu, yani panelden "şimdi üret" ile çıkan her video dedup
+    # geçmişine KÖR bir satır bırakıyordu: aynı haber ertesi gün başka bir
+    # gazeteden geldiğinde 3. ve 4. katman karşılaştıracak bir şey bulamıyor,
+    # yalnız GUID + başlık kalıyordu (farklı kaynak = farklı GUID = geçer).
+    # Fail-open: embedding alınamazsa üretim yine kaydedilir.
+    rss_embedding = None
+    produced_embedding = None
+    try:
+        okey = resolve_openai_api_key(secrets)
+        if okey:
+            from short_bot.embeddings import embed_text as _embed
+            rss_embedding = _embed(item.title, api_key=okey)
+            produced_text = f"{script.header_top} {script.header_bottom}".strip()
+            if produced_text:
+                produced_embedding = _embed(produced_text, api_key=okey)
+    except Exception as e:  # noqa: BLE001 — üretimi asla engellemez
+        log.warning(f"  dedup embedding alınamadı: {e}")
+
+    mark_processed(eng, item.guid, item.title, channel.slug,
+                   embedding=rss_embedding,
+                   produced_title_embedding=produced_embedding)
     short_id = record_short(
         eng, channel=channel.slug, rss_item_guid=item.guid,
         title=script.header_top + " " + script.header_bottom,
@@ -866,7 +940,8 @@ def _run_rss(*, channel, run_id, log, eng, settings,
     # NEW: negative keyword filter
     if channel.negative_keywords:
         before = len(items)
-        items = _filter_negative_keywords(items, channel.negative_keywords)
+        items = _filter_negative_keywords(items, channel.negative_keywords,
+                                          channel.language)
         if before != len(items):
             log.info(f"  → {len(items)} after negative keyword filter (dropped {before - len(items)})")
 
@@ -953,6 +1028,7 @@ def _run_rss(*, channel, run_id, log, eng, settings,
         cache_dir=Path(cache_dir),
         secrets_path=secrets_path_for_trends, log=log,
     )
+    scored = _apply_category_quota(scored, channel=channel, eng=eng, log=log)
     top_n_candidates = select_top(scored, min_score=channel.min_score,
                                   n=_IMAGE_RETRY_MAX)
     if not top_n_candidates:
@@ -983,6 +1059,11 @@ def _run_rss(*, channel, run_id, log, eng, settings,
                         or settings.claude_models.get("default", "haiku"))
     else:
         script_model = script_call.model
+    # Kanal modeli ANLATIMA da geçsin. script_call aşağıda _render_and_compose'a,
+    # oradan write_narration'a veriliyordu ve kanal ayarını GÖRMÜYORDU: aynı
+    # kanalın haber kartı channel.script_model ile, seslendirme anlatımı ise
+    # settings'teki modelle yazılıyordu.
+    script_call = _dc_replace(script_call, model=script_model)
 
     picked = None
     body = None
@@ -1669,13 +1750,22 @@ def _run_feed(*, channel, run_id, log, eng, settings,
         cutoff = datetime.now(timezone.utc) - timedelta(hours=channel.max_age_hours)
         items = [i for i in items if _is_recent(i.pub_date, cutoff)]
     if channel.negative_keywords:
-        items = _filter_negative_keywords(items, channel.negative_keywords)
+        items = _filter_negative_keywords(items, channel.negative_keywords,
+                                          channel.language)
 
     log.info("[2/3] dedup")
-    # NOT: filter_new burada embedding olmadan (GUID + fuzzy title) çalışır.
-    # Embedding-dedup (_run_rss'teki gibi) feed yolu için gelecek iyileştirme.
+    # ÇOK-KAYNAK DEDUP bu yolda da açık. Eskiden yalnız GUID + fuzzy-title
+    # çalışıyordu: aynı haber başka bir gazeteden geldiğinde GUID farklı,
+    # başlık yeterince farklı → aynı hikâye tekrar tekrar video oluyordu
+    # (kullanıcının bildirdiği asıl sorun). Anahtar yoksa filter_new zaten
+    # embedding katmanlarını atlar, davranış eskisi gibi kalır.
+    _dedup_secrets = _load_secrets(current_app_secrets_path())
+    _dedup_key = resolve_openai_api_key(_dedup_secrets)
+    _dedup_emb: dict[str, list[float]] = {}
     new_items = filter_new(eng, items, channel.slug,
-                           fuzzy_threshold=settings.fuzzy_dedup_threshold)
+                           fuzzy_threshold=settings.fuzzy_dedup_threshold,
+                           openai_api_key=_dedup_key,
+                           embeddings_out=_dedup_emb)
     if not new_items:
         log.info("no candidates → finish")
         finish_run(eng, run_id, status="no_candidates", short_id=None, error=None)
@@ -1700,6 +1790,7 @@ def _run_feed(*, channel, run_id, log, eng, settings,
     scored = _apply_trend_boost(
         scored, channel=channel, settings=settings,
         cache_dir=Path(cache_dir), secrets_path=secrets_path, log=log)
+    scored = _apply_category_quota(scored, channel=channel, eng=eng, log=log)
     picked = select_newest_above(scored, min_score=channel.min_score, n=1)
     if not picked:
         log.info(f"no item ≥ {channel.min_score} → finish")

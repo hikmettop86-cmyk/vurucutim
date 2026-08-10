@@ -26,6 +26,11 @@ class ScoredItem:
     item: NewsItem
     score: float            # 0-10
     reasoning: str          # LLM's short rationale (debug/UI)
+    # category: kanal canonical liste tanımladıysa puanlayıcının atadığı konu.
+    # Seçim anında konuyu bilmek gerekiyor — kategori eskiden yalnız script
+    # yazılırken (seçimden SONRA) belirleniyordu, bu yüzden "aynı konudan
+    # günde en fazla N" kotası uygulanamıyordu. Liste yoksa boş kalır.
+    category: str = ""
 
 
 class Highlight(BaseModel):
@@ -55,6 +60,16 @@ class Script(BaseModel):
     highlights: list[Highlight] = Field(default_factory=list, max_length=8)
     category: str = Field(min_length=1, max_length=30)
     mood: Literal["breaking", "neutral", "upbeat"]
+    # --- Yalnız seslendirmeli üretimde dolar; sessiz kanallarda boş kalır. ---
+    # Ekrandaki `body_paragraph` haber kartı metnidir; ANLATILAN metin ondan
+    # farklıdır ve hiçbir yerde saklanmıyordu.
+    narration_text: str = ""
+    # Anlatımın Türkçesi. Operatör hedef dili bilmiyorsa videoyu YAYINLAMADAN
+    # ÖNCE "bu ne diyor" sorusunu ancak böyle yanıtlayabilir; panel bunu
+    # /shorts/<id> sayfasında gösterir (web/routes/shorts.py). Türkçe kanalda boş.
+    # NOT: aksan temizleyici validator'ı bu iki alana UYGULANMAZ — hedef dilin
+    # aksanları (é, ñ, ü) korunmalı.
+    body_paragraph_tr: str = ""
 
     @field_validator("header_top", "header_bottom", "photo_overlay",
                       "body_paragraph", "category", mode="before")

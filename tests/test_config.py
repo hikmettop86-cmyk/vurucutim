@@ -744,3 +744,68 @@ def test_resolve_ai_call_vision_claude_cli_falls_back_to_default_when_unset():
     call = resolve_ai_call(s, {}, "vision")
     assert call.model == "default"
 
+
+
+def test_save_channel_round_trips_categories(tmp_path):
+    """categories YAML'dan okunur ve geri yazılır (reload'da kaybolmaz)."""
+    from short_bot.config import save_channel
+    src = (
+        "slug: t\nname: T\nkeywords: [a]\nlanguage: tr\n"
+        "schedule_cron: ''\nduration_s: 30\nmin_score: 0\n"
+        "max_candidates_per_run: 1\ntemplate: default\n"
+        "categories: [transfer-gelen, avrupa-kura]\n"
+        "colors: {primary: '#0', accent: '#1', bg_gradient: ['#2','#3']}\n"
+        "handle: x\noutput_dir: x\nenabled: true\n"
+    )
+    p = tmp_path / "ch.yaml"
+    p.write_text(src, encoding="utf-8")
+    c = load_channel(p)
+    assert c.categories == ["transfer-gelen", "avrupa-kura"]
+    save_channel(p, c)
+    assert load_channel(p).categories == ["transfer-gelen", "avrupa-kura"]
+
+
+def test_channel_without_categories_defaults_empty(tmp_path):
+    """Liste tanımlamayan kanallar serbest etikette kalır."""
+    src = (
+        "slug: t\nname: T\nkeywords: [a]\nlanguage: tr\n"
+        "schedule_cron: ''\nduration_s: 30\nmin_score: 0\n"
+        "max_candidates_per_run: 1\ntemplate: default\n"
+        "colors: {primary: '#0', accent: '#1', bg_gradient: ['#2','#3']}\n"
+        "handle: x\noutput_dir: x\nenabled: true\n"
+    )
+    p = tmp_path / "ch.yaml"
+    p.write_text(src, encoding="utf-8")
+    assert load_channel(p).categories == []
+
+
+def test_category_quota_round_trips(tmp_path):
+    """Kategori kotası YAML'dan okunur ve geri yazılır."""
+    from short_bot.config import save_channel
+    src = (
+        "slug: t\nname: T\nkeywords: [a]\nlanguage: tr\n"
+        "schedule_cron: ''\nduration_s: 30\nmin_score: 0\n"
+        "max_candidates_per_run: 1\ntemplate: default\n"
+        "category_quota_per_day: {transfer-gelen: 3, mac-skor: 1}\n"
+        "colors: {primary: '#0', accent: '#1', bg_gradient: ['#2','#3']}\n"
+        "handle: x\noutput_dir: x\nenabled: true\n"
+    )
+    p = tmp_path / "ch.yaml"
+    p.write_text(src, encoding="utf-8")
+    c = load_channel(p)
+    assert c.category_quota_per_day == {"transfer-gelen": 3, "mac-skor": 1}
+    save_channel(p, c)
+    assert load_channel(p).category_quota_per_day == {"transfer-gelen": 3, "mac-skor": 1}
+
+
+def test_category_quota_defaults_empty(tmp_path):
+    src = (
+        "slug: t\nname: T\nkeywords: [a]\nlanguage: tr\n"
+        "schedule_cron: ''\nduration_s: 30\nmin_score: 0\n"
+        "max_candidates_per_run: 1\ntemplate: default\n"
+        "colors: {primary: '#0', accent: '#1', bg_gradient: ['#2','#3']}\n"
+        "handle: x\noutput_dir: x\nenabled: true\n"
+    )
+    p = tmp_path / "ch.yaml"
+    p.write_text(src, encoding="utf-8")
+    assert load_channel(p).category_quota_per_day == {}

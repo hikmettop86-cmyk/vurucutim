@@ -16,7 +16,8 @@ def _default_trends_settings() -> "TrendsSettings":
     )
 
 from short_bot.dna import DnaSpec
-from short_bot.locale import RSS_LOCALES, SUPPORTED_LANGUAGES
+from short_bot.locale import (CJK_FONTS, RSS_LOCALES, SUPPORTED_LANGUAGES,
+                              font_supports_language)
 
 SLUG_RE = re.compile(r"^[a-z0-9\-]+$")
 
@@ -198,7 +199,8 @@ class ReelConfig(BaseModel):
     # (anlatım 1.0) → "sfx sesleri çok baskın". Vurgu olmalı, konuşmayla yarışmamalı.
     sfx_volume: float = Field(default=0.22, ge=0.0, le=1.0)
     font: Literal["Montserrat", "Anton", "Bebas Neue", "Oswald",
-                  "Poppins", "Inter", "Archivo Black"] = "Montserrat"
+                  "Poppins", "Inter", "Archivo Black",
+                  "Noto Sans JP"] = "Montserrat"
     verify_footage: bool = True
     footage_anchor: str = ""   # EN konu çıpası (boşsa dna.search_query_template'ten türetilir)
     # Retention kurgu katmanı (2026-07-12): insan-editör hamleleri
@@ -335,6 +337,16 @@ class ChannelConfig:
     max_age_hours: int = 24
     dynamic_dna: bool = False
     negative_keywords: list[str] = field(default_factory=list)
+    # categories: script'in seçebileceği canonical konu etiketleri. Boş
+    # bırakılırsa LLM serbest etiket yazar (eski davranış). Dolu olduğunda
+    # prompt listeyi dayatır — serbest etiket learning/aggregator'ın kova
+    # ortalamalarını bölüyor ve kategori ipucunu tamamen düşürüyordu.
+    categories: list[str] = field(default_factory=list)
+    # category_quota_per_day: {kategori: günlük üst sınır}. Sınırı dolduran
+    # kategorinin adayları ELENMEZ, puanı düşürülür — haber akışı tek konuya
+    # kilitlendiğinde (transfer dönemi) eleme üretimi durdururdu. Listede
+    # olmayan kategori sınırsızdır; boş sözlük kotayı tamamen kapatır.
+    category_quota_per_day: dict[str, int] = field(default_factory=dict)
     dna: DnaSpec | None = None
     script_model: str | None = None
     content_source: Literal["rss", "generator", "feed", "curated"] = "rss"
@@ -480,6 +492,16 @@ def load_channel(path: Path) -> ChannelConfig:
     reel_data = data.get("reel")
     reel = ReelConfig.model_validate(reel_data) if reel_data else None
 
+    # CJK dilli kanal, kana/kanji glifi OLMAYAN bir fontla çalışamaz: ekrana tofu (□)
+    # basar ya da sessizce sistem fontuna düşer — kanalın kimliği olan font hiç
+    # uygulanmaz ve bunu hiçbir hata bildirmez. Yükleme anında DURDUR (dil paketi
+    # kapısıyla aynı sözleşme: sessiz düşme yok).
+    if reel is not None and reel.enabled and not font_supports_language(reel.font, language):
+        raise ValueError(
+            f"channel {slug!r}: '{language}' dilinde '{reel.font}' fontunun CJK glifi yok "
+            f"(ekranda tofu çıkar). Kullanılabilir: "
+            f"{', '.join(CJK_FONTS.get(language, ()))}.")
+
     return ChannelConfig(
         slug=slug,
         name=data["name"],
@@ -492,6 +514,9 @@ def load_channel(path: Path) -> ChannelConfig:
         max_age_hours=int(data.get("max_age_hours", 24)),
         dynamic_dna=bool(data.get("dynamic_dna", False)),
         negative_keywords=list(data.get("negative_keywords") or []),
+        categories=list(data.get("categories") or []),
+        category_quota_per_day={str(k): int(v) for k, v
+                                in (data.get("category_quota_per_day") or {}).items()},
         reference_channels=list(data.get("reference_channels") or []),
         template=template,
         colors=dict(data["colors"]),
@@ -536,6 +561,10 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
         data["dynamic_dna"] = True
     if cfg.negative_keywords:
         data["negative_keywords"] = list(cfg.negative_keywords)
+    if cfg.categories:
+        data["categories"] = list(cfg.categories)
+    if cfg.category_quota_per_day:
+        data["category_quota_per_day"] = dict(cfg.category_quota_per_day)
     if cfg.reference_channels:
         data["reference_channels"] = list(cfg.reference_channels)
     if cfg.script_model:

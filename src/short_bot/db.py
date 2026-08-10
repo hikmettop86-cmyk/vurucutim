@@ -517,6 +517,38 @@ def record_short(
         return result.inserted_primary_key[0]
 
 
+def count_recent_categories(
+    eng: Engine, channel: str, *, hours: int = 24,
+) -> dict[str, int]:
+    """Son `hours` saatte bu kanalda hangi konudan kaç video üretildi.
+
+    Kategori kotasının girdisi. Etiketler normalize edilerek sayılır —
+    yazım farkı ("Transfer" / "transfer") kotayı iki ayrı kovaya bölüp
+    hiç dolmamasına yol açardı.
+    """
+    import json as _json
+    from short_bot.topic_taxonomy import normalize_category
+
+    cutoff = _utcnow() - timedelta(hours=hours)
+    counts: dict[str, int] = {}
+    with eng.connect() as conn:
+        rows = conn.execute(
+            select(shorts.c.script_json)
+            .where(shorts.c.channel == channel)
+            .where(shorts.c.created_at >= cutoff)
+        ).all()
+    for (script_json,) in rows:
+        try:
+            raw = (_json.loads(script_json or "{}") or {}).get("category")
+        except (TypeError, ValueError):
+            raw = None
+        if not raw:
+            continue
+        key = normalize_category(raw)
+        counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
 def start_run(eng: Engine, channel: str, trigger: str, log_path: str) -> int:
     with eng.begin() as conn:
         result = conn.execute(runs.insert().values(
