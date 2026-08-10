@@ -93,6 +93,30 @@ def test_multi_keyword_merges_and_dedupes_by_guid():
     assert [i.guid for i in items] == ["a", "shared", "b"]
 
 
+def test_multi_keyword_interleaves_so_first_key_cannot_eat_the_window():
+    """Anahtarlar sırayla eklenirse ilk anahtar puanlama penceresini yutar.
+
+    pipeline `new_items[:max_candidates_per_run]` ile havuzun BAŞINDAN dilim
+    alıyor. Anahtar sonuçları ardışık eklendiğinde bu dilim tamamen ilk
+    anahtardan gelir: gerçek koşuda 96 taze haberlik havuzda pencerenin
+    10/10'u "galatasaray" sorgusundandı, kanalın en iyi kategorilerini
+    beslemek için eklenen ŞL/yönetim/hukuk anahtarları hiç puanlanmadı ve
+    kanal üretimi durdu. Sonuçlar anahtarlar arasında dönüşümlü dizilmeli.
+    """
+    from unittest.mock import MagicMock
+    responses = [
+        MagicMock(status_code=200,
+                  content=_rss_bytes(*[f"a{i}" for i in range(10)])),
+        MagicMock(status_code=200, content=_rss_bytes("b0", "b1", "b2")),
+    ]
+    with patch("short_bot.fetcher.requests.get", side_effect=responses):
+        items = fetch_rss(["k1", "k2"], "hl=tr")
+
+    pencere = [i.guid for i in items[:6]]
+    assert sum(1 for g in pencere if g.startswith("b")) >= 2, pencere
+    assert len(items) == 13, "hiçbir haber düşmemeli, yalnız sıra değişmeli"
+
+
 def test_single_keyword_still_issues_one_request():
     """Tek anahtarlı kanallar (mevcut tüm kanallar) aynı davranışta kalır."""
     with patch("short_bot.fetcher.requests.get") as mock_get:

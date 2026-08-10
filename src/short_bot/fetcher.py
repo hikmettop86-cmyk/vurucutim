@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import time
 from datetime import datetime
+from itertools import zip_longest
 from urllib.parse import quote_plus
 
 import feedparser
@@ -38,18 +39,27 @@ def fetch_rss(
     AYRI sorgu olarak atıldığında dönen 99 haberin 91'i ana havuzda yoktu.
     Kanal tek anahtar kullanıyorsa (mevcut tüm kanallar) davranış değişmez —
     tek sorgu, aynı URL.
+
+    Sonuçlar anahtarlar arasında DÖNÜŞÜMLÜ diziliyor. Ardışık ekleme, aşağı
+    akıştaki `new_items[:max_candidates_per_run]` penceresini tamamen ilk
+    anahtara bırakıyordu: gerçek koşuda 96 taze haberin penceresine giren 10
+    haberin 10'u da "galatasaray" sorgusundandı ve kanalın en iyi
+    kategorilerini beslemek için eklenen anahtarlar hiç puanlanmadı.
     """
     if not keywords:
         raise ValueError("keywords boş olamaz")
 
+    per_key = [
+        _fetch_query(build_rss_url([k], locale),
+                     max_retries=max_retries, backoff=backoff, timeout=timeout)
+        for k in keywords
+    ]
     merged: dict[str, NewsItem] = {}
-    for keyword in keywords:
-        for item in _fetch_query(
-            build_rss_url([keyword], locale),
-            max_retries=max_retries, backoff=backoff, timeout=timeout,
-        ):
+    for sira in zip_longest(*per_key):
+        for item in sira:
             # İlk gören kazanır: aynı haber birden çok sorgudan dönebilir.
-            merged.setdefault(item.guid, item)
+            if item is not None:
+                merged.setdefault(item.guid, item)
     return list(merged.values())
 
 

@@ -4,12 +4,23 @@ keywords:
 # Her anahtar AYRI Google News sorgusu atar (fetcher.fetch_rss). Tek
 # "galatasaray" sorgusu transfer haberleriyle doluyordu: 442 videoluk analizde
 # üretimin %50'si gelen-transferdi ve bu en zayıf kategoriydi (endeks 0.93,
-# alt %10'un %59'u). Aşağıdaki üç anahtar, analizde en yüksek performansı
+# alt %10'un %59'u). Aşağıdaki anahtarlar, analizde en yüksek performansı
 # veren ama havuza neredeyse hiç girmeyen konuları besler.
+#
+# ÖLÇÜLDÜ (24s taze / ana havuzda olmayan net katkı). Anahtar seçimi endekse
+# DEĞİL arza bakmalı: yüksek performanslı bir kategori, o konuda her gün haber
+# çıktığı anlamına gelmiyor.
 - galatasaray
-- Galatasaray Şampiyonlar Ligi     # endeks 1.69, kanalın en iyi konusu (n=9)
-- Galatasaray başkan yönetim       # endeks 1.29
-- Galatasaray TFF ceza tahkim      # endeks 1.24
+- Galatasaray Şampiyonlar Ligi     # 20 taze / 15 net — endeks 1.69, en iyi konu
+- Galatasaray yönetim              # 14 taze /  8 net — endeks 1.29
+# KALDIRILDI "Galatasaray başkan yönetim" (0 taze / 0 net) ve
+# "Galatasaray TFF ceza tahkim" (0 taze / 0 net): üç kelimelik sorgular Google
+# News'te dar eşleşip arşiv döndürüyordu — 148 sonucun HİÇBİRİ son 24 saatte
+# değildi. İki kelimeli "Galatasaray yönetim" aynı konuyu 8 net haberle
+# besliyor. hukuk-ceza (endeks 1.24) için taze besleyici bulunamadı: PFDK/ceza/
+# tahkim sorgularının üçü de 0 taze verdi, çünkü o haberler her gün çıkmıyor.
+# Çıktıklarında ana "galatasaray" sorgusu zaten yakalıyor — ölçüm günü iki
+# gözaltı haberi de ana havuzdan gelmişti.
 # categories: script'in seçebileceği canonical konu etiketleri. Serbest metin
 # etiket learning/aggregator'ın kovalarını bölüyordu (aynı konuya "Transfer"
 # 210, "transfer" 138, "Futbol Transfer" 14 kez). Liste, ölçülen performans
