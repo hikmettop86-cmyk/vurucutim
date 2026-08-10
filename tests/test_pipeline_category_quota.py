@@ -76,3 +76,21 @@ def test_quota_not_reached_leaves_ranking_intact(tmp_path):
     out = _apply_category_quota(scored, channel=ch, eng=eng,
                                 log=logging.getLogger("t"))
     assert max(out, key=lambda s: s.score).item.guid == "g1"
+
+
+def test_pipeline_passes_min_score_as_quota_floor(tmp_path):
+    """Kota, adayı kanalın min_score'unun altına itmemeli.
+
+    Aksi hâlde güçlü adaylar havuzdan düşüyor ve geriye eşiğin tam sınırındaki
+    zayıf/alakasız haberler kalıyor (run 1615: Çorum FK videosu).
+    """
+    eng = init_db(tmp_path / "x.sqlite")
+    _produce(eng, "transfer-gelen", 3)
+    ch = _channel(min_score=6.0,
+                  categories=["transfer-gelen", "avrupa-kura"],
+                  category_quota_per_day={"transfer-gelen": 3})
+
+    out = _apply_category_quota([_scored("g1", 8.0, "transfer-gelen")],
+                                channel=ch, eng=eng,
+                                log=logging.getLogger("t"))
+    assert out[0].score == 6.0      # 8.0-3.0=5.0 değil; taban min_score

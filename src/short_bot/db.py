@@ -534,8 +534,22 @@ def count_recent_categories(
     with eng.connect() as conn:
         rows = conn.execute(
             select(shorts.c.script_json)
+            .select_from(
+                shorts.outerjoin(youtube_uploads,
+                                 youtube_uploads.c.short_id == shorts.c.id)
+            )
             .where(shorts.c.channel == channel)
             .where(shorts.c.created_at >= cutoff)
+            # "Silinmiş" ile "reddedilmiş" AYNI ŞEY DEĞİL. Operatörün akışı
+            # ölçüldü: üret → incele → beğenirse YÜKLE ve listeden sil,
+            # beğenmezse doğrudan sil. Son 24 saatteki 13 videonun 12'si
+            # deleted_at taşıyordu ama 7'si YouTube'da yayındaydı — yalnız
+            # deleted_at'e bakan bir filtre kotayı fiilen öldürürdü.
+            # Kota ölçüsü: yayınlanan (izleyici gördü) + henüz karar
+            # verilmemiş videolar sayılır; yalnızca YÜKLENMEDEN silinmiş
+            # olanlar sayılmaz.
+            .where(~(shorts.c.deleted_at.is_not(None)
+                     & youtube_uploads.c.id.is_(None)))
         ).all()
     for (script_json,) in rows:
         try:

@@ -39,6 +39,11 @@ Aşağıdaki haber başlıklarını bu KANALA UYGUNLUK ve ilginçlik açısında
 - 1-4: Sıkıcı, teknik, lokal
 - 0:   KONU DIŞI (kanalın anahtar kelimeleriyle alakasız) — başlık ne kadar çekici olursa olsun 0-3 ver
 
+MERKEZ KURALI: Kanalın öznesi haberin MERKEZİNDE olmalı; adının geçmesi yetmez.
+Rakip/başka bir kulüp ya da kişi merkezli haber (ör. rakip oyuncunun maç öncesi
+sözü, başka takımın kendi transferi) bu kanal için KONU DIŞIDIR → 0-3 ver.
+Ölçüt: haberin gövdesi kanalın öznesi çıkarılınca ayakta kalıyorsa, konu dışıdır.
+
 ETKİLEŞİM EKSENİ (eşit önemdeki iki haber arasında bunu kullan):
 - YUKARI çek: çatışma/karar taşıyanlar — teklif REDDİ, şart koşma, kriz, veto,
   taviz vermeme, kesinleşmiş karar, resmi açıklama, ilgili kişinin kendi sözü
@@ -64,6 +69,12 @@ Score the news headlines below from 0-10 based on RELEVANCE TO THIS CHANNEL and 
 - 5-6: Tangentially related or shallow
 - 1-4: Boring, technical, hyperlocal
 - 0:   OFF-TOPIC (unrelated to channel keywords) — even if the headline sounds catchy, score 0-3
+
+CENTER RULE: The channel's subject must be at the CENTER of the story; a passing
+mention is not enough. A story centred on a rival club or another person (e.g. a
+rival player's pre-match quote, another team's own transfer) is OFF-TOPIC here →
+score 0-3. Test: if the story still stands after removing the channel's subject,
+it is off-topic.
 
 ENGAGEMENT AXIS (use this to break ties between equally important stories):
 - Score UP: conflict or decision — offer REJECTED, demands/conditions, crisis,
@@ -91,6 +102,12 @@ Bewerte die folgenden Schlagzeilen von 0-10 nach RELEVANZ FÜR DIESEN KANAL und 
 - 5-6: Nur am Rande relevant oder oberflächlich
 - 1-4: Langweilig, technisch, lokal
 - 0:   OFF-TOPIC (nicht verwandt mit Kanal-Schlüsselwörtern) — egal wie spannend die Schlagzeile klingt, gib 0-3
+
+MITTELPUNKT-REGEL: Das Thema des Kanals muss im MITTELPUNKT stehen; eine bloße
+Erwähnung reicht nicht. Eine Meldung über einen Rivalen oder eine andere Person
+(z. B. das Vorspiel-Zitat eines gegnerischen Spielers, der eigene Transfer eines
+anderen Vereins) ist hier OFF-TOPIC → gib 0-3. Prüfung: Bleibt die Meldung ohne
+das Kanal-Thema bestehen, ist sie off-topic.
 
 INTERAKTIONS-ACHSE (bei gleich wichtigen Meldungen entscheidet diese):
 - HÖHER bewerten: Konflikt/Entscheidung — Angebot ABGELEHNT, Bedingungen, Krise,
@@ -221,12 +238,19 @@ def apply_category_quota(
     produced: dict[str, int],
     quota: dict[str, int],
     penalty: float = _QUOTA_PENALTY,
+    floor: float = 0.0,
 ) -> list[ScoredItem]:
     """Kotasını doldurmuş kategorilerdeki adayların puanını düşür.
 
     ELEMEK yerine CEZA veriyoruz: transfer dönemi gibi haber akışının tek
     konuya kilitlendiği günlerde eleme üretimi tamamen durdururdu. Ceza ise
     "başka konu varsa onu seç, hiç yoksa yine de üret" davranışı verir.
+
+    `floor` (pipeline min_score'u geçirir) cezanın adayı EŞİĞİN ALTINA
+    itmesini engeller. Bu taban olmadan kota aday havuzunu zayıflatıyordu:
+    gerçek koşuda güçlü GS haberleri 6.0'ın altına düştü, geriye 2 zayıf aday
+    kaldı ve tam sınırdaki alakasız bir haber seçilerek Galatasaray kanalında
+    Çorum FK videosu üretildi. Kota SIRALAMAYI değiştirmeli, kaliteyi değil.
 
     `produced`: son pencerede o kategoriden kaç video üretildiği.
     `quota`: kategori başına üst sınır. Listede olmayan kategori sınırsızdır.
@@ -237,7 +261,10 @@ def apply_category_quota(
     for s in scored:
         limit = quota.get(s.category) if s.category else None
         if limit is not None and produced.get(s.category, 0) >= limit:
-            out.append(replace(s, score=max(0.0, s.score - penalty)))
+            cezali = max(0.0, s.score - penalty)
+            # Zaten tabanın altındaysa yükseltme — yalnız ceza sonucu düşmeyi
+            # engelle.
+            out.append(replace(s, score=max(cezali, min(floor, s.score))))
         else:
             out.append(s)
     return out

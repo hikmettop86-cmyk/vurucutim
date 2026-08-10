@@ -139,7 +139,8 @@ def _apply_category_quota(
 
     produced = count_recent_categories(eng, channel.slug, hours=24)
     out = apply_category_quota(scored, produced=produced,
-                               quota=channel.category_quota_per_day)
+                               quota=channel.category_quota_per_day,
+                               floor=channel.min_score)
     doymus = [c for c, limit in channel.category_quota_per_day.items()
               if produced.get(c, 0) >= limit]
     if doymus:

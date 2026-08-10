@@ -215,3 +215,35 @@ def test_count_recent_categories_respects_window_and_channel(tmp_path):
     _short_with_category(eng, "other", "g3", "transfer-gelen", hours_ago=1)  # başka kanal
 
     assert count_recent_categories(eng, "c", hours=24) == {"transfer-gelen": 1}
+
+
+def test_count_recent_categories_excludes_rejected_only(tmp_path):
+    """"Silinmis" ile "reddedilmis" ayni sey degil.
+
+    Operatorun gercek akisi (olculdu): uret -> incele -> begenirse YUKLE ve
+    listeden sil, begenmezse dogrudan sil. Son 24 saatteki 13 videonun 12'si
+    deleted_at tasiyordu ama 7'si YouTube'da YAYINDAYDI. Sadece deleted_at'e
+    bakan bir filtre kotayi fiilen oldururdu.
+
+    Kota olcusu: yayinlanan video (izleyici gordu) + henuz karar verilmemis
+    video sayilir; yalnizca "yuklenmeden silinmis" olan sayilmaz.
+    """
+    from short_bot.db import (count_recent_categories, record_youtube_upload,
+                              shorts as shorts_tbl)
+    eng = init_db(tmp_path / "x.sqlite")
+
+    yayinda = _short_with_category(eng, "c", "g1", "transfer-gelen")
+    record_youtube_upload(eng, short_id=yayinda, video_id="V1",
+                          status="success", error=None, video_url="u")
+    reddedilen = _short_with_category(eng, "c", "g2", "transfer-gelen")
+    _short_with_category(eng, "c", "g3", "transfer-gelen")      # bekliyor
+
+    now = datetime.now(timezone.utc)
+    with eng.begin() as conn:
+        for sid in (yayinda, reddedilen):
+            conn.execute(shorts_tbl.update()
+                         .where(shorts_tbl.c.id == sid)
+                         .values(deleted_at=now))
+
+    # yayinda + bekleyen sayilir; reddedilen sayilmaz
+    assert count_recent_categories(eng, "c", hours=24) == {"transfer-gelen": 2}

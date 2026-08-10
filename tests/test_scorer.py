@@ -302,3 +302,46 @@ def test_quota_penalty_never_goes_below_zero():
     out = apply_category_quota(scored, produced={"transfer-gelen": 5},
                                quota={"transfer-gelen": 1})
     assert out[0].score == 0.0
+
+
+def test_quota_penalty_does_not_push_candidate_below_threshold():
+    """Ceza güçlü adayı havuzdan atınca geriye zayıf adaylar kalıyordu.
+
+    Gerçek olay (run 1615): kota transfer-gelen adaylarını -3 cezalandırdı,
+    güçlü GS haberleri 6.0 eşiğinin altına düştü, aday sayısı 3'ten 2'ye indi
+    ve tam sınırdaki (6.0) alakasız bir haber seçildi — Galatasaray kanalında
+    Çorum FK transfer videosu üretildi. Kota SIRALAMAYI değiştirmeli, aday
+    havuzunu zayıflatmamalı.
+    """
+    from short_bot.scorer import apply_category_quota
+    scored = [_scored("guclu", 8.0, "transfer-gelen"),
+              _scored("zayif", 6.0, "avrupa-kura")]
+    out = {s.item.guid: s for s in apply_category_quota(
+        scored, produced={"transfer-gelen": 3}, quota={"transfer-gelen": 3},
+        floor=6.0)}
+    # 8.0 - 3.0 = 5.0 eşiğin altında kalırdı; taban 6.0'da tutar
+    assert out["guclu"].score == 6.0
+    assert out["zayif"].score == 6.0
+
+
+def test_quota_floor_defaults_to_zero_for_legacy_callers():
+    """floor verilmezse eski davranış (0'a kadar ceza) korunur."""
+    from short_bot.scorer import apply_category_quota
+    out = apply_category_quota([_scored("g", 8.0, "x")],
+                               produced={"x": 1}, quota={"x": 1})
+    assert out[0].score == 5.0
+
+
+def test_prompt_requires_channel_subject_at_the_center():
+    """Adı geçmesi yetmiyordu; rakip merkezli haber 6.0 alıp seçildi.
+
+    Run 1615: "Ylber Ramadani'den Galatasaray açıklaması" — rakip takım
+    oyuncusunun maç öncesi sözleri — konu içi sayıldı ve Galatasaray kanalında
+    Çorum FK transfer videosu üretildi. Prompt "KONU DIŞI ise 0-3 ver" diyordu
+    ama merkez kuralını söylemiyordu.
+    """
+    from short_bot.topic_taxonomy import normalize_category
+    for lang in ("tr", "en", "de"):
+        p = normalize_category(build_scoring_prompt(
+            [_item("g1", "T")], channel=_channel("K", ["x"], language=lang)))
+        assert any(w in p for w in ("merkez", "center", "mittelpunkt")), lang
