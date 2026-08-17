@@ -51,3 +51,8 @@ def test_empty_never_matches():
 
 def test_disjoint_subjects_do_not_match():
     assert subject_matches("leao", "osimhen") is False
+
+
+def test_matches_same_words_in_different_order():
+    """Aynı özne iki kovaya bölünmemeli; sıra farkı anlam farkı değil."""
+    assert subject_matches("real madrid", "madrid real") is True

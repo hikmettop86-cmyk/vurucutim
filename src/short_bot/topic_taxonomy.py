@@ -73,9 +73,15 @@ def subject_matches(a: str, b: str) -> bool:
     if a == b:
         return True
     ta, tb = set(a.split()), set(b.split())
-    kisa, uzun = (ta, tb) if len(ta) <= len(tb) else (tb, ta)
-    if not kisa or kisa == uzun:
+    if not ta or not tb:
         return False
+    if ta == tb:
+        # Aynı kelimeler, farklı sıra: "real madrid" / "madrid real".
+        # Erken dönüş `a == b` bunu YAKALAMAZ (dizgeler farklı) ve alt-küme
+        # testi de yakalamaz (öz alt-küme değil, eşit) — ayrıca ele alınmalı,
+        # yoksa aynı özne iki kovaya bölünür ve sayaç sessizce hiç dolmaz.
+        return True
+    kisa, uzun = (ta, tb) if len(ta) < len(tb) else (tb, ta)
     if any(len(t) < _SUBJECT_MIN_TOKEN for t in kisa):
         return False
     return kisa < uzun
