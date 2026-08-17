@@ -39,6 +39,24 @@ def normalize_category(raw: str | None) -> str:
 # kelimelerde alt-küme eşleşmesi rastgele birleştirme üretir ("ns" her yere uyar).
 _SUBJECT_MIN_TOKEN = 4
 
+# Türkçede özel ada gelen çekim eki KESMEYLE ayrılır: "Batrakov'un",
+# "Galatasaray'ın", "Leao'ya". Kesmeden sonrası ek olduğu için atılır —
+# atılmazsa aynı özne iki kovaya bölünür ve sayaç sessizce hiç dolmaz.
+# Gövde 3 harften kısaysa KESİLMEZ: "O'Brien" gibi adlarda kesme ekin değil
+# adın parçasıdır ve kesmek özneyi "o"ya indirirdi.
+_APOSTROPHES = "'’ʼ`"
+_MIN_STEM_BEFORE_APOSTROPHE = 3
+
+
+def _stem(token: str) -> str:
+    """Bir kelimeyi çekim ekinden ve noktalamadan arındır."""
+    for ch in _APOSTROPHES:
+        idx = token.find(ch)
+        if idx >= _MIN_STEM_BEFORE_APOSTROPHE:
+            token = token[:idx]
+            break
+    return "".join(c for c in token if c.isalnum())
+
 
 def normalize_subject(raw: str | None) -> str:
     """Saga öznesini (kişi/kulüp) karşılaştırılabilir tek biçime indir.
@@ -54,7 +72,11 @@ def normalize_subject(raw: str | None) -> str:
     # "İ".lower() → "i" + U+0307 (görünmez birleşik nokta). "I" → "ı" YAPILMAZ:
     # kanallar çok dilli, Türkçe kuralı İspanyolca/Almanca özneleri bozar.
     text = raw.replace("İ", "i").lower()
-    return " ".join(text.split())
+    # Tire ve alt çizgi kelime ayırıcıdır: "jean-claude" ile "jean claude"
+    # aynı öznedir, LLM'in hangisini yazdığı rastlantıdır.
+    for ayirici in ("-", "–", "_"):
+        text = text.replace(ayirici, " ")
+    return " ".join(_stem(t) for t in text.split() if _stem(t))
 
 
 def subject_matches(a: str, b: str) -> bool:
@@ -67,6 +89,10 @@ def subject_matches(a: str, b: str) -> bool:
     Ham alt-dize (`a in b`) yerine kelime kümesi kullanmanın sebebi:
     "sara" ham alt-dize kuralıyla "sarabia"ya uyardı ve iki ayrı futbolcuyu
     birleştirirdi. Kelime kümesi bu yanlış birleşmeyi yapmaz.
+
+    ÇAĞIRAN SORUMLULUĞU: her iki argüman da `normalize_subject`'ten geçmiş
+    olmalı. Bu fonksiyon katlama YAPMAZ; ham LLM çıktısıyla çağrılırsa hata
+    değil sessiz EŞLEŞMEME döner.
     """
     if not a or not b:
         return False

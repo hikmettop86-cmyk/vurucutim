@@ -56,3 +56,35 @@ def test_disjoint_subjects_do_not_match():
 def test_matches_same_words_in_different_order():
     """Aynı özne iki kovaya bölünmemeli; sıra farkı anlam farkı değil."""
     assert subject_matches("real madrid", "madrid real") is True
+
+
+def test_normalize_strips_turkish_possessive_suffix():
+    """Kesmeden sonrası ektir; "batrakov'un" ile "batrakov" aynı öznedir."""
+    assert normalize_subject("Batrakov'un") == "batrakov"
+    assert normalize_subject("Galatasaray'ın") == "galatasaray"
+
+
+def test_normalize_strips_typographic_apostrophe_too():
+    """LLM düz kesme yerine tipografik kesme yazabilir."""
+    assert normalize_subject("Leao’ya") == "leao"
+
+
+def test_normalize_keeps_apostrophe_that_belongs_to_the_name():
+    """"O'Brien"de kesme ek ayırıcı değil; gövde 3 harften kısaysa kesme."""
+    assert normalize_subject("O'Brien") == "obrien"
+
+
+def test_normalize_treats_hyphen_as_word_separator():
+    assert normalize_subject("Jean-Claude") == "jean claude"
+
+
+def test_suffixed_and_bare_forms_match():
+    """Asıl kazanım: iki biçim aynı sagaya sayılmalı."""
+    assert subject_matches(normalize_subject("Batrakov'un"),
+                           normalize_subject("Batrakov")) is True
+
+
+def test_min_token_boundary_rejects_three_chars():
+    """_SUBJECT_MIN_TOKEN sınırı: 3 harf reddedilir, 4 harf kabul edilir."""
+    assert subject_matches("leo", "leo messi") is False
+    assert subject_matches("leao", "sporting leao") is True
