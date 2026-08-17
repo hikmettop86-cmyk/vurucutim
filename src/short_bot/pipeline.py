@@ -149,6 +149,44 @@ def _apply_category_quota(
     return out
 
 
+def _apply_saga_penalty(
+    scored: list[ScoredItem],
+    *,
+    channel: ChannelConfig,
+    eng,
+    log: logging.Logger,
+) -> list[ScoredItem]:
+    """Aynı öznenin tekrarında aday puanını kademeli düşür.
+
+    Kategori kotasından SONRA çalışır ve bu sıra bilinçlidir: kota puanı
+    min_score'a sabitler, saga cezası onu tabanın ALTINA indirebilir. Kota
+    konu çeşitliliği aracıdır, saga sınırı tekrar vetosudur; çatışırlarsa
+    veto kazanmalıdır.
+
+    Gerekçe (29 günlük ölçüm): "Batrakov" 15 günde 4 videoya çıktı. Mevcut
+    dedup neredeyse aynı HABERİ yakalıyor, günlere yayılan aynı HİKÂYEYİ
+    değil.
+
+    Cezası 0.0 olan kanallarda (varsayılan) hiçbir etkisi yok.
+    """
+    if not channel.saga_penalty_per_repeat:
+        return scored
+    from short_bot.db import count_recent_subjects
+    from short_bot.scorer import apply_saga_penalty, saga_repeat_count
+
+    produced = count_recent_subjects(eng, channel.slug,
+                                     days=channel.saga_window_days)
+    out = apply_saga_penalty(scored, produced=produced,
+                             step=channel.saga_penalty_per_repeat)
+    for before, after in zip(scored, out):
+        if after.score < before.score:
+            n = saga_repeat_count(before.subject, produced)
+            log.info(f"  [saga] '{before.subject}' son "
+                     f"{channel.saga_window_days}g'de {n} kez geçti → "
+                     f"puan {before.score:.1f}→{after.score:.1f}")
+    return out
+
+
 def _apply_trend_boost(
     scored: list[ScoredItem],
     *,
@@ -1030,6 +1068,7 @@ def _run_rss(*, channel, run_id, log, eng, settings,
         secrets_path=secrets_path_for_trends, log=log,
     )
     scored = _apply_category_quota(scored, channel=channel, eng=eng, log=log)
+    scored = _apply_saga_penalty(scored, channel=channel, eng=eng, log=log)
     top_n_candidates = select_top(scored, min_score=channel.min_score,
                                   n=_IMAGE_RETRY_MAX)
     if not top_n_candidates:
@@ -1792,6 +1831,7 @@ def _run_feed(*, channel, run_id, log, eng, settings,
         scored, channel=channel, settings=settings,
         cache_dir=Path(cache_dir), secrets_path=secrets_path, log=log)
     scored = _apply_category_quota(scored, channel=channel, eng=eng, log=log)
+    scored = _apply_saga_penalty(scored, channel=channel, eng=eng, log=log)
     picked = select_newest_above(scored, min_score=channel.min_score, n=1)
     if not picked:
         log.info(f"no item ≥ {channel.min_score} → finish")
