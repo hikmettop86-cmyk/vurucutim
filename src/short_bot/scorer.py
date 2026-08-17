@@ -325,6 +325,10 @@ def apply_saga_penalty(
     `produced`: son pencerede özne başına üretilen video sayısı
                 (`db.count_recent_subjects`).
     `step`:     tekrar başına düşülecek puan. 0.0 = özellik kapalı.
+
+    Boş özne (`subject=""`) hiç cezalandırılmaz — `saga_repeat_count` bunun
+    için 0 döner; öznesiz aday ilk kez üretiliyormuş gibi geçer, dev bir
+    "bilinmeyen" sagasına toplanmaz.
     """
     if not step:
         return scored
