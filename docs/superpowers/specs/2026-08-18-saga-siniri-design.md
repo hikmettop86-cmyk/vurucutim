@@ -101,14 +101,16 @@ oluşur ve sınır hiç tetiklenmez. Bu, tasarımın **en büyük başarısızl�
 
 1. Prompt "yalnız soyadı" der (yukarıda),
 2. `normalize_subject` biçim farklarını siler,
-3. Sayarken bir anahtar diğerini **içeriyorsa** aynı sayılır.
+3. Sayarken bir anahtarın **kelime kümesi** diğerininkinin öz alt-kümesiyse
+   aynı sayılır.
 
-(3) bilinçli bir tavizdir: nadiren yanlış birleştirebilir (`sara` ⊂ `sarabia`).
-Kaçırmaktan iyidir çünkü kaçırma özelliği tamamen işlevsiz bırakır, yanlış
-birleştirme yalnız bir videoyu geciktirir. Testle sabitlenir.
+(3) için ham alt-dize (`a in b`) düşünülmüş ve **reddedilmiştir**: o kural
+`sara`yı `sarabia`ya uydurup iki ayrı futbolcuyu birleştirirdi. Kelime kümesi
+alt-kümeliği hem asıl vakayı yakalar (`batrakov` ⊂ `aleksey batrakov`) hem bu
+yanlış birleşmeyi yapmaz.
 
-Alt-dize karşılaştırması en az 4 karakterlik anahtarlarda uygulanır; daha kısa
-anahtarlar (örn. `ns`) rastgele eşleşme üretir.
+Alt-küme karşılaştırması, kısa anahtarın her kelimesi en az 4 harfliyse
+uygulanır; daha kısa kelimeler (örn. `ns`) rastgele eşleşme üretir.
 
 ### 5. Ceza — `scorer.apply_saga_penalty()`
 
