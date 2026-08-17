@@ -265,3 +265,19 @@ def test_uploaded_then_deleted_IS_counted(tmp_path):
                           error=None, video_url="u")
     _sil(eng, sid)
     assert count_recent_subjects(eng, "gs", days=14) == {"batrakov": 1}
+
+
+def test_multiple_upload_rows_count_the_video_once(tmp_path):
+    """Başarısız deneme + yeniden yükleme = 2 satır, ama TEK video.
+
+    Ölçüldü: üretimde 9 short'un birden çok yükleme satırı var. DISTINCT
+    olmadan o videonun öznesi iki kez sayılır ve saga cezası hak edilmeden
+    iki katına çıkardı.
+    """
+    eng = init_db(tmp_path / "x.sqlite")
+    sid = _rec(eng, "batrakov", guid="a")
+    record_youtube_upload(eng, short_id=sid, video_id=None, status="failed",
+                          error="boom", video_url=None)
+    record_youtube_upload(eng, short_id=sid, video_id="v1", status="success",
+                          error=None, video_url="u")
+    assert count_recent_subjects(eng, "gs", days=14) == {"batrakov": 1}

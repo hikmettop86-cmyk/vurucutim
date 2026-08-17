@@ -574,6 +574,12 @@ def count_recent_subjects(
     bir filtre, yayınlanmış videoları saymayıp sayacı fiilen öldürürdü.
     Sayılan: yayınlanan + henüz karar verilmemiş. Sayılmayan: yüklenmeden
     silinmiş (operatörün reddettiği).
+
+    `DISTINCT` + birincil anahtar ŞART: bir short'un birden çok yükleme satırı
+    olabiliyor (başarısız deneme + yeniden yükleme). Outer join o videoyu
+    satır sayısı kadar çoğaltır ve tek video iki kez sayılırdı — ölçüldü,
+    üretimde 9 short'un 2 satırı var. Anahtarı seçime katmak, iki farklı
+    videonun aynı script_json'a sahip olması hâlinde birleşmelerini de önler.
     """
     import json as _json
     from short_bot.topic_taxonomy import normalize_subject
@@ -582,7 +588,8 @@ def count_recent_subjects(
     counts: dict[str, int] = {}
     with eng.connect() as conn:
         rows = conn.execute(
-            select(shorts.c.script_json)
+            select(shorts.c.id, shorts.c.script_json)
+            .distinct()
             .select_from(
                 shorts.outerjoin(youtube_uploads,
                                  youtube_uploads.c.short_id == shorts.c.id)
@@ -592,7 +599,7 @@ def count_recent_subjects(
             .where(~(shorts.c.deleted_at.is_not(None)
                      & youtube_uploads.c.id.is_(None)))
         ).all()
-    for (script_json,) in rows:
+    for _short_id, script_json in rows:
         try:
             raw = (_json.loads(script_json or "{}") or {}).get("subject")
         except (TypeError, ValueError):
