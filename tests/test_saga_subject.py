@@ -88,3 +88,37 @@ def test_min_token_boundary_rejects_three_chars():
     """_SUBJECT_MIN_TOKEN sınırı: 3 harf reddedilir, 4 harf kabul edilir."""
     assert subject_matches("leo", "leo messi") is False
     assert subject_matches("leao", "sporting leao") is True
+
+
+from datetime import datetime
+
+from short_bot.models import NewsItem, ScoredItem, Script
+
+
+def test_scored_item_subject_defaults_empty():
+    item = NewsItem(guid="g", title="t", link="l", source="s",
+                    pub_date=datetime(2026, 8, 18), thumb_url=None, description=None)
+    assert ScoredItem(item=item, score=8.0, reasoning="").subject == ""
+
+
+def test_scored_item_carries_subject():
+    item = NewsItem(guid="g", title="t", link="l", source="s",
+                    pub_date=datetime(2026, 8, 18), thumb_url=None, description=None)
+    s = ScoredItem(item=item, score=8.0, reasoning="", subject="batrakov")
+    assert s.subject == "batrakov"
+
+
+def _script(**kw) -> Script:
+    base = dict(header_top="UST", header_bottom="ALT", photo_overlay="foto",
+                body_paragraph="Bu bir gövde metnidir, yeterince uzun.",
+                category="transfer-gelen", mood="neutral")
+    base.update(kw)
+    return Script(**base)
+
+
+def test_script_subject_defaults_empty_and_round_trips():
+    """subject script_json'a yazılır; sayaç oradan okur."""
+    import json
+    assert _script().subject == ""
+    dumped = json.loads(_script(subject="batrakov").model_dump_json())
+    assert dumped["subject"] == "batrakov"

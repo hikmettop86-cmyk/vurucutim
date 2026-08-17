@@ -31,6 +31,10 @@ class ScoredItem:
     # yazılırken (seçimden SONRA) belirleniyordu, bu yüzden "aynı konudan
     # günde en fazla N" kotası uygulanamıyordu. Liste yoksa boş kalır.
     category: str = ""
+    # subject: haberin merkezindeki kişi/kulüp (saga anahtarı). Kategoriyle aynı
+    # sebeple SEÇİM ANINDA gerekiyor: aynı hikâyenin kaçıncı videosu olduğunu
+    # bilmeden puanı düşürülemez. Kanal saga cezasını açmadıysa boş kalır.
+    subject: str = ""
 
 
 class Highlight(BaseModel):
@@ -70,6 +74,11 @@ class Script(BaseModel):
     # NOT: aksan temizleyici validator'ı bu iki alana UYGULANMAZ — hedef dilin
     # aksanları (é, ñ, ü) korunmalı.
     body_paragraph_tr: str = ""
+    # subject: saga sayacının anahtarı. Senaryo yazarı LLM'i bunu ÜRETMEZ —
+    # seçilen adayın (ScoredItem.subject) değeri kaydetmeden hemen önce
+    # taşınır. Aksan temizleyici validator'a BAĞLANMAZ: anahtar eşleşme için
+    # kullanılıyor, görsel metin değil.
+    subject: str = Field(default="", max_length=40)
 
     @field_validator("header_top", "header_bottom", "photo_overlay",
                       "body_paragraph", "category", mode="before")
