@@ -187,3 +187,81 @@ def test_unrelated_subject_untouched():
     scored = [_si("g", 9.0, "osimhen")]
     out = apply_saga_penalty(scored, produced={"batrakov": 5}, step=1.0)
     assert out[0].score == 9.0
+
+
+import json as _json
+from datetime import timezone
+
+from sqlalchemy import update
+
+from short_bot.db import (
+    count_recent_subjects, init_db, record_short, record_youtube_upload, shorts,
+)
+
+
+def _rec(eng, subject, **kw):
+    return record_short(
+        eng, channel="gs", rss_item_guid=kw.get("guid", subject),
+        title=subject, file_path="x.mp4", duration_s=6,
+        script_json=_json.dumps({"subject": subject}), render_ms=1)
+
+
+def _sil(eng, short_id):
+    """deleted_at'i doğrudan yaz.
+
+    `db.py`'de soft-delete yardımcısı YOK — silme web katmanında ORM ile
+    yapılıyor (`web/models.py`). Test tabloyu doğrudan güncelliyor.
+    """
+    with eng.begin() as conn:
+        conn.execute(update(shorts).where(shorts.c.id == short_id)
+                     .values(deleted_at=datetime.now(timezone.utc)))
+
+
+def test_counts_produced_subjects(tmp_path):
+    eng = init_db(tmp_path / "x.sqlite")
+    _rec(eng, "batrakov", guid="a")
+    _rec(eng, "batrakov", guid="b")
+    _rec(eng, "leao", guid="c")
+    assert count_recent_subjects(eng, "gs", days=14) == {"batrakov": 2, "leao": 1}
+
+
+def test_normalises_keys_while_counting(tmp_path):
+    eng = init_db(tmp_path / "x.sqlite")
+    _rec(eng, "Batrakov", guid="a")
+    _rec(eng, "  batrakov ", guid="b")
+    assert count_recent_subjects(eng, "gs", days=14) == {"batrakov": 2}
+
+
+def test_ignores_records_without_subject(tmp_path):
+    eng = init_db(tmp_path / "x.sqlite")
+    record_short(eng, channel="gs", rss_item_guid="a", title="t",
+                 file_path="x.mp4", duration_s=6,
+                 script_json=_json.dumps({"category": "transfer-gelen"}),
+                 render_ms=1)
+    assert count_recent_subjects(eng, "gs", days=14) == {}
+
+
+def test_other_channels_are_not_counted(tmp_path):
+    eng = init_db(tmp_path / "x.sqlite")
+    record_short(eng, channel="fb", rss_item_guid="a", title="t",
+                 file_path="x.mp4", duration_s=6,
+                 script_json=_json.dumps({"subject": "batrakov"}), render_ms=1)
+    assert count_recent_subjects(eng, "gs", days=14) == {}
+
+
+def test_deleted_without_upload_is_not_counted(tmp_path):
+    """Operatör akışı: beğenmezse doğrudan siler. Reddedilen video sayılmaz."""
+    eng = init_db(tmp_path / "x.sqlite")
+    sid = _rec(eng, "batrakov", guid="a")
+    _sil(eng, sid)
+    assert count_recent_subjects(eng, "gs", days=14) == {}
+
+
+def test_uploaded_then_deleted_IS_counted(tmp_path):
+    """Beğenirse YÜKLER ve listeden siler — izleyici gördü, sayılmalı."""
+    eng = init_db(tmp_path / "x.sqlite")
+    sid = _rec(eng, "batrakov", guid="a")
+    record_youtube_upload(eng, short_id=sid, video_id="v1", status="success",
+                          error=None, video_url="u")
+    _sil(eng, sid)
+    assert count_recent_subjects(eng, "gs", days=14) == {"batrakov": 1}

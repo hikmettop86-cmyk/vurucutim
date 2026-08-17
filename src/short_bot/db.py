@@ -563,6 +563,49 @@ def count_recent_categories(
     return counts
 
 
+def count_recent_subjects(
+    eng: Engine, channel: str, *, days: int = 14,
+) -> dict[str, int]:
+    """Son `days` günde bu kanalda hangi özneden kaç video üretildi.
+
+    Saga cezasının girdisi. `count_recent_categories` ile AYNI join'i kullanır
+    ve bu bilinçlidir: "silinmiş" ile "reddedilmiş" aynı şey değil. Operatör
+    beğendiği videoyu YÜKLEYİP listeden siliyor; yalnız `deleted_at`'e bakan
+    bir filtre, yayınlanmış videoları saymayıp sayacı fiilen öldürürdü.
+    Sayılan: yayınlanan + henüz karar verilmemiş. Sayılmayan: yüklenmeden
+    silinmiş (operatörün reddettiği).
+    """
+    import json as _json
+    from short_bot.topic_taxonomy import normalize_subject
+
+    cutoff = _utcnow() - timedelta(days=days)
+    counts: dict[str, int] = {}
+    with eng.connect() as conn:
+        rows = conn.execute(
+            select(shorts.c.script_json)
+            .select_from(
+                shorts.outerjoin(youtube_uploads,
+                                 youtube_uploads.c.short_id == shorts.c.id)
+            )
+            .where(shorts.c.channel == channel)
+            .where(shorts.c.created_at >= cutoff)
+            .where(~(shorts.c.deleted_at.is_not(None)
+                     & youtube_uploads.c.id.is_(None)))
+        ).all()
+    for (script_json,) in rows:
+        try:
+            raw = (_json.loads(script_json or "{}") or {}).get("subject")
+        except (TypeError, ValueError):
+            raw = None
+        if not raw:
+            continue
+        key = normalize_subject(raw)
+        if not key:
+            continue
+        counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
 def start_run(eng: Engine, channel: str, trigger: str, log_path: str) -> int:
     with eng.begin() as conn:
         result = conn.execute(runs.insert().values(
