@@ -281,3 +281,40 @@ def test_multiple_upload_rows_count_the_video_once(tmp_path):
     record_youtube_upload(eng, short_id=sid, video_id="v1", status="success",
                           error=None, video_url="u")
     assert count_recent_subjects(eng, "gs", days=14) == {"batrakov": 1}
+
+
+from short_bot.config import ChannelConfig, load_channel, save_channel
+
+
+def _cfg(**kw) -> ChannelConfig:
+    from dataclasses import replace as _replace
+    base = ChannelConfig(
+        slug="gs", name="GS", keywords=["x"], rss_locale="hl=tr",
+        schedule_cron="0 * * * *", duration_s=6, min_score=6.0,
+        max_candidates_per_run=10, template="stadium",
+        colors={"primary": "#fff"}, handle="@x", output_dir="out",
+        enabled=True, language="tr",
+    )
+    return _replace(base, **kw)
+
+
+def test_saga_fields_default_to_disabled():
+    """Varsayılan 0.0 — mevcut kanalların hiçbiri etkilenmez."""
+    cfg = _cfg()
+    assert cfg.saga_penalty_per_repeat == 0.0
+    assert cfg.saga_window_days == 14
+
+
+def test_saga_fields_round_trip_through_yaml(tmp_path):
+    p = tmp_path / "gs.yaml"
+    save_channel(p, _cfg(saga_penalty_per_repeat=1.0, saga_window_days=10))
+    back = load_channel(p)
+    assert back.saga_penalty_per_repeat == 1.0
+    assert back.saga_window_days == 10
+
+
+def test_disabled_channel_yaml_stays_clean(tmp_path):
+    """Kapalıyken YAML'a anahtar YAZILMAZ — mevcut dosyalar kirlenmesin."""
+    p = tmp_path / "gs.yaml"
+    save_channel(p, _cfg())
+    assert "saga_penalty_per_repeat" not in p.read_text(encoding="utf-8")

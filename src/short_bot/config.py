@@ -347,6 +347,15 @@ class ChannelConfig:
     # kilitlendiğinde (transfer dönemi) eleme üretimi durdururdu. Listede
     # olmayan kategori sınırsızdır; boş sözlük kotayı tamamen kapatır.
     category_quota_per_day: dict[str, int] = field(default_factory=dict)
+    # saga_penalty_per_repeat: aynı ÖZNENİN (kişi/kulüp) her tekrarında puandan
+    # düşülecek miktar. 0.0 = kapalı (varsayılan, tüm mevcut kanallar).
+    # Kategori kotasından farkı: bu cezanın min_score tabanı YOKTUR, aday
+    # elenebilir ve koşu boş geçebilir. Bkz. scorer.apply_saga_penalty.
+    saga_penalty_per_repeat: float = 0.0
+    # Sayım penceresi. dedup.filter_new'ün lookback_days'iyle hizalı tutuldu:
+    # ayrışırlarsa "dedup'tan düştü ama saga sayacında hâlâ var" gibi
+    # açıklanması zor bir aralık doğar.
+    saga_window_days: int = 14
     dna: DnaSpec | None = None
     script_model: str | None = None
     content_source: Literal["rss", "generator", "feed", "curated"] = "rss"
@@ -517,6 +526,8 @@ def load_channel(path: Path) -> ChannelConfig:
         categories=list(data.get("categories") or []),
         category_quota_per_day={str(k): int(v) for k, v
                                 in (data.get("category_quota_per_day") or {}).items()},
+        saga_penalty_per_repeat=float(data.get("saga_penalty_per_repeat") or 0.0),
+        saga_window_days=int(data.get("saga_window_days") or 14),
         reference_channels=list(data.get("reference_channels") or []),
         template=template,
         colors=dict(data["colors"]),
@@ -565,6 +576,9 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
         data["categories"] = list(cfg.categories)
     if cfg.category_quota_per_day:
         data["category_quota_per_day"] = dict(cfg.category_quota_per_day)
+    if cfg.saga_penalty_per_repeat:
+        data["saga_penalty_per_repeat"] = cfg.saga_penalty_per_repeat
+        data["saga_window_days"] = cfg.saga_window_days
     if cfg.reference_channels:
         data["reference_channels"] = list(cfg.reference_channels)
     if cfg.script_model:
