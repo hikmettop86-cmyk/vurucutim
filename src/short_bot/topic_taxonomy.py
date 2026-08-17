@@ -33,3 +33,49 @@ def normalize_category(raw: str | None) -> str:
     text = raw.replace("İ", "i").lower()
     collapsed = " ".join(text.split())
     return collapsed or _PLACEHOLDER
+
+
+# Özne (saga) anahtarları için en kısa anlamlı kelime uzunluğu. Bunun altındaki
+# kelimelerde alt-küme eşleşmesi rastgele birleştirme üretir ("ns" her yere uyar).
+_SUBJECT_MIN_TOKEN = 4
+
+
+def normalize_subject(raw: str | None) -> str:
+    """Saga öznesini (kişi/kulüp) karşılaştırılabilir tek biçime indir.
+
+    `normalize_category` ile aynı katlama, TEK farkla: boş girdi BOŞ döner,
+    `"?"` değil. Bilinmeyen kategori "bilinmeyen kovasında topla" demektir;
+    bilinmeyen özne ise "bu videoyu hiç sayma" demektir — ikisini aynı yer
+    tutucuya bağlamak, öznesiz videoları tek bir dev sagaya toplar ve o
+    sahte saga bütün üretimi kilitlerdi.
+    """
+    if not isinstance(raw, str):
+        return ""
+    # "İ".lower() → "i" + U+0307 (görünmez birleşik nokta). "I" → "ı" YAPILMAZ:
+    # kanallar çok dilli, Türkçe kuralı İspanyolca/Almanca özneleri bozar.
+    text = raw.replace("İ", "i").lower()
+    return " ".join(text.split())
+
+
+def subject_matches(a: str, b: str) -> bool:
+    """İki özne anahtarı aynı sagaya mı işaret ediyor.
+
+    LLM bir koşuda "batrakov", diğerinde "aleksey batrakov" yazabilir; bunlar
+    ayrı kova sayılırsa sayaç hiç dolmaz ve özellik sessizce işlevsiz kalır.
+    Bu yüzden KELİME KÜMESİ alt-kümeliğine bakılır.
+
+    Ham alt-dize (`a in b`) yerine kelime kümesi kullanmanın sebebi:
+    "sara" ham alt-dize kuralıyla "sarabia"ya uyardı ve iki ayrı futbolcuyu
+    birleştirirdi. Kelime kümesi bu yanlış birleşmeyi yapmaz.
+    """
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    ta, tb = set(a.split()), set(b.split())
+    kisa, uzun = (ta, tb) if len(ta) <= len(tb) else (tb, ta)
+    if not kisa or kisa == uzun:
+        return False
+    if any(len(t) < _SUBJECT_MIN_TOKEN for t in kisa):
+        return False
+    return kisa < uzun
