@@ -122,3 +122,68 @@ def test_script_subject_defaults_empty_and_round_trips():
     assert _script().subject == ""
     dumped = json.loads(_script(subject="batrakov").model_dump_json())
     assert dumped["subject"] == "batrakov"
+
+
+from short_bot.scorer import apply_saga_penalty
+
+
+def _si(guid, score, subject):
+    item = NewsItem(guid=guid, title=guid, link="l", source="s",
+                    pub_date=datetime(2026, 8, 18), thumb_url=None, description=None)
+    return ScoredItem(item=item, score=score, reasoning="", subject=subject)
+
+
+def test_penalty_scales_with_repeat_count():
+    scored = [_si("g", 9.0, "batrakov")]
+    out = apply_saga_penalty(scored, produced={"batrakov": 3}, step=1.0)
+    assert out[0].score == 6.0
+
+
+def test_first_appearance_is_free():
+    scored = [_si("g", 9.0, "batrakov")]
+    out = apply_saga_penalty(scored, produced={}, step=1.0)
+    assert out[0].score == 9.0
+
+
+def test_penalty_has_NO_min_score_floor():
+    """Kotadan ayrılan nokta: saga cezası adayı eşiğin ALTINA itebilir.
+
+    Gerekçe ölçüm: üretilenin %42'si zaten yayına çıkmıyor, yani boş geçmek
+    yüklenmeyecek zayıf video üretmekten ucuz.
+    """
+    scored = [_si("g", 9.0, "batrakov")]
+    out = apply_saga_penalty(scored, produced={"batrakov": 5}, step=1.0)
+    assert out[0].score == 4.0        # 6.0'lık min_score'un ALTINDA
+
+
+def test_penalty_never_goes_below_zero():
+    scored = [_si("g", 2.0, "batrakov")]
+    out = apply_saga_penalty(scored, produced={"batrakov": 9}, step=1.0)
+    assert out[0].score == 0.0
+
+
+def test_empty_subject_is_never_penalised():
+    scored = [_si("g", 9.0, "")]
+    out = apply_saga_penalty(scored, produced={"batrakov": 5}, step=1.0)
+    assert out[0].score == 9.0
+
+
+def test_step_zero_is_passthrough():
+    """Kapalı kanallarda (varsayılan) hiçbir puan değişmez."""
+    scored = [_si("g", 9.0, "batrakov")]
+    out = apply_saga_penalty(scored, produced={"batrakov": 5}, step=0.0)
+    assert out[0].score == 9.0
+
+
+def test_counts_across_matching_key_variants():
+    """'batrakov' ve 'aleksey batrakov' AYNI sagadır; sayı toplanır."""
+    scored = [_si("g", 9.0, "batrakov")]
+    out = apply_saga_penalty(
+        scored, produced={"batrakov": 1, "aleksey batrakov": 2}, step=1.0)
+    assert out[0].score == 6.0
+
+
+def test_unrelated_subject_untouched():
+    scored = [_si("g", 9.0, "osimhen")]
+    out = apply_saga_penalty(scored, produced={"batrakov": 5}, step=1.0)
+    assert out[0].score == 9.0

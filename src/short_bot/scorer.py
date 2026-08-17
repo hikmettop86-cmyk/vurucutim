@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 from short_bot.claude_cli import OpenRouterError, run_json
 from short_bot.models import NewsItem, ScoredItem
-from short_bot.topic_taxonomy import normalize_category
+from short_bot.topic_taxonomy import normalize_category, subject_matches
 
 if TYPE_CHECKING:
     from short_bot.config import ChannelConfig
@@ -293,3 +293,46 @@ def select_newest_above(
 
     above.sort(key=_key, reverse=True)
     return above[:n]
+
+
+def saga_repeat_count(subject: str, produced: dict[str, int]) -> int:
+    """`subject` ile aynı sagaya işaret eden üretilmiş video sayısı.
+
+    Anahtar biçimi koşudan koşuya oynayabildiği için düz sözlük araması
+    yetmez; `subject_matches` kelime-kümesi kuralını uygular.
+    """
+    if not subject:
+        return 0
+    return sum(n for key, n in produced.items() if subject_matches(subject, key))
+
+
+def apply_saga_penalty(
+    scored: list[ScoredItem],
+    *,
+    produced: dict[str, int],
+    step: float,
+) -> list[ScoredItem]:
+    """Aynı öznenin tekrarında puanı kademeli düşür. TABAN YOK.
+
+    `apply_category_quota`'dan AYRILAN NOKTA budur: kota `floor` alır ve
+    cezanın adayı `min_score` altına itmesini engeller, çünkü kota SIRALAMA
+    aracıdır. Saga sınırı ise VETO aracıdır — aynı hikâyenin altıncı videosu
+    hiç çıkmamalıdır, zayıf bir alternatifle yer değiştirmesi bile gerekmez.
+
+    Ölçüm gerekçesi (2026-08-18, 29 gün): üretilen 292 videonun yalnız 168'i
+    yüklendi. Boş geçen bir koşu, yüklenmeyecek bir videodan ucuzdur.
+
+    `produced`: son pencerede özne başına üretilen video sayısı
+                (`db.count_recent_subjects`).
+    `step`:     tekrar başına düşülecek puan. 0.0 = özellik kapalı.
+    """
+    if not step:
+        return scored
+    out: list[ScoredItem] = []
+    for s in scored:
+        n = saga_repeat_count(s.subject, produced)
+        if n:
+            out.append(replace(s, score=max(0.0, s.score - step * n)))
+        else:
+            out.append(s)
+    return out
