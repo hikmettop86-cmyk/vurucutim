@@ -8,7 +8,9 @@ from pydantic import BaseModel, Field
 
 from short_bot.claude_cli import OpenRouterError, run_json
 from short_bot.models import NewsItem, ScoredItem
-from short_bot.topic_taxonomy import normalize_category, subject_matches
+from short_bot.topic_taxonomy import (
+    normalize_category, normalize_subject, subject_matches,
+)
 
 if TYPE_CHECKING:
     from short_bot.config import ChannelConfig
@@ -20,6 +22,8 @@ class _ItemScore(BaseModel):
     reasoning: str = Field(max_length=200)
     # Yalnız kanal canonical liste tanımladığında istenir; aksi halde boş.
     category: str = Field(default="", max_length=40)
+    # Yalnız kanal saga cezasını açtığında istenir; aksi halde boş.
+    subject: str = Field(default="", max_length=40)
 
 
 class _ScoreResponse(BaseModel):
@@ -162,6 +166,20 @@ def build_scoring_prompt(
             f"listeden başka değer yazma): {allowed}\n"
             f'JSON alanı: "category": "<listeden biri>"'
         )
+    # Saga anahtarı: aynı hikâyenin kaçıncı videosu olduğunu seçim anında
+    # bilmek gerekiyor. Yalnız özellik açıkken sorulur — kapalı kanalların
+    # prompt'u bit bit aynı kalsın.
+    if channel.saga_penalty_per_repeat:
+        base = base + (
+            "\n\nAyrıca her başlığa haberin MERKEZİNDEKİ özneyi ata: transferi "
+            f"ya da haberi yapılan KİŞİ veya KULÜP. \"{channel.name}\" ve "
+            f"\"{keywords_str}\" içindeki kanal öznesini ASLA yazma — her "
+            "haberde geçtiği için anahtar olarak işe yaramaz.\n"
+            "Kişide YALNIZ SOYADI yaz (\"batrakov\", \"leao\"), kulüpte kısa "
+            "ad (\"milan\"). Küçük harf, tek kelime tercih et. Aynı kişi her "
+            "koşuda AYNI yazılmalı. Merkezde belirgin bir özne yoksa boş bırak.\n"
+            'JSON alanı: "subject": "<soyadı veya kısa kulüp adı>"'
+        )
     # Optional performance-feedback hint. format_scorer_hint returns "" when
     # the insight set is too sparse (<5 samples) so callers can pass freely
     # without worrying about anchoring on noise.
@@ -225,7 +243,8 @@ def score_items(
             out.append(ScoredItem(item=item, score=s.score,
                                   reasoning=s.reasoning,
                                   category=normalize_category(s.category)
-                                           if s.category else ""))
+                                           if s.category else "",
+                                  subject=normalize_subject(s.subject)))
     return out
 
 

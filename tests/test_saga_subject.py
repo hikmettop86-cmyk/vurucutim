@@ -318,3 +318,69 @@ def test_disabled_channel_yaml_stays_clean(tmp_path):
     p = tmp_path / "gs.yaml"
     save_channel(p, _cfg())
     assert "saga_penalty_per_repeat" not in p.read_text(encoding="utf-8")
+
+
+# --- Puanlayıcı prompt'u özne istiyor -----------------------------------------
+
+from short_bot.scorer import build_scoring_prompt
+
+
+def _ch(**kw):
+    return _cfg(name="Aslan Gündem", keywords=["Galatasaray"], **kw)
+
+
+def _items():
+    return [NewsItem(guid="g1", title="Batrakov geldi", link="l", source="s",
+                     pub_date=datetime(2026, 8, 18), thumb_url=None, description=None)]
+
+
+def test_prompt_asks_for_subject_when_saga_enabled():
+    p = build_scoring_prompt(_items(), channel=_ch(saga_penalty_per_repeat=1.0))
+    assert '"subject"' in p
+
+
+def test_prompt_stays_unchanged_when_saga_disabled():
+    """Kapalı kanalların prompt'u hiç değişmemeli."""
+    p = build_scoring_prompt(_items(), channel=_ch())
+    assert "subject" not in p
+
+
+def test_prompt_forbids_the_channel_subject_as_key():
+    """Her haberde 'Galatasaray' geçiyor; anahtar olarak işe yaramaz."""
+    p = build_scoring_prompt(_items(), channel=_ch(saga_penalty_per_repeat=1.0))
+    assert "Aslan Gündem" in p or "Galatasaray" in p
+
+
+# --- LLM çıktısı normalize edilerek ScoredItem'a düşüyor ----------------------
+#
+# Asıl risk burada: prompt doğru şeyi istese bile LLM'in ham cevabı
+# (büyük/küçük harf, kesme eki, boşluk) normalize edilmeden saklanırsa
+# subject_matches hiçbir zaman eşleşmez ve saga sayacı sessizce hiç dolmaz.
+
+from unittest.mock import patch
+
+from short_bot.scorer import _ScoreResponse, score_items
+
+
+def test_score_items_normalizes_llm_subject_before_storing():
+    """LLM ham 'Batrakov'un' yazsa bile ScoredItem.subject normalize hâlde
+    saklanmalı — aksi halde db.count_recent_subjects'teki anahtarla asla
+    eşleşmez ve saga cezası hiç tetiklenmez."""
+    fake = _ScoreResponse(scores=[
+        {"guid": "g1", "score": 8.0, "reasoning": "r", "subject": "Batrakov'un"},
+    ])
+    with patch("short_bot.scorer.run_json", return_value=fake):
+        out = score_items(_items(), channel=_ch(saga_penalty_per_repeat=1.0))
+    assert out[0].subject == "batrakov"
+
+
+def test_score_items_subject_empty_when_llm_omits_it():
+    """Saga kapalı kanallarda ya da LLM özneyi boş bırakınca subject boş
+    kalmalı, kategori gibi '?' yer tutucusuna DÜŞMEMELİ (bkz. normalize_subject
+    docstring: boş özne 'hiç sayma' demek, 'bilinmeyen kovası' değil)."""
+    fake = _ScoreResponse(scores=[
+        {"guid": "g1", "score": 8.0, "reasoning": "r"},
+    ])
+    with patch("short_bot.scorer.run_json", return_value=fake):
+        out = score_items(_items(), channel=_ch())
+    assert out[0].subject == ""
