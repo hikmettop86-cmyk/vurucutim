@@ -346,9 +346,16 @@ def test_prompt_stays_unchanged_when_saga_disabled():
 
 
 def test_prompt_forbids_the_channel_subject_as_key():
-    """Her haberde 'Galatasaray' geçiyor; anahtar olarak işe yaramaz."""
-    p = build_scoring_prompt(_items(), channel=_ch(saga_penalty_per_repeat=1.0))
-    assert "Aslan Gündem" in p or "Galatasaray" in p
+    """Her haberde 'Galatasaray' geçiyor; anahtar olarak işe yaramaz.
+
+    Eski hâli `"Galatasaray" in p` diye bakıyordu ve UYGULAMA YOKKEN DE
+    geçiyordu — kanal adı zaten temel şablonun "KANAL:" satırında var.
+    Yasak cümlesinin kendisine bakmak gerekiyor.
+    """
+    acik = build_scoring_prompt(_items(), channel=_ch(saga_penalty_per_repeat=1.0))
+    kapali = build_scoring_prompt(_items(), channel=_ch())
+    assert "ASLA yazma" in acik
+    assert "ASLA yazma" not in kapali
 
 
 # --- LLM çıktısı normalize edilerek ScoredItem'a düşüyor ----------------------
