@@ -47,6 +47,16 @@ categories:
 category_quota_per_day:
   transfer-gelen: 3
   mac-skor: 1
+# Saga sınırı: aynı ÖZNENİN (kişi/kulüp) tekrarında puan kademeli düşer.
+# Ölçüm (2026-08-18, 29 gün): Batrakov 15 günde 4 kez, Gabriel Sara 29 günde
+# 14 kez yayınlanmış. Mevcut dedup tek haber düzeyinde çalışıp gelen haberin
+# %53'ünü eliyor ama sagayı görmüyor.
+# Kategori kotasından farkı: bu cezanın min_score tabanı YOK, aday elenebilir
+# ve koşu boş geçebilir. Gerekçe: üretilen 292 videonun yalnız 168'i yüklendi,
+# yani boş geçmek yüklenmeyecek video üretmekten ucuz.
+# 1.0 ÖLÇÜLMÜŞ DEĞİL — ilk tahmin. Bir hafta izlenip ayarlanacak.
+saga_penalty_per_repeat: 1.0
+saga_window_days: 14
 # Hazırlık maçı içeriği ölçülen en zayıf tür: 4 videonun medyanı 25.336 =
 # kanal medyanının %50'si (48.938 / 33.937 / 16.736 / 13.670 — dördü de
 # tutarlı biçimde düşük) ve alt %10'un %15,9'unu oluşturuyor. Tek kelime

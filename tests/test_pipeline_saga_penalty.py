@@ -154,7 +154,14 @@ def _script(**kw) -> Script:
 
 
 def test_subject_survives_into_the_counter(tmp_path):
-    """Uçtan uca: seçilen adayın öznesi script_json'a yazılıp sayaca dönmeli."""
+    """Script → script_json → sayaç zinciri. BORU HATTINI KAPSAMAZ.
+
+    Adı "uçtan uca" gibi okunuyordu ama boru hattı kodu tamamen kaldırılsa
+    da geçiyor — ölçüldü. Gerçek uçtan uca kapsam
+    test_produce_from_item_actually_writes_the_subject,
+    test_run_rss_writes_the_picked_candidates_subject ve
+    test_run_feed_hands_the_subject_to_the_producer testlerinde.
+    """
     from short_bot.db import count_recent_subjects
 
     eng = init_db(tmp_path / "x.sqlite")
