@@ -1,7 +1,9 @@
 """Saga sınırı: özne anahtarının biçimi ve eşleşme kuralı."""
 from __future__ import annotations
 
-from short_bot.topic_taxonomy import normalize_subject, subject_matches
+from short_bot.topic_taxonomy import (
+    normalize_category, normalize_subject, subject_matches,
+)
 
 
 def test_normalize_folds_turkish_dotted_i():
@@ -88,6 +90,75 @@ def test_min_token_boundary_rejects_three_chars():
     """_SUBJECT_MIN_TOKEN sınırı: 3 harf reddedilir, 4 harf kabul edilir."""
     assert subject_matches("leo", "leo messi") is False
     assert subject_matches("leao", "sporting leao") is True
+
+
+# --- Aksan aynı özneyi iki kovaya bölmemeli -----------------------------------
+#
+# Bu kanalda anahtar sapmasının EN SIK kaynağı buydu ve hiçbir savunma yoktu.
+# Düzeltmeden ÖNCEKİ ölçüm:
+#     'Aktürkoğlu' -> 'aktürkoğlu' | 'Akturkoglu' -> 'akturkoglu' | eşleşme YOK
+#     'Kılıç'      -> 'kılıç'      | 'Kilic'      -> 'kilic'      | eşleşme YOK
+#     'Şahin'      -> 'şahin'      | 'Sahin'      -> 'sahin'      | eşleşme YOK
+# LLM aynı soyadı iki koşuda iki türlü yazıyor; sayaç yarı yarıya boş kalıyordu.
+
+def test_diacritics_do_not_split_the_key():
+    """Aksanlı ve aksansız yazım AYNI anahtara inmeli."""
+    assert normalize_subject("Aktürkoğlu") == normalize_subject("Akturkoglu")
+    assert normalize_subject("Kılıç") == normalize_subject("Kilic")
+    assert normalize_subject("Şahin") == normalize_subject("Sahin")
+
+
+def test_diacritic_variants_match_the_same_saga():
+    """Asıl kazanım: iki yazım aynı sagaya sayılmalı."""
+    assert subject_matches(normalize_subject("Aktürkoğlu"),
+                           normalize_subject("Akturkoglu")) is True
+    assert subject_matches(normalize_subject("Kılıç"),
+                           normalize_subject("Kilic")) is True
+    assert subject_matches(normalize_subject("Şahin"),
+                           normalize_subject("Sahin")) is True
+
+
+def test_dotless_i_folds_to_ascii_i():
+    """'ı' AYRI bir harf: birleşik işaret ayrışması yok, NFKD tek başına
+    düşüremez — elle eşlenmesi şart."""
+    assert normalize_subject("Kılıç") == "kilic"
+
+
+def test_folding_direction_is_ascii_not_turkish_i_rule():
+    """Katlama `ı → i` yönünde; Türkçe `I → ı` yönü İspanyolcayı bozardı."""
+    assert normalize_subject("INFORMACIÓN") == "informacion"
+    assert normalize_subject("INTER") == "inter"
+
+
+def test_folding_runs_before_stemming_and_hyphen_split():
+    """SIRA kanıtı: sökme, kesme/tire adımlarından ÖNCE koşmalı.
+
+    NFKD, o adımların ARADIĞI ayırıcıların uyumluluk biçimlerini ASCII
+    karşılığına indirir: tam-genişlik kesme (U+FF07) → "'", tam-genişlik tire
+    (U+FF0D) → "-". Sökme sonraya kalsaydı bu karakterler ayırıcı listelerine
+    uymaz, `_stem`'in alnum süzgeci onları sessizce yutar ve kelimeler
+    yapışırdı. Ölçüldü (sonra sökülen sürümle):
+
+        "Batrakov＇un" → 'batrakovun'  (doğrusu 'batrakov')
+        "Jean－Claude" → 'jeanclaude'  (doğrusu 'jean claude')
+    """
+    assert normalize_subject("Batrakov＇un") == "batrakov"
+    assert normalize_subject("Jean－Claude") == "jean claude"
+    # DEĞER kanıtı: yapışık hâl sayacı sessizce ikiye bölerdi.
+    assert subject_matches(normalize_subject("Batrakov＇un"),
+                           normalize_subject("Batrakov")) is True
+    assert subject_matches("batrakovun", "batrakov") is False
+
+
+def test_category_normalisation_is_NOT_folded():
+    """`normalize_category` DEĞİŞMEDİ — aksan korunmalı.
+
+    Kategori değerleri kanal config'indeki KAPALI listeden birebir kopyalanıp
+    gösteriliyor; özne ise hiç gösterilmeyen saf karşılaştırma anahtarı. Sert
+    katlama yalnız öznede doğru.
+    """
+    assert normalize_category("İLGİNÇ") == "ilginç"
+    assert normalize_category("Ünlü Şarkıcı") == "ünlü şarkıcı"
 
 
 from datetime import datetime
