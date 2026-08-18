@@ -130,6 +130,43 @@ def test_boost_applied_when_headline_matches_trend(tmp_path):
     assert "trend+" in out[0].reasoning
 
 
+def test_boost_preserves_subject_and_category(tmp_path):
+    """Boost EDİLEN adayın `subject` ve `category` alanları hayatta kalmalı.
+
+    Regresyon: `_apply_trend_boost` `ScoredItem`'ı üç alanla YENİDEN KURUYORDU,
+    geri kalan alanlar sessizce varsayılanına (boş dizge) düşüyordu. Boost
+    `_apply_category_quota` ve `_apply_saga_penalty`'den ÖNCE koştuğu için
+    boost'lanan aday ikisinden de kaçıyordu: kotaya da saga vetosuna da
+    görünmez oluyor, üstüne +2.0'a kadar fazladan puanla seçilme ihtimali
+    artıyordu. Seçilirse `script_json`'a `subject=""` düşüyor ve o video da
+    sayaca girmiyordu.
+
+    Ölçüm: üretimde boost'lanan terimler saga adlarının KENDİSİ ("zaniolo" tek
+    koşuda iki kez) — bir hikâye zaten tekrar tekrar işlendiği için trend olur,
+    yani hata tam da özelliğin engellemek için var olduğu durumla örtüşüyor.
+
+    Mevcut fixture bunu YAKALAYAMIYORDU: `_pipeline_channel` `trend_boost`'u
+    `None` varsayılanında bırakıyor ve `_apply_trend_boost` erken dönüyor.
+    """
+    tb = TrendBoostConfig(enabled=True, max_boost=2.0)
+    item = _item("g0", "Galatasaray Zaniolo transferinde sona geldi")
+    scored = [ScoredItem(item=item, score=6.5, reasoning="r",
+                         category="transfer-gelen", subject="zaniolo")]
+    cache = _trend_cache([("Zaniolo", 1)])
+    with patch("short_bot.trends.aggregator.get_or_refresh", return_value=cache), \
+         patch("short_bot.pipeline._load_secrets", return_value={}):
+        out = _apply_trend_boost(
+            scored, channel=_channel(trend_boost=tb), settings=_settings(),
+            cache_dir=tmp_path, secrets_path=tmp_path / "s.yaml", log=_log(),
+        )
+    # Önce boost'un GERÇEKTEN uygulandığını doğrula — uygulanmazsa alanların
+    # korunması kendiliğinden sağlanır ve test hiçbir şey kanıtlamaz.
+    assert out[0].score > 6.5
+    assert "trend+" in out[0].reasoning
+    assert out[0].subject == "zaniolo"
+    assert out[0].category == "transfer-gelen"
+
+
 def test_boost_caps_score_at_10(tmp_path):
     tb = TrendBoostConfig(enabled=True, max_boost=3.0)
     scored = _scored(["Galatasaray Icardi transfer şoku"], [9.5])

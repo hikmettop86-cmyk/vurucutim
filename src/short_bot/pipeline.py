@@ -257,8 +257,20 @@ def _apply_trend_boost(
             f"[{top.match_type} rank#{top.item.rank} '{top.item.term[:60]}'] "
             f"{s.score:.1f}->{new_score:.1f} | {s.item.title[:70]}"
         )
-        boosted.append(ScoredItem(
-            item=s.item,
+        # `replace` ŞART — burada `ScoredItem(...)` YENİDEN KURULUYORDU ve
+        # sayılmayan her alan sessizce varsayılanına düşüyordu: `category` ve
+        # `subject` boşalıyordu. Sonucu, tam olarak engellenmek istenen durumdu:
+        # boost'lanan aday hem kategori kotasını hem saga vetosunu ATLIYOR
+        # (`_apply_trend_boost` ikisinden de ÖNCE koşar), üstüne +2.0'a kadar
+        # fazladan puan taşıdığı için seçilme ihtimali de artıyordu. Seçilirse
+        # `script_json`'a `subject=""` yazılıyor ve o video da sayaca hiç
+        # girmiyordu. Ölçüm: üretim günlüklerinde boost'lanan terimler saga
+        # adlarının kendisi ("zaniolo" tek koşuda iki kez, "bensebaini" iki
+        # kez) — bir hikâye zaten TEKRAR işlendiği için trend oluyor.
+        # Yeniden kurmak yerine kopyalamak, ileride eklenecek alanların da
+        # aynı şekilde düşmesini engeller.
+        boosted.append(replace(
+            s,
             score=new_score,
             reasoning=f"{s.reasoning} [trend+{boost:.2f}]",
         ))
