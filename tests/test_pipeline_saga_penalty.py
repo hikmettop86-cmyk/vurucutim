@@ -91,7 +91,15 @@ def test_disabled_channel_never_touches_the_db():
     assert out[0].score == 9.0
 
 
-def test_window_excludes_nothing_when_recent(tmp_path):
+def test_half_step_penalty_scales(tmp_path):
+    """Yarım `step` yarım ceza verir: 2 tekrar × 0.5 = 1.0 düşüş.
+
+    ESKİ ADI `test_window_excludes_nothing_when_recent`'ti ve PENCEREYİ HİÇ
+    SINAMIYORDU — üstteki tekrar-sayısı testinin farklı `step`'li kopyasıydı.
+    `count_recent_subjects`'ten `created_at >= cutoff` koşulu silinse bile
+    yeşil kalıyordu. Pencerenin gerçek sınaması artık
+    tests/test_saga_subject.py::test_window_excludes_rows_older_than_the_cutoff.
+    """
     eng = init_db(tmp_path / "x.sqlite")
     _produce(eng, "batrakov", 2)
     ch = _channel(saga_penalty_per_repeat=0.5, saga_window_days=14)

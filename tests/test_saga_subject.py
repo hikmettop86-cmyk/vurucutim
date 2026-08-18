@@ -261,7 +261,7 @@ def test_unrelated_subject_untouched():
 
 
 import json as _json
-from datetime import timezone
+from datetime import timedelta, timezone
 
 from sqlalchemy import update
 
@@ -286,6 +286,52 @@ def _sil(eng, short_id):
     with eng.begin() as conn:
         conn.execute(update(shorts).where(shorts.c.id == short_id)
                      .values(deleted_at=datetime.now(timezone.utc)))
+
+
+def _yasla(eng, short_id, gun):
+    """`created_at`'i `gun` gün geriye al.
+
+    `_sil` ile aynı gerekçe: `db.py`'de tarih geri alan yardımcı YOK, test
+    tabloyu doğrudan güncelliyor.
+    """
+    with eng.begin() as conn:
+        conn.execute(update(shorts).where(shorts.c.id == short_id)
+                     .values(created_at=datetime.now(timezone.utc)
+                             - timedelta(days=gun)))
+
+
+def test_window_excludes_rows_older_than_the_cutoff(tmp_path):
+    """`days` penceresi GERÇEKTEN dışarıda bırakmalı.
+
+    Bu testin varlık sebebi: iki dosyadaki saga testlerinin HİÇBİRİ pencereyi
+    sınamıyordu — `count_recent_subjects`'ten `created_at >= cutoff` koşulu
+    tamamen silinse bile hepsi yeşil kalıyordu. Eski
+    `test_window_excludes_nothing_when_recent` adı pencereyi sınıyormuş gibi
+    okunuyordu ama tekrar-sayısı testinin farklı `step`'li kopyasıydı.
+
+    40 günlük satır: 14 günlük pencerede SAYILMAZ, 90 günlükte SAYILIR.
+    """
+    eng = init_db(tmp_path / "x.sqlite")
+    eski = _rec(eng, "batrakov", guid="eski")
+    _yasla(eng, eski, 40)
+
+    assert count_recent_subjects(eng, "gs", days=14) == {}
+    assert count_recent_subjects(eng, "gs", days=90) == {"batrakov": 1}
+
+
+def test_window_counts_only_the_rows_inside_it(tmp_path):
+    """Aynı özneden biri pencerede biri dışında: yalnız içerideki sayılmalı.
+
+    Tek satırlık testin göremediği hata sınıfı: koşul "hepsini ele" ya da
+    "hiçbirini eleme" diye bozulursa sayı 0 ya da 2 olur, 1 olmaz.
+    """
+    eng = init_db(tmp_path / "x.sqlite")
+    _rec(eng, "batrakov", guid="yeni")
+    eski = _rec(eng, "batrakov", guid="eski")
+    _yasla(eng, eski, 40)
+
+    assert count_recent_subjects(eng, "gs", days=14) == {"batrakov": 1}
+    assert count_recent_subjects(eng, "gs", days=90) == {"batrakov": 2}
 
 
 def test_counts_produced_subjects(tmp_path):
