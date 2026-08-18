@@ -765,6 +765,7 @@ def _produce_from_item(
     *, item, channel, eng, settings, log,
     music_root, templates_dir, cache_dir, run_id: int,
     score: float | None = None,
+    subject: str = "",
     defer_upload: bool = False,
 ) -> RunResult:
     """Tek bir NewsItem'dan video üretir. Manuel ve otomatik yol paylaşır.
@@ -781,6 +782,13 @@ def _produce_from_item(
     yani bu yoldan üretilen videolar da sonraki koşuların çok-kaynak dedup'ına
     katkı verir. (Eskiden yalnız guid+title yazılıyordu ve bu, panelden üretilen
     her video için dedup geçmişinde kör bir satır bırakıyordu.)
+
+    `subject`: saga sayacının anahtarı — senaryo yazarı ÜRETMEZ, seçilen adayın
+    (`ScoredItem.subject`) değeri kaydetmeden hemen önce script'e taşınır. YENİ
+    ÇAĞIRAN EKLERKEN GEÇMEYİ UNUTMA: boş kalırsa video sayaca kör bir satır
+    olarak girer ve saga sınırı sessizce eksik ateşler (bkz. yukarıdaki dedup
+    hatası — aynı sınıf). Elle seçilen (preselected) item'da aday yoktur; ""
+    kalması BİLİNÇLİDİR, tek seferlik video bir sagayı temsil etmez.
     """
     secrets_path = current_app_secrets_path()
     secrets = _load_secrets(secrets_path)
@@ -939,11 +947,13 @@ def _produce_from_item(
     mark_processed(eng, item.guid, item.title, channel.slug,
                    embedding=rss_embedding,
                    produced_title_embedding=produced_embedding)
+    # Saga sayacının anahtarı: senaryo yazarı üretmez, seçilen adaydan taşınır.
     short_id = record_short(
         eng, channel=channel.slug, rss_item_guid=item.guid,
         title=script.header_top + " " + script.header_bottom,
         file_path=str(out_path), duration_s=channel.duration_s,
-        script_json=script.model_dump_json(), render_ms=render_ms)
+        script_json=script.model_copy(update={"subject": subject}).model_dump_json(),
+        render_ms=render_ms)
     finish_run(eng, run_id, status="success", short_id=short_id, error=None)
 
     score_call = resolve_ai_call(settings, secrets, "default")
@@ -1336,11 +1346,14 @@ def _run_rss(*, channel, run_id, log, eng, settings,
         embedding=dedup_embeddings.get(picked.item.guid),
         produced_title_embedding=produced_embedding,
     )
+    # Saga sayacının anahtarı: senaryo yazarı üretmez, seçilen adaydan taşınır.
     short_id = record_short(eng,
         channel=channel.slug, rss_item_guid=picked.item.guid,
         title=script.header_top + " " + script.header_bottom,
         file_path=str(out_path), duration_s=channel.duration_s,
-        script_json=script.model_dump_json(), render_ms=render_ms,
+        script_json=script.model_copy(
+            update={"subject": picked.subject}).model_dump_json(),
+        render_ms=render_ms,
     )
     finish_run(eng, run_id, status="success", short_id=short_id, error=None)
     yt_creds_root = (Path(eng.url.database).parent / "youtube_credentials").resolve() \
@@ -1852,6 +1865,7 @@ def _run_feed(*, channel, run_id, log, eng, settings,
         item=chosen.item, channel=channel, eng=eng, settings=settings,
         log=log, music_root=music_root, templates_dir=templates_dir,
         cache_dir=cache_dir, run_id=run_id, score=chosen.score,
+        subject=chosen.subject,
         defer_upload=defer_upload)
     if res.status != "success":
         finish_run(eng, run_id, status="no_candidates", short_id=None,
