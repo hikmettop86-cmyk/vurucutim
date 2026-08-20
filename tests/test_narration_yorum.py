@@ -41,12 +41,39 @@ def test_yorum_prompt_carries_persona_sources_and_rules():
     assert "kimsenin adamı olmayan" in p
     assert "PRIMARY SOURCE (Milliyet)" in p
     assert "ADDITIONAL SOURCES" in p and "ntv" in p.lower() and "Onedio" in p
-    # kurallar
-    for needle in ("at least TWO different source names", "BALANCE", "VERDICT", "closing QUESTION",
-                   "WHY IT IS TRENDING", "100.000 arama", "no subscribe", "not take a party"):
+    # kurallar: görüş + denge var, kaynak sayma SINIRLI (bibliyografya değil)
+    for needle in ("At most TWO such attributions", "HAVE A VIEW", "BE FAIR",
+                   "party's or a leader's side", "Invent nothing"):
         assert needle.lower() in p.lower(), needle
     # çıktı şeması mevcut Narration ile aynı
     assert '"hook"' in p and '"beats"' in p and '"loop_close"' in p and '"mood"' in p
+
+
+def test_yorum_prompt_forbids_speaking_the_search_signal():
+    """Kullanıcı bildirimi (2026-08-20): 'Google Trends'te yirmi bin kişi aradı' cümlesi
+    videoyu otomasyon gibi gösteriyor. Arama verisi konuyu SEÇER, konuşulmaz."""
+    from short_bot.narration_writer import BANNED_PHRASES, build_yorum_prompt
+    p = build_yorum_prompt(_item(), "gövde", _channel(), extra_sources=EXTRA)
+    assert "NEVER MENTION how many people searched" in p
+    for phrase in ("Google Trends", "kişi aradı", "Peki sizce", "Bence risk var ama",
+                   "Öte yandan", "abone ol"):
+        assert phrase in BANNED_PHRASES
+        assert phrase in p                      # yalnız YASAK listesinde geçer
+    # eski zorunlu kural artık YOK
+    assert "WHY IT IS TRENDING" not in p
+    assert "100.000 arama" not in p
+
+
+def test_yorum_prompt_injects_the_video_shape():
+    from short_bot.narration_writer import build_yorum_prompt
+    from short_bot.yorum_variation import pick_variation
+    v = pick_variation(seed_text="x")
+    p = build_yorum_prompt(_item(), "gövde", _channel(), extra_sources=[], variation=v)
+    assert "SHAPE OF THIS VIDEO" in p
+    assert v.opening in p and v.angle in p and v.closing in p
+    # varyasyonsuz çağrıda sabit iskelet dayatılmaz
+    assert "SHAPE OF THIS VIDEO" not in build_yorum_prompt(_item(), "gövde", _channel(),
+                                                           extra_sources=[])
 
 
 def test_yorum_prompt_word_budget_from_voice_target():
@@ -84,13 +111,15 @@ def test_write_yorum_narration_checks_facts_against_all_sources(monkeypatch):
         seen["reference"] = reference
         return []
     monkeypatch.setattr(nw, "unverified_claims", _claims)
+    from short_bot.yorum_variation import pick_variation
     n = nw.write_yorum_narration(_item(), "Milliyet gövdesi 36 sarsıntı.", channel=_channel(),
-                                 extra_sources=EXTRA)
+                                 extra_sources=EXTRA, variation=pick_variation(seed_text="s"))
     assert n.hook.startswith("Adalar")
     # referans metin = ana gövde + ek kaynaklar + Trends bağlamı
     assert "Milliyet gövdesi" in seen["reference"]
     assert "51 sarsıntı" in seen["reference"]
-    assert "100.000 arama" in seen["reference"]
+    assert "100.000 arama" in seen["reference"]   # olgu kapısı arama verisini TANIR
+    assert "SHAPE OF THIS VIDEO" in prompts[0]    # ama prompt onu konuşturmaz
     assert len(prompts) == 1
 
 

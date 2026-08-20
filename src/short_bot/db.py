@@ -517,6 +517,32 @@ def record_short(
         return result.inserted_primary_key[0]
 
 
+def recent_narration_variations(eng: Engine, channel: str, limit: int = 6) -> list[str]:
+    """Bu kanalın son videolarında kullanılan anlatım biçimleri (yeniden eskiye).
+
+    Yorum formatının çeşitleme motoru bunu dışlama listesi olarak kullanır.
+    Bozuk/eski script_json satırları sessizce atlanır."""
+    import json as _json
+    out: list[str] = []
+    with eng.connect() as conn:
+        rows = conn.execute(
+            select(shorts.c.script_json)
+            .where(shorts.c.channel == channel)
+            .order_by(shorts.c.id.desc())
+            .limit(limit * 3)
+        ).fetchall()
+    for (raw,) in rows:
+        try:
+            key = (_json.loads(raw or "{}") or {}).get("narration_variation") or ""
+        except (ValueError, TypeError):
+            continue
+        if key:
+            out.append(key)
+        if len(out) >= limit:
+            break
+    return out
+
+
 def count_recent_categories(
     eng: Engine, channel: str, *, hours: int = 24,
 ) -> dict[str, int]:

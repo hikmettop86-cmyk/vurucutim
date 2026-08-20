@@ -180,21 +180,20 @@ def _trend_context(item: NewsItem, channel: ChannelConfig) -> tuple[str, str]:
     if not item.trend_volume or not (item.description or "").strip():
         return "", ""
     block = (
-        "\nGOOGLE TRENDS CONTEXT (this is why the story is on screen right now — "
-        "treat it as a verified fact source alongside the article):\n"
+        "\nWHAT PEOPLE ARE SEARCHING FOR (internal signal — tells you which questions "
+        "the body should answer; NEVER mention it on screen):\n"
         f"{item.description.strip()}\n"
     )
     rules = (
-        "\n- WHY IT IS TRENDING: the LAST sentence of body_paragraph must say why people "
-        "are searching for this right now, using the Trends data (search volume and/or "
-        "the related searches). Write the number the way it is spoken "
-        "(e.g. '100 bin kişi aradı'), never as a raw figure with separators."
         "\n- CONTEXT SENTENCE: include exactly ONE sentence that places the event in "
         "context (a comparison, a sequence, a magnitude: 'the 36th tremor in 8 hours', "
         "'the first since 2019') — built ONLY from facts in the article body or the "
-        "Trends data. No opinion, no adjectives of judgement."
-        "\n- photo_overlay is the lower-third line: when search volume is 10,000 or more, "
-        "it may carry it in short form (e.g. '100 BİN ARAMA · KANDİLLİ: 3.1')."
+        "related searches above. No opinion, no adjectives of judgement."
+        "\n- The related searches tell you what people actually want to know — answer the "
+        "biggest of those questions inside the body."
+        "\n- NEVER write that the topic is trending, how many people searched it, or mention "
+        "search engines / Google Trends. That is our internal selection signal, not content; "
+        "on screen it reads as automation."
     )
     return block, rules
 

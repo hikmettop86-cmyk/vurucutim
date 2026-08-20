@@ -172,9 +172,28 @@ YORUM_PERSONA_TR = (
 )
 
 
-def build_yorum_prompt(item, body: str, channel, *, extra_sources: list[tuple[str, str]]) -> str:
+BANNED_PHRASES: tuple[str, ...] = (
+    # ARAMA VERİSİ: konuyu seçer, KONUŞULMAZ. "yirmi bin kişi aradı" cümlesi
+    # kimsenin umurunda değil ve videoyu otomasyon gibi gösteriyor (kullanıcı
+    # bildirimi 2026-08-20, Batrakov videosu).
+    "Google Trends", "arama hacmi", "kişi aradı", "aramalar yüzde", "aratıldı",
+    "trend oldu", "gündeme oturdu", "sosyal medyada gündem",
+    # AI-slop kalıpları: her videoda aynı yerde çıkan bağlaçlar/kapanışlar
+    "Bakın,", "Şimdi,", "Öte yandan", "Yani,", "Peki sizce", "Sizce de",
+    "Bence risk var ama", "Kısacası", "Sonuç olarak", "Özetle",
+    "abone ol", "kanalımıza", "yorumlarda buluşalım",
+)
+
+
+def build_yorum_prompt(item, body: str, channel, *, extra_sources: list[tuple[str, str]],
+                       variation=None) -> str:
     """Yorum anlatımı promptu. Çıktı şeması ``Narration`` ile aynı (hook/beats/
-    loop_close/mood) — TTS/hizalama/render zinciri değişmeden kullanılır."""
+    loop_close/mood) — TTS/hizalama/render zinciri değişmeden kullanılır.
+
+    ``variation`` (yorum_variation.YorumVariation): bu videonun açılış/yaklaşım/
+    kapanış biçimi. Pipeline her videoda farklı bir biçim seçer; sabit iskelet
+    "her video aynı" hissini veriyordu (kullanıcı bildirimi 2026-08-20).
+    """
     voice = channel.voice
     lo_w, hi_w = word_budget(voice.target_duration_s, channel.language)
     lo_s, hi_s = voice.target_duration_s
@@ -188,20 +207,24 @@ def build_yorum_prompt(item, body: str, channel, *, extra_sources: list[tuple[st
             host = url.split("//")[-1].split("/")[0].removeprefix("www.")
             parts.append(f"--- {host} ---\n{text[:1500]}")
         extra_block = "\nADDITIONAL SOURCES (same story, other publishers):\n" + "\n".join(parts) + "\n"
-        source_rule = ("- SOURCING: attribute facts to their outlet by name in spoken form "
-                       "('Milliyet'e göre', 'NTV yazıyor ki'); use at least TWO different source names "
-                       "across the narration.")
+        source_rule = ("- SOURCING: name an outlet ONLY when it earns it — a contested claim, an "
+                       "exclusive, or an official statement. At most TWO such attributions in the "
+                       "whole narration; everything else is plain narration. Never recite sources "
+                       "one after another like a bibliography.")
     else:
-        source_rule = ("- SOURCING: name the source when stating a fact ('Milliyet'e göre'); "
+        source_rule = ("- SOURCING: name the source at most once, only if the claim needs it; "
                        "do not invent other outlets.")
 
-    trend_block = ""
-    trend_rule = ""
-    desc = (getattr(item, "description", None) or "").strip()
-    if getattr(item, "trend_volume", 0) and desc:
-        trend_block = f"\nGOOGLE TRENDS CONTEXT (why this is on screen now): {desc}\n"
-        trend_rule = ("\n- WHY IT IS TRENDING: one sentence must say why people are searching this "
-                      "right now, using the Trends data (spoken numbers: 'yüz bin kişi aradı').")
+    shape = ""
+    if variation is not None:
+        shape = (
+            "\nSHAPE OF THIS VIDEO (follow it; the next video gets a different one):\n"
+            f"- OPENING: {variation.opening}\n"
+            f"- SPINE: {variation.angle}\n"
+            f"- CLOSING: {variation.closing}\n"
+        )
+
+    banned = ", ".join(f'"{p}"' for p in BANNED_PHRASES)
 
     return f"""You are writing a spoken commentary script for a {lo_s}-{hi_s} second vertical
 short video. A text-to-speech voice reads it; the news card stays on screen while a
@@ -213,26 +236,30 @@ COMMENTATOR PERSONA: {voice.persona}
 HEADLINE: {item.title}
 PRIMARY SOURCE ({primary_src}):
 {body[:3000]}
-{extra_block}{trend_block}
+{extra_block}{shape}
 OUTPUT a JSON object with exactly these fields:
-- "hook": the FIRST spoken sentence — the question everyone is already asking (under 2
-  seconds). Never start with a date or "Bugün".
+- "hook": the FIRST spoken sentence, written in the OPENING style above.
 - "beats": 3-5 beats. Each beat: {{"text": spoken sentence(s) (10-400 chars),
-  "on_screen": SHORT ALL-CAPS caption (max 60 chars, 2-5 words: a fact, number or the verdict)}}
-  Beats MUST follow this arc: FACTS (2-3 sentences, sourced) → CONNECTION (the point nobody
-  is connecting, built only from the sources) → BALANCE (one sentence for the other reading)
-  → VERDICT (first person, 'bence', fair but clear).
-- "loop_close": the LAST spoken sentence: a closing QUESTION to the viewer (invites comments;
-  no subscribe ask, no meta talk). It must also read as a natural set-up for the hook.
+  "on_screen": SHORT ALL-CAPS caption (max 60 chars, 2-5 words: a fact, number or claim)}}
+- "loop_close": the LAST spoken sentence, written in the CLOSING style above. It must also
+  read as a natural set-up for the hook when the video loops.
 - "mood": "breaking" | "neutral" | "upbeat"
 
 HARD RULES:
 - TOTAL spoken words across hook + beats + loop_close: between {lo_w} and {hi_w}.
 {source_rule}
-- NEUTRALITY: do not take a party's or a leader's side; no insults; no 'şok/bomba'; state
-  uncertain claims as uncertain ('iddiaya göre'). In tragedies: respectful, no jokes.
-- Every fact must come from the sources above. Invent nothing — no names, numbers, dates.{trend_rule}
+- HAVE A VIEW: somewhere in the narration take a clear, fair position on what this means —
+  but do not stamp it with the same phrase every time, and do not moralise.
+- BE FAIR: if there is a serious other reading, give it one honest sentence. Never take a
+  party's or a leader's side; no insults; state uncertain claims as uncertain
+  ('iddiaya göre'). In tragedies: respectful, no jokes.
+- NEVER MENTION how many people searched this, search engines, trends, or that the topic is
+  "trending" — that is our internal selection signal, not content. The viewer must not be
+  able to tell how the topic was chosen.
+- BANNED PHRASES (do not use, in any inflection): {banned}
+- Every fact must come from the sources above. Invent nothing — no names, numbers, dates.
 - Plain spoken language, no markdown, no emoji, no brackets, numbers written as spoken.
+- Vary sentence length. Do not start two consecutive sentences with the same word.
 
 Return ONLY the JSON object."""
 
@@ -243,6 +270,7 @@ def write_yorum_narration(
     *,
     channel,
     extra_sources: list[tuple[str, str]] | None = None,
+    variation=None,
     claude_path: str = "claude",
     model: str = "default",
     backend: str = "claude_cli",
@@ -256,7 +284,8 @@ def write_yorum_narration(
         raise ValueError("write_yorum_narration: channel.voice tanımlı değil")
     extra_sources = list(extra_sources or [])
     lo_w, hi_w = word_budget(voice.target_duration_s, channel.language)
-    prompt = build_yorum_prompt(item, body, channel, extra_sources=extra_sources)
+    prompt = build_yorum_prompt(item, body, channel, extra_sources=extra_sources,
+                                variation=variation)
     reference = "\n".join([body] + [t for _, t in extra_sources]
                           + [getattr(item, "description", None) or ""])
 

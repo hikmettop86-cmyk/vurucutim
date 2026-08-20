@@ -95,6 +95,7 @@ def produce_voiced_video(
     ticker_items: tuple[str, ...] = (),
     usage_dir: Path | None = None,
     extra_sources: list[tuple[str, str]] | None = None,
+    recent_variations: tuple[str, ...] = (),
 ) -> Path:
     """Seslendirmeli videoyu üretip ``out_path``'e yazar."""
     voice = getattr(channel, "voice", None)
@@ -120,10 +121,22 @@ def produce_voiced_video(
     # 2) Anlatım senaryosu — format 'yorum' ise yorumcu yazarı (çok-kaynak +
     # Trends bağlamı), değilse mevcut anlatım yazarı.
     if channel_format(channel) == "yorum":
+        # Her video kendi biçiminde: açılış/yaklaşım/kapanış üç bankadan seçilir ve
+        # SON videolarda kullanılanlar dışlanır. Sabit iskelet "hepsi aynı" hissi
+        # veriyordu (kullanıcı bildirimi 2026-08-20).
+        from short_bot.yorum_variation import pick_variation
+        variation = pick_variation(seed_text=f"{channel.slug}:{getattr(item, 'guid', '')}",
+                                   recent=recent_variations)
+        log.info(f"  yorum biçimi: {variation.key}")
         narration = d.write_yorum_narration(
             item, body, channel=channel, extra_sources=list(extra_sources or []),
+            variation=variation,
             claude_path=llm_claude_path, model=llm_model,
             backend=llm_backend, api_key=llm_api_key)
+        try:
+            script.narration_variation = variation.key
+        except Exception:  # noqa: BLE001 — kayıt alanı yoksa üretim durmaz
+            pass
     else:
         narration = d.write_narration(item, body, channel=channel,
                                        claude_path=llm_claude_path, model=llm_model,

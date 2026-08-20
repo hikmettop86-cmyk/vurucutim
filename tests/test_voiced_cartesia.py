@@ -119,3 +119,39 @@ def test_resolve_tts_provider_table():
     assert c.label == "Cartesia" and a.label == "ai33"
     with pytest.raises(ValueError):
         providers.resolve_tts("nope")
+
+
+def test_recent_variations_are_passed_and_recorded(tmp_path):
+    """Rotasyon zinciri: geçmiş → seçim → script.narration_variation."""
+    from short_bot.config import VoiceConfig
+    from short_bot.voiced import VoicedDeps, produce_voiced_video
+    from short_bot.yorum_variation import pick_variation
+    from dataclasses import replace as _replace
+
+    ch = _channel(tmp_path, "cartesia")
+    ch = _replace(ch, content_source="trends")
+    script = _script()
+    seen = {}
+
+    def _yorum(item_, body, **kw):
+        seen["variation"] = kw.get("variation")
+        return _narration()
+
+    def _synth(text, **kw):
+        p = tmp_path / "n.wav"
+        p.write_bytes(b"\0" * 4096)
+        return SynthesisResult(path=p, words=[], duration_s=5.0, chars_spent=len(text))
+
+    first = pick_variation(seed_text=f"{ch.slug}:g")
+    deps = VoicedDeps(write_narration=lambda *a, **k: _narration(), write_yorum_narration=_yorum,
+                      health_check=lambda **k: "healthy", synthesize=_synth,
+                      probe_duration_s=lambda p, **k: 5.0, transcribe_words=lambda *a, **k: [],
+                      render_frames=lambda job, tpl, fd, **k: Path(fd).mkdir(parents=True, exist_ok=True),
+                      compose_video=lambda f, m, o, **k: Path(o).write_bytes(b"x"))
+    produce_voiced_video(item=_item(), body="gövde", script=script, bg_image_path=None,
+                         music_path=tmp_path / "m.mp3", channel=ch, templates_dir=Path("templates"),
+                         work_dir=tmp_path / "w", out_path=tmp_path / "o.mp4", api_key="k",
+                         deps=deps, recent_variations=(first.key,))
+    v = seen["variation"]
+    assert v is not None and v.opening_key != first.opening_key
+    assert script.narration_variation == v.key

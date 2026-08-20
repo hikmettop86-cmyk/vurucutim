@@ -21,6 +21,7 @@ from short_bot.db import (
     init_db, mark_processed, record_short, record_rss_item,
     start_run, finish_run, get_last_youtube_upload_at,
     get_feed,
+    recent_narration_variations,
 )
 from short_bot.youtube import auth as _yt_auth
 from short_bot.youtube.auto_upload import (
@@ -934,6 +935,7 @@ def _produce_from_item(
             sfx_overlays=sfx_overlays, bg_video_path=bg_video_path,
             item=item, body=body, script=script, bg_image_path=bg,
             log=log, llm_call=script_call, cache_dir=cache_dir,
+            recent_variations=tuple(recent_narration_variations(eng, channel.slug)),
         )
         render_ms = int((time.perf_counter() - t0) * 1000)
         log.info(f"  → {out_path.name} ({render_ms}ms)")
@@ -1395,6 +1397,7 @@ def _run_rss(*, channel, run_id, log, eng, settings,
             sfx_overlays=sfx_overlays, bg_video_path=bg_video_path,
             item=picked.item, body=body, script=script, bg_image_path=bg,
             log=log, llm_call=script_call, cache_dir=cache_dir,
+            recent_variations=tuple(recent_narration_variations(eng, channel.slug)),
         )
         render_ms = int((time.perf_counter() - t0) * 1000)
         log.info(f"  → {out_path.name} ({render_ms}ms)")
@@ -1951,7 +1954,7 @@ def _render_and_compose(
     *, job, archetype, templates_dir, frames_dir, music, out_path,
     channel, settings, secrets, ui_labels, dna_css, animation_style,
     sfx_overlays, bg_video_path, item, body, script, bg_image_path, log,
-    llm_call, cache_dir=None,
+    llm_call, cache_dir=None, recent_variations=(),
 ) -> Path:
     """Kanal voiced ise seslendirmeli üretime devreder, değilse sessiz akış.
 
@@ -1975,6 +1978,7 @@ def _render_and_compose(
             usage_dir=Path(cache_dir) if cache_dir else None,
             extra_sources=(_extra_source_bodies(item, log=log)
                            if channel_format(channel) == "yorum" else None),
+            recent_variations=tuple(recent_variations or ()),
             ffmpeg_path=settings.ffmpeg_path,
             fps=30, browser=settings.playwright_browser,
             ui_labels=ui_labels, dna_css=dna_css,

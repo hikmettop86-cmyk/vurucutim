@@ -26,22 +26,23 @@ def test_trend_channel_prompt_carries_search_context_and_rules():
     from short_bot.script_writer import build_script_prompt_for_channel
     item = _item("Google Trends · 100.000 arama · +%1.000 · istanbul deprem, adalar fayı · Son dakika: Marmara sallandı", 100000)
     p = build_script_prompt_for_channel(item, "gövde metni " * 20, _channel())
-    assert "GOOGLE TRENDS CONTEXT" in p
-    assert "100.000 arama" in p
-    assert "adalar fayı" in p
-    assert "why it is trending" in p.lower() or "neden gündemde" in p.lower()
+    assert "WHAT PEOPLE ARE SEARCHING FOR" in p
+    assert "adalar fayı" in p                      # hangi soruların cevaplanacağını söyler
     assert "context sentence" in p.lower()
+    # Arama sayısı EKRANA YAZILMAZ (kullanıcı bildirimi 2026-08-20)
+    assert "NEVER write that the topic is trending" in p
+    assert "why it is trending" not in p.lower()
 
 
 def test_non_trend_channel_prompt_unchanged():
     from short_bot.script_writer import build_script_prompt_for_channel
     item = _item("Google Trends · 100.000 arama", 100000)
     p = build_script_prompt_for_channel(item, "gövde metni " * 20, _channel(content_source="rss"))
-    assert "GOOGLE TRENDS CONTEXT" not in p
+    assert "WHAT PEOPLE ARE SEARCHING FOR" not in p
 
 
 def test_trend_channel_without_volume_data_has_no_block():
     from short_bot.script_writer import build_script_prompt_for_channel
     item = _item(None, 0)
     p = build_script_prompt_for_channel(item, "gövde metni " * 20, _channel())
-    assert "GOOGLE TRENDS CONTEXT" not in p
+    assert "WHAT PEOPLE ARE SEARCHING FOR" not in p
