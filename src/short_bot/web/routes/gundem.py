@@ -1,23 +1,26 @@
-"""Canlı Gündem masası — Google Trends'in güncel listesi + tek tıkla üretim.
+"""Canlı Gündem masası — solda kuyruk, sağda seçilen haberin dosyası + tek tıkla üretim.
 
-Kullanıcı isteği (2026-08-20): "Trends'in sürekli güncel hâlini görüp en iyi
-haberleri bir tıkla video yapacağım bir ekran." Tablo 5 dakikada bir kendiliğinden
-tazelenir (HTMX), satır başına hedef kanallar listelenir (o bölgenin trends
-kanalları — 6 sn kart / Yorum), tıklanınca seçilen haber ``preselected_item``
-olarak kanalın hattına girer (dedup/puanlama atlanır, operatör zaten seçti).
+Kullanıcı isteği (2026-08-20): "Trends'in sürekli güncel hâlini görüp en iyi haberleri
+bir tıkla video yapacağım bir ekran." Tasarım yönü **Masa** seçildi (mockup tuvali
+"Gündem Ekranı Yönleri" → 2 · Masa): kuyrukta gezinip sağda kararı GÖREREK verirsin —
+hangi kaynaklardan yorum kurulacak, insanlar ne arıyor, kart nasıl çıkacak, kanal bugün
+kaç video üretmiş.
 
-Veri ``trends.trending_now.fetch_trending_items`` ile aynı önbellekten gelir
-(kanal koşularıyla aynı dosya) — ekran 'Yenile' derse API'ye gider.
+Veri kanal koşularıyla AYNI önbellekten gelir (trends/trending_now); "Şimdi yenile"
+API'ye gider. Seçilen haber ``preselected_item`` olarak hatta girer: dedup ve puanlama
+kapısı ATLANIR, çünkü seçimi zaten operatör yaptı.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, url_for
+from sqlalchemy import func, select
 
 from short_bot.config import list_channels, load_channel
-from short_bot.db import init_db, is_processed
+from short_bot.db import init_db, is_processed, rss_items, shorts
 from short_bot.formats import FORMAT_LABELS, channel_format
 from short_bot.locale import trend_region_for
 from short_bot.trends.trending_now import fetch_trending_items
@@ -27,10 +30,12 @@ bp = Blueprint("gundem", __name__)
 
 REGIONS = [("TR", "Türkiye"), ("DE", "Almanya"), ("ES", "İspanya"), ("US", "ABD"),
            ("FR", "Fransa"), ("JP", "Japonya"), ("GB", "Birleşik Krallık"), ("AT", "Avusturya")]
-REGION_LANG = {"TR": "tr", "DE": "de", "ES": "es", "US": "en", "FR": "fr", "JP": "ja", "GB": "en", "AT": "de"}
-DESK_MIN_VOLUME = 1000       # masa her şeyi göstersin; kanal eşiği ayrı
+REGION_LANG = {"TR": "tr", "DE": "de", "ES": "es", "US": "en", "FR": "fr", "JP": "ja",
+               "GB": "en", "AT": "de"}
+DESK_MIN_VOLUME = 1000       # masa her şeyi görsün; kanalın kendi eşiği ayrı
 DESK_MAX_ENTRIES = 60
 REFRESH_SECONDS = 300
+TZ = "Europe/Istanbul"
 
 
 def _cache_dir() -> Path:
@@ -42,19 +47,31 @@ def _region() -> str:
     return r if len(r) == 2 and r.isalpha() else "TR"
 
 
-def _trend_channels(region: str) -> list:
-    """Bu bölgeyi üreten trends kanalları (6 sn kart + yorum), etkin olmayanlar dahil
-    (operatör kapalı kanala da elle üretebilir)."""
+def _eng():
+    return init_db(current_app.config["SHORTBOT_DB_PATH"])
+
+
+def _items(region: str, *, force: bool = False):
+    return fetch_trending_items(region, language=REGION_LANG.get(region, "en"),
+                                cache_dir=_cache_dir(),
+                                max_age_minutes=0 if force else 30,
+                                min_volume=DESK_MIN_VOLUME, max_entries=DESK_MAX_ENTRIES)
+
+
+def _trend_channels(region: str) -> list[dict]:
+    """Bu bölgeyi üreten trends kanalları (kapalı olanlar dahil — operatör elle üretebilir)."""
     cfg_dir = current_app.config["SHORTBOT_CONFIG_DIR"]
     out = []
     for c in list_channels(cfg_dir / "channels", enabled_only=False):
         if c.content_source != "trends":
             continue
-        r = (c.trends_region or trend_region_for(c.language)).upper()
-        if r != region:
+        if (c.trends_region or trend_region_for(c.language)).upper() != region:
             continue
-        out.append({"slug": c.slug, "name": c.name, "format": channel_format(c),
-                    "label": FORMAT_LABELS.get(channel_format(c), channel_format(c))})
+        fmt = channel_format(c)
+        out.append({"slug": c.slug, "name": c.name, "format": fmt, "handle": c.handle,
+                    "label": FORMAT_LABELS.get(fmt, fmt), "cfg": c})
+    # Sıra sabit: önce 6 sn kart, sonra Yorum — klavye kısayolları (1/2) buna bağlı.
+    out.sort(key=lambda c: (0 if c["format"] == "card" else 1, c["name"]))
     return out
 
 
@@ -65,59 +82,135 @@ def _cache_age_minutes(region: str) -> float | None:
     return (datetime.now(timezone.utc).timestamp() - p.stat().st_mtime) / 60.0
 
 
-def _rows(region: str, *, force: bool):
-    items = fetch_trending_items(region, language=REGION_LANG.get(region, "en"),
-                                 cache_dir=_cache_dir(),
-                                 max_age_minutes=0 if force else 30,
-                                 min_volume=DESK_MIN_VOLUME, max_entries=DESK_MAX_ENTRIES)
-    channels = _trend_channels(region)
-    eng = init_db(current_app.config["SHORTBOT_DB_PATH"])
-    now = datetime.now(timezone.utc)
+def _age_hours(pub) -> float | None:
+    if not pub:
+        return None
+    pd = pub if pub.tzinfo else pub.replace(tzinfo=timezone.utc)
+    return max(0.0, (datetime.now(timezone.utc) - pd).total_seconds() / 3600)
+
+
+def _rows(items, channels, eng) -> list[dict]:
     rows = []
     for it in items:
         produced = [c["slug"] for c in channels if is_processed(eng, it.guid, c["slug"])]
-        age_h = None
-        if it.pub_date:
-            pd = it.pub_date if it.pub_date.tzinfo else it.pub_date.replace(tzinfo=timezone.utc)
-            age_h = max(0.0, (now - pd).total_seconds() / 3600)
-        # description biçimi (trending_now._describe): "Google Trends · N arama[ · +%P] · ilişkili · diğer"
-        parts = [p.strip() for p in (it.description or "").split("·")][1:]   # baş etiketi at
-        growth = next((p for p in parts if p.startswith("+%")), "")
-        rest = [p for p in parts if p and not p.startswith("+%") and not p.endswith("arama")]
-        related = rest[0] if rest else ""
-        others = rest[1] if len(rest) > 1 else ""
-        rows.append({
-            "guid": it.guid, "title": it.title, "link": it.link, "source": it.source or "",
-            "volume": it.trend_volume, "growth": growth, "age_h": age_h,
-            "related": related, "others": others, "thumb": it.thumb_url or "",
-            "extra": len(it.extra_links), "produced": produced,
+        rows.append({"guid": it.guid, "title": it.title, "source": it.source or "",
+                     "volume": it.trend_volume, "growth": it.trend_growth_pct,
+                     "age_h": _age_hours(it.pub_date), "produced": produced,
+                     "sources": 1 + len(it.trend_articles)})
+    return rows
+
+
+def _pick(items, rows, guid: str | None):
+    """Seçili haber: URL'deki guid, yoksa üretilmemiş ilk haber, o da yoksa ilk haber."""
+    if guid:
+        for it in items:
+            if it.guid == guid:
+                return it
+    by_guid = {r["guid"]: r for r in rows}
+    for it in items:
+        if not by_guid.get(it.guid, {}).get("produced"):
+            return it
+    return items[0] if items else None
+
+
+def _known_score(eng, guid: str):
+    """Bu haber daha önce puanlandıysa yapay zekâ kapısının verdiği puan."""
+    with eng.connect() as conn:
+        row = conn.execute(
+            select(rss_items.c.score, rss_items.c.status, rss_items.c.channel)
+            .where(rss_items.c.guid == guid)
+            .where(rss_items.c.score.is_not(None))
+            .order_by(rss_items.c.id.desc())
+        ).fetchone()
+    if row is None:
+        return None
+    return {"score": row.score, "status": row.status, "channel": row.channel}
+
+
+def _next_fire(cron: str):
+    try:
+        from apscheduler.triggers.cron import CronTrigger
+        nxt = CronTrigger.from_crontab(cron).get_next_fire_time(None, datetime.now())
+        return nxt.strftime("%H:%M") if nxt else None
+    except Exception:  # noqa: BLE001 — geçersiz cron paneli düşürmesin
+        return None
+
+
+def _channel_status(eng, channels) -> list[dict]:
+    """Kanal başına: bugün kaç video, sonuncusu ne zaman, sıradaki koşu."""
+    start = datetime.combine(date.today(), time.min, tzinfo=ZoneInfo(TZ)) \
+        .astimezone(timezone.utc).replace(tzinfo=None)
+    out = []
+    for c in channels:
+        with eng.connect() as conn:
+            row = conn.execute(
+                select(func.count(shorts.c.id), func.max(shorts.c.created_at))
+                .where(shorts.c.channel == c["slug"])
+                .where(shorts.c.created_at >= start)
+            ).fetchone()
+        last = row[1]
+        if isinstance(last, str):
+            try:
+                last = datetime.fromisoformat(last)
+            except ValueError:
+                last = None
+        cfg = c["cfg"]
+        out.append({
+            "slug": c["slug"], "name": c["name"], "label": c["label"], "format": c["format"],
+            "today": int(row[0] or 0),
+            "last": (last.replace(tzinfo=timezone.utc).astimezone(ZoneInfo(TZ)).strftime("%H:%M")
+                     if last else None),
+            "next": _next_fire(cfg.schedule_cron) if cfg.enabled else None,
+            "enabled": cfg.enabled,
         })
-    return rows, channels
+    return out
+
+
+def _cartesia_usage() -> dict:
+    from short_bot.tts import cartesia_client as cc
+    used = cc.month_usage(Path(current_app.config["SHORTBOT_CACHE_DIR"]))
+    budget = cc.MONTHLY_BUDGET_DEFAULT
+    return {"used": used, "budget": budget, "pct": (100 * used / budget) if budget else 0}
+
+
+def _context(region: str, *, guid: str | None, force: bool = False) -> dict:
+    items = _items(region, force=force)
+    channels = _trend_channels(region)
+    eng = _eng()
+    rows = _rows(items, channels, eng)
+    picked = _pick(items, rows, guid)
+    return {
+        "region": region, "regions": REGIONS, "rows": rows, "channels": channels,
+        "item": picked,
+        "item_age_h": _age_hours(picked.pub_date) if picked else None,
+        "produced": ([r for r in rows if r["guid"] == picked.guid][0]["produced"] if picked else []),
+        "score": _known_score(eng, picked.guid) if picked else None,
+        "status": _channel_status(eng, channels),
+        "cartesia": _cartesia_usage(),
+        "cache_age": _cache_age_minutes(region),
+        "refresh_seconds": REFRESH_SECONDS,
+    }
 
 
 @bp.route("/gundem")
 def desk():
-    region = _region()
-    rows, channels = _rows(region, force=False)
-    return render_template("gundem/desk.html.j2", region=region, regions=REGIONS, rows=rows,
-                           channels=channels, cache_age=_cache_age_minutes(region),
-                           refresh_seconds=REFRESH_SECONDS)
+    ctx = _context(_region(), guid=(request.args.get("guid") or "").strip() or None)
+    return render_template("gundem/desk.html.j2", **ctx)
 
 
-@bp.route("/gundem/table")
-def table():
-    """HTMX parçası: her 5 dk ve 'Yenile' ile."""
+@bp.route("/gundem/list")
+def list_partial():
+    """Sol kuyruk — HTMX ile 5 dakikada bir tazelenir; seçim korunur."""
     region = _region()
-    force = request.args.get("force") == "1"
-    rows, channels = _rows(region, force=force)
-    return render_template("gundem/_table.html.j2", region=region, rows=rows, channels=channels,
-                           cache_age=_cache_age_minutes(region))
+    ctx = _context(region, guid=(request.args.get("guid") or "").strip() or None,
+                   force=request.args.get("force") == "1")
+    return render_template("gundem/_list.html.j2", **ctx)
 
 
 @bp.route("/gundem/produce", methods=["POST"])
 def produce():
-    """Seçilen trendi seçilen kanala tek tıkla üret. Haber önbellekten guid ile bulunur
-    (form alanlarına güvenmek yerine) → description/trend_volume/extra_links tam gelir."""
+    """Seçilen trendi seçilen kanala üret. Haber ÖNBELLEKTEN guid ile bulunur (form
+    alanlarına güvenmek yerine) → açıklama, hacim ve ek kaynaklar eksiksiz gider."""
     region = _region()
     slug = (request.form.get("channel_slug") or "").strip()
     guid = (request.form.get("guid") or "").strip()
@@ -126,9 +219,7 @@ def produce():
     if not slug or not channel_path.exists() or not guid:
         abort(404)
     channel = load_channel(channel_path)
-    items = fetch_trending_items(region, language=REGION_LANG.get(region, "en"), cache_dir=_cache_dir(),
-                                 max_age_minutes=30, min_volume=DESK_MIN_VOLUME, max_entries=DESK_MAX_ENTRIES)
-    item = next((i for i in items if i.guid == guid), None)
+    item = next((i for i in _items(region) if i.guid == guid), None)
     if item is None:
         flash("Bu haber artık listede değil — listeyi yenileyip tekrar dene.", "error")
         return redirect(url_for("gundem.desk", region=region))
@@ -144,5 +235,6 @@ def produce():
         trigger="manual_gundem",
         preselected_item=item,
     )
-    flash(f"Üretim başladı: {item.title[:60]} → {channel.name}. İlerleme Akış/Loglar'da.", "success")
-    return redirect(url_for("gundem.desk", region=region))
+    flash(f"Üretim başladı: {item.title[:60]} → {channel.name}. İlerleme Akış/Loglar'da.",
+          "success")
+    return redirect(url_for("gundem.desk", region=region, guid=guid))

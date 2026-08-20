@@ -305,3 +305,26 @@ def test_as_news_items_carries_extra_links():
     assert items[0].extra_links == ("https://b/2", "https://c/3")
     single = trending_as_news_items([_entry("tek", 5000)], {0: [_art("Tek", "https://a/1")]})
     assert single[0].extra_links == ()
+
+
+def test_as_news_items_carries_growth_related_and_other_articles():
+    from short_bot.trends.trending_now import trending_as_news_items
+    e = _entry("deprem", 100000, breakdown=("istanbul deprem", "adalar fayı", "kandilli"), pct=1000)
+    arts = {0: [_art("Ana haber", "https://a/1", source="NTV"),
+                _art("Marmara 36 kez sallandı", "https://b/2", source="Milliyet"),
+                _art("Gece boyu 51 deprem", "https://c/3", source="Onedio")]}
+    it = trending_as_news_items([e], arts)[0]
+    assert it.trend_growth_pct == 1000
+    assert it.trend_related[:2] == ("istanbul deprem", "adalar fayı")
+    assert it.trend_articles == (("Milliyet", "Marmara 36 kez sallandı"), ("Onedio", "Gece boyu 51 deprem"))
+
+
+def test_cache_roundtrip_keeps_new_fields(tmp_path):
+    from short_bot.trends import trending_now as tn
+    item = tn.NewsItem(guid="g", title="t", link="l", source="S", pub_date=None, thumb_url=None,
+                       description="d", trend_volume=5000, extra_links=("https://b",),
+                       trend_growth_pct=700, trend_related=("a", "b"),
+                       trend_articles=(("Milliyet", "Başlık"),))
+    tn._save_cache(tmp_path / "trending_now_tr.json", "TR", [item])
+    age, back = tn._load_cache(tmp_path / "trending_now_tr.json")
+    assert back[0] == item

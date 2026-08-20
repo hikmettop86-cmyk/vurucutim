@@ -234,6 +234,9 @@ def trending_as_news_items(
             description=_describe(e, [a.title for a in arts[1:]]),
             trend_volume=e.volume,
             extra_links=tuple(a.url for a in arts[1:3] if a.url and a.url != first.url),
+            trend_growth_pct=e.growth_pct,
+            trend_related=tuple(e.breakdown[:6]),
+            trend_articles=tuple((a.source or "", a.title) for a in arts[1:3] if a.title),
         )
         prev = best.get(item.guid)
         if prev is None or item.trend_volume > prev.trend_volume:
@@ -250,6 +253,9 @@ def _item_to_dict(i: NewsItem) -> dict:
         "thumb_url": i.thumb_url, "description": i.description,
         "trend_volume": i.trend_volume,
         "extra_links": list(i.extra_links),
+        "trend_growth_pct": i.trend_growth_pct,
+        "trend_related": list(i.trend_related),
+        "trend_articles": [list(x) for x in i.trend_articles],
     }
 
 
@@ -261,6 +267,9 @@ def _item_from_dict(d: dict) -> NewsItem:
         thumb_url=d.get("thumb_url"), description=d.get("description"),
         trend_volume=int(d.get("trend_volume") or 0),
         extra_links=tuple(d.get("extra_links") or ()),
+        trend_growth_pct=int(d.get("trend_growth_pct") or 0),
+        trend_related=tuple(d.get("trend_related") or ()),
+        trend_articles=tuple(tuple(x) for x in (d.get("trend_articles") or ())),
     )
 
 
@@ -340,6 +349,9 @@ def _rss_fallback(region: str, *, timeout_s: int = 10) -> list[NewsItem]:
                   for n in news[1:3]]
         entry = TrendingEntry(term=term, volume=volume, growth_pct=0, started_at=None,
                               category_ids=(), breakdown=(term,), news_ids=())
+        others_src = [(n.findtext("ht:news_item_source", namespaces=_RSS_NS) or "",
+                       (n.findtext("ht:news_item_title", namespaces=_RSS_NS) or "").strip())
+                      for n in news[1:3]]
         out.append(NewsItem(
             guid=url, title=title, link=url,
             source=(first.findtext("ht:news_item_source", namespaces=_RSS_NS) or None),
@@ -348,6 +360,12 @@ def _rss_fallback(region: str, *, timeout_s: int = 10) -> list[NewsItem]:
                        or it.findtext("ht:picture", namespaces=_RSS_NS) or None),
             description=_describe(entry, others),
             trend_volume=volume,
+            trend_related=(term,),
+            trend_articles=tuple((s, t) for s, t in others_src if t),
+            extra_links=tuple(
+                (n.findtext("ht:news_item_url", namespaces=_RSS_NS) or "").strip()
+                for n in news[1:3]
+                if (n.findtext("ht:news_item_url", namespaces=_RSS_NS) or "").strip()),
         ))
     return out
 

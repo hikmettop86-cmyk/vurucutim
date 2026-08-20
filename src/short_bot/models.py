@@ -27,6 +27,12 @@ class NewsItem:
     # trende 3 haber verir). Yorum formatı bunları ek kaynak olarak okur — 'en az
     # iki kaynak adı' kuralı buradan beslenir. 6 sn kart yolu kullanmaz.
     extra_links: tuple[str, ...] = ()
+    # Aşağıdakiler yalnız Google Trends kaynağında dolar; panelin Gündem masası
+    # bunları GÖSTERİR (açıklama metnini geri ayrıştırmak yerine). Puanlayıcı ve
+    # senaryo yazarı description'ı kullanmaya devam eder.
+    trend_growth_pct: int = 0                          # 1000 = %1.000 artış
+    trend_related: tuple[str, ...] = ()                # ilişkili aramalar
+    trend_articles: tuple[tuple[str, str], ...] = ()   # diğer kaynaklar: (yayıncı, başlık)
 
 
 @dataclass(frozen=True)
@@ -87,6 +93,10 @@ class Script(BaseModel):
     # taşınır. Aksan temizleyici validator'a BAĞLANMAZ: anahtar eşleşme için
     # kullanılıyor, görsel metin değil.
     subject: str = Field(default="", max_length=40)
+    # narration_variation: yorum videosunun biçimi ("acilis/yaklasim/kapanis").
+    # Bir sonraki video bunu OKUYUP aynısını seçmez — art arda videolar aynı
+    # iskelette çıkmasın diye (kullanıcı bildirimi 2026-08-20).
+    narration_variation: str = Field(default="", max_length=60)
 
     @field_validator("header_top", "header_bottom", "photo_overlay",
                       "body_paragraph", "category", mode="before")

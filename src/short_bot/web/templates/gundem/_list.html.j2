@@ -1,0 +1,61 @@
+{# Sol kuyruk — HTMX ile tazelenir. Bağlam: region, rows, item, cache_age, refresh_seconds #}
+<div style="display: flex; flex-direction: column; height: 100%;">
+  <div class="px-4 pt-4 pb-3 border-b border-claude-border">
+    <div class="flex items-baseline justify-between">
+      <h1 class="font-serif text-xl font-bold">Canlı Gündem</h1>
+      <span class="text-xs text-claude-subtle">
+        {% if cache_age is none %}önbellek yok{% elif cache_age < 1 %}az önce{% else %}{{ '%.0f'|format(cache_age) }} dk önce{% endif %}
+      </span>
+    </div>
+    <div class="flex items-center gap-1.5 mt-2.5 text-xs">
+      <form method="get" action="/gundem" class="inline">
+        <input type="hidden" name="guid" value="{{ (item.guid if item else '')|e }}">
+        <select name="region" onchange="this.form.submit()"
+                class="px-2 py-1 rounded-full bg-claude-text text-claude-bg border-0 text-xs">
+          {% for code, label in regions %}<option value="{{ code }}" {% if code == region %}selected{% endif %}>{{ code }}</option>{% endfor %}
+        </select>
+      </form>
+      <button type="button" hx-get="/gundem/list?region={{ region }}&force=1{% if item %}&guid={{ item.guid|urlencode }}{% endif %}"
+              hx-target="#gundem-list" hx-swap="innerHTML"
+              class="px-2.5 py-1 rounded-full bg-claude-bg border border-claude-border text-claude-muted hover:text-claude-text">⟳ yenile</button>
+      <span class="ml-auto text-claude-subtle">{{ rows|length }} konu</span>
+    </div>
+  </div>
+
+  <div class="flex-1 overflow-y-auto">
+    {% for r in rows %}
+    {% set sel = item and r.guid == item.guid %}
+    <a href="/gundem?region={{ region }}&amp;guid={{ r.guid|urlencode }}"
+       data-row="{{ loop.index0 }}"
+       class="grid grid-cols-[62px_1fr] gap-2.5 px-4 py-3 border-b border-claude-border/70 hover:bg-claude-surface-alt/60
+              {% if sel %}bg-claude-bg{% endif %} {% if r.produced %}opacity-60{% endif %}"
+       {% if sel %}style="border-left: 4px solid #c96442; padding-left: 12px;"{% endif %}>
+      <div class="text-right">
+        <div class="text-sm font-bold {% if not sel %}text-claude-muted{% endif %}">
+          {% if r.volume >= 1000 %}{{ r.volume // 1000 }} B+{% else %}{{ r.volume }}{% endif %}
+        </div>
+        {% if r.produced %}
+          <div class="text-[11px] text-claude-success">✓ üretildi</div>
+        {% elif r.growth %}
+          <div class="text-[11px] text-claude-success">↑ %{{ '{:,}'.format(r.growth).replace(',', '.') }}</div>
+        {% endif %}
+      </div>
+      <div class="min-w-0">
+        <div class="text-[13.5px] leading-snug {% if sel %}font-semibold{% else %}font-medium{% endif %}">{{ r.title|e }}</div>
+        <div class="text-[11px] text-claude-subtle mt-0.5">
+          {{ r.source|e }}{% if r.age_h is not none %} · {% if r.age_h < 1 %}{{ (r.age_h * 60)|int }} dk{% else %}{{ r.age_h|int }} sa{% endif %}{% endif %}{% if r.sources > 1 %} · {{ r.sources }} kaynak{% endif %}
+        </div>
+      </div>
+    </a>
+    {% else %}
+    <div class="p-8 text-center text-claude-muted text-sm">Trend listesi boş — "yenile" dene.</div>
+    {% endfor %}
+  </div>
+
+  <div class="border-t border-claude-border px-4 py-2.5 text-[11px] text-claude-subtle flex gap-3.5">
+    <span><b class="text-claude-muted">↑ ↓</b> gez</span>
+    <span><b class="text-claude-muted">1</b> kart</span>
+    <span><b class="text-claude-muted">2</b> yorum</span>
+    <span class="ml-auto">{{ refresh_seconds // 60 }} dk'da bir tazelenir</span>
+  </div>
+</div>

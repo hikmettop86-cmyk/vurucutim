@@ -1,37 +1,213 @@
 {% extends "base.html.j2" %}
 {% block title %}Vurucu TİM — Canlı Gündem{% endblock %}
 {% block content %}
-<div class="max-w-7xl mx-auto">
-  <div class="flex items-start justify-between mb-4 gap-4">
-    <div>
-      <h1 class="font-serif text-3xl font-bold">📡 Canlı Gündem</h1>
-      <p class="text-claude-muted text-sm mt-1">
-        Google Trends'in son 24 saatlik listesi, arama hacmine göre. Tablo {{ refresh_seconds // 60 }} dakikada bir
-        kendiliğinden tazelenir; bir haberi seçip satırındaki kanala tek tıkla üret.
-        Seçtiğin haber dedup/puanlama kapısından geçmeden o kanalın hattına girer.
-      </p>
+{# Masa kenardan kenara: base'in `container mx-auto px-6 py-10 max-w-6xl` kutusundan
+   tam genişliğe çıkar (masa iki sütun ister, 1152px dar kalıyordu). #}
+<div style="position: relative; left: 50%; transform: translateX(-50%); width: 100vw;
+            margin-top: -2.5rem; margin-bottom: -2.5rem; height: calc(100vh - 130px);
+            min-height: 640px;">
+  <div class="grid h-full" style="grid-template-columns: 400px minmax(0, 1fr);">
+
+    {# SOL: kuyruk — 5 dakikada bir kendiliğinden tazelenir #}
+    <div id="gundem-list" class="border-r border-claude-border bg-claude-surface overflow-hidden"
+         hx-get="/gundem/list?region={{ region }}{% if item %}&amp;guid={{ item.guid|urlencode }}{% endif %}"
+         hx-trigger="every {{ refresh_seconds }}s" hx-swap="innerHTML">
+      {% include "gundem/_list.html.j2" %}
     </div>
-    <form method="get" action="/gundem" class="flex items-center gap-2 flex-shrink-0">
-      <select name="region" onchange="this.form.submit()"
-              class="bg-claude-surface border border-claude-border px-3 py-1.5 rounded-lg text-sm">
-        {% for code, label in regions %}<option value="{{ code }}" {% if code == region %}selected{% endif %}>{{ code }} · {{ label }}</option>{% endfor %}
-      </select>
-      <button type="button"
-              hx-get="/gundem/table?region={{ region }}&force=1" hx-target="#gundem-table" hx-swap="innerHTML"
-              class="bg-claude-accent hover:bg-claude-accent-hover text-white px-4 py-1.5 rounded-lg text-sm font-semibold">⟳ Şimdi yenile</button>
-    </form>
-  </div>
 
-  {% if not channels %}
-  <div class="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg p-3 text-sm mb-4">
-    {{ region }} bölgesini üreten trends kanalı yok. <a href="/channels/new-yorum" class="underline">Gündem Yorum kanalı</a>
-    ya da kanal düzenleme sayfasından kaynağı "Google Trends" yap.
-  </div>
-  {% endif %}
+    {# SAĞ: seçilen haberin dosyası — üretim düğmeleri HER ZAMAN görünür (alta sabit) #}
+    <div class="flex flex-col overflow-hidden">
+      {% if not item %}
+        <div class="p-10 text-claude-muted">
+          Bu bölge için trend bulunamadı. Soldaki <b>yenile</b> ile tekrar dene.
+        </div>
+      {% else %}
+      <div class="flex-1 overflow-y-auto px-7 py-6 flex flex-col gap-4">
 
-  <div id="gundem-table"
-       hx-get="/gundem/table?region={{ region }}" hx-trigger="every {{ refresh_seconds }}s" hx-swap="innerHTML">
-    {% include "gundem/_table.html.j2" %}
+        {# Başlık + görsel #}
+        <div class="flex items-start gap-5">
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 text-xs text-claude-muted mb-2">
+              {% if score %}
+                <span class="px-2.5 py-1 rounded-md bg-claude-surface-alt">
+                  Kapı <b class="{% if score.score >= 6 %}text-claude-success{% else %}text-claude-error{% endif %}">{{ '%.0f'|format(score.score) }}/10</b>
+                  {% if score.status == 'below_threshold' %}· eşiğin altında kalmıştı{% endif %}
+                </span>
+              {% else %}
+                <span class="px-2.5 py-1 rounded-md bg-claude-surface-alt">Henüz puanlanmadı</span>
+              {% endif %}
+              {% if item_age_h is not none %}<span>{% if item_age_h < 1 %}{{ (item_age_h * 60)|int }} dk{% else %}{{ item_age_h|int }} saat{% endif %} önce başladı</span><span>·</span>{% endif %}
+              <span>{{ item.source|e }}</span>
+              {% if produced %}<span class="px-2.5 py-1 rounded-md bg-green-50 text-claude-success border border-green-200">✓ {{ produced|join(', ')|e }} üretti</span>{% endif %}
+            </div>
+            <h2 class="font-serif text-[27px] font-bold leading-tight">
+              <a href="{{ item.link|e }}" target="_blank" rel="noopener" class="hover:underline">{{ item.title|e }}</a>
+            </h2>
+            <div class="flex gap-6 mt-4">
+              <div>
+                <div class="text-[11px] text-claude-subtle tracking-wider">ARAMA</div>
+                <div class="text-[26px] font-bold leading-tight">{{ '{:,}'.format(item.trend_volume).replace(',', '.') }}<span class="text-[15px] text-claude-muted">+</span></div>
+              </div>
+              {% if item.trend_growth_pct %}
+              <div>
+                <div class="text-[11px] text-claude-subtle tracking-wider">ARTIŞ</div>
+                <div class="text-[26px] font-bold leading-tight text-claude-success">%{{ '{:,}'.format(item.trend_growth_pct).replace(',', '.') }}</div>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+          {% if item.thumb_url %}
+          <img src="{{ item.thumb_url|e }}" alt="" class="w-[232px] h-[150px] object-cover rounded-lg flex-none border border-claude-border">
+          {% endif %}
+        </div>
+
+        {# Kaynaklar + aramalar #}
+        <div class="grid grid-cols-2 gap-4">
+          <div class="bg-claude-surface border border-claude-border rounded-xl p-4">
+            <div class="text-[11px] text-claude-subtle tracking-wider mb-2.5">KAYNAKLAR · YORUM BUNLARDAN KURULUR</div>
+            <div class="flex flex-col gap-2 text-[13px]">
+              <div class="flex gap-2">
+                <span class="text-claude-accent font-semibold flex-none">{{ item.source|e }}</span>
+                <span class="text-claude-muted leading-snug">{{ item.title|e }}</span>
+              </div>
+              {% for src, ttl in item.trend_articles %}
+              <div class="flex gap-2">
+                <span class="text-claude-accent font-semibold flex-none">{{ src|e }}</span>
+                <span class="text-claude-muted leading-snug">{{ ttl|e }}</span>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+          <div class="bg-claude-surface border border-claude-border rounded-xl p-4">
+            <div class="text-[11px] text-claude-subtle tracking-wider mb-2.5">İNSANLAR NE ARIYOR</div>
+            <div class="flex flex-wrap gap-1.5">
+              {% for k in item.trend_related %}
+              <span class="text-xs px-2.5 py-1 rounded-md bg-claude-surface-alt text-claude-muted">{{ k|e }}</span>
+              {% else %}
+              <span class="text-xs text-claude-subtle">—</span>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+
+        {# Önizleme + kanal durumu #}
+        <div class="grid gap-4 flex-1 min-h-0" style="grid-template-columns: 232px minmax(0, 1fr);">
+          <div class="bg-claude-surface border border-claude-border rounded-xl p-3.5 flex flex-col items-center gap-2.5">
+            <div class="text-[11px] text-claude-subtle tracking-wider self-start">KART BÖYLE ÇIKACAK</div>
+            <div class="relative rounded-lg overflow-hidden bg-[#141413]" style="width: 120px; height: 214px;">
+              <div class="absolute top-0 left-0 right-0 flex items-center px-1.5 text-white" style="height: 15px; background: #d0021b; font-size: 7px; font-weight: 700; letter-spacing: 0.06em;">{{ ((channels[0].handle if channels else '@gundem')|replace('@','')|upper)|e }}</div>
+              <div class="absolute left-0 right-0" style="top: 15px; height: 9px; background: #ffe600;"></div>
+              <div class="absolute left-0 right-0 bg-cover bg-center" style="top: 24px; height: 52px; {% if item.thumb_url %}background-image: url('{{ item.thumb_url|e }}');{% else %}background: linear-gradient(150deg,#6b6863,#3a3936);{% endif %}"></div>
+              <div class="absolute text-white font-serif font-bold" style="left: 7px; right: 7px; top: 64px; font-size: 15px; line-height: 0.95; letter-spacing: -0.02em;">MANŞET</div>
+              <div class="absolute text-white" style="left: 7px; top: 82px; background: #d0021b; font-size: 8px; font-weight: 700; padding: 2px 5px;">ALT SATIR</div>
+              <div class="absolute" style="left: 7px; right: 7px; top: 96px; background: #fff; color: #141413; font-size: 6.5px; font-weight: 700; padding: 3px 5px;">KJ SATIRI</div>
+              <div class="absolute flex flex-col gap-[3px]" style="left: 7px; right: 7px; top: 112px;">
+                <div style="height: 3px; background: rgba(255,255,255,0.55); width: 100%;"></div>
+                <div style="height: 3px; background: rgba(255,255,255,0.55); width: 92%;"></div>
+                <div style="height: 3px; background: #ffe600; width: 60%;"></div>
+                <div style="height: 3px; background: rgba(255,255,255,0.55); width: 84%;"></div>
+              </div>
+              <div class="absolute left-0 right-0 flex items-center" style="bottom: 8px; height: 9px; background: #fff;">
+                <span style="background: #d0021b; color: #fff; font-size: 6px; font-weight: 700; padding: 1px 4px;">SIRADA</span>
+              </div>
+            </div>
+            <div class="text-[11px] text-claude-subtle text-center leading-snug">Flaş kimliği · manşeti yapay zekâ yazar</div>
+          </div>
+
+          <div class="bg-claude-surface border border-claude-border rounded-xl p-4 flex flex-col gap-3">
+            <div class="text-[11px] text-claude-subtle tracking-wider">KANAL DURUMU · BUGÜN</div>
+            {% for s in status %}
+            <div class="flex items-center gap-3 text-[13px]">
+              <span class="w-2.5 h-2.5 rounded-full flex-none {% if s.enabled %}bg-claude-success{% else %}bg-claude-border-strong{% endif %}"></span>
+              <span class="font-semibold w-40 truncate">{{ s.name|e }}{% if s.label != s.name %} · {{ s.label|e }}{% endif %}</span>
+              <span class="text-claude-muted">{{ s.today }} video{% if s.last %} · son {{ s.last }}{% endif %}</span>
+              <span class="ml-auto text-claude-subtle">{% if s.next %}sıradaki koşu {{ s.next }}{% else %}cron kapalı{% endif %}</span>
+            </div>
+            {% else %}
+            <div class="text-[13px] text-claude-muted">
+              {{ region }} bölgesini üreten trends kanalı yok.
+              <a href="/channels/new-yorum" class="text-claude-accent underline">Gündem Yorum kanalı aç</a>.
+            </div>
+            {% endfor %}
+            {% if status %}
+            <div class="border-t border-claude-border pt-3 flex items-center gap-3 text-[13px]">
+              <span class="text-claude-muted w-36">Cartesia kredisi</span>
+              <span class="flex-1 h-1.5 rounded bg-claude-border relative overflow-hidden">
+                <span class="absolute left-0 top-0 bottom-0 {% if cartesia.pct >= 90 %}bg-amber-500{% else %}bg-claude-success{% endif %}" style="width: {{ '%.0f'|format(cartesia.pct if cartesia.pct < 100 else 100) }}%"></span>
+              </span>
+              <span class="text-claude-muted">%{{ '%.1f'|format(cartesia.pct) }}</span>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+
+      </div>
+
+      {# Üretim — sağ sütunun ALTINA sabit: kaydırma nereye gelirse gelsin düğme görünür #}
+      <div class="border-t border-claude-border bg-claude-surface px-7 py-4">
+        <div class="grid gap-4" style="grid-template-columns: repeat({{ channels|length if channels else 1 }}, minmax(0, 1fr));">
+          {% for c in channels %}
+          {% set done = c.slug in produced %}
+          <form method="post" action="/gundem/produce" data-produce="{{ loop.index }}">
+            <input type="hidden" name="region" value="{{ region }}">
+            <input type="hidden" name="channel_slug" value="{{ c.slug|e }}">
+            <input type="hidden" name="guid" value="{{ item.guid|e }}">
+            <button type="submit" {% if done %}disabled{% endif %}
+                    class="w-full flex items-center gap-3.5 rounded-xl p-3.5 text-left border transition
+                           {% if done %}bg-claude-surface border-claude-border opacity-60 cursor-default
+                           {% elif c.format == 'yorum' %}bg-claude-accent hover:bg-claude-accent-hover border-claude-accent text-white
+                           {% else %}bg-claude-surface hover:bg-claude-surface-alt border-claude-border-strong{% endif %}">
+              <span class="flex-none rounded-md overflow-hidden relative bg-[#141413]" style="width: 54px; height: 96px;">
+                <span class="absolute top-0 left-0 right-0" style="height: 10px; background: #d0021b;"></span>
+                <span class="absolute left-0 right-0" style="top: 10px; height: 6px; background: #ffe600;"></span>
+                <span class="absolute" style="left: 5px; right: 5px; top: 40px; height: 9px; background: #fff;"></span>
+                {% if c.format == 'yorum' %}
+                <span class="absolute" style="left: 5px; right: 5px; bottom: 12px; height: 7px; background: #fff;"></span>
+                <span class="absolute" style="left: 5px; right: 24px; bottom: 4px; height: 4px; background: #ffe600;"></span>
+                {% else %}
+                <span class="absolute" style="left: 5px; right: 16px; top: 52px; height: 6px; background: #d0021b;"></span>
+                {% endif %}
+              </span>
+              <span class="flex-1 min-w-0">
+                <span class="block text-[15px] font-bold truncate">{{ c.name|e }} · {% if c.format == 'yorum' %}35-50 sn{% else %}6 sn kart{% endif %}</span>
+                <span class="block text-xs mt-0.5 leading-snug {% if c.format == 'yorum' and not done %}opacity-90{% else %}text-claude-muted{% endif %}">
+                  {% if done %}Bu haber bu kanalda zaten üretildi.
+                  {% elif c.format == 'yorum' %}{{ 1 + item.trend_articles|length }} kaynaktan tarafsız yorum + seslendirme. ~3 dk.
+                  {% else %}Manşet + gövde + fotoğraf. ~40 sn.{% endif %}
+                </span>
+              </span>
+              <span class="flex-none rounded-lg px-3.5 py-2 text-[13px] font-bold
+                           {% if done %}bg-claude-surface-alt text-claude-muted
+                           {% elif c.format == 'yorum' %}bg-white text-claude-accent
+                           {% else %}bg-claude-bg border border-claude-border-strong{% endif %}">
+                {% if done %}✓{% else %}Üret{% endif %}
+              </span>
+            </button>
+          </form>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
   </div>
 </div>
+
+<script>
+// Klavye: ↑ ↓ kuyrukta gez, 1 / 2 seçili haberi ilgili kanala üret.
+(function () {
+  document.addEventListener('keydown', function (e) {
+    if (e.target.matches('input, textarea, select')) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      const rows = Array.from(document.querySelectorAll('#gundem-list a[data-row]'));
+      const cur = rows.findIndex(r => r.style.borderLeft);
+      const next = rows[Math.min(rows.length - 1, Math.max(0, (cur < 0 ? 0 : cur) + (e.key === 'ArrowDown' ? 1 : -1)))];
+      if (next) { e.preventDefault(); window.location = next.getAttribute('href'); }
+    }
+    if (e.key === '1' || e.key === '2') {
+      const f = document.querySelector('form[data-produce="' + e.key + '"]');
+      if (f && !f.querySelector('button[disabled]')) { e.preventDefault(); f.submit(); }
+    }
+  });
+})();
+</script>
 {% endblock %}

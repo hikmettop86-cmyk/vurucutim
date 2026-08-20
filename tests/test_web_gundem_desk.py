@@ -1,7 +1,7 @@
-"""Canlı Gündem masası: tablo, bölge, üretildi rozeti, tek tıkla üretim."""
+"""Canlı Gündem masası (Masa yönü): kuyruk + seçili haberin dosyası + tek tıkla üretim."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -13,7 +13,7 @@ _SETTINGS = ("ffmpeg_path: ffmpeg\nclaude_cli_path: claude\nplaywright_browser: 
              "claude_models: {dna: opus, default: haiku}\n")
 
 
-def _ch(slug, voice=False):
+def _ch(slug, voice=False, region="TR"):
     v = ("voice:\n  enabled: true\n  provider: cartesia\n  voice_id: v\n  speed: 1.05\n" if voice else "")
     return f"""\
 slug: {slug}
@@ -21,8 +21,8 @@ name: {slug.title()}
 keywords: []
 language: tr
 content_source: trends
-trends_region: TR
-schedule_cron: 0 * * * *
+trends_region: {region}
+schedule_cron: 0 7-22/3 * * *
 duration_s: 6
 min_score: 6.0
 max_candidates_per_run: 25
@@ -44,19 +44,23 @@ def app(tmp_path):
     (cfg_dir / "settings.yaml").write_text(_SETTINGS, encoding="utf-8")
     (cfg_dir / "channels" / "gundem.yaml").write_text(_ch("gundem"), encoding="utf-8")
     (cfg_dir / "channels" / "gundem-yorum.yaml").write_text(_ch("gundem-yorum", voice=True), encoding="utf-8")
+    (cfg_dir / "channels" / "berlin.yaml").write_text(_ch("berlin", region="DE"), encoding="utf-8")
     (tmp_path / "data").mkdir()
     return create_app(config_dir=cfg_dir, db_path=tmp_path / "x.sqlite",
                       secrets_path=tmp_path / "data" / "secrets.yaml", scheduler=False)
 
 
 ITEMS = [
-    NewsItem(guid="https://a/1", title="Marmara 8 saatte 36 kez sallandı", link="https://a/1", source="Milliyet",
-             pub_date=datetime.now(timezone.utc), thumb_url="https://img/1.jpg",
-             description="Google Trends · 100.000 arama · +%1.000 · istanbul deprem, adalar fayı · Başka başlık",
-             trend_volume=100000, extra_links=("https://b/2",)),
+    NewsItem(guid="https://a/1", title="Marmara 8 saatte 36 kez sallandı", link="https://a/1",
+             source="Milliyet", pub_date=datetime.now(timezone.utc) - timedelta(hours=16),
+             thumb_url="https://img/1.jpg",
+             description="Google Trends · 100.000 arama · +%1.000 · istanbul deprem",
+             trend_volume=100000, extra_links=("https://b/2", "https://c/3"),
+             trend_growth_pct=1000, trend_related=("istanbul deprem", "adalar fayı", "kandilli"),
+             trend_articles=(("NTV", "Adalar çevresindeki depremler"), ("Onedio", "Gece boyu 51 deprem"))),
     NewsItem(guid="https://c/3", title="Asgari ücrete ara zam", link="https://c/3", source="Dünya",
-             pub_date=None, thumb_url=None, description="Google Trends · 10.000 arama · asgari ücret",
-             trend_volume=10000),
+             pub_date=None, thumb_url=None, description="Google Trends · 10.000 arama",
+             trend_volume=10000, trend_growth_pct=0, trend_related=("asgari ücret zam",)),
 ]
 
 
@@ -65,48 +69,92 @@ def fake_trends(monkeypatch):
     seen = {}
 
     def _fetch(region, **kw):
-        seen["region"] = region; seen["kw"] = kw
-        return ITEMS
+        seen["region"] = region
+        seen["kw"] = kw
+        return ITEMS if region == "TR" else []
     monkeypatch.setattr("short_bot.web.routes.gundem.fetch_trending_items", _fetch)
     return seen
 
 
-def test_desk_renders_rows_and_channel_buttons(app, fake_trends):
+# --- kuyruk -------------------------------------------------------------------------
+
+def test_desk_lists_queue_with_volume_growth_and_age(app, fake_trends):
     body = app.test_client().get("/gundem?region=TR").data.decode("utf-8")
-    assert "Marmara 8 saatte 36 kez sallandı" in body and "100B+" in body and "%1.000" in body
-    assert "adalar fayı" in body and "+1 kaynak daha" in body
-    assert 'name="channel_slug" value="gundem"' in body and 'name="channel_slug" value="gundem-yorum"' in body
-    assert "🎙️ Gündem Yorum" in body and "▶ Kart" in body
+    assert "Marmara 8 saatte 36 kez sallandı" in body and "100 B+" in body
+    assert "%1.000" in body and "16 sa" in body and "3 kaynak" in body
+    assert "Asgari ücrete ara zam" in body and "10 B+" in body
+    # NOT: .html.j2 uzantısında Flask autoescape KAPALI (projenin bilinen tuzağı) —
+    # bu yüzden şablon dış veriyi |e ile elle kaçırır, & de elle &amp; yazılır.
+    assert 'href="/gundem?region=TR&amp;guid=https%3A//a/1"' in body
     assert 'hx-trigger="every 300s"' in body
-    assert fake_trends["region"] == "TR" and fake_trends["kw"]["max_age_minutes"] == 30
+    assert fake_trends["kw"]["max_age_minutes"] == 30
 
 
-def test_table_force_refresh_bypasses_cache(app, fake_trends):
-    r = app.test_client().get("/gundem/table?region=TR&force=1")
+def test_list_partial_force_refresh(app, fake_trends):
+    r = app.test_client().get("/gundem/list?region=TR&force=1")
     assert r.status_code == 200 and fake_trends["kw"]["max_age_minutes"] == 0
+    assert "Marmara" in r.data.decode("utf-8")
 
 
-def test_desk_marks_produced(app, fake_trends, tmp_path):
+# --- detay paneli --------------------------------------------------------------------
+
+def test_detail_shows_sources_related_and_channels(app, fake_trends):
+    body = app.test_client().get("/gundem?region=TR").data.decode("utf-8")
+    # ilk (üretilmemiş) haber kendiliğinden seçili
+    assert "KAYNAKLAR" in body and "Milliyet" in body and "NTV" in body and "Onedio" in body
+    assert "Adalar çevresindeki depremler" in body and "Gece boyu 51 deprem" in body
+    assert "İNSANLAR NE ARIYOR" in body and "adalar fayı" in body
+    assert "100.000" in body and "KART BÖYLE ÇIKACAK" in body
+    assert "KANAL DURUMU" in body and "Gundem-Yorum" in body
+    # üretim düğmeleri: iki TR kanalı, DE kanalı YOK
+    assert 'value="gundem-yorum"' in body and 'value="gundem"' in body
+    assert 'value="berlin"' not in body
+    assert "3 kaynaktan tarafsız yorum" in body
+
+
+def test_selecting_by_guid_switches_detail(app, fake_trends):
+    body = app.test_client().get("/gundem?region=TR&guid=https://c/3").data.decode("utf-8")
+    assert "asgari ücret zam" in body
+    assert "10.000" in body
+
+
+def test_produced_item_is_marked_and_button_disabled(app, fake_trends, tmp_path):
     from short_bot.db import init_db, mark_processed
     eng = init_db(tmp_path / "x.sqlite")
     mark_processed(eng, guid="https://a/1", channel="gundem", title="t")
-    body = app.test_client().get("/gundem").data.decode("utf-8")
-    assert "✓ Kart" in body
-    assert body.count('name="channel_slug" value="gundem"') == 1   # yalnız ikinci satır için düğme
+    body = app.test_client().get("/gundem?region=TR").data.decode("utf-8")
+    assert "✓ üretildi" in body                       # kuyrukta işaret
+    # seçim üretilmemiş ilk habere kayar
+    assert "asgari ücret zam" in body
 
 
-def test_produce_launches_pipeline_with_cached_item(app, fake_trends, monkeypatch):
+def test_known_gate_score_is_shown(app, fake_trends, tmp_path):
+    from short_bot.db import init_db, record_rss_item
+    eng = init_db(tmp_path / "x.sqlite")
+    record_rss_item(eng, guid="https://a/1", channel="gundem", title="t", link="l", source="s",
+                    pub_date=None, thumb_url=None, score=3.0, status="below_threshold")
+    body = app.test_client().get("/gundem?region=TR&guid=https://a/1").data.decode("utf-8")
+    assert "Kapı" in body and "3/10" in body and "eşiğin altında" in body
+
+
+def test_empty_region_shows_hint(app, fake_trends):
+    body = app.test_client().get("/gundem?region=DE").data.decode("utf-8")
+    assert "trend bulunamadı" in body
+
+
+# --- üretim --------------------------------------------------------------------------
+
+def test_produce_launches_pipeline_with_full_cached_item(app, fake_trends, monkeypatch):
     seen = {}
-
-    def _launch(**kw):
-        seen.update(kw)
-    monkeypatch.setattr("short_bot.web.routes.gundem.launch_pipeline", _launch)
+    monkeypatch.setattr("short_bot.web.routes.gundem.launch_pipeline", lambda **kw: seen.update(kw))
     r = app.test_client().post("/gundem/produce", data={"region": "TR", "channel_slug": "gundem-yorum",
                                                         "guid": "https://a/1"})
-    assert r.status_code == 302
+    assert r.status_code == 302 and "guid=" in r.headers["Location"]
     assert seen["channel"].slug == "gundem-yorum" and seen["trigger"] == "manual_gundem"
-    item = seen["preselected_item"]
-    assert item.guid == "https://a/1" and item.trend_volume == 100000 and item.extra_links == ("https://b/2",)
+    it = seen["preselected_item"]
+    assert it.guid == "https://a/1" and it.trend_volume == 100000
+    assert it.extra_links == ("https://b/2", "https://c/3")
+    assert it.trend_articles[0] == ("NTV", "Adalar çevresindeki depremler")
 
 
 def test_produce_unknown_guid_flashes(app, fake_trends, monkeypatch):
@@ -120,3 +168,19 @@ def test_produce_unknown_guid_flashes(app, fake_trends, monkeypatch):
 def test_nav_has_gundem_link(app, fake_trends):
     body = app.test_client().get("/gundem").data.decode("utf-8")
     assert 'href="/gundem"' in body
+
+
+def test_external_text_is_escaped(app, fake_trends, monkeypatch):
+    """.html.j2'de autoescape kapalı: Trends'ten gelen başlık HTML olarak girmemeli."""
+    from short_bot.models import NewsItem
+    evil = NewsItem(guid="https://x/1", title='<img src=x onerror="alert(1)">', link="https://x/1",
+                    source="<b>Kaynak</b>", pub_date=None, thumb_url=None, description="d",
+                    trend_volume=5000, trend_related=("<script>alert(2)</script>",),
+                    trend_articles=(("<i>NTV</i>", "<u>Başlık</u>"),))
+    monkeypatch.setattr("short_bot.web.routes.gundem.fetch_trending_items", lambda region, **kw: [evil])
+    body = app.test_client().get("/gundem?region=TR").data.decode("utf-8")
+    # ham etiket YOK, kaçırılmış metin VAR
+    assert "<img src=x" not in body and "<script>alert(2)" not in body
+    assert "<b>Kaynak</b>" not in body
+    assert "&lt;img src=x" in body and "&lt;b&gt;Kaynak" in body
+    assert "&lt;u&gt;Başlık" in body and "&lt;script&gt;alert(2)" in body
