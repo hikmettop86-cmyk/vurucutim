@@ -6,7 +6,7 @@
      x-show="!search || '{{ c.slug }}'.toLowerCase().includes(search.toLowerCase()) || '{{ c.name|e }}'.toLowerCase().includes(search.toLowerCase())">
   <div class="flex items-start justify-between mb-3">
     <div class="min-w-0 flex-1">
-      <a href="/channels/{{ c.slug }}/edit" class="block group">
+      <a href="{{ edit_path(c) }}" class="block group">
         <h3 class="font-serif font-bold text-lg text-claude-text group-hover:text-claude-accent truncate flex items-center flex-wrap gap-1">
           {{ c.name }}
           {% if c.dynamic_dna and cache_stats is defined and c.slug in cache_stats %}
@@ -70,7 +70,7 @@
             hx-on::after-request="if (event.detail.successful) window.location.href='/activity?channel={{ c.slug }}'"
             class="px-2 py-1 text-claude-accent hover:bg-claude-accent-soft rounded text-xs"
             title="Şimdi üret">▶</button>
-    <a href="/channels/{{ c.slug }}/edit" class="px-2 py-1 text-claude-text hover:bg-claude-surface-alt rounded text-xs">
+    <a href="{{ edit_path(c) }}" class="px-2 py-1 text-claude-text hover:bg-claude-surface-alt rounded text-xs">
       Düzenle
     </a>
     {% if c.content_source == 'generator' %}

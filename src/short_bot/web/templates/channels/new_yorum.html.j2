@@ -1,0 +1,105 @@
+{% extends "base.html.j2" %}
+{% block title %}Vurucu TİM — Yeni Gündem Yorum kanalı{% endblock %}
+{% block content %}
+<div class="max-w-4xl mx-auto">
+  <div class="flex items-center gap-3 mb-1">
+    <h1 class="font-serif text-3xl font-bold">🎙️ Yeni Gündem Yorum kanalı</h1>
+    <span class="bg-red-600 text-white text-xs font-semibold px-3 py-1 rounded-full">Trends + Cartesia</span>
+  </div>
+  <p class="text-claude-muted mb-6">
+    Ülkenin o an en çok aradığı konuyu, <strong>tarafsız ama görüşlü</strong> bir yorumcunun sesiyle 35-50 saniyede
+    anlatan format. Görsel kimlik Flaş kartı (kırmızı bant, SON DAKİKA şeridi); anlatım Google Trends'in verdiği
+    3 haberden kaynak adıyla kurulur. 6 saniyelik karttan bağımsız kurulum: burada DNA/palet ayarı yok.
+  </p>
+
+  <form method="post" action="/channels/new-yorum" class="space-y-4">
+    <section class="bg-claude-surface border border-claude-border rounded-xl p-5 space-y-4">
+      <h2 class="font-semibold text-claude-accent">Kanal</h2>
+      <div class="grid grid-cols-2 gap-4">
+        <label class="block">
+          <span class="text-xs text-claude-muted uppercase tracking-wide">Kanal adı</span>
+          <input type="text" name="name" required placeholder="Gündem Yorum"
+                 class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+        </label>
+        <label class="block">
+          <span class="text-xs text-claude-muted uppercase tracking-wide">Handle</span>
+          <input type="text" name="handle" placeholder="@gundem"
+                 class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+        </label>
+        <label class="block">
+          <span class="text-xs text-claude-muted uppercase tracking-wide">Dil</span>
+          <select name="language" class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+            {% for code, label in [('tr','Türkçe'),('de','Almanca'),('en','İngilizce'),('es','İspanyolca'),('fr','Fransızca')] %}
+            <option value="{{ code }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="block">
+          <span class="text-xs text-claude-muted uppercase tracking-wide">Trends bölgesi</span>
+          <select name="trends_region" class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+            {% for code, label in regions %}<option value="{{ code }}">{{ code }} · {{ label }}</option>{% endfor %}
+          </select>
+        </label>
+        <label class="block">
+          <span class="text-xs text-claude-muted uppercase tracking-wide">En düşük arama hacmi</span>
+          <input type="number" name="trends_min_volume" value="5000" min="100" step="100"
+                 class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+          <span class="text-[11px] text-claude-subtle">5.000 = günde ~25 gerçek gündem (TR ölçümü)</span>
+        </label>
+        <label class="block">
+          <span class="text-xs text-claude-muted uppercase tracking-wide">Günde kaç video</span>
+          <select name="runs_per_day" class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+            {% for n in runs %}<option value="{{ n }}" {% if n == 5 %}selected{% endif %}>{{ n }}</option>{% endfor %}
+          </select>
+          <span class="text-[11px] text-claude-subtle">Toplu-üretim sinyali vermemek için az ve yüksek hacimli.</span>
+        </label>
+      </div>
+    </section>
+
+    <section class="bg-claude-surface border border-claude-border rounded-xl p-5 space-y-3">
+      <h2 class="font-semibold text-claude-accent">Yorumcu</h2>
+      <label class="block">
+        <span class="text-xs text-claude-muted uppercase tracking-wide">Persona</span>
+        <textarea name="voice_persona" rows="5"
+                  class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm font-mono">{{ default_persona|e }}</textarea>
+        <span class="text-[11px] text-claude-subtle">Anlatım kuralları sabit: kaynak adıyla olgu → bağlantı → denge cümlesi → "bence" hükmü → kapanış sorusu; parti/lider tarafı yok.</span>
+      </label>
+      <div class="grid grid-cols-3 gap-4">
+        <label class="block">
+          <span class="text-xs text-claude-muted uppercase tracking-wide">Senaryo modeli</span>
+          <input type="text" name="script_model" value="opus"
+                 class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+        </label>
+        <label class="block">
+          <span class="text-xs text-claude-muted uppercase tracking-wide">Hedef süre (sn)</span>
+          <div class="flex gap-2 mt-1">
+            <input type="number" name="voice_target_min" value="35" min="10" max="180" class="w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+            <input type="number" name="voice_target_max" value="50" min="10" max="180" class="w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+          </div>
+        </label>
+        <label class="block">
+          <span class="text-xs text-claude-muted uppercase tracking-wide">Müzik seviyesi</span>
+          <input type="number" name="voice_music_volume" value="0.05" step="0.01" min="0" max="1"
+                 class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+        </label>
+      </div>
+    </section>
+
+    <section class="bg-claude-surface border border-claude-border rounded-xl p-5 space-y-3">
+      <h2 class="font-semibold text-claude-accent">Ses (Cartesia)</h2>
+      {% set c = namespace(voice=none, language='tr') %}
+      {% include "_partials/voice_cartesia_fields.html.j2" %}
+      <label class="block w-48">
+        <span class="text-xs text-claude-muted uppercase tracking-wide">Hız (0.6–1.5)</span>
+        <input type="number" name="voice_speed" value="1.05" step="0.05" min="0.6" max="1.5"
+               class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+      </label>
+    </section>
+
+    <div class="flex justify-end gap-3">
+      <a href="/channels" class="px-4 py-2 rounded-lg border border-claude-border text-sm">Vazgeç</a>
+      <button type="submit" class="bg-claude-accent hover:bg-claude-accent-hover text-white px-5 py-2 rounded-lg font-semibold text-sm">Kanalı oluştur</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

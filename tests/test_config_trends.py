@@ -103,3 +103,17 @@ def test_trends_min_volume_default_and_not_saved_when_default(tmp_path):
     out = tmp_path / "out.yaml"
     save_channel(out, cfg)
     assert "trends_min_volume" not in yaml.safe_load(out.read_text(encoding="utf-8"))
+
+
+def test_repo_gundem_yorum_channel_loads():
+    from pathlib import Path
+    from short_bot.formats import channel_format
+    p = Path(__file__).resolve().parents[1] / "config" / "channels" / "gundem-yorum.yaml"
+    if not p.exists():
+        pytest.skip("config/channels takipsiz olabilir (worktree)")
+    cfg = load_channel(p)
+    assert channel_format(cfg) == "yorum"
+    assert cfg.voice.provider == "cartesia" and cfg.voice.target_duration_s == (35, 50)
+    assert cfg.template == "flas" and cfg.schedule_cron.startswith("30 ")
+    assert cfg.youtube.auto_upload is False
+    assert "kimsenin adamı olmayan" in cfg.voice.persona

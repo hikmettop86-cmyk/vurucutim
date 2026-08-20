@@ -1,0 +1,131 @@
+{% extends "base.html.j2" %}
+{% block title %}Vurucu TİM — {{ c.name }} (Gündem Yorum){% endblock %}
+{% block content %}
+<div class="max-w-6xl mx-auto">
+  <div class="flex items-start justify-between mb-4">
+    <div>
+      <div class="flex items-center gap-3">
+        <h1 class="font-serif text-3xl font-bold">🎙️ {{ c.name }}</h1>
+        <span class="bg-red-600 text-white text-xs font-semibold px-3 py-1 rounded-full">Gündem Yorum · {{ c.voice.provider }}</span>
+        {% if not c.enabled %}<span class="bg-claude-surface-alt text-claude-muted text-xs px-2 py-1 rounded">kapalı</span>{% endif %}
+      </div>
+      <div class="text-sm text-claude-muted mt-1">{{ c.slug }} · {{ c.language }} · bölge {{ c.trends_region or 'dilden' }} · min hacim {{ c.trends_min_volume }} · {{ c.schedule_cron }}</div>
+    </div>
+    <div class="flex gap-2">
+      <button hx-post="/shorts/run-now" hx-vals='{"slug": "{{ c.slug }}"}' hx-swap="none"
+              class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm">▶ Şimdi üret</button>
+      <form method="post" action="/channels/{{ c.slug }}/compile-day" class="inline">
+        <button type="submit" class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm">🎞️ Günün derlemesini üret</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6 items-start">
+    <form method="post" action="/channels/{{ c.slug }}/edit-yorum" class="space-y-4">
+
+      <section class="bg-claude-surface border border-claude-border rounded-xl p-5 space-y-4">
+        <h2 class="font-semibold text-claude-accent">Kaynak &amp; tempo</h2>
+        <div class="grid grid-cols-3 gap-4">
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase tracking-wide">Kanal adı</span>
+            <input type="text" name="name" value="{{ c.name|e }}" class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+          </label>
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase tracking-wide">Handle</span>
+            <input type="text" name="handle" value="{{ c.handle }}" class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+          </label>
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase tracking-wide">Trends bölgesi</span>
+            <select name="trends_region" class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+              {% for code, label in regions %}<option value="{{ code }}" {% if c.trends_region == code %}selected{% endif %}>{{ code }} · {{ label }}</option>{% endfor %}
+            </select>
+          </label>
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase tracking-wide">En düşük arama hacmi</span>
+            <input type="number" name="trends_min_volume" value="{{ c.trends_min_volume }}" min="100" step="100" class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+          </label>
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase tracking-wide">Günde kaç video</span>
+            <select name="runs_per_day" class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+              <option value="">(özel cron: {{ c.schedule_cron }})</option>
+              {% for n in runs %}<option value="{{ n }}" {% if runs_now == n %}selected{% endif %}>{{ n }}</option>{% endfor %}
+            </select>
+          </label>
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase tracking-wide">AI kapısı eşiği (min_score)</span>
+            <input type="number" name="min_score" value="{{ c.min_score }}" step="0.5" min="0" max="10" class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+          </label>
+        </div>
+        <div class="flex items-center gap-6 text-sm">
+          <label class="flex items-center gap-2"><input type="checkbox" name="enabled" value="1" {% if c.enabled %}checked{% endif %}> Kanal etkin</label>
+          <label class="flex items-center gap-2"><input type="checkbox" name="auto_upload" {% if c.youtube and c.youtube.auto_upload %}checked{% endif %}> YouTube otomatik yükle</label>
+          <span class="text-[11px] text-claude-subtle">YPP incelemesi geçene kadar elle yükleme önerilir — sağdaki anlatım metnini okuyup yükle.</span>
+        </div>
+      </section>
+
+      <section class="bg-claude-surface border border-claude-border rounded-xl p-5 space-y-3">
+        <h2 class="font-semibold text-claude-accent">Yorumcu</h2>
+        <label class="block">
+          <span class="text-xs text-claude-muted uppercase tracking-wide">Persona</span>
+          <textarea name="voice_persona" rows="5" class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm font-mono">{{ c.voice.persona|e }}</textarea>
+          <span class="text-[11px] text-claude-subtle">Sabit kurallar: kaynak adıyla olgu (≥2 kaynak) → bağlantı → denge → "bence" hükmü → soru → "neden gündemde". Parti/lider tarafı, hakaret, "şok/bomba" yasak.</span>
+        </label>
+        <div class="grid grid-cols-3 gap-4">
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase tracking-wide">Senaryo modeli</span>
+            <input type="text" name="script_model" value="{{ c.script_model or '' }}" placeholder="opus" class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+          </label>
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase tracking-wide">Hedef süre (sn)</span>
+            <div class="flex gap-2 mt-1">
+              <input type="number" name="voice_target_min" value="{{ c.voice.target_duration_s[0] }}" min="10" max="180" class="w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+              <input type="number" name="voice_target_max" value="{{ c.voice.target_duration_s[1] }}" min="10" max="180" class="w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+            </div>
+          </label>
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase tracking-wide">Müzik seviyesi</span>
+            <input type="number" name="voice_music_volume" value="{{ c.voice.music_volume }}" step="0.01" min="0" max="1" class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+          </label>
+        </div>
+      </section>
+
+      <section class="bg-claude-surface border border-claude-border rounded-xl p-5 space-y-3">
+        <h2 class="font-semibold text-claude-accent">Ses</h2>
+        {% include "_partials/voice_cartesia_fields.html.j2" %}
+        <label class="block w-48">
+          <span class="text-xs text-claude-muted uppercase tracking-wide">Hız</span>
+          <input type="number" name="voice_speed" value="{{ c.voice.speed }}" step="0.05" min="0.6" max="1.5" class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+        </label>
+      </section>
+
+      <div class="flex justify-end gap-3">
+        <a href="/channels" class="px-4 py-2 rounded-lg border border-claude-border text-sm">Listeye dön</a>
+        <button type="submit" class="bg-claude-accent hover:bg-claude-accent-hover text-white px-5 py-2 rounded-lg font-semibold text-sm">Kaydet</button>
+      </div>
+    </form>
+
+    <aside class="space-y-3">
+      <div class="bg-claude-surface border border-claude-border rounded-xl p-4">
+        <div class="text-xs text-claude-muted uppercase tracking-wide mb-2">Son üretimler · anlatım metni</div>
+        {% if not recent %}
+          <div class="text-sm text-claude-muted">Henüz üretim yok. "Şimdi üret" ile ilkini dene.</div>
+        {% endif %}
+        {% for r in recent %}
+          <div class="border-t border-claude-border/60 pt-3 mt-3 first:border-0 first:pt-0 first:mt-0">
+            <a href="/shorts/{{ r.id }}" class="text-sm font-semibold hover:underline">{{ r.title }}</a>
+            <div class="text-[11px] text-claude-muted">{{ r.created_at.strftime('%d.%m %H:%M') if r.created_at else '' }} · {{ r.duration_s or '?' }} sn</div>
+            {% if r.narration %}
+              <details class="mt-1"><summary class="text-xs text-claude-accent cursor-pointer">Anlatımı oku</summary>
+                <p class="text-xs mt-1 whitespace-pre-line">{{ r.narration|e }}</p></details>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+      <div class="bg-claude-surface border border-claude-border rounded-xl p-4 text-xs text-claude-muted space-y-1">
+        <div><b>Günün derlemesi:</b> gece 23:30'da o günün yorum videoları (≥ 3 dk 10 sn olursa) tek uzun-form videoya birleşir; düğmeyle de üretilir.</div>
+        <div><b>YouTube:</b> {% if yt_connected %}bağlı{% else %}bağlı değil — bağlantı 6 sn kartın düzenleme sayfasındaki YouTube kartından{% endif %}.</div>
+      </div>
+    </aside>
+  </div>
+</div>
+{% endblock %}

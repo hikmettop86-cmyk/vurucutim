@@ -11,6 +11,9 @@
     {% if c.reel and c.reel.enabled %}
       <span title="Reel (footage'lı ilginç bilgiler)" class="ml-1">🎬</span>
     {% endif %}
+    {% if channel_format(c) == 'yorum' %}
+      <span title="Gündem Yorum (Trends + seslendirme)" class="ml-1 bg-red-600 text-white text-[10px] px-1.5 py-0.5 rounded">YORUM</span>
+    {% endif %}
   </td>
   <td class="p-3">{{ c.name }}</td>
   <td class="p-3">{{ c.language }}</td>
@@ -48,7 +51,7 @@
             hx-vals='{"slug": "{{ c.slug }}"}'
             hx-on::after-request="if (event.detail.successful) window.location.href='/activity?channel={{ c.slug }}'"
             class="text-claude-accent hover:underline mr-2" title="Şimdi üret">▶</button>
-    <a href="/channels/{{ c.slug }}/{% if c.reel and c.reel.enabled %}edit-reel{% else %}edit{% endif %}" class="text-claude-accent hover:underline mr-2">Düzenle</a>
+    <a href="{{ edit_path(c) }}" class="text-claude-accent hover:underline mr-2">Düzenle</a>
     <button hx-post="/channels/{{ c.slug }}/clone"
             hx-confirm="Kanalı klonlamak istiyor musunuz?"
             class="text-claude-muted hover:text-claude-text mr-2" title="Klonla">⎘</button>

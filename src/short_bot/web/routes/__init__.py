@@ -14,8 +14,13 @@ def register_blueprints(app: Flask) -> None:
         generator_test, system, youtube, youtube_stats, youtube_overview,
         activity, community, feeds, reel_new, reel_edit,
         topic_bank, series, autopilot, lang_packs,
-        curated, cartesia_api,
+        curated, cartesia_api, yorum,
     )
+    # Kanal formatı TEK yerden: liste parçaları düzenle bağlantısını ve rozeti
+    # buradan alır (formats.channel_format) — if-zinciri kopyalanmasın.
+    from short_bot.formats import FORMAT_LABELS, channel_format, edit_path
+    app.jinja_env.globals.update(channel_format=channel_format, edit_path=edit_path,
+                                 FORMAT_LABELS=FORMAT_LABELS)
     app.register_blueprint(dashboard.bp)
     app.register_blueprint(shorts.bp)
     app.register_blueprint(feeds.bp)
@@ -40,3 +45,4 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(community.bp)
     app.register_blueprint(curated.bp)
     app.register_blueprint(cartesia_api.bp)
+    app.register_blueprint(yorum.bp)

@@ -1,0 +1,119 @@
+# Gündem Yorum — Google Trends + Cartesia seslendirme (tarafsız-ama-görüşlü yorumcu).
+# gundem (6 sn Flaş kartı) kanalından türetildi; aynı Flaş kimliği, üstüne 35-50 sn
+# anlatım (templates/flas-narrator.html.j2). Anlatım kuralları narration_writer.
+# build_yorum_prompt'ta: kaynak adıyla olgu (≥2 kaynak) → bağlantı → denge → "bence"
+# hükmü → kapanış sorusu → "neden gündemde". Ses: Cartesia 'Taylan' (tr, masculine,
+# "versatile articulate male for storytelling") — panelden değiştirilebilir.
+# Cron :30'da: 6 sn kartın koşularıyla (07-22/3, :00) çakışmasın. Günde 5.
+# Yükleme KAPALI: YPP incelemesine kadar operatör anlatımı okuyup elle yükler.
+slug: gundem-yorum
+name: Gündem Yorum
+keywords:
+- Türkiye gündemi
+- son dakika
+- yorum
+language: tr
+content_source: trends
+trends_region: TR
+schedule_cron: 30 8-20/3 * * *
+trends_min_volume: 5000
+duration_s: 6
+min_score: 6.0
+max_candidates_per_run: 25
+max_age_hours: 24
+template: flas
+colors:
+  primary: '#d0021b'
+  accent: '#ffe600'
+  bg_gradient:
+  - '#3a3a3a'
+  - '#141414'
+handle: '@gundem'
+output_dir: output/gundem-yorum
+enabled: true
+youtube:
+  auto_upload: false
+  ai_content: false
+  category_id: '25'
+  privacy_status: public
+  min_score_for_upload: 6.0
+  cron_preset: null
+bg_video:
+  enabled: false
+  scale: 0.88
+  blur_px: 30
+  dim: 0.25
+trend_boost:
+  enabled: false
+bg_image_blur: 8
+dna:
+  archetype: flas
+  palette:
+    primary: '#d0021b'
+    accent: '#ffe600'
+    bg_gradient:
+    - '#3a3a3a'
+    - '#141414'
+    body_bg:
+    - '#141414'
+    - '#0e0e0e'
+    text_main: '#ececec'
+    text_muted: '#9a9a9a'
+    header_top_color: ''
+    header_bottom_color: ''
+  fonts:
+    headline: Oswald
+    body: Barlow
+    google_imports:
+    - Oswald:wght@600;700
+    - Barlow:wght@500;600;700
+    size_headline_top: null
+    size_headline_bottom: null
+  tone:
+    voice: hızlı, net, tarafsız, güvenilir
+    style: son dakika bülteni; ilk cümlede ne olduğu, sonra kim/nerede/ne zaman
+    forbidden:
+    - taraf tutan yorum
+    - küfür ve hakaret
+    - panik yaratan abartı
+    - doğrulanmamış iddiayı kesin gibi yazmak
+    - '"BOMBA" ve "ŞOK" gibi yıpranmış manşet klişeleri'
+    - her manşeti ünlemle bitirmek
+    - uzun teknik analiz
+    sentence_max_words: 14
+    paragraph_sentences:
+    - 3
+    - 5
+    body_max_chars: 330
+    headline_style_hint: 'Üst satır TEK ÖZNE (1-2 kelime, örn. ''ADALAR''), alt satır NE OLDU (2-4 kelime,
+      örn. ''YİNE SALLANDI''); photo_overlay = KJ alt satırı: rakam/kurum/yer (örn. ''KANDİLLİ: 3.1 BÜYÜKLÜĞÜNDE
+      SARSINTI'')'
+  banner_shape: flat
+  highlight_style: underline
+  chip_style: rounded
+  category_icon: 📰
+  search_query_template: '{header_top} {header_bottom} Türkiye haber'
+  persona_summary: Türkiye'nin o an en çok aradığı konuyu 6 saniyede, tarafsız ve net anlatan gündem kanalı.
+    Manşet ne olduğunu söyler, gövde üç cümlede bağlamı verir; abartı ve yorum yok.
+  custom_css: ''
+  ui_badge: ''
+  animation_style: none
+script_model: opus
+voice:
+  enabled: true
+  provider: cartesia
+  voice_id: c1cfee3d-532d-47f8-8dd2-8e5b2b66bf1d
+  speed: 1.05
+  persona: 'Sen Türkiye''nin gündemini yorumlayan, kimsenin adamı olmayan bir sokak bilgesisin. Taraf
+    tutmazsın ama görüşsüz de değilsin: olayı sade anlatır, herkesin aklındaki soruyu sen sorar, kimsenin
+    bağlamadığı bir noktayı bağlar, sonunda adil ama net bir hüküm verirsin. Vatandaşın tarafındasın —
+    kurumların değil, partilerin değil. Hafif mizah olur, alay olmaz. Acı haberde saygılısın. Konuşma
+    dili: kısa cümleler, ''bakın'', ''şimdi'', ''bence''; spiker kalıpları yok (''açıklandı'', ''bildirildi'',
+    ''kaydedildi'').'
+  target_duration_s:
+  - 35
+  - 50
+  music_volume: 0.05
+  model: sonic-3.5
+  volume: 1.0
+  emotion: ''
