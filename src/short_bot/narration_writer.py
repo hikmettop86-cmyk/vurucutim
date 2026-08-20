@@ -5,6 +5,7 @@ from short_bot.claude_cli import run_json
 import logging
 
 from short_bot.fact_gate import unverified_claims
+from short_bot.narration_lint import dangling_fragments, fragment_feedback
 from short_bot.locale import LANGUAGE_NAMES
 from short_bot.narration import Narration
 
@@ -259,7 +260,12 @@ HARD RULES:
 - BANNED PHRASES (do not use, in any inflection): {banned}
 - Every fact must come from the sources above. Invent nothing — no names, numbers, dates.
 - Plain spoken language, no markdown, no emoji, no brackets, numbers written as spoken.
-- Vary sentence length. Do not start two consecutive sentences with the same word.
+- Vary sentence length, but EVERY sentence must stand on its own: never write a short
+  abstract headline sentence whose referent arrives later ('Asıl mesele hız.'). If you
+  name an abstraction, the concrete fact goes in the SAME sentence
+  ('Asıl mesele hız: saldırgan bir ay önce partiye geçmişti.'). A metaphor is allowed
+  only next to the literal fact it stands for.
+- Do not start two consecutive sentences with the same word.
 
 Return ONLY the JSON object."""
 
@@ -299,14 +305,30 @@ def write_yorum_narration(
         narration = _uret(prompt + _budget_feedback(actual, lo_w, hi_w))
 
     eksik = unverified_claims(narration.full_text(), reference, language=channel.language)
-    if not eksik:
-        return narration
-    log.warning(f"[olgu] kaynaklarda geçmeyen isim/sayı: {eksik} → yeniden yazdırılıyor")
-    narration = _uret(prompt + _fact_feedback(eksik))
-    eksik = unverified_claims(narration.full_text(), reference, language=channel.language)
     if eksik:
-        raise RuntimeError(
-            f"yorum anlatımı kaynaklarda geçmeyen isim/sayı içeriyor: {', '.join(eksik)}. "
-            f"İki denemede de düzelmedi — video üretilmedi.")
-    log.info("[olgu] düzeltme turu temiz ✓")
+        log.warning(f"[olgu] kaynaklarda geçmeyen isim/sayı: {eksik} → yeniden yazdırılıyor")
+        narration = _uret(prompt + _fact_feedback(eksik))
+        eksik = unverified_claims(narration.full_text(), reference, language=channel.language)
+        if eksik:
+            raise RuntimeError(
+                f"yorum anlatımı kaynaklarda geçmeyen isim/sayı içeriyor: {', '.join(eksik)}. "
+                f"İki denemede de düzelmedi — video üretilmedi.")
+        log.info("[olgu] düzeltme turu temiz ✓")
+
+    # ÜSLUP KAPISI: dayanaksız kısa cümle ("Asıl mesele hız.") bir kez düzelttirilir.
+    # Uydurma bilgiden farkı: ısrar ederse video YİNE üretilir — kötü bir cümle,
+    # yanlış bilgi kadar ağır değil; ama sessizce geçmesin diye log'a düşer.
+    parcali = dangling_fragments(narration.full_text())
+    if parcali:
+        log.warning(f"[üslup] dayanaksız kısa cümle: {parcali} → yeniden yazdırılıyor")
+        aday = _uret(prompt + fragment_feedback(parcali))
+        kalan = dangling_fragments(aday.full_text())
+        if unverified_claims(aday.full_text(), reference, language=channel.language):
+            log.warning("[üslup] düzeltme turu olgu kapısını bozdu — ilk metin korunuyor")
+        elif kalan:
+            log.warning(f"[üslup] düzeltmede de kaldı: {kalan} — yine de üretiliyor")
+            narration = aday
+        else:
+            log.info("[üslup] düzeltme turu temiz ✓")
+            narration = aday
     return narration

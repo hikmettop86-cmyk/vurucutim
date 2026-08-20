@@ -128,3 +128,63 @@ def test_default_persona_is_neutral_but_opinionated():
     for needle in ("Taraf tutmaz", "görüşsüz de değil", "herkesin aklındaki soru", "adil ama net",
                    "Vatandaşın tarafında", "alay olmaz", "saygılı"):
         assert needle in YORUM_PERSONA_TR, needle
+
+
+def _n(hook, beat, close):
+    return Narration(hook=hook,
+                     beats=[{"text": beat, "on_screen": "KART"},
+                            {"text": "İkinci cümle burada duruyor.", "on_screen": "İKİ"},
+                            {"text": "Üçüncü cümle burada duruyor.", "on_screen": "ÜÇ"}],
+                     loop_close=close, mood="neutral")
+
+
+def test_style_gate_asks_one_rewrite_for_dangling_fragment(monkeypatch):
+    """Kullanıcı vakası: 'Asıl mesele hız.' — bir düzeltme turu istenir."""
+    from short_bot import narration_writer as nw
+    kotu = _n("Bıçak neden çekildi?", "Asıl mesele hız.", "Mahkeme karar verecek.")
+    iyi = _n("Bıçak neden çekildi?", "Asıl mesele hız: saldırgan bir ay önce geçmişti.",
+             "Mahkeme karar verecek.")
+    prompts, sirali = [], [kotu, iyi]
+
+    def _run_json(prompt, model_cls, **kw):
+        prompts.append(prompt)
+        return sirali[min(len(prompts) - 1, len(sirali) - 1)]
+    monkeypatch.setattr(nw, "run_json", _run_json)
+    monkeypatch.setattr(nw, "word_budget", lambda *a, **k: (5, 200))
+    monkeypatch.setattr(nw, "unverified_claims", lambda *a, **k: [])
+    n = nw.write_yorum_narration(_item(), "gövde", channel=_channel(), extra_sources=[])
+    assert len(prompts) == 2 and "STYLE ERROR" in prompts[1]
+    assert "Asıl mesele hız." in prompts[1]
+    assert "Asıl mesele hız: saldırgan" in n.full_text()
+
+
+def test_style_gate_does_not_kill_the_video_when_rewrite_fails(monkeypatch, caplog):
+    from short_bot import narration_writer as nw
+    kotu = _n("Bıçak neden çekildi?", "Asıl mesele hız.", "Mahkeme karar verecek.")
+    monkeypatch.setattr(nw, "run_json", lambda *a, **k: kotu)
+    monkeypatch.setattr(nw, "word_budget", lambda *a, **k: (5, 200))
+    monkeypatch.setattr(nw, "unverified_claims", lambda *a, **k: [])
+    with caplog.at_level("WARNING"):
+        n = nw.write_yorum_narration(_item(), "gövde", channel=_channel(), extra_sources=[])
+    assert n is not None                     # üretim DURMAZ
+    assert "düzeltmede de kaldı" in caplog.text
+
+
+def test_style_gate_keeps_first_text_if_rewrite_breaks_facts(monkeypatch):
+    from short_bot import narration_writer as nw
+    kotu = _n("Bıçak neden çekildi?", "Asıl mesele hız.", "Mahkeme karar verecek.")
+    uydurma = _n("Bıçak neden çekildi?", "Asıl mesele hız: Elon Musk devreye girdi.",
+                 "Mahkeme karar verecek.")
+    seq = [kotu, uydurma]
+    calls = {"n": 0}
+
+    def _run_json(prompt, model_cls, **kw):
+        calls["n"] += 1
+        return seq[min(calls["n"] - 1, len(seq) - 1)]
+    monkeypatch.setattr(nw, "run_json", _run_json)
+    monkeypatch.setattr(nw, "word_budget", lambda *a, **k: (5, 200))
+    # ilk metin temiz, düzeltme uydurma isim getiriyor
+    monkeypatch.setattr(nw, "unverified_claims",
+                        lambda text, ref, **k: ["Elon Musk"] if "Musk" in text else [])
+    n = nw.write_yorum_narration(_item(), "gövde", channel=_channel(), extra_sources=[])
+    assert "Musk" not in n.full_text()       # bozuk düzeltme reddedilir
