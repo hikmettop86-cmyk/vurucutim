@@ -48,7 +48,9 @@ def should_auto_upload(*, channel, picked_score: float | None,
 
 
 from short_bot.db import get_rss_item_for_short, record_youtube_upload, shorts as _shorts_table  # noqa: E402
-from short_bot.youtube.metadata_writer import generate_youtube_metadata  # noqa: E402
+from short_bot.youtube.metadata_writer import (  # noqa: E402
+    generate_youtube_metadata, search_terms_for as _search_terms_for,
+)
 from short_bot.youtube.uploader import build_snippet, build_status, upload_video  # noqa: E402
 from short_bot.youtube.proxy import (  # noqa: E402
     load_channel_proxy_url, build_proxied_http,
@@ -152,6 +154,10 @@ def run_auto_upload(*, eng, short_id: int, channel, credentials,
                 claude_path=claude_path, model=model,
                 backend=backend, api_key=api_key,
                 hook_patterns=hook_pats,
+                # Kanalın KANITLI arama sözlüğü (youtube_search_terms). Kimliği
+                # ödünç alan kanalda (credentials_from) sözlük de ödünç alınır:
+                # sorgular YouTube kanalına aittir, short-bot slug'ına değil.
+                search_terms=_search_terms_for(eng, channel),
                 # Reel'in ürettiği kısa SEO başlığını temel al (row.title); mizah
                 # kanalında metadata bunu koruyup haber tonuna sapmasın.
                 base_title=(row.title or ""),

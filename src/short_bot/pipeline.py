@@ -970,7 +970,10 @@ def _produce_from_item(
         eng, channel=channel.slug, rss_item_guid=item.guid,
         title=script.header_top + " " + script.header_bottom,
         file_path=str(out_path), duration_s=channel.duration_s,
-        script_json=script.model_copy(update={"subject": subject}).model_dump_json(),
+        script_json=script.model_copy(update={
+            "subject": subject,
+            "search_queries": list(getattr(item, "trend_related", ()) or ())[:10],
+        }).model_dump_json(),
         render_ms=render_ms)
     finish_run(eng, run_id, status="success", short_id=short_id, error=None)
 
@@ -1148,8 +1151,10 @@ def _run_rss(*, channel, run_id, log, eng, settings,
     scored = _apply_saga_penalty(scored, channel=channel, eng=eng, log=log)
     if is_trends:
         # Puan kapı, hacim sıra: ülkenin en çok aradığı OLAY önce.
-        top_n_candidates = select_by_volume(scored, min_score=channel.min_score,
-                                            n=_IMAGE_RETRY_MAX)
+        top_n_candidates = select_by_volume(
+            scored, min_score=channel.min_score, n=_IMAGE_RETRY_MAX,
+            intent=getattr(channel, "trends_intent", "any"),
+            language=channel.language)
     else:
         top_n_candidates = select_top(scored, min_score=channel.min_score,
                                       n=_IMAGE_RETRY_MAX)
@@ -1431,8 +1436,10 @@ def _run_rss(*, channel, run_id, log, eng, settings,
         channel=channel.slug, rss_item_guid=picked.item.guid,
         title=script.header_top + " " + script.header_bottom,
         file_path=str(out_path), duration_s=channel.duration_s,
-        script_json=script.model_copy(
-            update={"subject": picked.subject}).model_dump_json(),
+        script_json=script.model_copy(update={
+            "subject": picked.subject,
+            "search_queries": list(getattr(picked.item, "trend_related", ()) or ())[:10],
+        }).model_dump_json(),
         render_ms=render_ms,
     )
     finish_run(eng, run_id, status="success", short_id=short_id, error=None)

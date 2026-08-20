@@ -168,6 +168,21 @@ Index("idx_yt_channel_stats_chan_date",
       youtube_channel_stats.c.channel, youtube_channel_stats.c.snapshot_date,
       unique=True)
 
+# KANALIN ARAMA SÖZLÜĞÜ: izleyicilerin bizi bulduğu gerçek sorgular.
+# Ölçüm (2026-08-20) gösterdi ki bu liste tahmin edilemiyor — "gs transfer"
+# ayda 25K+ izlenme getiriyordu ve o kısaltma hiçbir başlığımızda yoktu.
+# Metadata yazarı bunu okur (bkz. youtube/metadata_writer.py).
+youtube_search_terms = Table(
+    "youtube_search_terms", metadata,
+    Column("channel", String, nullable=False),
+    Column("term", String, nullable=False),
+    Column("views", Integer, default=0),
+    Column("window_end", String, nullable=False),   # ölçüm penceresinin son günü
+    Column("updated_at", DateTime, default=_utcnow),
+)
+Index("idx_yt_search_terms_chan_term",
+      youtube_search_terms.c.channel, youtube_search_terms.c.term, unique=True)
+
 youtube_quota = Table(
     "youtube_quota", metadata,
     Column("channel", String, nullable=False),
@@ -541,6 +556,54 @@ def recent_narration_variations(eng: Engine, channel: str, limit: int = 6) -> li
         if len(out) >= limit:
             break
     return out
+
+
+def upsert_search_terms(eng: Engine, *, channel: str,
+                        terms: list[tuple[str, int]], window_end) -> int:
+    """Kanalın arama sözlüğünü tazele. Aynı terim tekrar gelirse ÜZERİNE yazılır
+    (son pencere geçerlidir; toplama YAPILMAZ — yoksa ölen sorgular sonsuza dek
+    listede kalır). Dönen sayı yazılan satır adedi."""
+    if not terms:
+        return 0
+    we = window_end.isoformat() if hasattr(window_end, "isoformat") else str(window_end)
+    n = 0
+    with eng.begin() as conn:
+        for term, views in terms:
+            term = (term or "").strip()
+            if not term:
+                continue
+            row = conn.execute(
+                select(youtube_search_terms.c.channel)
+                .where(youtube_search_terms.c.channel == channel)
+                .where(youtube_search_terms.c.term == term)
+            ).fetchone()
+            if row:
+                conn.execute(youtube_search_terms.update()
+                             .where(youtube_search_terms.c.channel == channel)
+                             .where(youtube_search_terms.c.term == term)
+                             .values(views=int(views), window_end=we,
+                                     updated_at=_utcnow()))
+            else:
+                conn.execute(youtube_search_terms.insert().values(
+                    channel=channel, term=term, views=int(views),
+                    window_end=we, updated_at=_utcnow()))
+            n += 1
+    return n
+
+
+def top_search_terms(eng: Engine, channel: str, limit: int = 12) -> list[str]:
+    """Bu kanalın en çok izlenme getiren arama terimleri (yalnız metin).
+
+    Boş liste = henüz ölçüm yok (yeni kanal) → metadata yazarı Trends
+    sorgularıyla yetinir, hiçbir şey bozulmaz."""
+    with eng.connect() as conn:
+        rows = conn.execute(
+            select(youtube_search_terms.c.term)
+            .where(youtube_search_terms.c.channel == channel)
+            .order_by(youtube_search_terms.c.views.desc())
+            .limit(max(1, int(limit)))
+        ).fetchall()
+    return [r[0] for r in rows]
 
 
 def count_recent_categories(
@@ -1215,6 +1278,13 @@ def kv_touch(eng: Engine, k: str, v: str = "", *, at: datetime | None = None) ->
                          .values(v=v, updated_at=ts)).rowcount
         if not n:
             conn.execute(kv.insert().values(k=k, v=v, updated_at=ts))
+
+
+def kv_value(eng: Engine, k: str) -> str:
+    """Anahtarın değeri ya da boş dize (hiç yazılmadıysa)."""
+    with eng.connect() as conn:
+        row = conn.execute(select(kv.c.v).where(kv.c.k == k)).first()
+    return (row[0] or "") if row else ""
 
 
 def kv_updated_at(eng: Engine, k: str):

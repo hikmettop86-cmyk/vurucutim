@@ -22,11 +22,81 @@ class YoutubeMetadata(BaseModel):
     tags: list[str] = Field(default_factory=list, min_length=0, max_length=20)
 
 
+def search_terms_for(eng, channel, limit: int = 12) -> list[str]:
+    """Bu kanalın metadata'da kullanılacak KANITLI arama sözlüğü.
+
+    Kimliğini başka kanaldan ödünç alan formatlarda (youtube.credentials_from —
+    ör. gundem-yorum → gundem) sorgular YouTube KANALINA aittir, short-bot
+    slug'ına değil; bu yüzden önce ödünç veren slug denenir. Ölçüm henüz yoksa
+    boş liste döner ve metadata yalnız konunun Trends sorgularıyla yazılır.
+
+    Hiçbir hata yükseltmez: sözlük bir iyileştirmedir, yükleme şartı değildir.
+    """
+    try:
+        from short_bot.db import top_search_terms
+        from short_bot.youtube import auth as _auth
+        primary = _auth.creds_slug(channel)
+        terms = top_search_terms(eng, primary, limit=limit)
+        if not terms and primary != channel.slug:
+            terms = top_search_terms(eng, channel.slug, limit=limit)
+        return terms
+    except Exception:  # noqa: BLE001
+        return []
+
+
+def _search_block(script: dict, search_terms, language: str) -> str:
+    """ARAMA SÖZLÜĞÜ bloğu: izleyicinin gerçekten YAZDIĞI dizeler.
+
+    İki kaynak birleşir:
+      * ``script["search_queries"]`` — bu KONUNUN canlı sorguları (Google Trends
+        ilişkili aramaları, hacim sırasında). Konuşulan metne asla girmez
+        (bkz. narration_writer.BANNED_PHRASES) ama metadata YouTube'un metni
+        sorguyla eşleştirdiği tek yer.
+      * ``search_terms`` — bu KANALIN kanıtlı sorguları (YouTube Analytics,
+        youtube_search_terms tablosu): izleyiciler bizi fiilen bu kelimelerle
+        buldu.
+
+    Ölçüm (2026-08-20, Aslan Gündem 28 gün): aramadan gelen 245K izlenmenin
+    tamamı VARLIK+NİYET kalıbındaydı ("galatasaray transfer son dakika"), soru
+    değil; ve "gs" kısaltması ayda 25K+ izlenme getirdiği hâlde hiçbir
+    başlığımızda geçmiyordu. Blok bu iki gerçeği doğrudan hedefler.
+    """
+    from short_bot.search_intent import ranked_queries
+
+    trend_q = ranked_queries(script.get("search_queries") or (), language=language)
+    proven = [t for t in (search_terms or []) if str(t).strip()][:12]
+    if not trend_q and not proven:
+        return ""
+    parts = ["\nARAMA SÖZLÜĞÜ (İZLEYİCİ TAM OLARAK BUNLARI YAZIYOR):"]
+    if trend_q:
+        parts.append("- Bu konunun canlı sorguları: " + " | ".join(trend_q))
+    if proven:
+        parts.append("- Kanalın kanıtlı sorguları (bizi bu kelimelerle buldular): "
+                     + " | ".join(str(t) for t in proven))
+    parts.append(
+        "\nARAMA KURALLARI (title/description/tags bunlara göre kurulur):\n"
+        "1. BAŞLIK: yukarıdaki sorgulardan HABERLE ÖRTÜŞEN en üsttekinin "
+        "kelimelerini BİREBİR ve BAŞTA taşı. Örtüşmeyeni ZORLAMA.\n"
+        "2. Konuyla ilgisiz sorguyu EKLEME — yanlış eşleşme izlenmeyi düşürür, "
+        "tıklayan kişi hemen çıkar.\n"
+        "3. KISALTMAYI da yaz (gs, fb, ŞL gibi): başlığa sığmıyorsa açıklamanın "
+        "ilk iki satırına ve etiketlere koy.\n"
+        "4. Etiketleri sorgudaki gibi YAZ — 'son dakika' boşlukluysa boşluklu "
+        "yaz, 'sondakika' diye birleştirme.\n"
+        "5. Açıklamanın İLK SATIRI sorgunun karşılığını doğrudan versin "
+        "(arayan kişi cevabı ilk satırda görsün).")
+    return "\n".join(parts) + "\n"
+
+
 def build_metadata_prompt(*, channel, script: dict,
                           rss_source: str | None,
                           rss_link: str | None,
-                          hook_patterns=None, base_title: str = "") -> str:
-    """Compose the prompt for Sonnet. Returns a string."""
+                          hook_patterns=None, base_title: str = "",
+                          search_terms=None) -> str:
+    """Compose the prompt for Sonnet. Returns a string.
+
+    ``search_terms``: kanalın kanıtlı arama sözlüğü (db.top_search_terms).
+    Boş geçilebilir — o zaman yalnız konunun Trends sorguları kullanılır."""
     lang_name = LANGUAGE_NAMES.get(channel.language, channel.language)
 
     # MİZAH PERSONA override'ı: prompt varsayılan olarak HABER-tonlu (fair-use
@@ -75,6 +145,7 @@ def build_metadata_prompt(*, channel, script: dict,
 
     body = script.get("body_paragraph", "")
     keywords = ", ".join((channel.keywords or [])[:8])
+    search_block = _search_block(script, search_terms, channel.language)
 
     return f"""Sen bir YouTube Shorts kanalı için SEO-uyumlu metadata üreticisisin.
 
@@ -92,6 +163,7 @@ KANAL:
 - Mood: {script.get("mood", "")}
 
 {source_block}
+{search_block}
 {hook_block}
 GÖREV: Aşağıdaki kurallara göre title + description + tags üret.
 
@@ -141,13 +213,15 @@ def generate_youtube_metadata(*, channel, script: dict,
                               model: str = "sonnet",
                               backend: str = "claude_cli",
                               api_key: str | None = None,
-                              hook_patterns=None, base_title: str = "") -> YoutubeMetadata:
+                              hook_patterns=None, base_title: str = "",
+                              search_terms=None) -> YoutubeMetadata:
     """Call Sonnet to produce metadata. Raises ClaudeCliError on failure —
     callers should fall back to non-LLM build_snippet."""
     prompt = build_metadata_prompt(
         channel=channel, script=script,
         rss_source=rss_source, rss_link=rss_link,
         hook_patterns=hook_patterns, base_title=base_title,
+        search_terms=search_terms,
     )
     return run_json(
         prompt, YoutubeMetadata,

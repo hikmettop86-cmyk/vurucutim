@@ -33,6 +33,11 @@ class NewsItem:
     trend_growth_pct: int = 0                          # 1000 = %1.000 artış
     trend_related: tuple[str, ...] = ()                # ilişkili aramalar
     trend_articles: tuple[tuple[str, str], ...] = ()   # diğer kaynaklar: (yayıncı, başlık)
+    # followup_of: bu haberi DAHA ÖNCE anlatan videonun özeti (bkz. followup.py).
+    # Doluysa yazarlar "güncelleme" modunda çalışır: yalnız YENİ olanı anlatır.
+    # Yalnız Gündem masasındaki "takip üret" düğmesi doldurur — otomatik üretim
+    # asla doldurmaz, yoksa aynı haberi iki kez anlatan bot oluruz.
+    followup_of: str = ""
 
 
 @dataclass(frozen=True)
@@ -97,6 +102,12 @@ class Script(BaseModel):
     # Bir sonraki video bunu OKUYUP aynısını seçmez — art arda videolar aynı
     # iskelette çıkmasın diye (kullanıcı bildirimi 2026-08-20).
     narration_variation: str = Field(default="", max_length=60)
+    # search_queries: bu KONUNUN canlı arama dizeleri (Trends ilişkili aramaları).
+    # Senaryo yazarı ÜRETMEZ — seçilen adaydan kaydetmeden önce taşınır, tıpkı
+    # subject gibi. Tek tüketicisi YouTube metadata yazarı: başlık/açıklama/etiket
+    # YouTube'un metni sorguyla eşleştirdiği TEK yer. Konuşulan metne ASLA girmez
+    # (bkz. narration_writer.BANNED_PHRASES — kullanıcı kuralı 2026-08-20).
+    search_queries: list[str] = Field(default_factory=list, max_length=10)
 
     @field_validator("header_top", "header_bottom", "photo_overlay",
                       "body_paragraph", "category", mode="before")

@@ -12,7 +12,9 @@ from short_bot.db import init_db, record_youtube_upload, get_rss_item_for_short
 from short_bot.pexels import load_secrets as _load_secrets
 from short_bot.web.models import Short
 from short_bot.youtube import auth as yt_auth
-from short_bot.youtube.metadata_writer import generate_youtube_metadata
+from short_bot.youtube.metadata_writer import (
+    generate_youtube_metadata, search_terms_for as _search_terms_for,
+)
 from short_bot.youtube.proxy import (
     _redact_err, build_proxied_http, build_proxied_requests_session,
     load_channel_proxy_url,
@@ -261,6 +263,7 @@ def upload(short_id):
             backend=call.backend,
             api_key=call.api_key,
             hook_patterns=hook_pats,
+            search_terms=_search_terms_for(eng, cfg),
         )
         generated = {"title": meta.title, "description": meta.description, "tags": meta.tags}
         current_app.logger.info("youtube: Sonnet metadata generated for short %s", short_id)
