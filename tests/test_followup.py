@@ -143,3 +143,33 @@ def test_yorum_promptuna_girer():
 def test_newsitem_alani_replace_ile_dolar():
     it = dataclasses.replace(_item(), followup_of="özet")
     assert it.followup_of == "özet" and _item().followup_of == ""
+
+
+# --- derleme: evergreen varlık de gerçek sorguları taşır -----------------------
+
+def test_derleme_etiketleri_gunun_gercek_sorgularini_tasir():
+    """Ölçüm: 60+ günlük videolarda izlenmenin %17,3'ü aramadan geliyor — akış
+    bıraktıktan sonra kalan tek kapı arama. Derleme evergreen varlık."""
+    from datetime import date as _date
+    from pathlib import Path as _Path
+    from short_bot.compilation import Clip, build_compilation_metadata
+    clips = [Clip(1, "BATRAKOV GELDİ", _Path("a.mp4"), 40, datetime(2026, 8, 20, 9),
+                  queries=("galatasaray transfer son dakika", "gs transfer")),
+             Clip(2, "DEPREM", _Path("b.mp4"), 40, datetime(2026, 8, 20, 12),
+                  queries=("istanbul deprem", "son dakika"))]
+    m = build_compilation_metadata(_date(2026, 8, 20), clips, channel_name="G", handle="@g")
+    assert "gs transfer" in m["tags"] and "istanbul deprem" in m["tags"]
+    assert m["tags"].count("son dakika") == 1        # taban etiketle çakışma tekrarlanmaz
+    assert len(m["tags"]) <= 20                       # YouTube sınırı
+
+
+def test_derleme_sorgusuz_kliplerde_eski_etiketlerde_kalir():
+    from datetime import date as _date
+    from pathlib import Path as _Path
+    from short_bot.compilation import Clip, build_compilation_metadata
+    m = build_compilation_metadata(
+        _date(2026, 8, 20),
+        [Clip(1, "X", _Path("a.mp4"), 40, datetime(2026, 8, 20, 9))],
+        channel_name="G", handle="@g")
+    assert m["tags"] == ["gündem", "haber", "türkiye", "son dakika", "google trends",
+                         "günün özeti"]

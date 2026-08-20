@@ -28,6 +28,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 
 from short_bot.db import record_short, shorts
+from short_bot.text_normalize import locale_fold
 
 log = logging.getLogger(__name__)
 
@@ -53,6 +54,11 @@ class Clip:
     path: Path
     duration_s: float
     created_at: datetime
+    # queries: o klibin konusunun canlı arama dizeleri (Script.search_queries).
+    # Derleme EVERGREEN varlıktır ve ölçüm (2026-08-20) 60+ günlük videolarda
+    # izlenmenin %17,3'ünün aramadan geldiğini gösterdi — akış bıraktıktan sonra
+    # kalan tek kapı arama. Etiketler bu yüzden gerçek sorgu metnini taşır.
+    queries: tuple[str, ...] = ()
 
 
 # --- seçim --------------------------------------------------------------------------
@@ -84,7 +90,7 @@ def pick_day_clips(eng, channel_slug: str, day: date, *, tz: str = "Europe/Istan
     with eng.connect() as conn:
         rows = conn.execute(
             select(shorts.c.id, shorts.c.title, shorts.c.file_path, shorts.c.created_at,
-                   shorts.c.rss_item_guid)
+                   shorts.c.rss_item_guid, shorts.c.script_json)
             .where(shorts.c.channel == channel_slug)
             .where(shorts.c.created_at >= start)
             .where(shorts.c.created_at < end)
@@ -100,7 +106,12 @@ def pick_day_clips(eng, channel_slug: str, day: date, *, tz: str = "Europe/Istan
         d = probe(p)
         if d <= 0:
             continue
-        clips.append(Clip(short_id=r.id, title=r.title, path=p, duration_s=d, created_at=r.created_at))
+        try:
+            qs = tuple((json.loads(r.script_json or "{}") or {}).get("search_queries") or ())
+        except (ValueError, TypeError):
+            qs = ()
+        clips.append(Clip(short_id=r.id, title=r.title, path=p, duration_s=d,
+                          created_at=r.created_at, queries=qs))
     return clips
 
 
@@ -132,6 +143,18 @@ def build_compilation_metadata(day: date, clips: list[Clip], *, channel_name: st
         lines.append(f"{sec // 60:02d}:{sec % 60:02d} {name}")
     lines += ["", f"{channel_name} · {handle}", "#gündem #haber #türkiye #sondakika"]
     tags = ["gündem", "haber", "türkiye", "son dakika", "google trends", "günün özeti"]
+    # O günün GERÇEK arama dizeleri etiketlere eklenir (varsa). Uydurma anahtar
+    # kelime değil: her biri o derlemede gerçekten anlatılan konunun sorgusudur.
+    seen = {locale_fold(t) for t in tags}
+    for clip in clips:
+        for q in clip.queries:
+            q = (q or "").strip()
+            if not q or len(tags) >= 20:
+                continue
+            key = locale_fold(q)
+            if key not in seen:
+                seen.add(key)
+                tags.append(q)
     return {"title": title[:100], "description": "\n".join(lines)[:5000], "tags": tags}
 
 
