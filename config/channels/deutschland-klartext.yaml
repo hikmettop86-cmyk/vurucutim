@@ -1,0 +1,126 @@
+slug: deutschland-klartext
+name: Deutschland Klartext
+keywords:
+- Nachrichten aus Deutschland
+- Einordnung
+- Kommentar
+language: de
+# Sunucu saati Europe/Istanbul; cron 1 saat İLERİ yazılır → Alman günü 08:30-19:30.
+schedule_cron: 30 9-21/3 * * *
+duration_s: 6
+min_score: 6.0
+max_candidates_per_run: 25
+max_age_hours: 24
+template: eilmeldung
+colors:
+  primary: '#0b3b73'
+  accent: '#e2001a'
+  bg_gradient:
+  - '#1d2632'
+  - '#10141a'
+handle: '@deutschlandkompakt'
+output_dir: output/deutschland-klartext
+# KAPALI — bilinçli. Cartesia bütçesi: Almanca 35-50 sn ≈ 600-750 karakter
+# (2,2 kelime/sn), günde 5 video ≈ 3.500 karakter ≈ 105.000/ay. 100.000'lik
+# plan TEK BAŞINA bu kanalla dolar ve Gündem Yorum'a yer kalmaz. Açmadan önce
+# plan büyütülmeli (bkz. tts/cartesia_client.MONTHLY_BUDGET_DEFAULT).
+enabled: false
+script_model: opus
+content_source: trends
+trends_region: DE
+trends_min_volume: 10000
+# Yorum videosu CEVAP verir: ilişkili aramalarında soru olan konular önce.
+trends_intent: question
+youtube:
+  auto_upload: false
+  ai_content: false
+  category_id: '25'
+  privacy_status: public
+  min_score_for_upload: 6.0
+  # Aynı YouTube kanalına üretir: kimlik, kota ve istatistik tek yerde toplanır.
+  credentials_from: deutschland-kompakt
+trend_boost:
+  enabled: false
+bg_image_blur: 8
+voice:
+  enabled: true
+  provider: cartesia
+  # Henrik — Steady Analyst: "articulate, dependable German male, business
+  # briefings". Alman haber yorumu için doğru kayıt: güvenilir, abartısız.
+  voice_id: d1cbea67-e4d3-47cd-be2a-2bd4e646b002
+  speed: 1.0
+  persona: 'Du kommentierst die Nachrichtenlage in Deutschland: parteilos, aber
+    nicht meinungslos. Zuerst sagst du sachlich, was passiert ist. Dann ordnest
+    du ein — was daran neu ist, was es konkret für die Menschen bedeutet, was
+    offen bleibt. Du wägst ab, drückst dich aber nicht: am Ende steht ein klares,
+    faires Urteil. Du stehst auf der Seite der Bürgerinnen und Bürger, nicht auf
+    der einer Partei, einer Behörde oder eines Konzerns. Trockener Humor ja, Häme
+    nein; bei Opfern und Trauer bist du respektvoll. Sprache: kurze Hauptsätze,
+    Aktiv statt Passiv, ''Der Reihe nach'', ''Fakt ist'', ''Bleibt die Frage''.
+    Keine Behördenfloskeln (''teilte mit'', ''wurde bekannt gegeben''), keine
+    Anglizismen-Show. Pressekodex: Verdächtige NIE mit vollem Namen — ''mutmaßlich'',
+    ''Max M.''.'
+  target_duration_s:
+  - 35
+  - 50
+  music_volume: 0.05
+  model: sonic-3.5
+dna:
+  archetype: eilmeldung
+  palette:
+    primary: '#0b3b73'
+    accent: '#e2001a'
+    bg_gradient:
+    - '#1d2632'
+    - '#10141a'
+    body_bg:
+    - '#10141a'
+    - '#0a0d12'
+    text_main: '#e8ebef'
+    text_muted: '#97a1ad'
+    header_top_color: ''
+    header_bottom_color: ''
+  fonts:
+    headline: Fira Sans Condensed
+    body: Fira Sans
+    google_imports:
+    - Fira+Sans+Condensed:wght@600;700
+    - Fira+Sans:wght@400;500;600;700
+    size_headline_top: null
+    size_headline_bottom: null
+  tone:
+    voice: sachlich, klar, unaufgeregt, verlässlich
+    style: Nachrichtenmeldung; erster Satz sagt WAS passiert ist, dann Wer/Wo/Wann
+      und die Einordnung in einem Satz
+    forbidden:
+    - Verdächtige oder Opfer mit vollem Namen nennen (Pressekodex — 'mutmaßlich',
+      'Max M.', 'die 73-Jährige')
+    - unbestätigte Behauptung als Tatsache schreiben
+    - Boulevard-Wörter wie 'SCHOCK', 'DRAMA', 'Wahnsinn', 'unfassbar'
+    - Ausrufezeichen am Ende jeder Zeile
+    - Panikmache und Angst-Zuspitzung
+    - parteiische Wertung oder Wahlempfehlung
+    - unnötige Anglizismen ('Breaking', 'Update', 'Statement')
+    - lange Behördenfloskeln ('im Rahmen von', 'zeitnah', 'diesbezüglich')
+    - englische Zahlen- und Datumsformate (richtig ist 1.500 / 20,5 Prozent /
+      14:32 Uhr / 20.08.2026 — nicht 1,500 oder 2:32 PM)
+    sentence_max_words: 13
+    paragraph_sentences:
+    - 3
+    - 5
+    body_max_chars: 350
+    headline_style_hint: 'Obere Zeile EIN Subjekt (1-2 Wörter, z.B. ''STUTTGART''),
+      untere Zeile WAS PASSIERT IST (2-4 Wörter, z.B. ''BAHN ERFASST PERSON'');
+      photo_overlay = Bauchbinde mit Zahl/Behörde/Ort.'
+  banner_shape: flat
+  highlight_style: underline
+  chip_style: rounded
+  categories: []
+  category_icon: 📰
+  search_query_template: '{header_top} {header_bottom} Deutschland Nachrichten'
+  persona_summary: Kommentarkanal zur deutschen Nachrichtenlage — parteilos, aber
+    nicht meinungslos. Erklärt in unter einer Minute, was passiert ist, ordnet es
+    ein und endet mit einem klaren, fairen Urteil.
+  custom_css: ''
+  ui_badge: ''
+  animation_style: none
