@@ -22,6 +22,19 @@ class YoutubeMetadata(BaseModel):
     tags: list[str] = Field(default_factory=list, min_length=0, max_length=20)
 
 
+# Hashtag ÖRNEĞİ dile özgü olmalı. Örnek Türkçe sabit kalınca Almanca kanalın
+# metadata'sına "#sondakika" sızıyordu: model örneği kopyalar, kural metnini
+# değil. (Aynı aile: çok dilli sessiz tuzaklar — persona/yasak listesi.)
+_HASHTAG_ORNEK: dict[str, str] = {
+    "tr": "#shorts #sondakika #haber",
+    "de": "#shorts #eilmeldung #nachrichten #deutschland",
+    "en": "#shorts #breakingnews #news",
+    "es": "#shorts #ultimahora #noticias",
+    "fr": "#shorts #actualites #info",
+    "ja": "#shorts #速報 #ニュース",
+}
+
+
 def search_terms_for(eng, channel, limit: int = 12) -> list[str]:
     """Bu kanalın metadata'da kullanılacak KANITLI arama sözlüğü.
 
@@ -146,6 +159,7 @@ def build_metadata_prompt(*, channel, script: dict,
     body = script.get("body_paragraph", "")
     keywords = ", ".join((channel.keywords or [])[:8])
     search_block = _search_block(script, search_terms, channel.language)
+    hashtag_ornek = _HASHTAG_ORNEK.get(channel.language, _HASHTAG_ORNEK["en"])
 
     return f"""Sen bir YouTube Shorts kanalı için SEO-uyumlu metadata üreticisisin.
 
@@ -189,7 +203,7 @@ DESCRIPTION KURALLARI ({lang_name} dilinde):
    sahipleri kanal sahibiyle iletişime geçebilir."
 8. Boş satır
 9. Hashtag bloğu: 5-10 tag, son satırda. #shorts MUTLAKA dahil. Konuyla
-   alakalı + handle. Örn: "#shorts #sondakika #haber #{channel.handle.replace('@', '')}"
+   alakalı + handle. Örn: "{hashtag_ornek} #{channel.handle.replace('@', '')}"
 
 TAGS KURALLARI:
 - 8-15 tag (kesinlikle ≤20)

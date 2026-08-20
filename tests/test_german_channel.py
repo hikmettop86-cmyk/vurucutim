@@ -186,3 +186,24 @@ def test_renderer_baglama_now_gecirir():
     """Şablonun kendi biçiminde damgalayabilmesi için."""
     html = _html("eilmeldung.html.j2")
     assert "20.08.2026" in html
+
+
+def test_metadata_hashtag_ornegi_dile_ozgu():
+    """Örnek Türkçe sabit kalınca Almanca kanalın etiketlerine '#sondakika'
+    sızıyordu: model KURAL metnini değil ÖRNEĞİ kopyalar."""
+    from short_bot.youtube.metadata_writer import build_metadata_prompt
+
+    class _De:
+        name = "Deutschland Kompakt"; handle = "@deutschlandkompakt"; language = "de"
+        keywords = ["Nachrichten"]; reel = None; slug = "deutschland-kompakt"
+
+    p = build_metadata_prompt(channel=_De(), script={"body_paragraph": "x"},
+                              rss_source="Spiegel", rss_link="https://spiegel.de/1")
+    assert "#eilmeldung" in p and "#nachrichten" in p
+    assert "#sondakika" not in p
+
+    class _Tr(_De):
+        language = "tr"; handle = "@gundem"
+
+    assert "#sondakika" in build_metadata_prompt(
+        channel=_Tr(), script={"body_paragraph": "x"}, rss_source=None, rss_link=None)
