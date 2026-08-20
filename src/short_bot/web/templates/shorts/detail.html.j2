@@ -135,6 +135,23 @@
       <div class="text-xs text-claude-muted uppercase tracking-wider mb-1">RSS GUID</div>
       <div class="font-mono text-xs break-all">{{ s.rss_item_guid }}</div>
     </div>
+    {% if narration %}
+    <div class="bg-claude-surface border border-claude-border rounded-lg p-4">
+      <div class="text-xs text-claude-muted uppercase tracking-wider mb-1">Anlatım</div>
+      <div class="text-sm whitespace-pre-wrap leading-relaxed">{{ narration }}</div>
+    </div>
+    {% endif %}
+    {% if narration_tr %}
+    {# Yabancı dilli kanal: operatör anlatımı okuyamaz. Bu kutu, yayın kararının
+       verilebildiği tek yer — kapı değil, pencere (bkz. lang_review.back_translate). #}
+    <div class="bg-claude-surface border border-amber-500/40 rounded-lg p-4">
+      <div class="text-xs text-amber-400 uppercase tracking-wider mb-1">
+        Anlatımın Türkçesi <span class="normal-case text-claude-muted">(otomatik geri çeviri — yayından önce oku)</span>
+      </div>
+      <div class="text-sm whitespace-pre-wrap leading-relaxed">{{ narration_tr }}</div>
+    </div>
+    {% endif %}
+    {% include "shorts/_yt_meta.html.j2" %}
     <div class="bg-claude-surface border border-claude-border rounded-lg p-4">
       <div class="text-xs text-claude-muted uppercase tracking-wider mb-1">Script JSON</div>
       <pre class="text-xs whitespace-pre-wrap">{{ s.script_json }}</pre>

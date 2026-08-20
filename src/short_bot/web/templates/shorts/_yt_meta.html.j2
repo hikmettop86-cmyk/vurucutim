@@ -1,0 +1,84 @@
+{# YouTube metadata kutusu — videoyu İNDİRİP ELLE yükleyen operatör için.
+   Gösterilen metin, otomatik yüklemenin göndereceğinin AYNISIDIR (aynı üretici
+   + aynı yedek birleşimi), böylece iki yol iki farklı başlık üretmez.
+   NOT: .html.j2 uzantısında autoescape KAPALI — dış veri |e ile kaçırılır. #}
+<div id="yt-meta" class="bg-claude-surface border border-claude-border rounded-lg p-4">
+  <div class="flex items-baseline justify-between mb-2">
+    <div class="text-xs text-claude-muted uppercase tracking-wider">
+      YouTube metni
+      <span class="normal-case">(indirip elle yükleyeceksen buradan kopyala)</span>
+    </div>
+    {% if yt_meta %}
+    <form hx-post="/shorts/{{ s.id }}/metadata" hx-target="#yt-meta" hx-swap="outerHTML" class="inline">
+      <input type="hidden" name="force" value="1">
+      <button type="submit" class="text-xs text-claude-muted hover:text-claude-text"
+              hx-disabled-elt="this">↻ yeniden yaz</button>
+    </form>
+    {% endif %}
+  </div>
+
+  {% if meta_error %}
+  <div class="text-sm text-red-400">Üretilemedi: {{ meta_error|e }}</div>
+  <form hx-post="/shorts/{{ s.id }}/metadata" hx-target="#yt-meta" hx-swap="outerHTML" class="mt-2">
+    <button type="submit" class="px-3 py-1.5 rounded-lg bg-claude-surface-alt border border-claude-border text-sm">
+      Tekrar dene
+    </button>
+  </form>
+
+  {% elif not yt_meta %}
+  <div class="text-sm text-claude-muted mb-2">
+    Başlık, açıklama ve etiketler henüz yazılmadı.
+  </div>
+  <form hx-post="/shorts/{{ s.id }}/metadata" hx-target="#yt-meta" hx-swap="outerHTML">
+    <button type="submit" hx-disabled-elt="this"
+            class="px-3 py-1.5 rounded-lg bg-claude-accent hover:bg-claude-accent-hover text-white text-sm font-semibold">
+      ✎ Yaz
+      <span class="htmx-indicator">…</span>
+    </button>
+  </form>
+
+  {% else %}
+  {% set tags_line = (yt_meta.tags or [])|join(', ') %}
+  <div class="space-y-3" x-data="{ kopyala(metin, el) {
+        navigator.clipboard.writeText(metin);
+        const eski = el.textContent; el.textContent = 'Kopyalandı ✓';
+        setTimeout(() => el.textContent = eski, 1600);
+      } }">
+
+    <div>
+      <div class="flex items-baseline justify-between">
+        <span class="text-[11px] text-claude-subtle uppercase tracking-wider">Başlık</span>
+        <div class="text-[11px] text-claude-subtle">
+          <span class="{% if yt_meta.title|length > 100 %}text-red-400{% endif %}">{{ yt_meta.title|length }}/100</span>
+          <button type="button" class="ml-2 text-claude-muted hover:text-claude-text"
+                  x-on:click="kopyala($refs.baslik.textContent, $el)">⎘ kopyala</button>
+        </div>
+      </div>
+      <div x-ref="baslik" class="text-sm font-semibold leading-snug mt-0.5">{{ yt_meta.title|e }}</div>
+    </div>
+
+    <div>
+      <div class="flex items-baseline justify-between">
+        <span class="text-[11px] text-claude-subtle uppercase tracking-wider">Açıklama</span>
+        <button type="button" class="text-[11px] text-claude-muted hover:text-claude-text"
+                x-on:click="kopyala($refs.aciklama.textContent, $el)">⎘ kopyala</button>
+      </div>
+      <div x-ref="aciklama"
+           class="text-[13px] whitespace-pre-wrap leading-relaxed mt-0.5 max-h-64 overflow-y-auto
+                  bg-claude-bg border border-claude-border rounded p-2">{{ yt_meta.description|e }}</div>
+    </div>
+
+    <div>
+      <div class="flex items-baseline justify-between">
+        <span class="text-[11px] text-claude-subtle uppercase tracking-wider">
+          Etiketler ({{ (yt_meta.tags or [])|length }})
+        </span>
+        <button type="button" class="text-[11px] text-claude-muted hover:text-claude-text"
+                x-on:click="kopyala($refs.etiket.textContent, $el)">⎘ kopyala</button>
+      </div>
+      {# YouTube etiket kutusu virgülle ayrılmış metin bekler — tek tık yapıştır. #}
+      <div x-ref="etiket" class="text-[13px] font-mono mt-0.5 break-words">{{ tags_line|e }}</div>
+    </div>
+  </div>
+  {% endif %}
+</div>

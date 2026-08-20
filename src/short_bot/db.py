@@ -558,6 +558,35 @@ def recent_narration_variations(eng: Engine, channel: str, limit: int = 6) -> li
     return out
 
 
+def store_youtube_meta(eng: Engine, short_id: int, meta: dict) -> None:
+    """Üretilen YouTube metadata'sını short'un script_json'una yaz.
+
+    NEDEN SAKLANIYOR: metadata bir LLM çağrısıyla üretiliyor ve şimdiye kadar
+    yalnız yükleme anında, bellekte kalıyordu. Videoyu İNDİRİP ELLE yükleyen
+    operatörün başlığı/açıklamayı/etiketleri görmesi gerekiyor (kullanıcı
+    isteği 2026-08-20) — ve aynı short'a her bakışta yeni bir çağrı yapmak
+    hem para hem tutarsızlık demek: iki farklı başlık iki farklı yerde çıkar.
+
+    Bozuk/eksik script_json sessizce atlanır; metadata bir kolaylıktır, üretimi
+    ya da yüklemeyi düşürmez.
+    """
+    import json as _json
+    with eng.begin() as conn:
+        row = conn.execute(
+            select(shorts.c.script_json).where(shorts.c.id == short_id)).first()
+        if row is None:
+            return
+        try:
+            data = _json.loads(row[0] or "{}") or {}
+        except (ValueError, TypeError):
+            data = {}
+        data["youtube_meta"] = {"title": meta.get("title", ""),
+                                "description": meta.get("description", ""),
+                                "tags": list(meta.get("tags") or [])}
+        conn.execute(shorts.update().where(shorts.c.id == short_id)
+                     .values(script_json=_json.dumps(data, ensure_ascii=False)))
+
+
 def produced_guids_since(eng: Engine, channel: str, since) -> set[str]:
     """Bu kanalın ``since``'ten beri ürettiği haberlerin guid'leri.
 

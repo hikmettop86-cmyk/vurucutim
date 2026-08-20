@@ -168,6 +168,76 @@ def disconnect(slug):
     return redirect(url_for("channel_edit.edit", slug=slug))
 
 
+def snippet_for_short(s, cfg, *, force: bool = False) -> dict:
+    """Bu short için YouTube başlığı/açıklaması/etiketleri.
+
+    Botun yükleme anında kullanacağı snippet'in AYNISINI üretir (aynı LLM
+    çağrısı + aynı build_snippet birleşimi) — böylece videoyu indirip ELLE
+    yükleyen operatörün kopyaladığı metin, otomatik yüklemenin göndereceğiyle
+    birebir aynı olur. Farklı iki yol iki farklı başlık üretseydi kanal kendi
+    içinde tutarsızlaşırdı.
+
+    Sonuç ``script_json.youtube_meta`` içinde SAKLANIR: her sayfa açılışında
+    yeni bir LLM çağrısı hem para harcar hem her seferinde başka bir başlık
+    gösterir. ``force=True`` yeniden üretir.
+
+    LLM düşerse build_snippet'in LLM'siz yedeği döner — kutu hiç boş kalmaz.
+    """
+    import json as _json
+    from short_bot.db import store_youtube_meta
+    script = _json.loads(s.script_json or "{}")
+    if not force:
+        cached = script.get("youtube_meta")
+        if cached and cached.get("title"):
+            return cached
+
+    eng = init_db(current_app.config["SHORTBOT_DB_PATH"])
+    settings = current_app.config["SHORTBOT_SETTINGS"]
+    secrets_path = current_app.config.get("SHORTBOT_SECRETS_PATH")
+    rss_row = get_rss_item_for_short(eng, short_id=s.id)
+    secrets = _load_secrets(Path(secrets_path)) if secrets_path else {}
+    call = resolve_ai_call(settings, secrets, "default")
+    hook_pats = None
+    try:
+        from short_bot.db import bank_hook_patterns
+        hook_pats = bank_hook_patterns(eng, cfg.slug, limit=5) or None
+    except Exception:  # noqa: BLE001
+        pass
+    generated = None
+    try:
+        meta = generate_youtube_metadata(
+            channel=cfg, script=script,
+            rss_source=(rss_row.source if rss_row else None),
+            rss_link=(rss_row.link if rss_row else None),
+            claude_path=call.claude_path, model=call.model,
+            backend=call.backend, api_key=call.api_key,
+            hook_patterns=hook_pats,
+            search_terms=_search_terms_for(eng, cfg),
+        )
+        generated = {"title": meta.title, "description": meta.description,
+                     "tags": meta.tags}
+    except Exception as e:  # noqa: BLE001 — yedeğe düş, kutu boş kalmasın
+        current_app.logger.warning("metadata üretilemedi (short %s): %s", s.id, e)
+
+    yt_cfg = cfg.youtube
+    snippet = build_snippet(
+        header_top=script.get("header_top", ""),
+        header_bottom=script.get("header_bottom", ""),
+        body_paragraph=script.get("body_paragraph", ""),
+        handle=cfg.handle, keywords=cfg.keywords or [],
+        category_id=(yt_cfg.category_id if yt_cfg else "25"),
+        language=cfg.language, generated=generated,
+    )
+    out = {"title": snippet.get("title", ""),
+           "description": snippet.get("description", ""),
+           "tags": list(snippet.get("tags") or [])}
+    try:
+        store_youtube_meta(eng, s.id, out)
+    except Exception:  # noqa: BLE001 — saklayamamak göstermeyi engellemesin
+        pass
+    return out
+
+
 @bp.route("/shorts/<int:short_id>/upload-youtube", methods=["POST"])
 def upload(short_id):
     s = Short.query.filter_by(id=short_id).first()
@@ -282,6 +352,16 @@ def upload(short_id):
     )
     status = build_status(privacy_status=privacy, ai_content=ai,
                           publish_at=publish_at)
+    # Gönderilen metni SAKLA: detay sayfası "elle yükleyenler için" kutusunda
+    # gerçekte yüklenenin aynısını göstersin, yeniden LLM çağırmasın.
+    try:
+        from short_bot.db import store_youtube_meta
+        store_youtube_meta(eng, short_id, {
+            "title": snippet.get("title", ""),
+            "description": snippet.get("description", ""),
+            "tags": list(snippet.get("tags") or [])})
+    except Exception:  # noqa: BLE001 — yükleme buna bağlı değil
+        pass
 
     try:
         video_id = upload_video(

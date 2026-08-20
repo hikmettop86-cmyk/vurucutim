@@ -124,7 +124,38 @@ def detail(short_id):
                            narration=(script.get("narration_text")
                                       or script.get("body_paragraph") or ""),
                            narration_tr=(script.get("body_paragraph_tr") or ""),
+                           # Elle yükleyecek operatör için: başlık/açıklama/etiket.
+                           # Kayıtlıysa gösterilir; yoksa sayfada "üret" düğmesi
+                           # çıkar — her açılışta LLM çağırmak hem para harcar
+                           # hem her seferinde başka bir başlık gösterirdi.
+                           yt_meta=(script.get("youtube_meta") or None),
                            default_privacy=default_privacy)
+
+
+@bp.route("/shorts/<int:short_id>/metadata", methods=["POST"])
+def metadata(short_id):
+    """YouTube başlığı/açıklaması/etiketlerini üret (ve sakla).
+
+    Videoyu indirip ELLE yükleyen operatör için. Üretilen metin, otomatik
+    yüklemenin göndereceğinin AYNISIDIR (aynı üretici + aynı yedek birleşimi).
+    """
+    s = Short.query.filter_by(id=short_id).first()
+    if s is None or s.deleted_at is not None:
+        abort(404)
+    cfg_path = current_app.config["SHORTBOT_CONFIG_DIR"] / "channels" / f"{s.channel}.yaml"
+    if not cfg_path.exists():
+        return render_template("shorts/_yt_meta.html.j2", s=s, yt_meta=None,
+                               meta_error="Kanal yapılandırması bulunamadı.")
+    from short_bot.web.routes.youtube import snippet_for_short
+    try:
+        meta = snippet_for_short(s, load_channel(cfg_path),
+                                 force=request.form.get("force") == "1")
+    except Exception as e:  # noqa: BLE001 — kutu hata gösterir, sayfa düşmez
+        current_app.logger.warning("metadata üretilemedi (short %s): %s", short_id, e)
+        return render_template("shorts/_yt_meta.html.j2", s=s, yt_meta=None,
+                               meta_error=str(e)[:200])
+    return render_template("shorts/_yt_meta.html.j2", s=s, yt_meta=meta,
+                           meta_error=None)
 
 
 @bp.route("/shorts/run-now", methods=["POST"])
