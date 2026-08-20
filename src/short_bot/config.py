@@ -356,9 +356,14 @@ class ChannelConfig:
     # ayrışırlarsa "dedup'tan düştü ama saga sayacında hâlâ var" gibi
     # açıklanması zor bir aralık doğar.
     saga_window_days: int = 14
+    # trends_region: content_source="trends" kanalında Google Trends bölgesi
+    # (ISO 3166-1 alpha-2: TR, DE, ES…). None ise dilden türetilir
+    # (locale.trend_region_for). Dil ile bölge bağımsız: language=de +
+    # trends_region=AT Avusturya gündemini Almanca anlatır.
+    trends_region: str | None = None
     dna: DnaSpec | None = None
     script_model: str | None = None
-    content_source: Literal["rss", "generator", "feed", "curated"] = "rss"
+    content_source: Literal["rss", "generator", "feed", "curated", "trends"] = "rss"
     generator: GeneratorConfig | None = None
     auto_feed_ids: list[int] = field(default_factory=list)
     youtube: YoutubeChannelConfig | None = None
@@ -441,11 +446,21 @@ def load_channel(path: Path) -> ChannelConfig:
         )
 
     content_source = data.get("content_source", "rss")
-    if content_source not in ("rss", "generator", "feed", "curated"):
+    if content_source not in ("rss", "generator", "feed", "curated", "trends"):
         raise ValueError(
-            f"content_source must be 'rss', 'generator', 'feed' or 'curated', "
+            f"content_source must be 'rss', 'generator', 'feed', 'curated' or 'trends', "
             f"got {content_source!r}"
         )
+
+    trends_region_raw = data.get("trends_region")
+    trends_region: str | None = None
+    if trends_region_raw:
+        trends_region = str(trends_region_raw).strip().upper()
+        if not re.fullmatch(r"[A-Z]{2}", trends_region):
+            raise ValueError(
+                f"channel {slug!r}: trends_region must be a 2-letter ISO region "
+                f"code (TR, DE, ES…), got {trends_region_raw!r}"
+            )
 
     auto_feed_ids = [int(x) for x in (data.get("auto_feed_ids") or [])]
     if content_source == "feed" and not auto_feed_ids:
@@ -528,6 +543,7 @@ def load_channel(path: Path) -> ChannelConfig:
                                 in (data.get("category_quota_per_day") or {}).items()},
         saga_penalty_per_repeat=float(data.get("saga_penalty_per_repeat") or 0.0),
         saga_window_days=int(data.get("saga_window_days") or 14),
+        trends_region=trends_region,
         reference_channels=list(data.get("reference_channels") or []),
         template=template,
         colors=dict(data["colors"]),
@@ -585,6 +601,8 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
         data["script_model"] = cfg.script_model
     if cfg.content_source != "rss":
         data["content_source"] = cfg.content_source
+    if cfg.trends_region:
+        data["trends_region"] = cfg.trends_region
     if cfg.auto_feed_ids:
         data["auto_feed_ids"] = list(cfg.auto_feed_ids)
     if cfg.generator is not None:
