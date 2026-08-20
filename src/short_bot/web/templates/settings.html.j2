@@ -361,6 +361,35 @@
       {% endif %}
     </div>
 
+    <h2 class="font-serif text-lg font-bold mt-6 border-t border-claude-border pt-4">Cartesia (Seslendirme / TTS — Gündem Yorum)</h2>
+    <div class="bg-claude-surface border border-claude-border rounded-lg p-4">
+      {% if cartesia_key_set %}
+        <div class="flex items-center gap-3">
+          <span class="font-mono text-sm">{{ cartesia_key_masked }}</span>
+          <label class="text-xs flex items-center gap-1 text-claude-muted">
+            <input type="checkbox" name="cartesia_api_key_clear" value="1"> Sil
+          </label>
+        </div>
+        <input type="password" name="cartesia_api_key" placeholder="Yeni key gir (değiştir)"
+               autocomplete="new-password"
+               class="bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm w-full mt-2 text-claude-text">
+      {% else %}
+        <input type="password" name="cartesia_api_key" value="" placeholder="sk_car_..."
+               autocomplete="new-password"
+               class="bg-claude-surface-alt border border-claude-border px-3 py-2 rounded-lg text-sm w-full text-claude-text">
+      {% endif %}
+      {% set _pct = (100 * cartesia_month_usage / cartesia_month_budget) if cartesia_month_budget else 0 %}
+      <div class="text-xs text-claude-muted mt-2">
+        Bu ay harcanan: <b>{{ '{:,}'.format(cartesia_month_usage).replace(',', '.') }}</b> kredi
+        (1 karakter = 1 kredi; PRO ses 1,5×; $5 plan = {{ '{:,}'.format(cartesia_month_budget).replace(',', '.') }}/ay, devretmez)
+        {% if _pct >= 90 %}<span class="text-amber-600 font-semibold">— %{{ '%.0f'|format(_pct) }} doldu, kredi bitmek üzere</span>
+        {% else %}— %{{ '%.1f'|format(_pct) }}{% endif %}
+      </div>
+      <div class="text-xs text-claude-subtle mt-1">
+        Ses seçimi, model sınama ve klonlama kanalın Seslendirme kartında (sağlayıcı = Cartesia).
+      </div>
+    </div>
+
     <h2 class="font-serif text-lg font-bold mt-6 border-t border-claude-border pt-4">Trend Detection</h2>
     <div class="bg-claude-surface border border-claude-border rounded-lg p-4 space-y-3">
       <label class="flex items-center gap-2 text-sm">

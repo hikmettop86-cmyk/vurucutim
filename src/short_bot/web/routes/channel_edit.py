@@ -375,9 +375,19 @@ def save(slug):
         flash("Seslendirmeyi açmak için bir ses seç (voice_id boş).", "error")
         return redirect(url_for("channel_edit.edit", slug=slug))
     if v_enabled or v_id or cfg.voice is not None:
+        from pydantic import ValidationError as _VErr
         old = cfg.voice
-        new_voice = VoiceConfig(
+        try:
+          new_voice = VoiceConfig(
             enabled=v_enabled,
+            # Sağlayıcı formdan; gelmezse eski değer (başka bir kartın POST'u
+            # kanalı sessizce ai33'e döndürmesin).
+            provider=(request.form.get("voice_provider") or (old.provider if old else "ai33")),
+            model=(request.form.get("voice_model") if "voice_model" in request.form
+                   else (old.model if old else "")) or "",
+            volume=_form_get_float("voice_volume", old.volume if old else 1.0),
+            emotion=(request.form.get("voice_emotion") if "voice_emotion" in request.form
+                     else (old.emotion if old else "")) or "",
             voice_id=v_id or (old.voice_id if old else ""),
             speed=_form_get_float("voice_speed", old.speed if old else 1.0),
             persona=(request.form.get("voice_persona") or "").strip()
@@ -392,7 +402,11 @@ def save(slug):
             # korunuyordu, yani panelden HİÇ değiştirilemiyordu.
             music_volume=_form_get_float("voice_music_volume",
                                          old.music_volume if old else 0.12),
-        )
+          )
+        except _VErr as e:
+            first = e.errors()[0] if e.errors() else {}
+            flash(f"Seslendirme ayarı geçersiz: {first.get('msg', e)}", "error")
+            return redirect(url_for("channel_edit.edit", slug=slug))
     else:
         new_voice = cfg.voice
 

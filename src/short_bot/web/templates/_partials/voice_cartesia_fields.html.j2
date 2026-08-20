@@ -1,0 +1,178 @@
+{# Cartesia seslendirme alanları — edit.html.j2 (ses kartı) ve edit_yorum.html.j2
+   tarafından paylaşılır. Beklenen bağlam: `c` (ChannelConfig). Form alanları:
+   voice_provider, voice_id, voice_model, voice_volume, voice_emotion (+ mevcut
+   voice_speed/persona/target/music_volume sayfada ayrıca).
+   faceless-2'den taşınan davranışlar: dil süzgeçli ses listesi (süzgeçsiz Türkçe
+   görünmez), PRO 1,5× rozeti, önizleme, model sınama (2 kredi/aday), kredisiz
+   sağlık yoklaması, instant clone (10 sn kırpma sunucuda). #}
+{% set _v = c.voice %}
+{% set _provider = (_v.provider if _v else 'ai33') %}
+<div class="grid grid-cols-2 gap-3">
+  <label class="text-xs">
+    <span class="block text-claude-muted mb-1">Sağlayıcı</span>
+    <select name="voice_provider" id="voice-provider"
+            class="bg-claude-surface-alt border border-claude-border px-2 py-1 rounded w-full text-sm text-claude-text">
+      <option value="ai33" {% if _provider == 'ai33' %}selected{% endif %}>ai33 (ElevenLabs altyapısı)</option>
+      <option value="cartesia" {% if _provider == 'cartesia' %}selected{% endif %}>Cartesia (Sonic)</option>
+    </select>
+    <span class="block text-[10px] text-claude-subtle mt-1">Sağlayıcılar birbirine yedek değil: ses evrenleri farklı, biri düşünce diğerine geçilmez.</span>
+  </label>
+  <label class="text-xs">
+    <span class="block text-claude-muted mb-1">Ses (voice_id)</span>
+    <input type="text" name="voice_id" id="voice-id-input" list="ai33-voice-list"
+           value="{{ _v.voice_id if _v else '' }}"
+           class="bg-claude-surface-alt border border-claude-border px-2 py-1 rounded w-full text-sm text-claude-text font-mono">
+    <datalist id="ai33-voice-list"></datalist>
+  </label>
+</div>
+
+<div id="cartesia-fields" class="mt-3 border border-claude-border/60 rounded-lg p-3 space-y-3"
+     {% if _provider != 'cartesia' %}style="display:none"{% endif %}>
+  <div class="text-xs text-claude-muted uppercase tracking-wider">Cartesia</div>
+
+  {# Ses kütüphanesi #}
+  <div class="grid grid-cols-[1fr_auto_auto] gap-2 items-end">
+    <label class="text-xs">
+      <span class="block text-claude-muted mb-1">Ses dili (liste süzgeci)</span>
+      <select id="cartesia-voice-lang"
+              class="bg-claude-surface-alt border border-claude-border px-2 py-1 rounded w-full text-sm text-claude-text">
+        {% for code, label in [('tr','Türkçe'),('en','İngilizce'),('de','Almanca'),('es','İspanyolca'),('fr','Fransızca'),('ja','Japonca'),('*','Tüm diller (ilk 100)')] %}
+        <option value="{{ code }}" {% if code == c.language %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="button" id="btn-cartesia-voices"
+            class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border px-3 py-1 rounded text-xs whitespace-nowrap">🔄 Sesleri yükle</button>
+    <button type="button" id="btn-cartesia-health"
+            class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border px-3 py-1 rounded text-xs whitespace-nowrap">🔍 Test et (2 kredi)</button>
+  </div>
+  <select id="cartesia-voice-select" size="5"
+          class="bg-claude-surface-alt border border-claude-border px-2 py-1 rounded w-full text-sm text-claude-text font-mono" style="display:none"></select>
+  <div class="flex items-center gap-3">
+    <audio id="cartesia-preview" controls preload="none" style="height:28px; display:none"></audio>
+    <span id="cartesia-voice-status" class="text-[10px]"></span>
+  </div>
+
+  {# Model + hız + ses seviyesi #}
+  <div class="grid grid-cols-3 gap-3">
+    <label class="text-xs">
+      <span class="block text-claude-muted mb-1">Model</span>
+      <select name="voice_model" id="cartesia-model"
+              class="bg-claude-surface-alt border border-claude-border px-2 py-1 rounded w-full text-sm text-claude-text">
+        <option value="" {% if not (_v and _v.model) %}selected{% endif %}>(varsayılan sonic-3.5)</option>
+        {% for m in ['sonic-3.5', 'sonic-3', 'sonic-preview'] %}
+        <option value="{{ m }}" {% if _v and _v.model == m %}selected{% endif %}>{{ m }}</option>
+        {% endfor %}
+      </select>
+      <button type="button" id="btn-cartesia-probe" class="text-[10px] text-claude-accent underline mt-1">Modelleri sına (6 kredi)</button>
+    </label>
+    <label class="text-xs">
+      <span class="block text-claude-muted mb-1">Ses seviyesi (0.5–2.0)</span>
+      <input type="number" step="0.05" min="0.5" max="2" name="voice_volume"
+             value="{{ _v.volume if _v else 1.0 }}"
+             class="bg-claude-surface-alt border border-claude-border px-2 py-1 rounded w-full text-sm text-claude-text">
+    </label>
+    <label class="text-xs">
+      <span class="block text-claude-muted mb-1">Duygu / yönerge</span>
+      <input type="text" name="voice_emotion" placeholder="[sakin, güven veren]"
+             value="{{ (_v.emotion if _v else '')|e }}"
+             class="bg-claude-surface-alt border border-claude-border px-2 py-1 rounded w-full text-sm text-claude-text">
+    </label>
+  </div>
+  <div class="text-[10px] text-claude-subtle">Cartesia hız aralığı 0.6–1.5 (ai33 0.5–1.5). 1 karakter = 1 kredi; PRO sesler 1,5×. Aylık sayaç Ayarlar sayfasında.</div>
+
+  {# Klon #}
+  <div class="grid grid-cols-[1fr_auto_auto] gap-2 items-end">
+    <label class="text-xs">
+      <span class="block text-claude-muted mb-1">Ses klonla (≤10 sn; uzunsa kırpılır)</span>
+      <input type="file" id="cartesia-clone-file" accept=".wav,.mp3,.flac,.ogg,.webm,.mpeg,.mpga,.oga"
+             class="text-xs w-full">
+    </label>
+    <input type="text" id="cartesia-clone-name" placeholder="Klon adı"
+           class="bg-claude-surface-alt border border-claude-border px-2 py-1 rounded text-sm text-claude-text">
+    <button type="button" id="btn-cartesia-clone"
+            class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border px-3 py-1 rounded text-xs whitespace-nowrap">🎙️ Klonla</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  const prov = document.getElementById('voice-provider');
+  const box = document.getElementById('cartesia-fields');
+  const idInput = document.getElementById('voice-id-input');
+  const status = document.getElementById('cartesia-voice-status');
+  const sel = document.getElementById('cartesia-voice-select');
+  const audio = document.getElementById('cartesia-preview');
+  const speed = document.querySelector('input[name="voice_speed"]');
+  if (!prov || !box) return;
+  function say(msg, cls) { status.textContent = msg; status.className = 'text-[10px] ' + (cls || 'text-claude-muted'); }
+  function sync() {
+    const isC = prov.value === 'cartesia';
+    box.style.display = isC ? '' : 'none';
+    if (speed) { speed.min = isC ? '0.6' : '0.5'; }
+  }
+  prov.addEventListener('change', sync); sync();
+
+  document.getElementById('btn-cartesia-voices').addEventListener('click', async () => {
+    const lang = document.getElementById('cartesia-voice-lang').value;
+    say('Sesler yükleniyor…');
+    try {
+      const r = await fetch('/api/cartesia/voices?language=' + encodeURIComponent(lang));
+      const j = await r.json();
+      const voices = j.voices || [];
+      if (!voices.length) { say('⚠ ' + (j.error || 'Ses listesi alınamadı'), 'text-amber-600'); return; }
+      sel.innerHTML = '';
+      for (const v of voices) {
+        const o = document.createElement('option');
+        o.value = v.voice_id; o.dataset.preview = v.preview_url || '';
+        o.textContent = [v.name, v.language, v.gender, v.is_pro ? '⚠ PRO 1,5×' : '', v.is_owner ? '(kendi klonun)' : ''].filter(Boolean).join(' · ')
+          + (v.description ? ' — ' + v.description : '');
+        sel.appendChild(o);
+      }
+      sel.style.display = '';
+      say('✓ ' + voices.length + ' ses — listeden seç, önizlemeyi dinle', 'text-green-600');
+    } catch (e) { say('⚠ Ses listesi alınamadı', 'text-amber-600'); }
+  });
+  sel.addEventListener('change', () => {
+    const o = sel.options[sel.selectedIndex]; if (!o) return;
+    idInput.value = o.value;
+    if (o.dataset.preview) { audio.src = o.dataset.preview; audio.style.display = ''; } else { audio.style.display = 'none'; }
+  });
+  document.getElementById('btn-cartesia-health').addEventListener('click', async () => {
+    say('Yoklanıyor…');
+    const fd = new FormData(); fd.append('voice_id', idInput.value); fd.append('model', document.getElementById('cartesia-model').value);
+    try {
+      const j = await (await fetch('/api/cartesia/health', { method: 'POST', body: fd })).json();
+      say((j.ok ? '✓ ' : '⚠ ') + j.message, j.ok ? 'text-green-600' : 'text-amber-600');
+    } catch (e) { say('⚠ Yoklama başarısız', 'text-amber-600'); }
+  });
+  document.getElementById('btn-cartesia-probe').addEventListener('click', async () => {
+    say('Modeller sınanıyor (kredi harcar)…');
+    try {
+      const j = await (await fetch('/api/cartesia/models/probe', { method: 'POST' })).json();
+      const ms = j.models || [];
+      const modelSel = document.getElementById('cartesia-model');
+      for (const m of ms) {
+        const o = Array.from(modelSel.options).find(x => x.value === m.id);
+        if (o) { o.disabled = !m.ok; o.textContent = m.id + (m.ok ? '' : ' — ' + m.reason); }
+      }
+      say('✓ ' + ms.filter(m => m.ok).length + '/' + ms.length + ' model çalışıyor (' + (j.credits || 0) + ' kredi)', 'text-green-600');
+    } catch (e) { say('⚠ Model sınaması başarısız', 'text-amber-600'); }
+  });
+  document.getElementById('btn-cartesia-clone').addEventListener('click', async () => {
+    const f = document.getElementById('cartesia-clone-file').files[0];
+    const name = document.getElementById('cartesia-clone-name').value.trim();
+    if (!f || !name) { say('⚠ Dosya ve klon adı gerekli', 'text-amber-600'); return; }
+    const fd = new FormData(); fd.append('clip', f); fd.append('name', name);
+    fd.append('language', '{{ c.language }}');
+    say('Klonlanıyor…');
+    try {
+      const r = await fetch('/api/cartesia/clone', { method: 'POST', body: fd });
+      const j = await r.json();
+      if (!r.ok) { say('⚠ ' + (j.error || 'Klonlama başarısız'), 'text-amber-600'); return; }
+      idInput.value = j.voice_id;
+      say('✓ Klon hazır: ' + j.voice_id + (j.trimmed ? ' (klip 9 sn\'ye kırpıldı)' : ''), 'text-green-600');
+    } catch (e) { say('⚠ Klonlama başarısız', 'text-amber-600'); }
+  });
+})();
+</script>

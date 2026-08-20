@@ -108,7 +108,10 @@ def view():
     youtube_key_masked = _mask_key(secrets.get("youtube_api_key", ""))
     openrouter_key_masked = _mask_key(secrets.get("openrouter_api_key", ""))
     ai33_key_masked = _mask_key(secrets.get("ai33_api_key", ""))
+    cartesia_key_masked = _mask_key(secrets.get("cartesia_api_key", ""))
     cache_dir = current_app.config.get("SHORTBOT_CACHE_DIR") or Path("data")
+    from short_bot.tts import cartesia_client as _cc
+    cartesia_month_usage = _cc.month_usage(Path(cache_dir))
     return render_template("settings.html.j2", data=data, paths=paths,
                             pexels_key_masked=pexels_key_masked,
                             pexels_key_set=bool(secrets.get("pexels_api_key")),
@@ -123,6 +126,10 @@ def view():
                                 secrets.get("youtube_api_keys") or []),
                             ai33_key_masked=ai33_key_masked,
                             ai33_key_set=bool(secrets.get("ai33_api_key")),
+                            cartesia_key_masked=cartesia_key_masked,
+                            cartesia_key_set=bool(secrets.get("cartesia_api_key")),
+                            cartesia_month_usage=cartesia_month_usage,
+                            cartesia_month_budget=_cc.MONTHLY_BUDGET_DEFAULT,
                             ai_backend=data.get("ai_backend", "claude_cli"),
                             openrouter_models=data.get("openrouter_models", {}) or {},
                             openrouter_key_masked=openrouter_key_masked,
@@ -297,6 +304,16 @@ def save():
         _save_secrets(secrets)
     elif clear_ai33:
         secrets.pop("ai33_api_key", None)
+        _save_secrets(secrets)
+
+    # Cartesia API key — Gündem Yorum gibi Cartesia sağlayıcılı voiced kanallar için
+    new_cartesia_key = request.form.get("cartesia_api_key", "").strip()
+    clear_cartesia = request.form.get("cartesia_api_key_clear") == "1"
+    if new_cartesia_key:
+        secrets["cartesia_api_key"] = new_cartesia_key
+        _save_secrets(secrets)
+    elif clear_cartesia:
+        secrets.pop("cartesia_api_key", None)
         _save_secrets(secrets)
 
     # Reload in-memory Settings so trend boost / refresh cron / cache TTL

@@ -1294,23 +1294,17 @@
         Seslendirmeli kanallarda süre sesten gelir; <code>duration_s</code> yok sayılır.
       </div>
       <div class="space-y-3">
-        <label class="text-xs block">
-          <span class="block text-claude-muted mb-1">Ses (voice_id)</span>
-          <div class="flex gap-2">
-            <input type="text" name="voice_id" list="ai33-voice-list"
-                   value="{{ c.voice.voice_id if c.voice else '' }}"
-                   class="bg-claude-surface-alt border border-claude-border px-2 py-1 rounded w-full text-sm text-claude-text">
-            <button type="button" id="btn-load-voices"
-                    class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border px-3 py-1 rounded text-xs whitespace-nowrap">
-              🔄 Sesleri yükle
-            </button>
-          </div>
-          <datalist id="ai33-voice-list"></datalist>
-          <span id="voice-load-status" class="text-[10px] block mt-1"></span>
-        </label>
+        {% include "_partials/voice_cartesia_fields.html.j2" %}
+        <div class="flex items-center gap-2" id="ai33-voice-tools">
+          <button type="button" id="btn-load-voices"
+                  class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border px-3 py-1 rounded text-xs whitespace-nowrap">
+            🔄 ai33 seslerini yükle
+          </button>
+          <span id="voice-load-status" class="text-[10px]"></span>
+        </div>
         <div class="grid grid-cols-2 gap-3">
           <label class="text-xs">
-            <span class="block text-claude-muted mb-1">Hız (0.5–1.5)</span>
+            <span class="block text-claude-muted mb-1">Hız (ai33 0.5–1.5 · Cartesia 0.6–1.5)</span>
             <input type="number" step="0.1" min="0.5" max="1.5" name="voice_speed"
                    value="{{ c.voice.speed if c.voice else 1.0 }}"
                    class="bg-claude-surface-alt border border-claude-border px-2 py-1 rounded w-full text-sm text-claude-text">
