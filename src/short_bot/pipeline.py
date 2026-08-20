@@ -1008,7 +1008,8 @@ def _run_rss(*, channel, run_id, log, eng, settings,
         log.info(f"[1/8] fetch_trending_now region={region}")
         items = fetch_trending_items(
             region, language=channel.language,
-            cache_dir=Path(cache_dir) / "trends", log=log)
+            cache_dir=Path(cache_dir) / "trends",
+            min_volume=channel.trends_min_volume, log=log)
     else:
         log.info("[1/8] fetch_rss")
         items = fetch_rss(channel.keywords, channel.rss_locale)

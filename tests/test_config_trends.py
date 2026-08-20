@@ -82,7 +82,24 @@ def test_repo_gundem_channel_loads():
     cfg = load_channel(p)
     assert cfg.content_source == "trends"
     assert cfg.trends_region == "TR"
-    assert cfg.schedule_cron == "0 */2 * * *"
+    assert cfg.schedule_cron == "0 7-22/3 * * *"
+    assert cfg.trends_min_volume == 5000
     assert cfg.trend_boost is None or cfg.trend_boost.enabled is False
     assert cfg.dna is not None and cfg.dna.archetype == cfg.template == "flas"
     assert cfg.youtube is not None and cfg.youtube.auto_upload is False
+
+
+def test_trends_min_volume_loads_and_saves(tmp_path):
+    cfg = load_channel(_write(tmp_path, "content_source: trends\ntrends_min_volume: 5000\n"))
+    assert cfg.trends_min_volume == 5000
+    out = tmp_path / "out.yaml"
+    save_channel(out, cfg)
+    assert yaml.safe_load(out.read_text(encoding="utf-8"))["trends_min_volume"] == 5000
+
+
+def test_trends_min_volume_default_and_not_saved_when_default(tmp_path):
+    cfg = load_channel(_write(tmp_path, "content_source: trends\n"))
+    assert cfg.trends_min_volume == 1000
+    out = tmp_path / "out.yaml"
+    save_channel(out, cfg)
+    assert "trends_min_volume" not in yaml.safe_load(out.read_text(encoding="utf-8"))

@@ -10,9 +10,10 @@ language: tr
 # bağımsız; Almanya kanalı için language: de + trends_region: DE yeter.
 content_source: trends
 trends_region: TR
-# Trend ömrü kısa (çoğu 6-12 saatte sönüyor): 2 saatlik adım sıcakken yakalar,
-# 24 saatlik listede 1000+ hacimli ~70 trend bunu rahat besler (ölçüm 2026-08-20).
-schedule_cron: 0 */2 * * *
+# Günde 6 koşu (07-22 arası 3 saatte bir). 12/gün toplu-üretim sinyaliydi;
+# trends_min_volume=5000 ile günde ~25 gerçek gündem kalıyor, 6'sı yeter.
+schedule_cron: 0 7-22/3 * * *
+trends_min_volume: 5000
 duration_s: 6
 # Puan burada SIRA değil KAPI: eşiği geçenlerden en yüksek arama hacmi seçilir.
 # 6.0 = "olay var, 3-4 cümleye sığar" (bkz. scorer._TREND_PROMPT_TEMPLATES).
@@ -36,7 +37,7 @@ youtube:
   category_id: '25'
   privacy_status: public
   min_score_for_upload: 6.0
-  cron_preset: every_2h
+  cron_preset: null
 # Flaş kartı tam ekran tasarlandı (fotoğraf zaten tam genişlik); %88 ölçek +
 # bulanık arka plan videosu üst/altta siyah bant bırakıyordu.
 bg_video:
@@ -85,8 +86,8 @@ dna:
     sentence_max_words: 14
     paragraph_sentences:
     - 3
-    - 4
-    body_max_chars: 280
+    - 5
+    body_max_chars: 330
     headline_style_hint: 'Üst satır TEK ÖZNE (1-2 kelime, örn. ''ADALAR''), alt satır NE OLDU (2-4 kelime, örn. ''YİNE SALLANDI''); photo_overlay = KJ alt satırı: rakam/kurum/yer (örn. ''KANDİLLİ: 3.1 BÜYÜKLÜĞÜNDE SARSINTI'')'
   banner_shape: flat
   highlight_style: underline

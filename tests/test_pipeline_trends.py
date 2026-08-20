@@ -127,3 +127,21 @@ def test_trends_channel_empty_source_is_no_candidates(tmp_path, monkeypatch):
                             settings=_settings(), music_root=tmp_path,
                             templates_dir=Path("templates"), cache_dir=tmp_path)
     assert res.status == "no_candidates"
+
+
+def test_trends_min_volume_passed_to_fetch(tmp_path, monkeypatch):
+    from dataclasses import replace
+    from short_bot import pipeline
+    eng = init_db(tmp_path / "x.sqlite")
+    ch = replace(_channel(tmp_path), trends_min_volume=5000)
+    seen = {}
+
+    def _fake(region, **kw):
+        seen.update(kw)
+        return []
+    monkeypatch.setattr(pipeline, "fetch_trending_items", _fake)
+    monkeypatch.setattr(pipeline, "filter_new", lambda eng, items, slug, **k: items)
+    pipeline._run_rss(channel=ch, run_id=1, log=MagicMock(), eng=eng,
+                      settings=_settings(), music_root=tmp_path,
+                      templates_dir=Path("templates"), cache_dir=tmp_path)
+    assert seen["min_volume"] == 5000

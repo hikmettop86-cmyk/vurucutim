@@ -361,6 +361,11 @@ class ChannelConfig:
     # (locale.trend_region_for). Dil ile bölge bağımsız: language=de +
     # trends_region=AT Avusturya gündemini Almanca anlatır.
     trends_region: str | None = None
+    # trends_min_volume: bu arama hacminin altındaki trendler hiç aday olmaz.
+    # 1000 = API'nin verdiği hemen her şey (TR'de ~70 trend/gün); 5000 = günde
+    # ~25 gerçek gündem. Tempo kısıtı: toplu-üretim sinyali vermemek için
+    # kanal az ama yüksek hacimli üretmeli (politika notu, 2026-08-20).
+    trends_min_volume: int = 1000
     dna: DnaSpec | None = None
     script_model: str | None = None
     content_source: Literal["rss", "generator", "feed", "curated", "trends"] = "rss"
@@ -544,6 +549,7 @@ def load_channel(path: Path) -> ChannelConfig:
         saga_penalty_per_repeat=float(data.get("saga_penalty_per_repeat") or 0.0),
         saga_window_days=int(data.get("saga_window_days") or 14),
         trends_region=trends_region,
+        trends_min_volume=int(data.get("trends_min_volume") or 1000),
         reference_channels=list(data.get("reference_channels") or []),
         template=template,
         colors=dict(data["colors"]),
@@ -603,6 +609,8 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
         data["content_source"] = cfg.content_source
     if cfg.trends_region:
         data["trends_region"] = cfg.trends_region
+    if cfg.trends_min_volume != 1000:
+        data["trends_min_volume"] = cfg.trends_min_volume
     if cfg.auto_feed_ids:
         data["auto_feed_ids"] = list(cfg.auto_feed_ids)
     if cfg.generator is not None:

@@ -133,6 +133,7 @@ TONE OF VOICE:
         channel.template, _DEFAULT_HEADER_TOP_BUDGET)
 
     source = item.source or "—"
+    trend_block, trend_rules = _trend_context(item, channel)
     return f"""You are writing a {lang_name} YouTube Shorts script.
 
 ORIGINAL HEADLINE: {item.title}
@@ -140,7 +141,7 @@ SOURCE: {source}
 
 ARTICLE BODY:
 {body}
-
+{trend_block}
 {arch_instructions}
 {tone_text}
 TASK: Convert this news into a 3-layer Short script. Output language: {lang_name}.
@@ -162,8 +163,40 @@ Rules:{category_rule}
 - Stay within tone constraints if specified above
 - header_top: MAX {header_top_budget} characters (hard limit, will be rejected otherwise).
   Shorter is better — one strong word beats a truncated phrase.
-- header_bottom: MAX 35 characters (hard limit, will be rejected otherwise)
+- header_bottom: MAX 35 characters (hard limit, will be rejected otherwise){trend_rules}
 """
+
+
+def _trend_context(item: NewsItem, channel: ChannelConfig) -> tuple[str, str]:
+    """Trend kanalında (content_source=trends) kartın 'kendi değer katmanı':
+    arama hacmi + ilişkili aramalar. Yayıncının haberini özetleyen bin kanaldan
+    ayıran tek veri bu; gövdenin son cümlesi 'neden gündemde' olur ve KJ satırı
+    hacmi taşıyabilir. Ayrıca tek bir BAĞLAM cümlesine izin verilir (kıyas/sıra/
+    büyüklük — gövdedeki bilgiden, yorum değil). Politika gerekçesi: toplu
+    üretilmiş 'haber özeti' yerine dönüştürülmüş içerik (2026-08-20 notu).
+    Trend verisi yoksa ikisi de boş döner, prompt bit bit aynı kalır."""
+    if getattr(channel, "content_source", "") != "trends":
+        return "", ""
+    if not item.trend_volume or not (item.description or "").strip():
+        return "", ""
+    block = (
+        "\nGOOGLE TRENDS CONTEXT (this is why the story is on screen right now — "
+        "treat it as a verified fact source alongside the article):\n"
+        f"{item.description.strip()}\n"
+    )
+    rules = (
+        "\n- WHY IT IS TRENDING: the LAST sentence of body_paragraph must say why people "
+        "are searching for this right now, using the Trends data (search volume and/or "
+        "the related searches). Write the number the way it is spoken "
+        "(e.g. '100 bin kişi aradı'), never as a raw figure with separators."
+        "\n- CONTEXT SENTENCE: include exactly ONE sentence that places the event in "
+        "context (a comparison, a sequence, a magnitude: 'the 36th tremor in 8 hours', "
+        "'the first since 2019') — built ONLY from facts in the article body or the "
+        "Trends data. No opinion, no adjectives of judgement."
+        "\n- photo_overlay is the lower-third line: when search volume is 10,000 or more, "
+        "it may carry it in short form (e.g. '100 BİN ARAMA · KANDİLLİ: 3.1')."
+    )
+    return block, rules
 
 
 def build_script_prompt(item: NewsItem, body: str) -> str:
