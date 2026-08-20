@@ -238,3 +238,172 @@ def trending_as_news_items(
         if prev is None or item.trend_volume > prev.trend_volume:
             best[item.guid] = item
     return sorted(best.values(), key=lambda i: i.trend_volume, reverse=True)
+
+
+# --- önbellek -----------------------------------------------------------------
+
+def _item_to_dict(i: NewsItem) -> dict:
+    return {
+        "guid": i.guid, "title": i.title, "link": i.link, "source": i.source,
+        "pub_date": i.pub_date.isoformat() if i.pub_date else None,
+        "thumb_url": i.thumb_url, "description": i.description,
+        "trend_volume": i.trend_volume,
+    }
+
+
+def _item_from_dict(d: dict) -> NewsItem:
+    pd = d.get("pub_date")
+    return NewsItem(
+        guid=d["guid"], title=d["title"], link=d["link"], source=d.get("source"),
+        pub_date=datetime.fromisoformat(pd) if pd else None,
+        thumb_url=d.get("thumb_url"), description=d.get("description"),
+        trend_volume=int(d.get("trend_volume") or 0),
+    )
+
+
+def _save_cache(path: Path, region: str, items: list[NewsItem]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "region": region.upper(),
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "items": [_item_to_dict(i) for i in items],
+    }
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _load_cache(path: Path) -> tuple[float, list[NewsItem]] | None:
+    """(yaş_dakika, items) ya da None. Bozuk dosya yok sayılır."""
+    if not path.exists():
+        return None
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        fetched = datetime.fromisoformat(raw["fetched_at"])
+        if fetched.tzinfo is None:
+            fetched = fetched.replace(tzinfo=timezone.utc)
+        items = [_item_from_dict(d) for d in raw.get("items", [])]
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        logger.warning(f"trending_now önbellek okunamadı ({path.name}): {e}")
+        return None
+    age = (datetime.now(timezone.utc) - fetched).total_seconds() / 60.0
+    return age, items
+
+
+# --- RSS yedeği ---------------------------------------------------------------
+
+_RSS_URL = "https://trends.google.com/trending/rss"
+_RSS_NS = {"ht": "https://trends.google.com/trending/rss"}
+
+
+def _traffic_to_int(raw: str | None) -> int:
+    """'200+' → 200, '1.000+' → 1000, '2K+' → 2000. Okunamazsa 0."""
+    s = (raw or "").strip().upper().replace("+", "").replace(".", "").replace(",", "")
+    mult = 1
+    if s.endswith("K"):
+        mult, s = 1000, s[:-1]
+    elif s.endswith("M"):
+        mult, s = 1_000_000, s[:-1]
+    try:
+        return int(float(s)) * mult
+    except ValueError:
+        return 0
+
+
+def _rss_fallback(region: str, *, timeout_s: int = 10) -> list[NewsItem]:
+    """Resmi RSS ucu: ~10 trend, her birinin ilk haberi. Hata → []."""
+    from xml.etree import ElementTree as ET
+    try:
+        r = requests.get(f"{_RSS_URL}?geo={region.upper()}", timeout=timeout_s,
+                         headers={"User-Agent": _UA})
+        if r.status_code != 200:
+            logger.warning(f"trending_now RSS yedeği HTTP {r.status_code}")
+            return []
+        root = ET.fromstring(r.text)
+    except (requests.RequestException, ET.ParseError) as e:
+        logger.warning(f"trending_now RSS yedeği başarısız: {e}")
+        return []
+    out: list[NewsItem] = []
+    for it in root.iter("item"):
+        term = (it.findtext("title") or "").strip()
+        news = it.findall("ht:news_item", _RSS_NS)
+        if not term or not news:
+            continue
+        first = news[0]
+        url = (first.findtext("ht:news_item_url", namespaces=_RSS_NS) or "").strip()
+        title = (first.findtext("ht:news_item_title", namespaces=_RSS_NS) or "").strip()
+        if not url or not title:
+            continue
+        volume = _traffic_to_int(it.findtext("ht:approx_traffic", namespaces=_RSS_NS))
+        others = [(n.findtext("ht:news_item_title", namespaces=_RSS_NS) or "").strip()
+                  for n in news[1:3]]
+        entry = TrendingEntry(term=term, volume=volume, growth_pct=0, started_at=None,
+                              category_ids=(), breakdown=(term,), news_ids=())
+        out.append(NewsItem(
+            guid=url, title=title, link=url,
+            source=(first.findtext("ht:news_item_source", namespaces=_RSS_NS) or None),
+            pub_date=None,
+            thumb_url=(first.findtext("ht:news_item_picture", namespaces=_RSS_NS)
+                       or it.findtext("ht:picture", namespaces=_RSS_NS) or None),
+            description=_describe(entry, others),
+            trend_volume=volume,
+        ))
+    return out
+
+
+# --- dış yüz ------------------------------------------------------------------
+
+def fetch_trending_items(
+    region: str,
+    *,
+    language: str,
+    cache_dir: Path,
+    max_age_minutes: float = 30.0,
+    min_volume: int = 1000,
+    max_entries: int = 40,
+    timeout_s: int = 15,
+    log: logging.Logger | None = None,
+) -> list[NewsItem]:
+    """Pipeline'ın çağırdığı tek giriş. Sıra: taze önbellek → API → RSS yedeği →
+    bayat önbellek → []. Hiçbir durumda hata fırlatmaz.
+
+    Yedek (RSS) sonucu önbelleğe YAZILMAZ: bir sonraki koşu API'yi yeniden
+    denesin; aksi hâlde 30 dk boyunca 10 trendlik zayıf listeye kilitlenir.
+    """
+    log = log or logger
+    region = region.upper()
+    path = Path(cache_dir) / f"trending_now_{region.lower()}.json"
+    cached = _load_cache(path)
+    if cached is not None and cached[0] < max_age_minutes and cached[1]:
+        log.info(f"  [trending_now] önbellek ({cached[0]:.0f} dk) → {len(cached[1])} haber")
+        return cached[1]
+
+    items: list[NewsItem] = []
+    try:
+        entries = fetch_trending_now(region, language=language, timeout_s=timeout_s)
+        picked = sorted(
+            (e for e in entries if e.volume >= min_volume and e.news_ids),
+            key=lambda e: e.volume, reverse=True,
+        )[:max_entries]
+        arts = fetch_trending_articles(picked, language=language, region=region,
+                                       timeout_s=timeout_s) if picked else {}
+        items = trending_as_news_items(picked, arts, min_volume=min_volume)
+        log.info(f"  [trending_now] region={region} {len(entries)} trend / "
+                 f"{len(picked)} hacim≥{min_volume} / {len(items)} haberli")
+    except Exception as e:  # noqa: BLE001 — ağ, HTTP, biçim: hepsi yedeğe düşer
+        log.warning(f"  [trending_now] API başarısız ({type(e).__name__}: "
+                    f"{str(e)[:200]}) → RSS yedeği")
+        items = []
+
+    if items:
+        _save_cache(path, region, items)
+        return items
+
+    fallback = [i for i in _rss_fallback(region) if i.trend_volume >= min_volume]
+    if fallback:
+        fallback.sort(key=lambda i: i.trend_volume, reverse=True)
+        log.info(f"  [trending_now] RSS yedeği → {len(fallback)} haber")
+        return fallback
+    if cached is not None and cached[1]:
+        log.info(f"  [trending_now] bayat önbellek ({cached[0]:.0f} dk) → {len(cached[1])} haber")
+        return cached[1]
+    log.info("  [trending_now] hiçbir kaynaktan veri yok")
+    return []

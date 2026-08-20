@@ -200,3 +200,98 @@ def test_as_news_items_merges_same_article_keeping_highest_volume():
     items = trending_as_news_items(entries, arts)
     assert len(items) == 1
     assert items[0].trend_volume == 10000
+
+
+# --- fetch_trending_items: önbellek + yedek -----------------------------------
+
+def _rss_xml(rows):
+    """rows: (term, traffic, news_title, url, source, picture)"""
+    items = ""
+    for term, traffic, nt, url, src, pic in rows:
+        items += (
+            f"<item><title>{term}</title><ht:approx_traffic>{traffic}</ht:approx_traffic>"
+            f"<pubDate>Thu, 20 Aug 2026 00:20:00 -0700</pubDate>"
+            f"<ht:picture>{pic}</ht:picture>"
+            f"<ht:news_item><ht:news_item_title>{nt}</ht:news_item_title>"
+            f"<ht:news_item_url>{url}</ht:news_item_url>"
+            f"<ht:news_item_source>{src}</ht:news_item_source>"
+            f"<ht:news_item_picture>{pic}</ht:news_item_picture></ht:news_item></item>")
+    return ('<?xml version="1.0" encoding="UTF-8"?>'
+            '<rss xmlns:ht="https://trends.google.com/trending/rss" version="2.0">'
+            f'<channel>{items}</channel></rss>')
+
+
+def test_fetch_items_happy_path_writes_cache(trends_text, articles_text, tmp_path, monkeypatch):
+    from short_bot.trends import trending_now as tn
+    calls = []
+
+    def _post(url, data=None, headers=None, timeout=None):
+        rpc = json.loads(data["f.req"])[0][0][0]
+        calls.append(rpc)
+        return _Resp(trends_text if rpc == "i0OFE" else articles_text)
+    monkeypatch.setattr(tn.requests, "post", _post)
+
+    items = tn.fetch_trending_items("TR", language="tr", cache_dir=tmp_path,
+                                    max_entries=25)
+    assert calls == ["i0OFE", "w4opAf"]
+    assert items and items[0].trend_volume == 100000
+    assert items == sorted(items, key=lambda i: i.trend_volume, reverse=True)
+    assert (tmp_path / "trending_now_tr.json").exists()
+
+
+def test_fetch_items_uses_fresh_cache_without_network(tmp_path, monkeypatch):
+    from short_bot.trends import trending_now as tn
+    cached = [tn.NewsItem(guid="https://x/1", title="Önbellek", link="https://x/1",
+                          source="S", pub_date=None, thumb_url=None,
+                          description="d", trend_volume=7000)]
+    tn._save_cache(tmp_path / "trending_now_tr.json", "TR", cached)
+
+    def _boom(*a, **k):
+        raise AssertionError("ağ çağrısı olmamalı")
+    monkeypatch.setattr(tn.requests, "post", _boom)
+
+    items = tn.fetch_trending_items("TR", language="tr", cache_dir=tmp_path)
+    assert [i.guid for i in items] == ["https://x/1"]
+    assert items[0].trend_volume == 7000
+
+
+def test_fetch_items_falls_back_to_rss_when_api_fails(tmp_path, monkeypatch):
+    from short_bot.trends import trending_now as tn
+    monkeypatch.setattr(tn.requests, "post",
+                        lambda *a, **k: _Resp("down", status=503))
+    xml = _rss_xml([("izzet özilhan", "200+", "Ünlü iş insanı kaza yaptı",
+                     "https://sozcu/kaza", "Sözcü", "https://img/1.jpg"),
+                    ("armutlu", "1000+", "Baba kız İmralı'ya sürüklendi",
+                     "https://sozcu/armutlu", "Sözcü", "https://img/2.jpg")])
+    monkeypatch.setattr(tn.requests, "get", lambda *a, **k: _Resp(xml))
+
+    items = tn.fetch_trending_items("TR", language="tr", cache_dir=tmp_path,
+                                    min_volume=100)
+    assert [i.trend_volume for i in items] == [1000, 200]
+    assert items[0].guid == "https://sozcu/armutlu"
+    assert items[0].title == "Baba kız İmralı'ya sürüklendi"
+    assert items[0].thumb_url == "https://img/2.jpg"
+    assert "Google Trends" in items[0].description
+    # yedek veri önbelleğe YAZILMAZ (bir sonraki koşu API'yi yeniden denesin)
+    assert not (tmp_path / "trending_now_tr.json").exists()
+
+
+def test_fetch_items_returns_stale_cache_when_everything_fails(tmp_path, monkeypatch):
+    from short_bot.trends import trending_now as tn
+    cached = [tn.NewsItem(guid="https://x/eski", title="Eski", link="https://x/eski",
+                          source=None, pub_date=None, thumb_url=None,
+                          description=None, trend_volume=3000)]
+    tn._save_cache(tmp_path / "trending_now_tr.json", "TR", cached)
+    monkeypatch.setattr(tn.requests, "post", lambda *a, **k: _Resp("x", status=500))
+    monkeypatch.setattr(tn.requests, "get", lambda *a, **k: _Resp("x", status=500))
+
+    items = tn.fetch_trending_items("TR", language="tr", cache_dir=tmp_path,
+                                    max_age_minutes=0)   # önbellek bayat sayılsın
+    assert [i.guid for i in items] == ["https://x/eski"]
+
+
+def test_fetch_items_returns_empty_when_no_source_and_no_cache(tmp_path, monkeypatch):
+    from short_bot.trends import trending_now as tn
+    monkeypatch.setattr(tn.requests, "post", lambda *a, **k: _Resp("x", status=500))
+    monkeypatch.setattr(tn.requests, "get", lambda *a, **k: _Resp("x", status=500))
+    assert tn.fetch_trending_items("TR", language="tr", cache_dir=tmp_path) == []
