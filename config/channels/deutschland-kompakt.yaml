@@ -90,6 +90,8 @@ dna:
     - lange Behördenfloskeln ('im Rahmen von', 'zeitnah', 'diesbezüglich')
     - englische Zahlen- und Datumsformate (richtig ist 1.500 / 20,5 Prozent /
       14:32 Uhr / 20.08.2026 — nicht 1,500 oder 2:32 PM)
+    - 'Abkürzungen und Eigennamen falsch schreiben — AfD (nicht AFD), ZDF, taz,
+      iPhone behalten ihre amtliche Schreibweise AUCH in Zeilen aus Großbuchstaben'
     sentence_max_words: 13
     paragraph_sentences:
     - 3
