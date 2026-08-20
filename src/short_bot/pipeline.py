@@ -1016,6 +1016,47 @@ def _extra_source_bodies(item, *, log) -> list[tuple[str, str]]:
     return out
 
 
+_SIBLING_WINDOW_H = 24
+
+
+def _drop_sibling_coverage(items, *, channel, eng, log):
+    """Aynı YouTube kanalına üreten KARDEŞ formatın son 24 saatte anlattığı
+    olayları listeden düşür.
+
+    NEDEN (ölçüldü 2026-08-20): ``trends_intent`` havuzu ayırmak için var ama
+    bir FİLTRE değil TERCİH — havuzda tercih edilen tür yoksa iki format da en
+    yüksek hacimli olaya düşüyor. Alman trendlerinde soru sorgusu oranı **%0**
+    ölçüldü (Türkçede %8), yani orada tercih neredeyse hiç bağlamıyor ve
+    Deutschland Kompakt ile Klartext aynı haberi iki kez anlatıyordu — TEK bir
+    YouTube kanalında aynı olayın iki videosu demek.
+
+    Dedup kanal bazlıdır ve öyle kalmalı (ayrı kanallar aynı olayı işleyebilir);
+    burada kısıt yalnız KİMLİĞİ PAYLAŞANLAR için geçerli: ``credentials_from``
+    dolu olan kanal, ödünç aldığı kanalın işlediği olaya girmez.
+    """
+    yt = getattr(channel, "youtube", None)
+    sibling = (getattr(yt, "credentials_from", None) or "").strip()
+    if not sibling or sibling == channel.slug or not items:
+        return items
+    from datetime import timedelta as _td
+    from short_bot.db import _utcnow, produced_guids_since
+    # shorts.created_at NAİF UTC saklanıyor (db._utcnow) — karşılaştırma aynı
+    # kaynaktan gelmeli, yoksa saat farkı pencereyi kaydırır.
+    since = (_utcnow() - _td(hours=_SIBLING_WINDOW_H)).replace(tzinfo=None)
+    try:
+        gorulen = produced_guids_since(eng, sibling, since)
+    except Exception as e:  # noqa: BLE001 — kısıt üretimi asla durdurmaz
+        log.warning(f"  kardeş kanal kontrolü atlandı: {e}")
+        return items
+    if not gorulen:
+        return items
+    kalan = [i for i in items if i.guid not in gorulen]
+    if len(kalan) != len(items):
+        log.info(f"  kardeş kanal '{sibling}' son {_SIBLING_WINDOW_H} saatte "
+                 f"{len(items) - len(kalan)} olayı zaten anlattı → düşürüldü")
+    return kalan or items      # hepsi düşerse boş dönme: kanal susmasın
+
+
 def _ticker_items_for_trends(
     scored: list[ScoredItem], picked: ScoredItem, *, min_score: float, limit: int = 4,
 ) -> tuple[str, ...]:
@@ -1086,6 +1127,7 @@ def _run_rss(*, channel, run_id, log, eng, settings,
     )
     log.info(f"  → {len(new_items)} new"
              f"{' (embedding-dedup active)' if dedup_openai_key else ''}")
+    new_items = _drop_sibling_coverage(new_items, channel=channel, eng=eng, log=log)
     # Record only fuzzy-similar dropped items (not GUID-exact duplicates,
     # which would bloat rss_items on every poll for the same headline)
     from short_bot.db import is_processed

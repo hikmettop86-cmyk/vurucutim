@@ -207,3 +207,86 @@ def test_metadata_hashtag_ornegi_dile_ozgu():
 
     assert "#sondakika" in build_metadata_prompt(
         channel=_Tr(), script={"body_paragraph": "x"}, rss_source=None, rss_link=None)
+
+
+# --- kardeş kanal kısıtı ---------------------------------------------------------
+
+def test_kardes_kanal_ayni_olayi_ikinci_kez_anlatmaz(tmp_path):
+    """ÖLÇÜLDÜ: Alman trendlerinde soru sorgusu oranı %0 (Türkçede %8), yani
+    trends_intent tercihi Almancada neredeyse hiç bağlamıyor ve iki format aynı
+    olaya düşüyordu — TEK YouTube kanalında aynı haberin iki videosu."""
+    import json
+    import logging
+    from datetime import datetime, timedelta
+    from short_bot.db import init_db, record_short
+    from short_bot.models import NewsItem
+    from short_bot.pipeline import _drop_sibling_coverage
+
+    eng = init_db(tmp_path / "t.sqlite")
+    record_short(eng, channel="deutschland-kompakt", rss_item_guid="https://a/1",
+                 title="STENDAL", file_path="f.mp4", duration_s=6,
+                 script_json=json.dumps({}), render_ms=1)
+    items = [NewsItem(guid="https://a/1", title="CDU spendet an AfD", link="l",
+                      source="s", pub_date=None, thumb_url=None, description="d"),
+             NewsItem(guid="https://b/2", title="Unwetter in Hessen", link="l",
+                      source="s", pub_date=None, thumb_url=None, description="d")]
+    klartext = load_channel(Path("config/channels/deutschland-klartext.yaml"))
+    kalan = _drop_sibling_coverage(items, channel=klartext, eng=eng,
+                                   log=logging.getLogger("t"))
+    assert [i.guid for i in kalan] == ["https://b/2"]
+
+    # Kimliği ödünç ALMAYAN kanal etkilenmez: ayrı kanallar aynı olayı işleyebilir.
+    kart = load_channel(Path("config/channels/deutschland-kompakt.yaml"))
+    assert len(_drop_sibling_coverage(items, channel=kart, eng=eng,
+                                      log=logging.getLogger("t"))) == 2
+
+
+def test_kardes_kisiti_kanali_susturmaz(tmp_path):
+    """Havuzun TAMAMI kardeş tarafından işlenmişse boş dönmek yerine eski
+    davranışa düşülür — kanalın hiç üretmemesi daha kötü."""
+    import json
+    import logging
+    from short_bot.db import init_db, record_short
+    from short_bot.models import NewsItem
+    from short_bot.pipeline import _drop_sibling_coverage
+
+    eng = init_db(tmp_path / "t.sqlite")
+    record_short(eng, channel="deutschland-kompakt", rss_item_guid="https://a/1",
+                 title="T", file_path="f.mp4", duration_s=6,
+                 script_json=json.dumps({}), render_ms=1)
+    items = [NewsItem(guid="https://a/1", title="X", link="l", source="s",
+                      pub_date=None, thumb_url=None, description="d")]
+    klartext = load_channel(Path("config/channels/deutschland-klartext.yaml"))
+    assert len(_drop_sibling_coverage(items, channel=klartext, eng=eng,
+                                      log=logging.getLogger("t"))) == 1
+
+
+def test_kardes_kisiti_24_saatlik_pencereyle_sinirli(tmp_path):
+    """Saat dilimi tuzağı: shorts.created_at NAİF UTC saklanıyor. Farkındalıklı
+    bir datetime ile karşılaştırmak pencereyi sessizce kaydırır — dünkü haber
+    sonsuza dek engellenir ya da hiç engellenmez."""
+    import json
+    import logging
+    from datetime import timedelta
+    from sqlalchemy import update
+    from short_bot.db import init_db, record_short, shorts, _utcnow
+    from short_bot.models import NewsItem
+    from short_bot.pipeline import _drop_sibling_coverage
+
+    eng = init_db(tmp_path / "t.sqlite")
+    sid = record_short(eng, channel="deutschland-kompakt", rss_item_guid="https://eski/1",
+                       title="ESKİ", file_path="f.mp4", duration_s=6,
+                       script_json=json.dumps({}), render_ms=1)
+    eski = (_utcnow() - timedelta(hours=25)).replace(tzinfo=None)
+    with eng.begin() as c:
+        c.execute(update(shorts).where(shorts.c.id == sid).values(created_at=eski))
+
+    items = [NewsItem(guid="https://eski/1", title="25 saat önceki olay", link="l",
+                      source="s", pub_date=None, thumb_url=None, description="d"),
+             NewsItem(guid="https://yeni/2", title="Yeni olay", link="l",
+                      source="s", pub_date=None, thumb_url=None, description="d")]
+    klartext = load_channel(Path("config/channels/deutschland-klartext.yaml"))
+    kalan = _drop_sibling_coverage(items, channel=klartext, eng=eng,
+                                   log=logging.getLogger("t"))
+    # 25 saat önce anlatılan olay artık serbest (takip/gelişme meşru).
+    assert {i.guid for i in kalan} == {"https://eski/1", "https://yeni/2"}

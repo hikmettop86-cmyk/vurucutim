@@ -558,6 +558,21 @@ def recent_narration_variations(eng: Engine, channel: str, limit: int = 6) -> li
     return out
 
 
+def produced_guids_since(eng: Engine, channel: str, since) -> set[str]:
+    """Bu kanalın ``since``'ten beri ürettiği haberlerin guid'leri.
+
+    Silinmiş satırlar SAYILIR: operatör videoyu listeden kaldırmış olabilir ama
+    yayına çıkmış olabilir; kardeş kanalın aynı olaya girmemesi için üretilmiş
+    saymak doğru taraf."""
+    with eng.connect() as conn:
+        rows = conn.execute(
+            select(shorts.c.rss_item_guid)
+            .where(shorts.c.channel == channel)
+            .where(shorts.c.created_at >= since)
+        ).fetchall()
+    return {r[0] for r in rows if r[0]}
+
+
 def upsert_search_terms(eng: Engine, *, channel: str,
                         terms: list[tuple[str, int]], window_end) -> int:
     """Kanalın arama sözlüğünü tazele. Aynı terim tekrar gelirse ÜZERİNE yazılır
