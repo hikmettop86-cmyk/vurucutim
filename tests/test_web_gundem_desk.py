@@ -249,3 +249,31 @@ def test_external_text_is_escaped(app, fake_trends, monkeypatch):
     assert "<b>Kaynak</b>" not in body
     assert "&lt;img src=x" in body and "&lt;b&gt;Kaynak" in body
     assert "&lt;u&gt;Başlık" in body and "&lt;script&gt;alert(2)" in body
+
+
+def test_card_mock_follows_the_regions_channel_identity(tmp_path, monkeypatch):
+    """Masadaki 'kart böyle çıkacak' maketi SABİT Türk kimliğindeydi (kırmızı+sarı,
+    'MANŞET', 'SIRADA'): Almanca kanalın masasında yanlış bir kart gösteriyordu.
+
+    Kendi uygulamasını kurar — kanal dosyası create_app'ten ÖNCE yazılmalı."""
+    import yaml
+    cfg_dir = tmp_path / "config"
+    (cfg_dir / "channels").mkdir(parents=True)
+    (cfg_dir / "settings.yaml").write_text(_SETTINGS, encoding="utf-8")
+    (cfg_dir / "channels" / "gundem.yaml").write_text(_ch("gundem"), encoding="utf-8")
+    de = yaml.safe_load(_ch("de-kanal"))
+    de.update({"language": "de", "trends_region": "DE", "template": "eilmeldung",
+               "colors": {"primary": "#0b3b73", "accent": "#e2001a",
+                          "bg_gradient": ["#1d2632", "#10141a"]}})
+    (cfg_dir / "channels" / "de-kanal.yaml").write_text(
+        yaml.safe_dump(de, allow_unicode=True), encoding="utf-8")
+    (tmp_path / "data").mkdir()
+    app = create_app(config_dir=cfg_dir, db_path=tmp_path / "x.sqlite",
+                     secrets_path=tmp_path / "data" / "secrets.yaml", scheduler=False)
+    monkeypatch.setattr("short_bot.web.routes.gundem.fetch_trending_items",
+                        lambda region, **kw: (ITEMS if region == "TR" else [ITEMS[0]]))
+    de_body = app.test_client().get("/gundem?region=DE").data.decode("utf-8")
+    assert "SCHLAGZEILE" in de_body and "BAUCHBINDE" in de_body and "WEITER" in de_body
+    assert "#0b3b73" in de_body and "Eilmeldung kimliği" in de_body
+    tr_body = app.test_client().get("/gundem?region=TR").data.decode("utf-8")
+    assert "MANŞET" in tr_body and "SIRADA" in tr_body and "Flaş kimliği" in tr_body

@@ -95,23 +95,23 @@
           <div class="bg-claude-surface border border-claude-border rounded-xl p-3.5 flex flex-col items-center gap-2.5">
             <div class="text-[11px] text-claude-subtle tracking-wider self-start">KART BÖYLE ÇIKACAK</div>
             <div class="relative rounded-lg overflow-hidden bg-[#141413]" style="width: 120px; height: 214px;">
-              <div class="absolute top-0 left-0 right-0 flex items-center px-1.5 text-white" style="height: 15px; background: #d0021b; font-size: 7px; font-weight: 700; letter-spacing: 0.06em;">{{ ((channels[0].handle if channels else '@gundem')|replace('@','')|upper)|e }}</div>
-              <div class="absolute left-0 right-0" style="top: 15px; height: 9px; background: #ffe600;"></div>
+              <div class="absolute top-0 left-0 right-0 flex items-center px-1.5 text-white" style="height: 15px; background: {{ mock.primary }}; font-size: 7px; font-weight: 700; letter-spacing: 0.06em;">{{ ((channels[0].handle if channels else '@gundem')|replace('@','')|upper)|e }}</div>
+              <div class="absolute left-0 right-0" style="top: 15px; height: 9px; background: {{ mock.accent }};"></div>
               <div class="absolute left-0 right-0 bg-cover bg-center" style="top: 24px; height: 52px; {% if item.thumb_url %}background-image: url('{{ item.thumb_url|e }}');{% else %}background: linear-gradient(150deg,#6b6863,#3a3936);{% endif %}"></div>
-              <div class="absolute text-white font-serif font-bold" style="left: 7px; right: 7px; top: 64px; font-size: 15px; line-height: 0.95; letter-spacing: -0.02em;">MANŞET</div>
-              <div class="absolute text-white" style="left: 7px; top: 82px; background: #d0021b; font-size: 8px; font-weight: 700; padding: 2px 5px;">ALT SATIR</div>
-              <div class="absolute" style="left: 7px; right: 7px; top: 96px; background: #fff; color: #141413; font-size: 6.5px; font-weight: 700; padding: 3px 5px;">KJ SATIRI</div>
+              <div class="absolute text-white font-serif font-bold" style="left: 7px; right: 7px; top: 64px; font-size: 15px; line-height: 0.95; letter-spacing: -0.02em;">{{ mock.top }}</div>
+              <div class="absolute text-white" style="left: 7px; top: 82px; background: {{ mock.accent if mock.archetype == 'eilmeldung' else mock.primary }}; font-size: 8px; font-weight: 700; padding: 2px 5px;">{{ mock.bottom }}</div>
+              <div class="absolute" style="left: 7px; right: 7px; top: 96px; background: #fff; color: #141413; font-size: 6.5px; font-weight: 700; padding: 3px 5px;">{{ mock.kj }}</div>
               <div class="absolute flex flex-col gap-[3px]" style="left: 7px; right: 7px; top: 112px;">
                 <div style="height: 3px; background: rgba(255,255,255,0.55); width: 100%;"></div>
                 <div style="height: 3px; background: rgba(255,255,255,0.55); width: 92%;"></div>
-                <div style="height: 3px; background: #ffe600; width: 60%;"></div>
+                <div style="height: 3px; background: {{ mock.accent }}; width: 60%;"></div>
                 <div style="height: 3px; background: rgba(255,255,255,0.55); width: 84%;"></div>
               </div>
               <div class="absolute left-0 right-0 flex items-center" style="bottom: 8px; height: 9px; background: #fff;">
-                <span style="background: #d0021b; color: #fff; font-size: 6px; font-weight: 700; padding: 1px 4px;">SIRADA</span>
+                <span style="background: {{ mock.primary }}; color: #fff; font-size: 6px; font-weight: 700; padding: 1px 4px;">{{ mock.ticker|upper }}</span>
               </div>
             </div>
-            <div class="text-[11px] text-claude-subtle text-center leading-snug">Flaş kimliği · manşeti yapay zekâ yazar</div>
+            <div class="text-[11px] text-claude-subtle text-center leading-snug">{{ mock.archetype_label }} kimliği · manşeti yapay zekâ yazar</div>
           </div>
 
           <div class="bg-claude-surface border border-claude-border rounded-xl p-4 flex flex-col gap-3">

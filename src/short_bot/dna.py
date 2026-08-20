@@ -34,6 +34,12 @@ if _REGISTRY_PATH.exists():
 
 ARCHETYPES = _EXISTING_ARCHETYPES + [a["slug"] for a in _DESIGNED_ARCHETYPES]
 
+# Görünen ad (panelde arketip adını yazarken slug'ı büyütmek yerine): slug
+# 'flas' → etiket 'Flaş'. Kayıtta olmayan slug kendi adına düşer.
+ARCHETYPE_LABELS: dict[str, str] = {
+    a["slug"]: a.get("label") or a["slug"] for a in _DESIGNED_ARCHETYPES
+}
+
 
 def _designed_to_default(arch: dict) -> dict:
     """Translate archetypes.json entry to internal ARCHETYPE_DEFAULTS shape."""

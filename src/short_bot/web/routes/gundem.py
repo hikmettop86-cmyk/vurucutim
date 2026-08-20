@@ -180,6 +180,34 @@ def _channel_status(eng, channels) -> list[dict]:
     return out
 
 
+# Masadaki "kart böyle çıkacak" maketi. Renkler ve etiketler SABİT olsaydı
+# (Türk flaş kimliği: kırmızı+sarı, "SIRADA") Almanca kanalın masasında yanlış
+# bir kart gösterilirdi — operatör kanalı yanlış kimlikle değerlendirir.
+_MOCK_TICKER = {"tr": "Sırada", "de": "Weiter", "en": "Next", "es": "Sigue",
+                "fr": "Ensuite", "ja": "次"}
+_MOCK_ROWS = {"tr": ("MANŞET", "ALT SATIR", "KJ SATIRI"),
+              "de": ("SCHLAGZEILE", "UNTERZEILE", "BAUCHBINDE"),
+              "en": ("HEADLINE", "SUBLINE", "LOWER THIRD")}
+
+
+def _card_mock(channels) -> dict:
+    """Maketin paleti ve etiketleri bölgeyi üreten kanaldan gelir."""
+    cfg = next((c["cfg"] for c in channels if c.get("cfg")), None)
+    lang = getattr(cfg, "language", "tr") if cfg else "tr"
+    colors = getattr(cfg, "colors", None) or {}
+    arch = getattr(getattr(cfg, "dna", None), "archetype", "") or getattr(cfg, "template", "")
+    from short_bot.dna import ARCHETYPE_LABELS
+    top, bottom, kj = _MOCK_ROWS.get(lang, _MOCK_ROWS["en"])
+    return {
+        "primary": colors.get("primary", "#d0021b"),
+        "accent": colors.get("accent", "#ffe600"),
+        "ticker": _MOCK_TICKER.get(lang, "Next"),
+        "top": top, "bottom": bottom, "kj": kj,
+        "archetype": arch,
+        "archetype_label": ARCHETYPE_LABELS.get(arch, arch.capitalize()),
+    }
+
+
 def _search_pct(eng, cfg) -> float | None:
     """Bu kanalın izlenmelerinin yüzde kaçı YouTube ARAMASINDAN geliyor.
 
@@ -219,6 +247,7 @@ def _context(region: str, *, guid: str | None, force: bool = False) -> dict:
         "score": _known_score(eng, picked.guid) if picked else None,
         "status": _channel_status(eng, channels),
         "cartesia": _cartesia_usage(),
+        "mock": _card_mock(channels),
         "cache_age": _cache_age_minutes(region),
         "refresh_seconds": REFRESH_SECONDS,
     }
