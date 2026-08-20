@@ -130,13 +130,114 @@ Antworte NUR in diesem JSON-Format, kein anderer Text:
 }
 
 
+# Trend kanalı (content_source="trends"): kanalın ÖZNESİ yok, her konu uygun.
+# Merkez kuralı uygulanmaz. Kapı tek şeyi eler: arkasında anlatılacak OLAY
+# olmayan "fayda araması" (hava durumu, hisse fiyatı, maç hangi kanalda, TV
+# program, sınav sonucu sorgusu). Sıralamayı puan DEĞİL arama hacmi yapar
+# (select_by_volume); puan yalnız min_score eşiğinde kapı görevi görür.
+_TREND_PROMPT_TEMPLATES = {
+    "tr": """Sen bir YouTube Shorts gündem kanalının editörüsün. Kanal ülkenin o an
+EN ÇOK ARANAN konularını 6 saniyelik tek kartta verir: manşet + 3-4 cümle gövde
++ fotoğraf. Aşağıdaki başlıklar Google Trends'ten geldi; her satırda arama
+hacmi ve ilişkili aramalar var.
+
+KANAL: {channel_name}
+
+Her başlığı "bu bir OLAY mı, yoksa sadece bir ARAMA mı?" sorusuyla 0-10 puanla:
+- 9-10: Net, anlatılabilir olay; tek kartta özetlenir (deprem uyarısı, kaza,
+  zam kararı, transfer teklifi, resmi açıklama, skor + sonuç, gözaltı)
+- 7-8: Olay var, biraz bağlam gerekir ama 3-4 cümleye sığar
+- 4-6: Olay zayıf, yerel ya da yalnız bir kesimi ilgilendiriyor
+- 0-3: FAYDA ARAMASI — arkasında haber yok: hava durumu, hisse fiyatı/grafik,
+  döviz/altın kuru sorgusu, "maç hangi kanalda / saat kaçta", TV program ya da
+  "son bölüm izle", "ne kadar kazandı / kimdir" (olay yok), sınav sonucu ve
+  başvuru tarihi sorguları, ürün/kampanya fiyatı
+
+Başlık ilgi çekici olsa bile OLAY yoksa 0-3 ver; izleyici 6 saniyede "ne oldu?"
+sorusunun cevabını almalı. Arama hacmi yüksek diye puanı YÜKSELTME — hacmi
+sistem ayrıca kullanıyor, sen yalnız olay var mı yok mu ona bak.
+
+Başlıklar:
+{listing}
+
+SADECE şu JSON formatında yanıtla, başka metin yazma:
+{{"scores": [{{"guid": "<aynısı>", "score": <0-10>, "reasoning": "<≤200 char, neden bu puan>"}}, ...]}}""",
+
+    "en": """You are the editor of a YouTube Shorts trending-news channel. The channel
+turns the country's MOST-SEARCHED topics of the moment into a single 6-second
+card: headline + 3-4 sentence body + photo. The headlines below come from
+Google Trends; each line carries search volume and related queries.
+
+CHANNEL: {channel_name}
+
+Score each headline 0-10 by asking "is this an EVENT, or just a SEARCH?":
+- 9-10: Clear, tellable event that fits one card (earthquake warning, crash,
+  pay-rise decision, transfer bid, official statement, score + outcome, arrest)
+- 7-8: An event, needs a little context but fits 3-4 sentences
+- 4-6: Weak, local, or relevant to a narrow group only
+- 0-3: UTILITY SEARCH — no story behind it: weather, stock price/chart,
+  currency/gold rate lookup, "what channel / what time is the match", TV
+  schedule or "watch latest episode", "how much did X earn / who is X" with no
+  event, exam results and application dates, product/deal prices
+
+Even if the headline is catchy, score 0-3 when there is no EVENT; the viewer
+must get "what happened?" answered in 6 seconds. Do NOT raise the score for
+high search volume — the system uses volume separately; you only judge
+whether there is an event.
+
+Headlines:
+{listing}
+
+Reply ONLY in this JSON format, no other text:
+{{"scores": [{{"guid": "<same>", "score": <0-10>, "reasoning": "<≤200 char, why this score>"}}, ...]}}""",
+
+    "de": """Du bist Redakteur eines YouTube-Shorts-Kanals für aktuelle Trends. Der
+Kanal macht aus den MEISTGESUCHTEN Themen des Landes eine einzige 6-Sekunden-
+Karte: Schlagzeile + 3-4 Sätze + Foto. Die Schlagzeilen unten stammen aus
+Google Trends; jede Zeile trägt Suchvolumen und verwandte Suchanfragen.
+
+KANAL: {channel_name}
+
+Bewerte jede Schlagzeile von 0-10 mit der Frage "ist das ein EREIGNIS oder nur
+eine SUCHE?":
+- 9-10: Klares, erzählbares Ereignis, passt auf eine Karte (Erdbebenwarnung,
+  Unfall, Lohnentscheidung, Transferangebot, offizielle Erklärung, Ergebnis +
+  Folge, Festnahme)
+- 7-8: Ereignis vorhanden, braucht etwas Kontext, passt aber in 3-4 Sätze
+- 4-6: Schwaches, lokales oder nur für eine kleine Gruppe relevantes Ereignis
+- 0-3: NUTZSUCHE — keine Geschichte dahinter: Wetter, Aktienkurs/Chart,
+  Wechselkurs/Goldpreis, "welcher Sender / wann läuft das Spiel", TV-Programm
+  oder "letzte Folge ansehen", "wie viel hat X verdient / wer ist X" ohne
+  Ereignis, Prüfungsergebnisse und Bewerbungsfristen, Produkt-/Angebotspreise
+
+Auch bei reizvoller Schlagzeile: ohne EREIGNIS 0-3. Der Zuschauer muss in 6
+Sekunden "was ist passiert?" beantwortet bekommen. Erhöhe die Bewertung NICHT
+wegen hohen Suchvolumens — das System nutzt das Volumen separat; du beurteilst
+nur, ob ein Ereignis vorliegt.
+
+Schlagzeilen:
+{listing}
+
+Antworte NUR in diesem JSON-Format, kein anderer Text:
+{{"scores": [{{"guid": "<gleich>", "score": <0-10>, "reasoning": "<≤200 char, warum>"}}, ...]}}""",
+}
+
+
 def build_scoring_prompt(
     items: list[NewsItem],
     *,
     channel: "ChannelConfig | None" = None,
     performance_insights: dict | None = None,
 ) -> str:
-    listing = "\n".join(f"- guid={i.guid} | {i.title}" for i in items)
+    is_trends = channel is not None and channel.content_source == "trends"
+    if is_trends:
+        # Trend satırında bağlam (hacim + ilişkili aramalar) description'da
+        # taşınıyor; model "ajet" gibi tek başına anlamsız terimi böyle çözer.
+        listing = "\n".join(
+            f"- guid={i.guid} | {i.title}" + (f" — {i.description}" if i.description else "")
+            for i in items)
+    else:
+        listing = "\n".join(f"- guid={i.guid} | {i.title}" for i in items)
     if channel is None:
         # Backward-compat fallback: legacy callers (no channel context). Use
         # generic Turkish prompt without channel anchoring.
@@ -149,7 +250,10 @@ def build_scoring_prompt(
             "SADECE şu JSON formatında yanıtla, başka metin yazma:\n"
             '{"scores": [{"guid": "<aynısı>", "score": <0-10>, "reasoning": "<≤200 char>"}, ...]}'
         )
-    template = _PROMPT_TEMPLATES.get(channel.language, _PROMPT_TEMPLATES["en"])
+    if is_trends:
+        template = _TREND_PROMPT_TEMPLATES.get(channel.language, _TREND_PROMPT_TEMPLATES["en"])
+    else:
+        template = _PROMPT_TEMPLATES.get(channel.language, _PROMPT_TEMPLATES["en"])
     keywords_str = ", ".join(channel.keywords) if channel.keywords else "(no keywords)"
     base = template.format(
         channel_name=channel.name,
@@ -292,6 +396,18 @@ def apply_category_quota(
 def select_top(scored: list[ScoredItem], min_score: float, n: int = 1) -> list[ScoredItem]:
     above = [s for s in scored if s.score >= min_score]
     above.sort(key=lambda s: s.score, reverse=True)
+    return above[:n]
+
+
+def select_by_volume(
+    scored: list[ScoredItem], min_score: float, n: int = 1,
+) -> list[ScoredItem]:
+    """Trend kanalı seçimi: min_score eşiğini geçenler arasından en yüksek
+    ARAMA HACMİ (item.trend_volume) önce, eşitlikte puan. Puan burada sıra
+    değil KAPI — 'hikâyesiz fayda araması' eşiğin altında kalıp elenir,
+    kalanları ülkenin ne aradığı sıralar."""
+    above = [s for s in scored if s.score >= min_score]
+    above.sort(key=lambda s: (s.item.trend_volume, s.score), reverse=True)
     return above[:n]
 
 
