@@ -161,7 +161,7 @@
             <option value="">Kendi bağlantım ({{ c.slug }})</option>
             {% for l in linkable %}
             <option value="{{ l.slug|e }}" {% if c.youtube and c.youtube.credentials_from == l.slug %}selected{% endif %}>
-              {{ l.name|e }}{% if l.yt %} · {{ l.yt|e }}{% endif %}
+              {{ l.name|e }}{% if l.yt %} · {{ l.yt|e }}{% endif %}{% if l.connected is defined and not l.connected %} · henüz bağlı değil{% endif %}
             </option>
             {% endfor %}
           </select>

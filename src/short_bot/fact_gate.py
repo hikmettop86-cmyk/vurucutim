@@ -55,22 +55,41 @@ def _fold(s: str) -> str:
     return s.casefold().replace("’", "'")
 
 
-# ADLARI BÜYÜK HARFLE YAZAN DİLLER. Almancada HER ad büyük harfle başlar
-# ("der Streit", "ein Wechsel", "die Konkurrenz") — "cümle içinde büyük harf =
-# özel ad" sezgiseli bu dilde çöker ve kapı her anlatımı uydurma ilan eder.
+# ADLARI BÜYÜK HARFLE YAZAN DİLLER (Almanca). Bu dilde "büyük harf = özel ad"
+# sezgiseli KANIT DEĞİLDİR: her ad büyük harfle başlar.
 #
-# CANLI VAKA (2026-08-20, Deutschland Klartext ilk koşusu): kapı
-# ['Überläufer', 'Reihe', 'Konkurrenz', 'Streit', 'Wechsel', 'Kontoauszug']
-# listesini "kaynakta geçmeyen isim" sayıp boşuna bir yeniden yazım turu
-# harcadı. İkinci tur da takılsaydı video düşecekti.
+# İKİ CANLI VAKA:
+#   1) İlk koşu: ['Überläufer','Reihe','Konkurrenz','Streit','Wechsel',
+#      'Kontoauszug'] uydurma sayıldı → boşuna bir yeniden yazım turu.
+#   2) İkinci koşu (kullanıcı bildirimi): 'Todesfall' iki turda da düzelmedi,
+#      VİDEO ÜRETİLMEDİ. Belirteç kuralı yetmiyor çünkü Almancada sıfat araya
+#      giriyor ("ein plötzlicher Todesfall") ve deyimler belirteçsiz kuruluyor
+#      ("unter Schock", "vor Ort", "nach Angaben").
 #
-# AYIRT EDİCİ: Almancada sıradan adın önünde neredeyse her zaman bir belirteç
-# vardır (der/die/das, ein/eine, im/am/zum, dieser, kein…). Özel ad çoğunlukla
-# belirteçsiz gelir ("in Stendal", "Bernd Prange spendet"). Kısaltmalar (CDU,
-# AfD) ve arka arkaya iki büyük harfli sözcük (kişi/yer adı) HER ZAMAN adaydır.
+# KARAR: kanıt olmayan şeye dayanarak video düşürülmez. Almancada aday yalnız
+# GERÇEKTEN ad işareti taşıyanlardır:
+#   * kısaltma (CDU, AfD, ZDF) — ikinci bir büyük harf taşır,
+#   * arka arkaya iki "ad-gibi" sözcük (kişi/yer/kurum: "Bernd Prange",
+#     "Sachsen Anhalt") — işlev sözcükleri ve belirteçler bu diziye girmez.
+# Tek başına duran büyük harfli sözcük ADAY DEĞİLDİR.
+#
+# KAPI KÖRLEŞMEZ: uydurma bir kişi/kurum anlatımda neredeyse her zaman iki
+# sözcüklü ("Olaf Scholz") ya da kısaltmadır; uydurma SAYILAR ise dilden
+# bağımsız olarak ayrıca denetleniyor — sahtekârlığın en sık biçimi zaten odur.
+#
+# KABUL EDİLEN BOŞLUK: tek sözcüklü bir yer/kişi adı ("in Karlsruhe") kaçar,
+# çünkü Almancada "in Karlsruhe" ile "unter Schock" yapı olarak AYNIDIR ve
+# ikisini ayıracak bir sinyal yok. Takas bilinçli: iki günde iki video
+# kaybetmektense nadir bir tek sözcüklü ad kaçsın. Testle yazılı:
+# tests/test_german_channel.py::test_olgu_kapisi_almanca_BILINEN_BOSLUK_tek_sozcuklu_ad
 _NOUN_CAPITALIZING: frozenset[str] = frozenset({"de"})
 
-_DE_BELIRTEC: frozenset[str] = frozenset("""
+# Almanca işlev sözcükleri: belirteçler, edatlar, bağlaçlar, yardımcı fiiller.
+# KAPALI bir sınıf olduğu için liste sürdürülebilir — modül başındaki "sözlükle
+# kovalamak sürdürülemez" uyarısı İÇERİK adları içindi, işlev sözcükleri için
+# değil. Cümle başında büyük harfle yazıldıklarında ad dizisini bozmasınlar diye
+# gerekli ("Auch Olaf Scholz" → 'Auch' diziye girmemeli).
+_DE_ISLEV: frozenset[str] = frozenset("""
 der die das den dem des ein eine einen einem einer eines
 kein keine keinen keinem keiner keines
 mein meine meinen meinem meiner dein deine sein seine seinen seinem seiner
@@ -78,6 +97,13 @@ ihr ihre ihren ihrem ihrer unser unsere unseren unserem unserer euer eure
 dieser diese dieses diesen diesem jeder jede jedes jeden jedem
 im am zum zur beim vom ins ans aufs
 viele mehrere einige manche alle solche beide welche
+in an auf aus bei mit nach von vor seit zu über unter gegen um für durch ohne
+laut trotz während wegen ab bis neben hinter zwischen innerhalb statt
+und oder aber denn dass weil wenn als wie also doch schon noch nur auch sogar
+ist sind war waren hat haben hatte hatten wird werden wurde wurden kann können
+soll sollen muss müssen darf dürfen will wollen sich man wer was wann wo warum
+nicht kein sehr mehr weniger hier dort dann jetzt heute gestern morgen
+es er sie ihm ihn ihr wir uns ihr euch dann dabei damit dafür dagegen
 """.split())
 
 
@@ -86,22 +112,20 @@ def _cok_buyuk_harf(k: str) -> bool:
     return sum(1 for c in k if c.isupper()) >= 2
 
 
-# 'als'/'wie' sonrası ROL gelir, ad değil ("als Überläufer", "wie Nachbarn").
-# Sayıdan sonra BİRİM gelir ("zehntausend Euro", "60 Häuser") — sayının kendisi
-# zaten ayrıca denetleniyor.
-_DE_ROL_ONCESI: frozenset[str] = frozenset({"als", "wie"})
-_DE_SAYI_SONU = ("tausend", "hundert", "zig", "millionen", "milliarden",
-                 "million", "milliarde")
-_DE_SAYI_KELIME: frozenset[str] = frozenset("""
-ein eine zwei drei vier funf sechs sieben acht neun zehn elf zwolf
-dutzend etliche rund etwa knapp uber mehr weniger
-""".split())
+def _ad_gibi(k: str) -> bool:
+    """Ad dizisine girebilecek sözcük: büyük harfle başlar ve işlev sözcüğü
+    değildir. 'Auch Olaf Scholz' → 'Auch' diziye girmez, 'Olaf Scholz' girer."""
+    return bool(k) and k[:1].isupper() and _fold(k) not in _DE_ISLEV
 
 
-def _sayi_gibi(k: str) -> bool:
-    f = _fold(k)
-    return (any(c.isdigit() for c in k) or f in _DE_SAYI_KELIME
-            or f.endswith(_DE_SAYI_SONU))
+def ad_gibi_dizi(kelimeler: list[str], i: int) -> bool:
+    """i'deki sözcük, arka arkaya en az İKİ ad-gibi sözcükten oluşan bir dizinin
+    parçası mı ("Bernd Prange", "Sachsen Anhalt", "Olaf Scholz")."""
+    if not _ad_gibi(kelimeler[i]):
+        return False
+    onceki = i > 0 and _ad_gibi(kelimeler[i - 1])
+    sonraki = i + 1 < len(kelimeler) and _ad_gibi(kelimeler[i + 1])
+    return bool(onceki or sonraki)
 
 
 def _proper_nouns(text: str, language: str = "tr") -> list[str]:
@@ -135,21 +159,10 @@ def _proper_nouns(text: str, language: str = "tr") -> list[str]:
             if _fold(k) in _STOP:
                 continue
             if ad_dili:
-                # Kısaltma ya da arka arkaya büyük harfli sözcük dizisi (kişi/yer
-                # adı) her hâlükârda aday; tek başına duran bir ad ancak önünde
-                # belirteç YOKSA aday olur.
-                komsu_buyuk = ((i > 0 and buyukler[i - 1] and i - 1 != 0)
-                               or (i + 1 < len(kelimeler) and buyukler[i + 1]))
-                onceki_ham = kelimeler[i - 1] if i > 0 else ""
-                onceki = _fold(onceki_ham)
-                if not _cok_buyuk_harf(k) and not komsu_buyuk and i > 0 and (
-                        onceki in _DE_ROL_ONCESI or _sayi_gibi(onceki_ham)):
-                    continue
-                if not (_cok_buyuk_harf(k) or komsu_buyuk
-                        or (i > 0 and onceki not in _DE_BELIRTEC)):
-                    continue
-                if i > 0 and onceki in _DE_BELIRTEC and not (
-                        _cok_buyuk_harf(k) or komsu_buyuk):
+                # Aday YALNIZ gerçek ad işareti taşıyanlar: kısaltma ya da
+                # arka arkaya iki "ad-gibi" sözcük. Tek başına duran büyük
+                # harfli sözcük Almancada kanıt DEĞİLDİR (bkz. modül üstü not).
+                if not (_cok_buyuk_harf(k) or ad_gibi_dizi(kelimeler, i)):
                     continue
             cumle_basi = i == 0
             adaylar.append((k, cumle_basi))

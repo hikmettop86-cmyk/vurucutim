@@ -212,7 +212,19 @@ def edit(slug):
             if other.slug != slug and _yt_auth.has_credentials(yt_root, other.slug):
                 info = _yt_auth.load_channel_info(yt_root, other.slug) or {}
                 linkable.append({"slug": other.slug, "name": other.name,
-                                 "yt": (info.get("snippet") or {}).get("title", "")})
+                                 "yt": (info.get("snippet") or {}).get("title", ""),
+                                 "connected": True})
+        # SEÇİLİ DEĞER HER ZAMAN LİSTEDE OLMALI — henüz bağlanmamış olsa bile.
+        # CANLI VAKA (2026-08-20): deutschland-klartext'in credentials_from'u
+        # 'deutschland-kompakt' idi ama o kanal henüz OAuth'lanmamıştı, bu yüzden
+        # açılırda HİÇ seçenek yoktu; tarayıcı boş değeri gönderdi ve ayar
+        # SESSİZCE silindi. (Aynı aile: dil açılırının ilk seçeneğe düşmesi.)
+        mevcut = (c.youtube.credentials_from if c.youtube else None)
+        if mevcut and mevcut not in {l["slug"] for l in linkable}:
+            baslik = next((o.name for o in list_channels(_channels_dir(), enabled_only=False)
+                           if o.slug == mevcut), mevcut)
+            linkable.insert(0, {"slug": mevcut, "name": baslik, "yt": "",
+                                "connected": False})
         # Aynı YouTube kanalına bağlı başka slug var mı — paylaşım BEYAN EDİLMEMİŞSE
         # bu yanlış bağlantı demektir (Google hesap seçicisinde yanlış marka kanalı).
         declared = {(c.youtube.credentials_from if c.youtube else None), cslug, slug}

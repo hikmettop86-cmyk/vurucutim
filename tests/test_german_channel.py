@@ -57,11 +57,10 @@ def test_kart_kanali_almanya_icin_ayarli():
 def test_yorum_kanali_kart_kanaliyla_es_ama_ayri_niyette():
     k = load_channel(Path("config/channels/deutschland-klartext.yaml"))
     assert k.language == "de" and k.trends_intent == "question"
-    assert k.voice.enabled and k.voice.provider == "cartesia"
-    # Aynı YouTube kanalı: kimlik/kota/istatistik tek yerde.
+    assert k.voice.enabled and k.voice.provider in ("cartesia", "ai33")
+    # Aynı YouTube kanalı: kimlik/kota/istatistik tek yerde. Bu ayar panelden
+    # kaydedince SESSİZCE siliniyordu (bkz. test_web_yorum_edit).
     assert k.youtube.credentials_from == "deutschland-kompakt"
-    # Cartesia bütçesi tek başına dolardı → bilinçli KAPALI.
-    assert k.enabled is False
 
 
 def test_yorum_personasi_almanca_ve_pressekodex_tasiyor():
@@ -290,3 +289,50 @@ def test_kardes_kisiti_24_saatlik_pencereyle_sinirli(tmp_path):
                                    log=logging.getLogger("t"))
     # 25 saat önce anlatılan olay artık serbest (takip/gelişme meşru).
     assert {i.guid for i in kalan} == {"https://eski/1", "https://yeni/2"}
+
+
+@pytest.mark.parametrize("cumle", [
+    "Ein Todesfall, zwei Schwerverletzte.",
+    "Der Todesfall in Waldorf wirft Fragen auf.",
+    "Nach dem tragischen Todesfall ermittelt die Polizei.",
+    "Ein plötzlicher Todesfall trifft die Gemeinde.",
+    "Die Menschen stehen unter Schock, vor Ort helfen Rettungskräfte.",
+    "Nach Angaben der Feuerwehr gab es einen Todesfall.",
+])
+def test_olgu_kapisi_almanca_deyim_ve_sifatli_adlari_gecirir(cumle):
+    """KULLANICI BİLDİRİMİ (2026-08-20, 19:35): 'Todesfall' iki turda da
+    düzelmedi ve VİDEO ÜRETİLMEDİ. Belirteç kuralı yetmiyordu — Almancada sıfat
+    araya giriyor ('ein plötzlicher Todesfall') ve deyimler belirteçsiz kuruluyor
+    ('unter Schock', 'vor Ort', 'nach Angaben')."""
+    from short_bot.fact_gate import unverified_claims
+    kaynak = "Bei einem Unwetter starb eine Frau. Die Polizei ermittelt."
+    assert unverified_claims(cumle, kaynak, language="de") == []
+
+
+@pytest.mark.parametrize("cumle,beklenen", [
+    ("Auch Olaf Scholz äußerte sich zu dem Verfahren.", "Scholz"),
+    ("Der Bericht stammt vom ZDF Magazin Royale.", "ZDF"),
+])
+def test_olgu_kapisi_almancada_uydurma_adlari_hala_yakalar(cumle, beklenen):
+    """Gevşetme kapıyı körleştirmemeli: kişi/kurum adları ya iki sözcüklü ya
+    kısaltmadır, ikisi de aday kalır."""
+    from short_bot.fact_gate import unverified_claims
+    kaynak = "Die Polizei ermittelt nach einem Unwetter."
+    assert beklenen in unverified_claims(cumle, kaynak, language="de")
+
+
+def test_olgu_kapisi_almanca_BILINEN_BOSLUK_tek_sozcuklu_ad():
+    """BİLİNEN VE KABUL EDİLEN BOŞLUK — gizlenmesin diye testle yazılı.
+
+    Almancada tek başına duran büyük harfli sözcük özel ad KANITI DEĞİLDİR
+    ('unter Schock' ile 'in Karlsruhe' aynı yapıda). Kapı bu yüzden tek
+    sözcüklü adı yakalamıyor. Takas bilinçli: iki günde iki kez video
+    kaybetmektense ('Todesfall'), nadir bir tek-sözcüklü yer adı kaçsın.
+    Uydurmanın asıl biçimleri — iki sözcüklü kişi/kurum adları, kısaltmalar ve
+    SAYILAR — yakalanmaya devam ediyor."""
+    from short_bot.fact_gate import unverified_claims
+    kaynak = "Die Polizei ermittelt nach einem Unwetter."
+    assert unverified_claims("Die Sache landete in Karlsruhe.", kaynak,
+                             language="de") == []
+    # Sayı kaçmaz — dilden bağımsız denetim:
+    assert "42" in unverified_claims("Es gab 42 Verletzte.", kaynak, language="de")

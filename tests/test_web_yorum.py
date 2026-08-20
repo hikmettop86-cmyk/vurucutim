@@ -176,3 +176,30 @@ def test_compile_day_calls_producer_when_enough(app, monkeypatch):
     monkeypatch.setattr("short_bot.compilation.produce_daily_compilation", _produce)
     r = app.test_client().post("/channels/yorum/compile-day")
     assert r.status_code == 302 and seen == {"slug": "yorum", "force": False}
+
+
+def test_edit_post_bagli_olmayan_odunc_kimligi_silmez(app, tmp_path):
+    """CANLI VAKA (2026-08-20): deutschland-klartext'in credentials_from'u
+    'deutschland-kompakt' idi ama o kanal henüz OAuth'lanmamıştı. Açılır YALNIZ
+    bağlı kanalları listelediği için hiç seçenek yoktu; tarayıcı boş değeri
+    gönderdi ve ayar SESSİZCE silindi — yorum kanalı kendi bağlantısını arar
+    hâle geldi. (Aynı aile: dil açılırının ilk seçeneğe düşmesi.)"""
+    p = tmp_path / "config" / "channels" / "yorum.yaml"
+    p.write_text(p.read_text(encoding="utf-8")
+                 + "youtube:\n  auto_upload: false\n  credentials_from: kart\n",
+                 encoding="utf-8")
+
+    # 1) Sayfa, bağlı OLMAYAN kanalı da seçenek olarak sunmalı ve seçili tutmalı.
+    body = app.test_client().get("/channels/yorum/edit-yorum").data.decode("utf-8")
+    assert 'value="kart"' in body and "selected" in body
+    assert "henüz bağlı değil" in body
+
+    # 2) Kullanıcı seçimi değiştirmeden kaydederse ayar KORUNUR.
+    form = {"name": "Yorum", "handle": "@yorum", "trends_region": "TR",
+            "trends_min_volume": "5000", "runs_per_day": "5", "min_score": "6.0",
+            "enabled": "1", "voice_provider": "ai33", "voice_id": "abc",
+            "voice_speed": "1.1", "voice_persona": "p", "voice_target_min": "35",
+            "voice_target_max": "50", "voice_music_volume": "0.05",
+            "credentials_from": "kart"}
+    assert app.test_client().post("/channels/yorum/edit-yorum", data=form).status_code == 302
+    assert _yaml(tmp_path, "yorum")["youtube"]["credentials_from"] == "kart"
