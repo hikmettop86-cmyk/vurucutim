@@ -88,6 +88,7 @@ def build_html(
         animation_style=animation_style,
         rss_source=job.rss_source,
         narration=job.narration,
+        ticker_items=list(job.ticker_items),
     )
 
 

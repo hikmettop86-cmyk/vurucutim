@@ -406,6 +406,35 @@
     ]
   },
   {
+    "slug": "flas",
+    "label": "Flaş",
+    "subtitle": "Türk haber TV + gazete manşeti · kırmızı logo bandı, sarı FLAŞ şeridi, KJ, ticker",
+    "defaults": {
+      "colors": {
+        "primary": "#d0021b",
+        "accent": "#ffe600",
+        "primary_light": "#ff2d45",
+        "bg_gradient": [
+          "#3a3a3a",
+          "#141414"
+        ]
+      },
+      "body_bg": [
+        "#141414",
+        "#0e0e0e"
+      ],
+      "text_main": "#ececec",
+      "text_muted": "#9a9a9a",
+      "font_headline": "Oswald",
+      "font_body": "Barlow"
+    },
+    "pexels_queries": [
+      "istanbul city night",
+      "turkey news crowd street",
+      "breaking news city lights"
+    ]
+  },
+  {
     "slug": "minimal",
     "label": "Minimal",
     "subtitle": "Apple-tarzı · bol whitespace, tek font",

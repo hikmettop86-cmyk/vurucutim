@@ -84,5 +84,5 @@ def test_repo_gundem_channel_loads():
     assert cfg.trends_region == "TR"
     assert cfg.schedule_cron == "0 */2 * * *"
     assert cfg.trend_boost is None or cfg.trend_boost.enabled is False
-    assert cfg.dna is not None and cfg.dna.archetype == cfg.template == "broadcast"
+    assert cfg.dna is not None and cfg.dna.archetype == cfg.template == "flas"
     assert cfg.youtube is not None and cfg.youtube.auto_upload is False

@@ -983,6 +983,18 @@ def _produce_from_item(
                      short_path=out_path, error=None, short_id=short_id)
 
 
+def _ticker_items_for_trends(
+    scored: list[ScoredItem], picked: ScoredItem, *, min_score: float, limit: int = 4,
+) -> tuple[str, ...]:
+    """flas şablonunun 'SIRADA' ticker'ı: koşuda kapıyı geçen (≥ min_score) ama
+    seçilmeyen diğer olaylar, hacme göre. Kapının altında kalanlar (hava durumu,
+    hisse…) ticker'a da girmez — yoksa elenen şey arka kapıdan ekrana döner."""
+    others = [s for s in scored
+              if s.item.guid != picked.item.guid and s.score >= min_score]
+    others.sort(key=lambda s: (s.item.trend_volume, s.score), reverse=True)
+    return tuple(s.item.title.strip() for s in others[:limit] if s.item.title.strip())
+
+
 def _run_rss(*, channel, run_id, log, eng, settings,
              music_root, templates_dir, cache_dir,
              defer_upload: bool = False) -> RunResult:
@@ -1286,6 +1298,11 @@ def _run_rss(*, channel, run_id, log, eng, settings,
     log.info(f"  → bg={'cached' if bg else 'none'} music={music.name}")
 
     log.info("[7/8] render_frames")
+    ticker_items: tuple[str, ...] = ()
+    if is_trends and picked is not None:
+        ticker_items = _ticker_items_for_trends(scored, picked, min_score=channel.min_score)
+        if ticker_items:
+            log.info(f"  ticker: {len(ticker_items)} başlık")
     job = RenderJob(
         script=script,
         bg_image_path=bg,
@@ -1295,6 +1312,7 @@ def _run_rss(*, channel, run_id, log, eng, settings,
         duration_s=channel.duration_s,
         language=channel.language,
         rss_source=picked.item.source if picked else None,
+        ticker_items=ticker_items,
     )
 
     with tempfile.TemporaryDirectory() as tmpd:

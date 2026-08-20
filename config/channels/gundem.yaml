@@ -20,13 +20,13 @@ min_score: 6.0
 # Hacim sıralı ilk 25 trend puanlanır.
 max_candidates_per_run: 25
 max_age_hours: 24
-template: broadcast
+template: flas
 colors:
-  primary: '#d11a2a'
-  accent: '#ffd60a'
+  primary: '#d0021b'
+  accent: '#ffe600'
   bg_gradient:
-  - '#0b1220'
-  - '#1b2a4a'
+  - '#3a3a3a'
+  - '#141414'
 handle: '@gundem'
 output_dir: output/gundem
 enabled: true
@@ -37,8 +37,10 @@ youtube:
   privacy_status: public
   min_score_for_upload: 6.0
   cron_preset: every_2h
+# Flaş kartı tam ekran tasarlandı (fotoğraf zaten tam genişlik); %88 ölçek +
+# bulanık arka plan videosu üst/altta siyah bant bırakıyordu.
 bg_video:
-  enabled: true
+  enabled: false
   scale: 0.88
   blur_px: 30
   dim: 0.25
@@ -47,26 +49,26 @@ trend_boost:
   enabled: false
 bg_image_blur: 8
 dna:
-  archetype: broadcast
+  archetype: flas
   palette:
-    primary: '#d11a2a'
-    accent: '#ffd60a'
+    primary: '#d0021b'
+    accent: '#ffe600'
     bg_gradient:
-    - '#0b1220'
-    - '#1b2a4a'
+    - '#3a3a3a'
+    - '#141414'
     body_bg:
-    - '#0b1220'
-    - '#101a30'
-    text_main: '#ffffff'
-    text_muted: '#c9d3e6'
+    - '#141414'
+    - '#0e0e0e'
+    text_main: '#ececec'
+    text_muted: '#9a9a9a'
     header_top_color: ''
     header_bottom_color: ''
   fonts:
-    headline: Roboto Condensed
-    body: Inter
+    headline: Oswald
+    body: Barlow
     google_imports:
-    - Roboto+Condensed:wght@700
-    - Inter:wght@400;600;800
+    - Oswald:wght@600;700
+    - Barlow:wght@500;600;700
     size_headline_top: null
     size_headline_bottom: null
   tone:
@@ -85,9 +87,9 @@ dna:
     - 3
     - 4
     body_max_chars: 280
-    headline_style_hint: 'Kısa, net manşet: özne + ne oldu (örn. ''MARMARA 8 SAATTE 36 KEZ SALLANDI'')'
+    headline_style_hint: 'Üst satır TEK ÖZNE (1-2 kelime, örn. ''ADALAR''), alt satır NE OLDU (2-4 kelime, örn. ''YİNE SALLANDI''); photo_overlay = KJ alt satırı: rakam/kurum/yer (örn. ''KANDİLLİ: 3.1 BÜYÜKLÜĞÜNDE SARSINTI'')'
   banner_shape: flat
-  highlight_style: bg-flat
+  highlight_style: underline
   chip_style: rounded
   category_icon: 📰
   search_query_template: '{header_top} {header_bottom} Türkiye haber'
@@ -95,5 +97,5 @@ dna:
     net anlatan gündem kanalı. Manşet ne olduğunu söyler, gövde üç cümlede bağlamı
     verir; abartı ve yorum yok.
   custom_css: ''
-  ui_badge: SON DAKİKA
+  ui_badge: ''
   animation_style: none

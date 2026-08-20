@@ -125,3 +125,7 @@ class RenderJob:
     # Doluysa video "voiced" modda render edilir: süre sesten gelir,
     # her karede window.__seek(t_ms) çağrılır.
     narration: NarrationTimeline | None = None
+    # ticker_items: şablonun alt akan şeridinde gösterilecek diğer başlıklar
+    # (flas arketipi 'SIRADA' ticker'ı). Trend kanalında koşudaki diğer
+    # yüksek hacimli olaylarla dolar; başka kaynaklarda boş kalır.
+    ticker_items: tuple[str, ...] = ()
