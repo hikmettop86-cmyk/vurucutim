@@ -3,12 +3,21 @@ from __future__ import annotations
 
 import base64
 import mimetypes
+import logging
+from datetime import datetime
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from playwright.sync_api import sync_playwright
 
 from short_bot.models import RenderJob
+
+log = logging.getLogger(__name__)
+
+# Tarayıcı kopmasında kaç kez yeniden açılacağı. Sınırlı: her oturum anında
+# koparsa (gerçek arıza) sonsuza kadar denemek üretimi asar. Kareler diskte
+# birikerek ilerlediği için her yeniden açılış işi ileri taşır.
+_RENDER_MAX_RESTARTS = 4
 
 WIDTH = 1080
 HEIGHT = 1920
@@ -47,6 +56,7 @@ def build_html(
     ui_labels: dict[str, str] | None = None,
     dna_css: str = "",
     animation_style: str = "none",
+    now: datetime | None = None,
 ) -> str:
     template_path = Path(template_path)
     env = Environment(
@@ -89,6 +99,11 @@ def build_html(
         rss_source=job.rss_source,
         narration=job.narration,
         ticker_items=list(job.ticker_items),
+        # now: şablonun kendi biçiminde damgalayabilmesi için (Almanca haber
+        # dilinde "Stand: 20.08.2026, 14:32 Uhr" standarttır — tarihsiz bir
+        # haber kartı Alman izleyiciye eksik görünür). Şablonlar isterse
+        # kullanır; kullanmayan hiçbir şablon etkilenmez.
+        now=now or datetime.now(),
     )
 
 
@@ -117,28 +132,55 @@ def render_frames(
 
     total_frames = _total_frames(job, fps)
 
-    with sync_playwright() as p:
-        browser_obj = getattr(p, browser).launch()
-        page = browser_obj.new_page(viewport={"width": WIDTH, "height": HEIGHT},
-                                     device_scale_factor=1)
-        page.set_content(html, wait_until="networkidle")
-        # Wait for auto-fit script to finish — it awaits document.fonts.ready
-        # so we don't screenshot mid-resize. Templates without auto-fit set
-        # __autoFitDone to undefined; Promise.resolve() handles that case.
-        page.evaluate("() => window.__autoFitDone || Promise.resolve()")
-        # Pause CSS animations so we can step them via clock
-        page.add_init_script("document.getAnimations().forEach(a => a.pause());")
+    # TARAYICI ORTADA KAPANIRSA İŞİ TERK ETME (canlı vaka: koşu #1587 ve iki CLI
+    # koşusu "Page.screenshot: Target page ... has been closed" ile düştü).
+    # Makinede başka bir otomasyon da Playwright kullanıyor; 6sn'lik videolar
+    # 180 karede aradan sıyrılıyordu ama seslendirmeli videolar 1000+ kare
+    # sürdüğü için o pencereye yakalanıp TÜM üretimi kaybettiriyordu — oysa o
+    # ana kadar basılmış yüzlerce kare diskte hazır. Tarayıcıyı yeniden açıp
+    # KALDIĞIMIZ KAREDEN devam ediyoruz (ai33 poll'ündeki geçici-hata felsefesi).
+    basilan = 0
+    kopma = 0
+    while basilan < total_frames:
+        try:
+            with sync_playwright() as p:
+                browser_obj = getattr(p, browser).launch()
+                page = browser_obj.new_page(
+                    viewport={"width": WIDTH, "height": HEIGHT},
+                    device_scale_factor=1)
+                page.set_content(html, wait_until="networkidle")
+                # Wait for auto-fit script to finish — it awaits document.fonts.ready
+                # so we don't screenshot mid-resize. Templates without auto-fit set
+                # __autoFitDone to undefined; Promise.resolve() handles that case.
+                page.evaluate("() => window.__autoFitDone || Promise.resolve()")
+                # Pause CSS animations so we can step them via clock
+                page.add_init_script(
+                    "document.getAnimations().forEach(a => a.pause());")
 
-        for i in range(total_frames):
-            t_ms = int((i / fps) * 1000)
-            page.evaluate(
-                "(t) => { document.getAnimations().forEach(a => { a.currentTime = t; }); }",
-                t_ms,
-            )
-            if job.narration is not None:
-                page.evaluate("(t) => window.__seek && window.__seek(t)", t_ms)
-            page.screenshot(path=str(out_dir / f"frame_{i:05d}.png"), omit_background=False)
+                for i in range(basilan, total_frames):
+                    t_ms = int((i / fps) * 1000)
+                    page.evaluate(
+                        "(t) => { document.getAnimations().forEach(a => "
+                        "{ a.currentTime = t; }); }",
+                        t_ms,
+                    )
+                    if job.narration is not None:
+                        page.evaluate("(t) => window.__seek && window.__seek(t)",
+                                      t_ms)
+                    page.screenshot(path=str(out_dir / f"frame_{i:05d}.png"),
+                                    omit_background=False)
+                    basilan = i + 1
 
-        browser_obj.close()
+                browser_obj.close()
+        except Exception as e:  # noqa: BLE001 — kopma sınıfı sürücüye göre değişir
+            kopma += 1
+            if kopma > _RENDER_MAX_RESTARTS:
+                raise RuntimeError(
+                    f"render {kopma} kez koptu ve ilerleyemedi "
+                    f"(kare {basilan}/{total_frames}): {e}") from e
+            log.warning(
+                f"  render kesintisi ({e.__class__.__name__}) — kare "
+                f"{basilan}/{total_frames}'da tarayıcı yeniden açılıyor "
+                f"({kopma}/{_RENDER_MAX_RESTARTS})")
 
     return total_frames

@@ -435,6 +435,35 @@
     ]
   },
   {
+    "slug": "eilmeldung",
+    "label": "Eilmeldung",
+    "subtitle": "Alman haber TV'si - koyu mavi kopfleiste + Stand damgasi, kirmizi EILMELDUNG bandi, Bauchbinde, +++ ticker",
+    "defaults": {
+      "colors": {
+        "primary": "#0b3b73",
+        "accent": "#e2001a",
+        "primary_light": "#1d5aa0",
+        "bg_gradient": [
+          "#1d2632",
+          "#10141a"
+        ]
+      },
+      "body_bg": [
+        "#10141a",
+        "#0a0d12"
+      ],
+      "text_main": "#e8ebef",
+      "text_muted": "#97a1ad",
+      "font_headline": "Fira Sans Condensed",
+      "font_body": "Fira Sans"
+    },
+    "pexels_queries": [
+      "berlin city street",
+      "germany news crowd",
+      "german parliament building"
+    ]
+  },
+  {
     "slug": "minimal",
     "label": "Minimal",
     "subtitle": "Apple-tarzı · bol whitespace, tek font",
