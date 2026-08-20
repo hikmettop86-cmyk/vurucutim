@@ -409,6 +409,7 @@ def new_create():
 
     from short_bot.config import ChannelConfig, ReelConfig, save_channel
     from short_bot.lang_pack import load_pack
+    from short_bot.locale import default_font_for
     name = (request.form.get("name") or "").strip()
     voice_id = (request.form.get("voice_id") or "").strip()
     language = (request.form.get("language") or "tr").strip()
@@ -450,6 +451,11 @@ def new_create():
             humor_style=(request.form.get("humor_style") or "").strip(),
             highlight_color=(request.form.get("highlight_color") or "#38bdf8").strip(),
             music_mood=(request.form.get("music_mood") or "upbeat").strip(),
+            # CJK dilinde marka fontlarının hiçbirinde kanji glifi yok → tofu. Dil
+            # seçilir seçilmez doğru font kendiliğinden gelmeli; operatörün bunu
+            # bilmesi beklenemez (varsayılan Montserrat sessizce bozuk kanal üretirdi).
+            **({"font": _default_font} if (_default_font := default_font_for(language))
+               else {}),
             # Kürate klipleri sık HAREKETLİ özneli → sabit-konumlu ok kayabilir (short 920);
             # yeni kürate kanalda ok VARSAYILAN KAPALI (kartta açılabilir). Diğer efekt/
             # varyasyonlar (geçiş/zoom/SFX/AI-kurgucu) ReelConfig varsayılanıyla AÇIK kalır.
@@ -490,8 +496,9 @@ def edit_curated(slug):
     # (connect/disconnect/reset/upload-secrets) her kanal slug'ı için çalışır.
     from short_bot.youtube import auth as _yt_auth
     yt_root = current_app.config.get("SHORTBOT_YT_CREDS_DIR")
-    yt_connected = bool(yt_root and _yt_auth.has_credentials(yt_root, slug))
-    yt_info = (_yt_auth.load_channel_info(yt_root, slug)
+    _cslug = _yt_auth.creds_slug(ch)
+    yt_connected = bool(yt_root and _yt_auth.has_credentials(yt_root, _cslug))
+    yt_info = (_yt_auth.load_channel_info(yt_root, _cslug)
                if yt_root and yt_connected else None)
     yt_secrets_path = (yt_root / slug / "client_secrets.json") if yt_root else None
     yt_has_secrets = bool(yt_secrets_path and yt_secrets_path.is_file())
@@ -546,7 +553,13 @@ def edit_curated_save(slug):
         curated_min_ups=_int("curated_min_ups", ch.reel.curated_min_ups),
         curated_time=(request.form.get("curated_time") or ch.reel.curated_time).strip(),
         curated_clean=(request.form.get("curated_clean") == "on"),
-        curated_tone=("duygu" if request.form.get("curated_tone") == "duygu" else "mizah"),
+        # Formdan geleni GERÇEKTEN yaz. Eski hâli ``"duygu" if ... else "mizah"`` idi ve
+        # açılırdaki KARMA seçeneğini sessizce mizah'a çeviriyordu — karmadayi'nin
+        # YAML'ında bugün 'mizah' yazmasının sebebi bu. Bilinmeyen değer mizah'a düşer
+        # (Literal doğrulaması zaten koruyor, ama kaydediciyi de sağlam tutalım).
+        curated_tone=(request.form.get("curated_tone")
+                      if request.form.get("curated_tone") in ("mizah", "duygu", "karma")
+                      else ch.reel.curated_tone),
         # EFEKT & VARYASYON (her video benzersiz) — eski reel kartından geri getirildi.
         ai_director=(request.form.get("ai_director") == "on"),
         fast_cuts=(request.form.get("fast_cuts") == "on"),

@@ -58,12 +58,30 @@ class GeneratorConfig:
 
 
 class YoutubeChannelConfig(BaseModel):
+    # credentials_from: BAŞKA bir kanalın YouTube bağlantısını kullan.
+    #
+    # NEDEN: yetki kanal SLUG'ına göre saklanıyor (data/youtube_credentials/<slug>).
+    # Aynı YouTube kanalına iki format üreten iki short-bot kanalı olduğunda
+    # (gundem = 6 sn kart, gundem-yorum = seslendirmeli yorum → ikisi de @gundem)
+    # ikincisi "bağlanmamış" sayılıyor ve HİÇ yüklenmiyordu (kullanıcı bildirimi
+    # 2026-08-20). Ayrı OAuth açmak yanlış çözüm: aynı kanal iki kez bağlanır,
+    # kota ve istatistik ikiye bölünür.
+    credentials_from: str | None = None
     auto_upload: bool = False
     ai_content: bool = True
     category_id: str = "24"
     privacy_status: Literal["public", "unlisted", "private"] = "public"
     min_score_for_upload: float = Field(default=8.0, ge=0.0, le=10.0)
     cron_preset: str | None = None
+
+
+    @model_validator(mode="after")
+    def _check_credentials_from(self) -> "YoutubeChannelConfig":
+        cf = (self.credentials_from or "").strip()
+        if cf and not SLUG_RE.match(cf):
+            raise ValueError(
+                f"youtube.credentials_from geçersiz slug: {cf!r}")
+        return self
 
 
 class AutopilotConfig(BaseModel):
@@ -644,6 +662,8 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
         }
         if cfg.youtube.cron_preset:
             data["youtube"]["cron_preset"] = cfg.youtube.cron_preset
+        if cfg.youtube.credentials_from:
+            data["youtube"]["credentials_from"] = cfg.youtube.credentials_from
     # AUTOPILOT: blok VARSA yaz. Yoksa YAZMA — autopilot'u hiç kullanmayan bir kanala
     # kaydet'e basınca blok eklemek, geriye uyumu sessizce kırardı.
     if cfg.autopilot is not None:

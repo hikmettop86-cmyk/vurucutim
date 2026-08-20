@@ -29,6 +29,36 @@ def credentials_dir(root: Path, slug: str) -> Path:
     return Path(root) / slug
 
 
+def channel_id(root: Path, slug: str) -> str:
+    """Bu slug'ın bağlı olduğu YouTube kanal kimliği ("" = bağlı değil)."""
+    info = load_channel_info(root, slug) or {}
+    return str(info.get("id") or "")
+
+
+def same_youtube_channel(root: Path, slug: str, others) -> list[str]:
+    """``slug`` ile AYNI YouTube kanalına bağlı diğer slug'lar.
+
+    NEDEN (canlı vaka 2026-08-20): 'gundem' bağlanırken Google hesap seçicisinde
+    yanlış marka kanalı seçilmiş ve slug 'Kaos Dayı' kanalına bağlanmıştı — kartlar
+    fark edilmeden o kanala yüklenecekti. Panel bunu görünür kılsın diye.
+    """
+    mine = channel_id(root, slug)
+    if not mine:
+        return []
+    return [o for o in others if o != slug and channel_id(root, o) == mine]
+
+
+def creds_slug(channel) -> str:
+    """Bu kanalın YouTube kimliği hangi slug altında duruyor.
+
+    ``youtube.credentials_from`` doluysa o kanalın bağlantısı kullanılır: aynı
+    YouTube kanalına üreten iki format (6 sn kart + seslendirmeli yorum) tek
+    bağlantıyı, tek kotayı ve tek istatistik geçmişini paylaşır.
+    """
+    yt = getattr(channel, "youtube", None)
+    return (getattr(yt, "credentials_from", None) or "").strip() or channel.slug
+
+
 def has_credentials(root: Path, slug: str) -> bool:
     return (credentials_dir(root, slug) / "token.json").is_file()
 

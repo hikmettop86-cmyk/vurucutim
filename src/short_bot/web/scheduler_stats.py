@@ -22,9 +22,10 @@ def refresh_all_channels_stats(*, config_dir: Path, db_path: Path,
         return
     for ch in channels:
         try:
+            from short_bot.youtube import auth as _yt_auth
             result = refresh_channel_stats(
                 eng=eng, channel_slug=ch.slug, yt_creds_root=yt_creds_root,
-                video_lookback_days=30,
+                video_lookback_days=30, creds_slug=_yt_auth.creds_slug(ch),
             )
             _log.info("[YT stats] %s: %d videos, channel=%s, %s",
                        ch.slug, result.video_count,

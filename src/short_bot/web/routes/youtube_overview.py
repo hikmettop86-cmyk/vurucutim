@@ -23,9 +23,10 @@ def index():
     channels = list_channels(cfg_dir / "channels", enabled_only=False)
     summaries = []
     for ch in channels:
-        if not _yt_auth.has_credentials(yt_root, ch.slug):
+        _cslug = _yt_auth.creds_slug(ch)
+        if not _yt_auth.has_credentials(yt_root, _cslug):
             continue
-        info = _yt_auth.load_channel_info(yt_root, ch.slug) or {}
+        info = _yt_auth.load_channel_info(yt_root, _cslug) or {}
         history = get_channel_stats_history(eng, channel=ch.slug, days=30)
         latest = history[0] if history else None
         # 7-day delta

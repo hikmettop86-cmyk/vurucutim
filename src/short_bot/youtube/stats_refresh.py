@@ -30,9 +30,13 @@ class RefreshResult:
 
 
 def refresh_channel_stats(*, eng, channel_slug: str, yt_creds_root: Path,
-                          video_lookback_days: int = 30) -> RefreshResult:
-    """Refresh stats for one connected channel."""
-    creds = _yt_auth.load_credentials(yt_creds_root, channel_slug)
+                          video_lookback_days: int = 30,
+                          creds_slug: str | None = None) -> RefreshResult:
+    """Refresh stats for one connected channel.
+
+    ``creds_slug``: kimliği başka bir kanaldan ödünç alan kanallar için
+    (youtube.credentials_from). Verilmezse kanalın kendi slug'ı kullanılır."""
+    creds = _yt_auth.load_credentials(yt_creds_root, creds_slug or channel_slug)
     if creds is None:
         return RefreshResult(channel_slug, 0, False, "no credentials")
 

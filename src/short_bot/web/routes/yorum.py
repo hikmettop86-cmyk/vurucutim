@@ -14,7 +14,8 @@ from pathlib import Path
 from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, url_for
 from pydantic import ValidationError
 
-from short_bot.config import ChannelConfig, VoiceConfig, YoutubeChannelConfig, load_channel, save_channel
+from short_bot.config import (ChannelConfig, VoiceConfig, YoutubeChannelConfig, list_channels,
+                              load_channel, save_channel)
 from short_bot.formats import channel_format
 from short_bot.narration_writer import YORUM_PERSONA_TR
 
@@ -189,10 +190,30 @@ def edit(slug):
     runs_now = next((n for n, cron in RUNS_PER_DAY_CRON.items() if cron == c.schedule_cron), None)
     from short_bot.youtube import auth as _yt_auth
     yt_root = current_app.config.get("SHORTBOT_YT_CREDS_DIR")
-    yt_connected = bool(yt_root and _yt_auth.has_credentials(yt_root, slug))
+    cslug = _yt_auth.creds_slug(c)
+    yt_connected = bool(yt_root and _yt_auth.has_credentials(yt_root, cslug))
+    yt_info = (_yt_auth.load_channel_info(yt_root, cslug)
+               if yt_root and yt_connected else None)
+    # Bağlantısı olan diğer kanallar: aynı YouTube kanalına üreten formatlar
+    # (6 sn kart + yorum) tek bağlantıyı paylaşabilsin.
+    linkable, yt_clash = [], []
+    if yt_root:
+        all_slugs = [o.slug for o in list_channels(_channels_dir(), enabled_only=False)]
+        for other in list_channels(_channels_dir(), enabled_only=False):
+            if other.slug != slug and _yt_auth.has_credentials(yt_root, other.slug):
+                info = _yt_auth.load_channel_info(yt_root, other.slug) or {}
+                linkable.append({"slug": other.slug, "name": other.name,
+                                 "yt": (info.get("snippet") or {}).get("title", "")})
+        # Aynı YouTube kanalına bağlı başka slug var mı — paylaşım BEYAN EDİLMEMİŞSE
+        # bu yanlış bağlantı demektir (Google hesap seçicisinde yanlış marka kanalı).
+        declared = {(c.youtube.credentials_from if c.youtube else None), cslug, slug}
+        yt_clash = [o for o in _yt_auth.same_youtube_channel(yt_root, cslug, all_slugs)
+                    if o not in declared]
     return render_template("channels/edit_yorum.html.j2", c=c, regions=REGIONS,
                            runs=sorted(RUNS_PER_DAY_CRON), runs_now=runs_now,
                            recent=_recent(slug), yt_connected=yt_connected,
+                           yt_info=yt_info, creds_slug=cslug, linkable=linkable,
+                           yt_clash=yt_clash,
                            default_persona=YORUM_PERSONA_TR)
 
 
@@ -211,7 +232,12 @@ def edit_save(slug):
         flash(f"Ayar geçersiz: {first}", "error")
         return redirect(url_for("yorum.edit", slug=slug))
     yt = c.youtube or YoutubeChannelConfig()
-    yt = yt.model_copy(update={"auto_upload": request.form.get("auto_upload") == "on"})
+    upd = {"auto_upload": request.form.get("auto_upload") == "on"}
+    if "credentials_from" in request.form:
+        # Boş = kendi bağlantısını kullan; kendi slug'ı da "kendi" demektir.
+        cf = (request.form.get("credentials_from") or "").strip()
+        upd["credentials_from"] = None if (not cf or cf == slug) else cf
+    yt = yt.model_copy(update=upd)
     new_cfg = dataclasses.replace(
         c,
         name=(request.form.get("name") or c.name).strip(),

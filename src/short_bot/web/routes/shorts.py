@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timedelta
 
 from flask import (Blueprint, abort, current_app, flash, make_response,
@@ -82,7 +83,17 @@ def detail(short_id):
     from short_bot.youtube import auth as _yt_auth
     from short_bot.web.models import YoutubeUpload
     yt_root = current_app.config.get("SHORTBOT_YT_CREDS_DIR")
-    yt_connected = bool(yt_root and _yt_auth.has_credentials(yt_root, s.channel))
+    # Bağlantı, kanalın KENDİ slug'ında olmayabilir (youtube.credentials_from ile
+    # başka bir kanalınkini paylaşıyor olabilir) — yapılandırmadan çöz.
+    _cslug = s.channel
+    try:
+        from short_bot.config import load_channel as _load_ch
+        _cpath = current_app.config["SHORTBOT_CONFIG_DIR"] / "channels" / f"{s.channel}.yaml"
+        if _cpath.exists():
+            _cslug = _yt_auth.creds_slug(_load_ch(_cpath))
+    except Exception:  # noqa: BLE001 — panel sayfası bağlantı yüzünden düşmesin
+        pass
+    yt_connected = bool(yt_root and _yt_auth.has_credentials(yt_root, _cslug))
     yt_upload = (YoutubeUpload.query.filter_by(short_id=s.id)
                  .order_by(YoutubeUpload.uploaded_at.desc()).first())
     from short_bot.db import get_video_stats_for_short, init_db
@@ -95,9 +106,24 @@ def detail(short_id):
         default_privacy = cfg.youtube.privacy_status if cfg.youtube else "public"
     except Exception:
         default_privacy = "public"
+    # Anlatım + (yabancı dilli kanalda) Türkçe geri çevirisi. Ham script_json aşağıda
+    # zaten dökülüyor ama operatör onu okumaz; yayın kararı için ikisi YAN YANA lazım.
+    try:
+        script = json.loads(s.script_json or "{}")
+    except Exception:  # noqa: BLE001 — bozuk JSON detay sayfasını çökertmesin
+        script = {}
     return render_template("shorts/detail.html.j2", s=s,
                            yt_connected=yt_connected, yt_upload=yt_upload,
                            yt_video_stats=yt_video_stats,
+                           # Seslendirmeli üretimde KONUŞULAN metin `narration_text`tir;
+                           # `body_paragraph` ekrandaki haber yazısıdır. Eskiden ikincisi
+                           # "Anlatım" diye gösteriliyordu ve altındaki Türkçe geri çeviri
+                           # BAŞKA bir metnin çevirisi oluyordu — yan yana konunca iki
+                           # metin tutmuyordu. Sessiz kanallarda narration_text boştur,
+                           # eski davranışa düşer.
+                           narration=(script.get("narration_text")
+                                      or script.get("body_paragraph") or ""),
+                           narration_tr=(script.get("body_paragraph_tr") or ""),
                            default_privacy=default_privacy)
 
 

@@ -401,12 +401,15 @@ def _maybe_auto_upload(*, eng, short_id: int, channel, picked_score: float | Non
         proxy_url = load_channel_proxy_url(channel.slug, secrets_path)
         if proxy_url:
             proxy_session = build_proxied_requests_session(proxy_url)
+    _cslug = _yt_auth.creds_slug(channel)
     creds = _yt_auth.load_credentials(
-        yt_creds_root, channel.slug, proxy_session=proxy_session,
+        yt_creds_root, _cslug, proxy_session=proxy_session,
     )
     if creds is None:
-        log.info("[YT] auto-upload atlandı — kanal bağlanmamış (token.json yok)")
+        log.info(f"[YT] auto-upload atlandı — '{_cslug}' bağlanmamış (token.json yok)")
         return
+    if _cslug != channel.slug:
+        log.info(f"[YT] '{_cslug}' kanalının bağlantısı kullanılıyor")
     last_at = get_last_youtube_upload_at(eng)
     decision = should_auto_upload(
         channel=channel, picked_score=picked_score,

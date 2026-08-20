@@ -21,7 +21,7 @@
   </div>
 
   <div class="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6 items-start">
-    <form method="post" action="/channels/{{ c.slug }}/edit-yorum" class="space-y-4">
+    <form id="yorum-form" method="post" action="/channels/{{ c.slug }}/edit-yorum" class="space-y-4">
 
       <section class="bg-claude-surface border border-claude-border rounded-xl p-5 space-y-4">
         <h2 class="font-semibold text-claude-accent">Kaynak &amp; tempo</h2>
@@ -121,9 +121,53 @@
           </div>
         {% endfor %}
       </div>
+      {# YouTube: yetki kanal SLUG'ına göre saklanıyor. Aynı YouTube kanalına üreten
+         iki format (6 sn kart + yorum) tek bağlantıyı paylaşabilsin diye seçici. #}
+      <div class="bg-claude-surface border border-claude-border rounded-xl p-4 space-y-2">
+        <div class="text-xs text-claude-muted uppercase tracking-wide">YouTube bağlantısı</div>
+        {% if yt_connected %}
+          <div class="flex items-center gap-2 text-sm">
+            <span class="w-2.5 h-2.5 rounded-full bg-claude-success"></span>
+            <span class="font-semibold">{{ (yt_info.snippet.title if yt_info and yt_info.snippet else creds_slug)|e }}</span>
+            {% if creds_slug != c.slug %}<span class="text-xs text-claude-muted">({{ creds_slug|e }} kanalının bağlantısı)</span>{% endif %}
+          </div>
+        {% else %}
+          <div class="text-sm text-claude-error">Bağlı değil — bu kanal YouTube'a yükleyemez.</div>
+        {% endif %}
+        {% if yt_clash %}
+          {# Bilgi satırı, uyarı değil: aynı YouTube kanalına birden çok format üretmek
+             meşru bir tercih (kullanıcı kararı 2026-08-20). Ama YANLIŞ bağlanmış bir
+             slug da böyle görünür — bu yüzden hangi kanala gittiği açıkça yazılır. #}
+          <div class="text-xs bg-claude-surface-alt border border-claude-border rounded-lg p-2.5 leading-snug text-claude-muted">
+            Bu bağlantı <b>{{ yt_clash|join(', ')|e }}</b> ile aynı YouTube kanalına gidiyor:
+            <b>{{ (yt_info.snippet.title if yt_info and yt_info.snippet else creds_slug)|e }}</b>.
+            Beklediğin kanal bu değilse Kanallar → <b>{{ creds_slug|e }}</b> → Düzenle → YouTube
+            kartından bağlantıyı kesip doğru kanalla yeniden bağla.
+          </div>
+        {% endif %}
+        <label class="block text-xs">
+          <span class="block text-claude-muted mb-1">Hangi bağlantı kullanılsın</span>
+          <select name="credentials_from" form="yorum-form"
+                  class="w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+            <option value="">Kendi bağlantım ({{ c.slug }})</option>
+            {% for l in linkable %}
+            <option value="{{ l.slug|e }}" {% if c.youtube and c.youtube.credentials_from == l.slug %}selected{% endif %}>
+              {{ l.name|e }}{% if l.yt %} · {{ l.yt|e }}{% endif %}
+            </option>
+            {% endfor %}
+          </select>
+          <span class="block text-[11px] text-claude-subtle mt-1">
+            Aynı YouTube kanalına üreten kart kanalını seç — ayrı OAuth açman gerekmez,
+            kota ve istatistik tek yerde toplanır.
+          </span>
+        </label>
+        {% if not linkable %}
+        <div class="text-[11px] text-claude-subtle">Bağlantısı olan başka kanal yok; önce bir kanalı Kanallar → Düzenle sayfasından bağla.</div>
+        {% endif %}
+      </div>
+
       <div class="bg-claude-surface border border-claude-border rounded-xl p-4 text-xs text-claude-muted space-y-1">
         <div><b>Günün derlemesi:</b> gece 23:30'da o günün yorum videoları (≥ 3 dk 10 sn olursa) tek uzun-form videoya birleşir; düğmeyle de üretilir.</div>
-        <div><b>YouTube:</b> {% if yt_connected %}bağlı{% else %}bağlı değil — bağlantı 6 sn kartın düzenleme sayfasındaki YouTube kartından{% endif %}.</div>
       </div>
     </aside>
   </div>

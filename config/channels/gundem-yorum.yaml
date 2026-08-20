@@ -1,11 +1,3 @@
-# Gündem Yorum — Google Trends + Cartesia seslendirme (tarafsız-ama-görüşlü yorumcu).
-# gundem (6 sn Flaş kartı) kanalından türetildi; aynı Flaş kimliği, üstüne 35-50 sn
-# anlatım (templates/flas-narrator.html.j2). Anlatım kuralları narration_writer.
-# build_yorum_prompt'ta: kaynak adıyla olgu (≥2 kaynak) → bağlantı → denge → "bence"
-# hükmü → kapanış sorusu → "neden gündemde". Ses: Cartesia 'Taylan' (tr, masculine,
-# "versatile articulate male for storytelling") — panelden değiştirilebilir.
-# Cron :30'da: 6 sn kartın koşularıyla (07-22/3, :00) çakışmasın. Günde 5.
-# Yükleme KAPALI: YPP incelemesine kadar operatör anlatımı okuyup elle yükler.
 slug: gundem-yorum
 name: Gündem Yorum
 keywords:
@@ -13,10 +5,7 @@ keywords:
 - son dakika
 - yorum
 language: tr
-content_source: trends
-trends_region: TR
 schedule_cron: 30 8-20/3 * * *
-trends_min_volume: 5000
 duration_s: 6
 min_score: 6.0
 max_candidates_per_run: 25
@@ -30,22 +19,41 @@ colors:
   - '#141414'
 handle: '@gundem'
 output_dir: output/gundem-yorum
-enabled: true
+enabled: false
+script_model: opus
+content_source: trends
+trends_region: TR
+trends_min_volume: 5000
 youtube:
   auto_upload: false
   ai_content: false
   category_id: '25'
   privacy_status: public
   min_score_for_upload: 6.0
-  cron_preset: null
-bg_video:
-  enabled: false
-  scale: 0.88
-  blur_px: 30
-  dim: 0.25
+  credentials_from: gundem
 trend_boost:
   enabled: false
+  max_boost: 2.0
+  min_term_length: 4
+  fuzzy_threshold: 85
 bg_image_blur: 8
+voice:
+  enabled: true
+  provider: cartesia
+  voice_id: c1cfee3d-532d-47f8-8dd2-8e5b2b66bf1d
+  speed: 1.05
+  persona: 'Sen Türkiye''nin gündemini yorumlayan, kimsenin adamı olmayan bir sokak
+    bilgesisin. Taraf tutmazsın ama görüşsüz de değilsin: olayı sade anlatır, herkesin
+    aklındaki soruyu sen sorar, kimsenin bağlamadığı bir noktayı bağlar, sonunda adil
+    ama net bir hüküm verirsin. Vatandaşın tarafındasın — kurumların değil, partilerin
+    değil. Hafif mizah olur, alay olmaz. Acı haberde saygılısın. Konuşma dili: kısa
+    cümleler, ''bakın'', ''şimdi'', ''bence''; spiker kalıpları yok (''açıklandı'',
+    ''bildirildi'', ''kaydedildi'').'
+  target_duration_s:
+  - 35
+  - 50
+  music_volume: 0.05
+  model: sonic-3.5
 dna:
   archetype: flas
   palette:
@@ -85,35 +93,18 @@ dna:
     - 3
     - 5
     body_max_chars: 330
-    headline_style_hint: 'Üst satır TEK ÖZNE (1-2 kelime, örn. ''ADALAR''), alt satır NE OLDU (2-4 kelime,
-      örn. ''YİNE SALLANDI''); photo_overlay = KJ alt satırı: rakam/kurum/yer (örn. ''KANDİLLİ: 3.1 BÜYÜKLÜĞÜNDE
-      SARSINTI'')'
+    headline_style_hint: 'Üst satır TEK ÖZNE (1-2 kelime, örn. ''ADALAR''), alt satır
+      NE OLDU (2-4 kelime, örn. ''YİNE SALLANDI''); photo_overlay = KJ alt satırı:
+      rakam/kurum/yer (örn. ''KANDİLLİ: 3.1 BÜYÜKLÜĞÜNDE SARSINTI'')'
   banner_shape: flat
   highlight_style: underline
   chip_style: rounded
+  categories: []
   category_icon: 📰
   search_query_template: '{header_top} {header_bottom} Türkiye haber'
-  persona_summary: Türkiye'nin o an en çok aradığı konuyu 6 saniyede, tarafsız ve net anlatan gündem kanalı.
-    Manşet ne olduğunu söyler, gövde üç cümlede bağlamı verir; abartı ve yorum yok.
+  persona_summary: Türkiye'nin o an en çok aradığı konuyu 6 saniyede, tarafsız ve
+    net anlatan gündem kanalı. Manşet ne olduğunu söyler, gövde üç cümlede bağlamı
+    verir; abartı ve yorum yok.
   custom_css: ''
   ui_badge: ''
   animation_style: none
-script_model: opus
-voice:
-  enabled: true
-  provider: cartesia
-  voice_id: c1cfee3d-532d-47f8-8dd2-8e5b2b66bf1d
-  speed: 1.05
-  persona: 'Sen Türkiye''nin gündemini yorumlayan, kimsenin adamı olmayan bir sokak bilgesisin. Taraf
-    tutmazsın ama görüşsüz de değilsin: olayı sade anlatır, herkesin aklındaki soruyu sen sorar, kimsenin
-    bağlamadığı bir noktayı bağlar, sonunda adil ama net bir hüküm verirsin. Vatandaşın tarafındasın —
-    kurumların değil, partilerin değil. Hafif mizah olur, alay olmaz. Acı haberde saygılısın. Konuşma
-    dili: kısa cümleler, ''bakın'', ''şimdi'', ''bence''; spiker kalıpları yok (''açıklandı'', ''bildirildi'',
-    ''kaydedildi'').'
-  target_duration_s:
-  - 35
-  - 50
-  music_volume: 0.05
-  model: sonic-3.5
-  volume: 1.0
-  emotion: ''

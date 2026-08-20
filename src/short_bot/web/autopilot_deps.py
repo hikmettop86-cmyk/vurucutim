@@ -38,7 +38,7 @@ def _llm(app):
 def _creds(app, cfg):
     root = (Path(app.config["SHORTBOT_DB_PATH"]).parent
             / "youtube_credentials").resolve()
-    return _yt_auth.load_credentials(root, cfg.slug)
+    return _yt_auth.load_credentials(root, _yt_auth.creds_slug(cfg))
 
 
 def build_deps(app, cfg) -> AutopilotDeps:

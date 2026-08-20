@@ -15,9 +15,12 @@ def refresh(slug):
     eng = init_db(current_app.config["SHORTBOT_DB_PATH"])
     yt_root = Path(current_app.config["SHORTBOT_YT_CREDS_DIR"])
     try:
+        from short_bot.config import load_channel
+        from short_bot.youtube import auth as _yt_auth
         result = refresh_channel_stats(
             eng=eng, channel_slug=slug, yt_creds_root=yt_root,
             video_lookback_days=30,
+            creds_slug=_yt_auth.creds_slug(load_channel(cfg_path)),
         )
         if result.skipped_reason:
             flash(f"Stats çekilemedi: {result.skipped_reason}", "error")
