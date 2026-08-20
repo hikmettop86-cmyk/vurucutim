@@ -27,10 +27,10 @@ def refresh_all_channels_stats(*, config_dir: Path, db_path: Path,
                 eng=eng, channel_slug=ch.slug, yt_creds_root=yt_creds_root,
                 video_lookback_days=30, creds_slug=_yt_auth.creds_slug(ch),
             )
-            _log.info("[YT stats] %s: %d videos, channel=%s, %s",
+            _log.info("[YT stats] %s: %d videos, channel=%s, %d arama terimi, %s",
                        ch.slug, result.video_count,
                        "updated" if result.channel_updated else "skipped",
-                       result.skipped_reason or "ok")
+                       result.search_terms, result.skipped_reason or "ok")
         except Exception:
             _log.exception("[YT stats] %s: failed", ch.slug)
 
