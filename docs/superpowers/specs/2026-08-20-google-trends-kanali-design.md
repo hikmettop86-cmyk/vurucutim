@@ -33,10 +33,15 @@ noktadan (trendspy kütüphanesinin de kullandığı) doğrudan çekildi:
   (TR), her satırda: terim, başlangıç zamanı, arama hacmi (`50000`), artış
   yüzdesi (`1000`), kategori kimlikleri (`[17]`=spor, `[11]`=siyaset/hukuk…),
   arama dökümü (`["istanbul deprem", "adalar fayı", …]`), haber kimlikleri.
-- rpc `w4opAf`, yük `[[[<id>, "<lang>", "<GEO>"], …]]` → haber başlığı, URL,
-  kaynak, yayın zamanı, görsel. **Doğrudan yayıncı URL'si** — Google News
-  yönlendirmesi yok, yani `galatasaray`'daki 3-5 sn'lik Playwright çözümleme
-  adımı bu kanalda atlanır.
+- rpc `w4opAf`, yük `[[[<id>, "<lang>", "<GEO>"], …]]` → **tek trendin** en
+  çok 3 haberi: başlık, URL, kaynak, yayın zamanı, görsel. Kimlikler birden
+  çok trendden gelse bile yalnız ilk trendin haberleri döner (ölçüldü: 6 kimlik
+  → 3 deprem haberi). Çözüm: `batchexecute` tek HTTP isteğinde **çoklu rpc**
+  kabul ediyor — her trend için ayrı `w4opAf` alt çağrısı, dördüncü eleman
+  istek kimliği (`"0"`, `"1"`…), yanıt parçası `[6]`'da aynı kimlik. 25 alt
+  çağrı tek istekte 1,2 sn'de döndü; yanıt sırası rastgele, kimlikle eşlenir.
+  **Doğrudan yayıncı URL'si** — Google News yönlendirmesi yok, yani
+  `galatasaray`'daki 3-5 sn'lik Playwright çözümleme adımı bu kanalda atlanır.
 - DE 389, ES 295, US 474, JP 390 trend ile doğrulandı — bölge bağımsız.
 
 Ekran görüntüsüyle birebir örtüştü (`şener üşümezsoy` 50.000 / %1000 /
@@ -74,10 +79,10 @@ class TrendingArticle:
     published_at: datetime | None; image_url: str | None
 
 def fetch_trending_now(region, *, language, hours=24, timeout_s=15) -> list[TrendingEntry]
-def fetch_trending_articles(news_ids, *, language, region, timeout_s=15) -> list[TrendingArticle]
-def parse_trending_response(text) -> list[TrendingEntry]      # saf, test edilebilir
-def parse_articles_response(text) -> list[TrendingArticle]    # saf, test edilebilir
-def trending_as_news_items(entries, articles_by_id, *, min_volume=1000, max_entries=40) -> list[NewsItem]
+def fetch_trending_articles(entries, *, language, region, timeout_s=15) -> dict[int, list[TrendingArticle]]  # indeks → makaleler
+def parse_trending_response(text) -> list[TrendingEntry]                 # saf, test edilebilir
+def parse_articles_response(text) -> dict[int, list[TrendingArticle]]    # saf, test edilebilir
+def trending_as_news_items(entries, articles_by_index, *, min_volume=1000) -> list[NewsItem]
 def fetch_trending_items(region, *, language, cache_dir, max_age_minutes=30, log) -> list[NewsItem]
 ```
 
@@ -98,9 +103,11 @@ seyrek; TTL yalnız panelden art arda "Şimdi üret"te API'yi dövmemek için).
   üşümezsoy, istanbul deprem, adalar fayı · diğer başlıklar: …"`. Puanlayıcı
   ve senaryo yazarı bağlamı buradan görür.
 - `trend_volume` = hacim. Sıra hacme göre azalan; `min_volume` altı atılır,
-  ilk `max_entries` kalır.
-- Yalnız ilk makale için `w4opAf` çağrılır; tek toplu istek (`max_entries`
-  kimlik tek yükte).
+  `max_entries` (varsayılan 40) üst sınırı makale çağrısından ÖNCE uygulanır.
+- Makaleler tek HTTP isteğiyle çekilir: hacim sıralı ilk `max_entries` trend
+  için birer `w4opAf` alt çağrısı, istek kimliği = trendin sıra indeksi.
+  Her trendin **ilk** makalesi kullanılır; makalesi dönmeyen trend elenir
+  (ölçümde 25'te 2: `safran`, `sony playstation plus`).
 
 ### 2. Model ve config
 
