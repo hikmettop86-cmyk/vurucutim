@@ -2,24 +2,53 @@
 from __future__ import annotations
 
 from short_bot.claude_cli import run_json
+import logging
+
+from short_bot.fact_gate import unverified_claims
 from short_bot.locale import LANGUAGE_NAMES
 from short_bot.narration import Narration
+
+log = logging.getLogger(__name__)
 
 # Ölçülmüş anlatım hızı: ai33/ElevenLabs Türkçe sesi, speed=1.0 → 70 kelime
 # 31.4 sn (2.23 kelime/sn). 2.5 varsayımı bütçeyi şişirip videoyu 67 sn'ye
 # taşıyordu; 2.2 hedef 45-60 sn bandını tutturuyor.
 WORDS_PER_SECOND = 2.2
 
+# HIZ DİLE BAĞLI — Türkçe sabiti başka dilde SESSİZCE yanlış süre üretir; hata da
+# vermez, video sadece hedefin dışına düşer.
+#
+# ÖLÇÜLDÜ (2026-08-09, gerçek koşular):
+#   es, ses 'Juanka Dominguez':  90/29.2 = 3.08 | 110/39.5 = 2.78 | 102/38.7 = 2.64
+#   tr, ses 'Mustafa Energetic': 103/52.1 = 1.98
+# Hız hem içerikle (~%17) hem SESLE değişiyor: yukarıdaki 2.2 sabiti başka bir
+# Türkçe sesle ölçülmüştü, Mustafa belirgin daha yavaş okuyor ve 35-50sn hedefi
+# 52.1sn'ye taşıyordu. reel_narration'daki kanıtlanmış kural: bütçeyi EN YAVAŞ
+# ölçüme göre kur — üst sınırın hedefi AŞMAMASI, kısa kalmaktan önemlidir
+# (aşınca loop zorlaşır). Bu yüzden es'te ortalama (2.8) değil 2.64 yazılı.
+WORDS_PER_SECOND_BY_LANG: dict[str, float] = {"es": 2.64, "tr": 1.98}
 
-def word_budget(target_duration_s: tuple[int, int]) -> tuple[int, int]:
-    """Hedef süre aralığından kelime bütçesi (min, max)."""
+
+def words_per_second(language: str | None = None) -> float:
+    """Bu dilin ölçülmüş anlatım hızı; ölçülmemişse Türkçe sabiti."""
+    return WORDS_PER_SECOND_BY_LANG.get(language or "", WORDS_PER_SECOND)
+
+
+def word_budget(target_duration_s: tuple[int, int],
+                language: str | None = None) -> tuple[int, int]:
+    """Hedef süre aralığından kelime bütçesi (min, max).
+
+    `language` verilmezse Türkçe hızı kullanılır (mevcut çağıranların davranışı
+    değişmesin diye).
+    """
+    wps = words_per_second(language)
     lo, hi = target_duration_s
-    return int(lo * WORDS_PER_SECOND), int(hi * WORDS_PER_SECOND)
+    return int(lo * wps), int(hi * wps)
 
 
 def build_narration_prompt(item, body: str, channel) -> str:
     voice = channel.voice
-    lo_w, hi_w = word_budget(voice.target_duration_s)
+    lo_w, hi_w = word_budget(voice.target_duration_s, channel.language)
     lo_s, hi_s = voice.target_duration_s
     lang_name = LANGUAGE_NAMES.get(channel.language, "Turkish")
 
@@ -64,6 +93,17 @@ def _budget_feedback(actual: int, lo_w: int, hi_w: int) -> str:
             f"the minimum is {lo_w}. Add detail from the article body.\n")
 
 
+def _fact_feedback(eksik: list[str]) -> str:
+    return (
+        "\n\nFACT ERROR — these names/numbers are in your narration but NOT in the "
+        f"ARTICLE BODY: {', '.join(eksik)}.\n"
+        "Rewrite. Use ONLY names, clubs and numbers that literally appear in the "
+        "article body above. Your verdict/opinion is still REQUIRED, but an opinion "
+        "must be about what the article says — it may not introduce a new person, "
+        "club or figure. Do not replace them with other outside names either.\n"
+    )
+
+
 def write_narration(
     item,
     body: str,
@@ -74,22 +114,43 @@ def write_narration(
     backend: str = "claude_cli",
     api_key: str | None = None,
 ) -> Narration:
-    """Anlatım senaryosu üretir; kelime bütçesi dışındaysa bir kez düzelttirir."""
+    """Anlatım senaryosu üretir; kelime bütçesi ve OLGU kapısından geçirir.
+
+    Olgu kapısı (fact_gate): anlatımdaki her isim/sayı haberde geçmeli. Bir kez
+    düzelttirilir; ikinci kez de uydurma varsa RuntimeError — video ÜRETİLMEZ.
+    Prompt'taki "Invent nothing" kuralı tek başına yetmedi (bkz. fact_gate).
+    """
     voice = getattr(channel, "voice", None)
     if voice is None:
         raise ValueError("write_narration: channel.voice tanımlı değil")
 
-    lo_w, hi_w = word_budget(voice.target_duration_s)
+    lo_w, hi_w = word_budget(voice.target_duration_s, channel.language)
     prompt = build_narration_prompt(item, body, channel)
 
-    narration = run_json(prompt, Narration, claude_path=claude_path, model=model,
-                         backend=backend, api_key=api_key, retries=3)
+    def _uret(p: str) -> Narration:
+        return run_json(p, Narration, claude_path=claude_path, model=model,
+                        backend=backend, api_key=api_key, retries=3)
+
+    narration = _uret(prompt)
     actual = narration.word_count()
-    if lo_w <= actual <= hi_w:
+    if not (lo_w <= actual <= hi_w):
+        # Tek düzeltme turu. İkincisi de bütçe dışıysa kabul edilir —
+        # süre zaten sesten okunur, bütçe sadece bir hedeftir.
+        narration = _uret(prompt + _budget_feedback(actual, lo_w, hi_w))
+
+    eksik = unverified_claims(narration.full_text(), body,
+                              language=channel.language)
+    if not eksik:
         return narration
 
-    # Tek düzeltme turu. İkincisi de bütçe dışıysa kabul edilir —
-    # süre zaten sesten okunur, bütçe sadece bir hedeftir.
-    retry_prompt = prompt + _budget_feedback(actual, lo_w, hi_w)
-    return run_json(retry_prompt, Narration, claude_path=claude_path, model=model,
-                    backend=backend, api_key=api_key, retries=3)
+    log.warning(f"[olgu] haberde geçmeyen isim/sayı: {eksik} → yeniden yazdırılıyor")
+    narration = _uret(prompt + _fact_feedback(eksik))
+    eksik = unverified_claims(narration.full_text(), body,
+                              language=channel.language)
+    if eksik:
+        raise RuntimeError(
+            f"anlatım haberde geçmeyen isim/sayı içeriyor: {', '.join(eksik)}. "
+            f"İki denemede de düzelmedi — video üretilmedi (uydurma bilgi "
+            f"yayınlamaktansa video çıkmasın).")
+    log.info("[olgu] düzeltme turu temiz ✓")
+    return narration
