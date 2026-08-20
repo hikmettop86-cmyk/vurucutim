@@ -141,3 +141,40 @@ def parse_articles_response(text: str) -> dict[int, list[TrendingArticle]]:
                 logger.debug(f"trending_now: haber atlandı ({e}): {str(a)[:120]}")
         out[idx] = arts
     return out
+
+
+# --- HTTP ---------------------------------------------------------------------
+
+def _post(calls: list[list], timeout_s: int) -> str:
+    """Birden çok rpc alt çağrısını tek batchexecute isteğinde gönder.
+    HTTP hatasında requests.HTTPError fırlatır (çağıran yedeğe düşer)."""
+    r = requests.post(_URL, data={"f.req": json.dumps([calls])},
+                      headers=_HEADERS, timeout=timeout_s)
+    r.raise_for_status()
+    return r.text
+
+
+def fetch_trending_now(
+    region: str, *, language: str, hours: int = 24, timeout_s: int = 15,
+) -> list[TrendingEntry]:
+    """Bölgenin son `hours` saatlik trend listesi. Ağ/HTTP hatası fırlatır."""
+    payload = json.dumps([None, None, region.upper(), 0, language, hours, 1])
+    text = _post([[_RPC_TRENDS, payload, None, "generic"]], timeout_s)
+    return parse_trending_response(text)
+
+
+def fetch_trending_articles(
+    entries: list[TrendingEntry], *, language: str, region: str,
+    timeout_s: int = 15,
+) -> dict[int, list[TrendingArticle]]:
+    """Her giriş için ayrı w4opAf alt çağrısı, hepsi tek istekte.
+    Anahtar = `entries` içindeki indeks. Haber kimliği olmayan giriş atlanır."""
+    calls: list[list] = []
+    for idx, e in enumerate(entries):
+        if not e.news_ids:
+            continue
+        payload = json.dumps([[[nid, language, region.upper()] for nid in e.news_ids]])
+        calls.append([_RPC_ARTICLES, payload, None, str(idx)])
+    if not calls:
+        return {}
+    return parse_articles_response(_post(calls, timeout_s))

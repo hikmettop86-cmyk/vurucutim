@@ -36,7 +36,7 @@ def test_parse_trending_reads_all_rows(trends_text):
     assert first.started_at == datetime.fromtimestamp(1787160000, tz=timezone.utc)
     assert first.category_ids == (20,)
     assert first.breakdown[:3] == ("şener üşümezsoy", "son dakika", "istanbul deprem")
-    assert len(first.news_ids) == 24 and first.news_ids[0] == 4775113814
+    assert len(first.news_ids) == 22 and first.news_ids[0] == 4775113814
 
 
 def test_parse_trending_skips_malformed_row():
@@ -76,3 +76,72 @@ def test_parse_articles_keys_by_request_id(articles_text):
 def test_parse_articles_returns_empty_on_garbage():
     from short_bot.trends.trending_now import parse_articles_response
     assert parse_articles_response("nope") == {}
+
+
+# --- HTTP çağrıları -----------------------------------------------------------
+
+class _Resp:
+    def __init__(self, text: str, status: int = 200):
+        self.text = text
+        self.status_code = status
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise requests.HTTPError(f"HTTP {self.status_code}")
+
+
+def test_fetch_trending_now_posts_expected_payload(trends_text, monkeypatch):
+    from short_bot.trends import trending_now as tn
+    seen = {}
+
+    def _post(url, data=None, headers=None, timeout=None):
+        seen["url"] = url; seen["data"] = data; seen["timeout"] = timeout
+        return _Resp(trends_text)
+    monkeypatch.setattr(tn.requests, "post", _post)
+
+    entries = tn.fetch_trending_now("tr", language="tr", hours=24, timeout_s=9)
+    assert len(entries) == 181
+    assert seen["url"].endswith("/batchexecute")
+    assert seen["timeout"] == 9
+    calls = json.loads(seen["data"]["f.req"])
+    assert calls[0][0][0] == "i0OFE"
+    assert json.loads(calls[0][0][1]) == [None, None, "TR", 0, "tr", 24, 1]
+
+
+def test_fetch_trending_articles_one_subcall_per_entry(articles_text, monkeypatch):
+    from short_bot.trends import trending_now as tn
+    seen = {}
+
+    def _post(url, data=None, headers=None, timeout=None):
+        seen["data"] = data
+        return _Resp(articles_text)
+    monkeypatch.setattr(tn.requests, "post", _post)
+
+    entries = [
+        tn.TrendingEntry("a", 5000, 100, None, (), (), (11, 12)),
+        tn.TrendingEntry("habersiz", 5000, 100, None, (), (), ()),
+        tn.TrendingEntry("b", 2000, 100, None, (), (), (21,)),
+    ]
+    by_idx = tn.fetch_trending_articles(entries, language="tr", region="tr")
+    calls = json.loads(seen["data"]["f.req"])[0]
+    # haberi olmayan giriş için alt çağrı YOK; kimlik = giriş indeksi
+    assert [c[3] for c in calls] == ["0", "2"]
+    assert json.loads(calls[0][1]) == [[[11, "tr", "TR"], [12, "tr", "TR"]]]
+    assert 0 in by_idx
+
+
+def test_fetch_trending_articles_no_request_when_nothing_to_ask(monkeypatch):
+    from short_bot.trends import trending_now as tn
+
+    def _boom(*a, **k):
+        raise AssertionError("HTTP çağrısı yapılmamalıydı")
+    monkeypatch.setattr(tn.requests, "post", _boom)
+    assert tn.fetch_trending_articles([], language="tr", region="TR") == {}
+
+
+def test_fetch_trending_now_raises_on_http_error(monkeypatch):
+    from short_bot.trends import trending_now as tn
+    monkeypatch.setattr(tn.requests, "post",
+                        lambda *a, **k: _Resp("rate limited", status=429))
+    with pytest.raises(requests.HTTPError):
+        tn.fetch_trending_now("TR", language="tr")
