@@ -46,6 +46,10 @@ DOWNLOAD_RETRIES = 3       # ses hazır ama indirme kopabilir (10054) — kredi 
 # Poll'de 429: görev ZATEN gönderildi, kredi harcandı → geri çekil, terk etme.
 RATE_LIMIT_BACKOFF_S = 10   # artan: 10, 20, 30...
 RATE_LIMIT_MAX_WAIT_S = 60
+# Poll'de 5xx (gözlenen: 503 'server_busy') aynı gerekçeyle geçici. Bekleme daha
+# KISA: preflight'ın toplam bütçesi 25sn (HEALTH_TIMEOUT_S) ve okuma ucu ucuz.
+SERVER_BUSY_BACKOFF_S = 2   # artan: 2, 4, 6...
+SERVER_BUSY_MAX_WAIT_S = 30
 
 
 class Ai33Error(RuntimeError):
@@ -61,7 +65,17 @@ class Ai33RateLimitError(Ai33Error):
 
 
 class Ai33TimeoutError(Ai33Error):
-    """poll zaman aşımı — kuyruk takılı (task 'done'/'error' vermeden süre doldu)."""
+    """poll zaman aşımı — task 'done'/'error' vermeden süre doldu.
+
+    ``progress_seen``: süre dolana kadar EN AZ BİR poll başarıyla okundu mu?
+    Okunduysa servis canlıdır, görev ilerliyordur — yalnızca yavaştır. Hiç
+    okunamadıysa (ör. her poll 503) elimizde canlılık kanıtı yoktur. Bu ayrım
+    preflight'ın "yavaş"ı "ölü" sanıp üretimi durdurmasını engeller.
+    """
+
+    def __init__(self, message: str, *, progress_seen: bool = False):
+        super().__init__(message)
+        self.progress_seen = progress_seen
 
 
 _STATUS_MESSAGES = {
@@ -139,10 +153,15 @@ def synthesize(
 
         start = now()
         rate_hits = 0
+        busy_hits = 0
+        # Görevin ilerlediğinin KANITI: en az bir poll'ü başarıyla okuduk mu.
+        # Zaman aşımında "yavaş" ile "ölü"yü ayıran tek bilgi budur.
+        progress_seen = False
         while True:
             if now() - start > poll_timeout_s:
                 raise Ai33TimeoutError(
-                    f"ai33 poll timeout (~{poll_timeout_s / 60:.0f}dk), task={task_id}"
+                    f"ai33 poll timeout (~{poll_timeout_s / 60:.0f}dk), task={task_id}",
+                    progress_seen=progress_seen,
                 )
             sleep(poll_interval_s)
             try:
@@ -157,15 +176,31 @@ def synthesize(
             # olur. Geri çekil, beklemeye devam et; poll_timeout_s zaten sonsuz
             # beklemeyi engelliyor. (POST'taki 429 farklı: orada hata veriyoruz,
             # çünkü henüz bir şey gönderilmedi.)
-            if getattr(r, "status_code", 200) == 429:
+            code = getattr(r, "status_code", 200)
+            if code == 429:
                 rate_hits += 1
                 wait = min(RATE_LIMIT_BACKOFF_S * rate_hits, RATE_LIMIT_MAX_WAIT_S)
                 log.warning(f"  ai33 poll hız sınırı ({rate_hits}. kez) → {wait}sn "
                             f"bekle, görev sunucuda sürüyor (task={task_id})")
                 sleep(wait)
                 continue
+            # 5xx DE GEÇİCİ (429 ile aynı gerekçe): gözlenen 503 'server_busy —
+            # Task polling temporarily busy', poll isteklerinin ~yarısında geliyor.
+            # Bunu kalıcı saymak, ödediğimiz görevi ilk gürültüde terk etmekti:
+            # koşu 1246'da üst üste 5 aday bu yüzden elendi, servis sağlıklıyken.
+            # 4xx yeniden denenmez: kalıcıdır (ör. 404 task yok).
+            if code >= 500:
+                busy_hits += 1
+                wait = min(SERVER_BUSY_BACKOFF_S * busy_hits, SERVER_BUSY_MAX_WAIT_S)
+                log.warning(f"  ai33 poll sunucu meşgul (HTTP {code}, {busy_hits}. "
+                            f"kez) → {wait}sn bekle, görev sunucuda sürüyor "
+                            f"(task={task_id})")
+                sleep(wait)
+                continue
             _check_status(r, "task poll")
             task = r.json() or {}
+            # Buraya gelmek = poll BAŞARIYLA okundu → servis canlı, görev var.
+            progress_seen = True
             status = task.get("status")
             if status == "done":
                 meta = task.get("metadata") or {}
@@ -212,7 +247,10 @@ def synthesize(
             sess.close()
 
 
-HEALTH_TIMEOUT_S = 25.0
+# 25→60: poll ucu isteklerin ~yarısında 503 'server_busy' veriyor. Geri çekilmeler
+# (2+4+6+8+10) 25sn'lik bütçeyi taşırıp SAĞLIKLI servisi 'stalled' gösteriyordu;
+# üst katman da her tekrarında yeni bir TTS görevi açıp kredi yakıyordu.
+HEALTH_TIMEOUT_S = 60.0
 HEALTH_TEXT = "test bir iki"
 
 
@@ -229,7 +267,11 @@ def health_check(
 ) -> str:
     """Küçük bir TTS isteğiyle servisi yoklar. ASLA exception atmaz.
 
-    Dönüş: 'healthy' | 'stalled' | 'auth' | 'no-key' | 'no-voice' | 'error'
+    Dönüş: 'healthy' | 'yavas' | 'stalled' | 'auth' | 'no-key' | 'no-voice' | 'error'
+
+    'yavas' BAŞARIDIR (üretim sürer): pencere doldu ama görev ilerliyor.
+    Ayrıntı ve saha gerekçesi için bkz. Ai33TimeoutError.progress_seen —
+    yanlış "ölü" kararı üretimi durdurur, yanlış "canlı" kararı en fazla bekletir.
     """
     if not api_key:
         return "no-key"
@@ -243,7 +285,11 @@ def health_check(
                    poll_interval_s=1.0, poll_timeout_s=timeout_s)
     except Ai33AuthError:
         return "auth"
-    except Ai33TimeoutError:
+    except Ai33TimeoutError as e:
+        if getattr(e, "progress_seen", False):
+            log.warning("  ai33 preflight penceresi doldu ama görev İLERLİYOR "
+                        "→ servis yavaş, üretim sürüyor")
+            return "yavas"
         return "stalled"
     except Ai33Error:
         return "error"

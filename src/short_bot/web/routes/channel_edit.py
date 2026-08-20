@@ -87,6 +87,12 @@ def edit(slug):
 def ai33_voices():
     """ai33 ses kütüphanesini JSON döndürür (arayüzdeki datalist'i doldurmak için).
 
+    `?language=tr` verilirse YALNIZ o dilde konuşan sesler döner ve liste
+    SAYFALANARAK çekilir. Eskiden tek sayfa çekiliyordu: 121 sesin 72'si
+    İngilizce, yalnız 3'ü Türkçe / 11'i İspanyolcaydı (kütüphanede 23 ve 77 var).
+    Yani kullanıcı kanalına ses seçmek istediğinde aradığı ses listede YOKTU ve
+    bunu hiçbir uyarı söylemiyordu — ekranda "121 ses yüklendi" yazıyordu.
+
     Anahtar yoksa 200 + boş liste + hata mesajı döner ki arayüz kullanıcıya
     anlaşılır bir uyarı gösterebilsin. ``health_check`` ÇAĞIRMAZ — o kredi harcar.
     """
@@ -96,7 +102,21 @@ def ai33_voices():
     key = resolve_ai33_api_key(secrets)
     if not key:
         return jsonify({"voices": [], "error": "AI33_API_KEY tanımlı değil"})
-    voices = list_voices(api_key=key)
+
+    from short_bot.locale import LANGUAGE_NAMES
+    from short_bot.voice_picker import fetch_all_voices
+
+    language = (request.args.get("language") or "").strip().lower()
+    voices = fetch_all_voices(api_key=key)
+    if language:
+        eslesen = [v for v in voices
+                   if str(v.get("language") or "").lower() == language]
+        if not eslesen:
+            ad = LANGUAGE_NAMES.get(language, language)
+            return jsonify({"voices": [], "error":
+                            f"ai33 kütüphanesinde {ad} konuşan ses bulunamadı "
+                            f"({len(voices)} ses tarandı)"})
+        voices = eslesen
     out = [
         {
             "voice_id": v.get("voice_id", ""),
@@ -368,7 +388,10 @@ def save(slug):
                 _form_get_int("voice_target_max",
                               old.target_duration_s[1] if old else 60),
             ),
-            music_volume=(old.music_volume if old else 0.12),
+            # Arka plan müziği formdan okunur; eskiden yalnız mevcut değer
+            # korunuyordu, yani panelden HİÇ değiştirilemiyordu.
+            music_volume=_form_get_float("voice_music_volume",
+                                         old.music_volume if old else 0.12),
         )
     else:
         new_voice = cfg.voice

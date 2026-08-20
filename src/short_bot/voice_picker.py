@@ -35,6 +35,26 @@ class VoiceChoice(BaseModel):
     reason: str      # NEDEN bu ses — kullanıcı planda görecek
 
 
+def fetch_all_voices(*, api_key: str, session=None) -> list[dict]:
+    """Kütüphanenin TAMAMI — SAYFALAYARAK.
+
+    Tek sayfa çekmek yetmez: varsayılan sayfa çoğunlukla İngilizce, diğer diller
+    ileriki sayfalarda. Panelin ses açılırı bunu yapmadığı için kullanıcıya
+    121 sesin yalnız 3'ü Türkçe / 11'i İspanyolca görünüyordu (gerçekte 23 ve 77)
+    — yani seçmek istediği ses listede HİÇ yoktu. Anahtar yoksa boş liste.
+    """
+    if not api_key:
+        return []
+    hepsi: list[dict] = []
+    for page in range(1, _MAX_PAGES + 1):
+        sayfa = list_voices(api_key=api_key, provider="elevenlabs",
+                            page=page, page_size=_PAGE_SIZE, session=session)
+        if not sayfa:
+            break
+        hepsi.extend(sayfa)
+    return hepsi
+
+
 def voices_for(language: str, *, api_key: str, session=None) -> list[dict]:
     """ai33 kütüphanesinden HEDEF DİLDE konuşan sesler.
 
@@ -44,13 +64,7 @@ def voices_for(language: str, *, api_key: str, session=None) -> list[dict]:
         raise RuntimeError("ai33 API anahtarı yok — Ayarlar'dan ekleyin "
                            "(ses olmadan reel kanalı kurulamaz).")
 
-    hepsi: list[dict] = []
-    for page in range(1, _MAX_PAGES + 1):
-        sayfa = list_voices(api_key=api_key, provider="elevenlabs",
-                            page=page, page_size=_PAGE_SIZE, session=session)
-        if not sayfa:
-            break
-        hepsi.extend(sayfa)
+    hepsi = fetch_all_voices(api_key=api_key, session=session)
 
     out = [v for v in hepsi
            if str(v.get("language") or "").lower() == (language or "").lower()]

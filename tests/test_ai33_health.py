@@ -28,11 +28,36 @@ def test_health_check_auth(tmp_path):
                         session=sess, sleep=lambda s: None, now=_clock()) == "auth"
 
 
-def test_health_check_stalled_on_timeout(tmp_path):
-    """Kuyruk 'doing'de takiliysa -> stalled (asla exception atmaz)."""
+def test_health_check_yavas_when_task_is_progressing(tmp_path):
+    """PENCERE DOLDU AMA GOREV ILERLIYOR -> 'yavas': uretim SURER.
+
+    CANLI VAKA (2026-08-09, panel kosusu #1585): ai33 yogun oldugu icin preflight
+    penceresi doldu, 'stalled' donuldu ve URETIM OLDU. Oysa poll'ler BASARIYLA
+    'doing' donuyordu -- servis canliydi, sadece yavasti (ayni anda elle olculen
+    preflight 40.9sn surdu ve 'healthy' dondu).
+
+    'Asla bitmeyecek' ile 'yavas'i 60 saniyede ayirt etmek imkansiz; asil sentezin
+    kendi 600sn butcesi zaten var, gercek ariza orada yakalanir. Bedel asimetrik:
+    yanlis 'olu' karari uretimi DURDURUR, yanlis 'canli' karari en fazla bekletir.
+    """
     sess = FakeSession(
         post_resp=FakeResponse(200, {"task_id": "t1"}),
         task_resps=[FakeResponse(200, {"status": "doing"})] * 50,
+    )
+    assert health_check(voice_id="v", api_key="k", tmp_dir=tmp_path,
+                        session=sess, sleep=lambda s: None, now=_clock(),
+                        timeout_s=3.0) == "yavas"
+
+
+def test_health_check_stalled_when_no_progress_evidence(tmp_path):
+    """Poll HIC basarili olmadiysa (surekli 503) canlilik KANITI yoktur -> stalled.
+
+    Bu ayrim sart: 'yavas' demek icin gorevin ilerledigini GORMUS olmak gerekir.
+    Her poll hata veriyorsa elimizde hicbir kanit yok, sert karar dogrudur.
+    """
+    sess = FakeSession(
+        post_resp=FakeResponse(200, {"task_id": "t1"}),
+        task_resps=[FakeResponse(503, {"code": "server_busy"})] * 50,
     )
     assert health_check(voice_id="v", api_key="k", tmp_dir=tmp_path,
                         session=sess, sleep=lambda s: None, now=_clock(),

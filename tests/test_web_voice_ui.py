@@ -104,8 +104,9 @@ def test_voices_endpoint_returns_list(app, monkeypatch):
             {"voice_id": "elevenlabs_deniz", "name": "Deniz", "language": "tr"},
         ]
 
-    monkeypatch.setattr(
-        "short_bot.web.routes.channel_edit.list_voices", fake_list_voices)
+    # Rota artık kütüphaneyi SAYFALAYARAK çeken fetch_all_voices'ı kullanıyor
+    # (tek sayfada Türkçe sesler görünmüyordu); sahte onun yerine takılır.
+    monkeypatch.setattr("short_bot.voice_picker.fetch_all_voices", fake_list_voices)
 
     resp = app.test_client().get("/api/ai33/voices")
     assert resp.status_code == 200
