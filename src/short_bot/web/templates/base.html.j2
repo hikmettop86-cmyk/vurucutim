@@ -17,8 +17,8 @@
             'claude-surface': '#f5f2ea',
             'claude-surface-alt': '#ece8dc',
             'claude-text': '#141413',
-            'claude-muted': '#6b6863',
-            'claude-subtle': '#94918a',
+            'claude-muted': '#55524a',   /* 8,1:1 (eski #6b6863 = 5,3:1) */
+            'claude-subtle': '#726e64',  /* 5,6:1 (eski #94918a = 3,0:1) */
             'claude-accent': '#c96442',
             'claude-accent-hover': '#b85638',
             'claude-accent-soft': '#f4ddd3',
@@ -26,6 +26,15 @@
             'claude-border-strong': '#cfcbb8',
             'claude-error': '#cc3333',
             'claude-success': '#3a7d44',
+            /* Durum renkleri aksandan (terracotta) AYRI tutulur: aksan
+               "tıklanır" demek, bunlar "bilgi" demek. Kokpit ekranı bu
+               ayrımın üstüne kurulu. */
+            'claude-wait': '#9a6b12',
+            'claude-wait-soft': '#fbf3e0',
+            'claude-idle': '#5b6779',
+            'claude-idle-soft': '#eeeff2',
+            'claude-success-soft': '#e8f1eb',
+            'claude-error-soft': '#f9e9e7',
           },
           fontFamily: {
             serif: ['"Source Serif 4"', 'Georgia', 'serif'],
@@ -43,7 +52,9 @@
   <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
   <style>
     [x-cloak] { display: none !important; }
-    body { font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }
+    /* 14px'ti; uzun süre ekrana bakan operatör için 15,5px'e çıkarıldı. */
+    body { font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased;
+           font-size: 15.5px; line-height: 1.55; }
     h1, h2, h3 { font-family: 'Source Serif 4', Georgia, serif; letter-spacing: -0.01em; }
     .nav-link { position: relative; transition: color 150ms ease; }
     .nav-link::after {
@@ -69,18 +80,59 @@
         <span class="w-8 h-8 rounded-md bg-claude-accent text-white flex items-center justify-center font-serif italic text-lg shadow-soft group-hover:bg-claude-accent-hover transition-colors">V</span>
         <span class="font-serif font-bold text-claude-text text-base tracking-tight">Vurucu <span class="text-claude-accent">TİM</span></span>
       </a>
-      <div class="flex items-center gap-4 text-sm text-claude-muted overflow-x-auto whitespace-nowrap flex-1 min-w-0">
-        <a href="/" class="nav-link hover:text-claude-text {% if p == '/' %}active{% endif %}">Dashboard</a>
-        <a href="/activity" class="nav-link hover:text-claude-text {% if p.startswith('/activity') %}active{% endif %}">Akış</a>
-        <a href="/shorts" class="nav-link hover:text-claude-text {% if p.startswith('/shorts') %}active{% endif %}">Shorts</a>
-        <a href="/gundem" class="nav-link hover:text-claude-text {% if p.startswith('/gundem') %}active{% endif %}">Gündem</a>
-        <a href="/curated" class="nav-link hover:text-claude-text {% if p.startswith('/curated') %}active{% endif %}">Cevher</a>
-        <a href="{{ url_for('feeds.list_view') }}" class="nav-link hover:text-claude-text {% if p.startswith('/feeds') %}active{% endif %}">RSS Havuzu</a>
-        <a href="/channels" class="nav-link hover:text-claude-text {% if p.startswith('/channels') %}active{% endif %}">Kanallar</a>
-        <a href="/youtube" class="nav-link hover:text-claude-text {% if p.startswith('/youtube') %}active{% endif %}">YouTube</a>
-        <a href="/scheduler/timeline" class="nav-link hover:text-claude-text {% if p.startswith('/scheduler') %}active{% endif %}">Cron</a>
-        <a href="/lang-packs" class="nav-link hover:text-claude-text {% if p.startswith('/lang-packs') %}active{% endif %}">Diller</a>
-        <a href="/logs" class="nav-link hover:text-claude-text {% if p.startswith('/logs') %}active{% endif %}">Loglar</a>
+      {# Üst çubukta YALNIZ her gün kullanılanlar. Cevher/Cron/Diller ve
+         Akış/RSS Havuzu "Daha fazla" altına indi: on iki başlık çubuğu
+         taşırıyor ve göz aradığını bulamıyordu. Hiçbir sayfa kaybolmadı. #}
+      <div class="flex items-center gap-1 flex-1 min-w-0 overflow-x-auto whitespace-nowrap">
+        {% set nav_ana = [
+          ('/', 'Kokpit', p == '/'),
+          ('/shorts', 'Shorts', p.startswith('/shorts')),
+          ('/channels', 'Kanallar', p.startswith('/channels')),
+          ('/gundem', 'Gündem', p.startswith('/gundem')),
+          ('/youtube', 'YouTube', p.startswith('/youtube')),
+        ] %}
+        {% for yol, ad, etkin in nav_ana %}
+        <a href="{{ yol }}"
+           class="px-3 py-2 rounded-lg text-[14.5px] transition-colors
+                  {% if etkin %}bg-claude-surface-alt text-claude-text font-semibold
+                  {% else %}text-claude-muted hover:bg-claude-surface hover:text-claude-text{% endif %}">
+          {{ ad }}{% if ad == 'Shorts' and pending_review_count %}
+          <b class="ml-1 font-mono tabular-nums text-claude-wait">{{ pending_review_count }}</b>
+          {% endif %}
+        </a>
+        {% endfor %}
+
+        <div class="relative" x-data="{ acik: false }" x-on:click.outside="acik = false">
+          <button type="button" x-on:click="acik = !acik" x-bind:aria-expanded="acik"
+                  class="px-3 py-2 rounded-lg text-[14.5px] text-claude-muted hover:bg-claude-surface hover:text-claude-text transition-colors">
+            Daha fazla <span class="text-[11px]">⌄</span>
+          </button>
+          <div x-show="acik" x-cloak x-transition.opacity.duration.120ms
+               class="absolute top-full left-0 mt-2 z-50 w-56 p-1.5 rounded-xl bg-white border border-claude-border shadow-card">
+            {% set nav_diger = [
+              ('/activity', 'Akış', 'canlı üretim'),
+              ('/feeds', 'RSS Havuzu', 'kaynaklar'),
+              (None, None, None),
+              ('/curated', 'Cevher', 'Reddit kürate'),
+              ('/scheduler/timeline', 'Cron', 'zamanlama'),
+              ('/lang-packs', 'Diller', 'dil paketleri'),
+              ('/logs', 'Loglar', ''),
+            ] %}
+            {% for yol, ad, ipucu in nav_diger %}
+              {% if yol is none %}
+              <div class="h-px bg-claude-border my-1.5 mx-1"></div>
+              {% else %}
+              <a href="{{ yol }}"
+                 class="flex items-center justify-between gap-3 px-3 py-2 rounded-lg text-[14.5px] transition-colors
+                        {% if p.startswith(yol) and yol != '/' %}bg-claude-surface-alt text-claude-text
+                        {% else %}text-claude-muted hover:bg-claude-surface hover:text-claude-text{% endif %}">
+                <span>{{ ad }}</span>
+                {% if ipucu %}<span class="text-xs text-claude-subtle">{{ ipucu }}</span>{% endif %}
+              </a>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
       </div>
       <span class="flex items-center gap-2 text-xs flex-shrink-0">
         {# Cron health badge #}

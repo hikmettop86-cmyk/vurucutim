@@ -137,6 +137,28 @@ def create_app(
     from short_bot.text_normalize import turkish_upper
     app.jinja_env.filters["tr_upper"] = turkish_upper
 
+    def kisa_sayi(n) -> str:
+        """679826 → '680 B'. Dar sütunda tam sayı okunmuyor; tam hâli
+        satırın tooltip'inde duruyor."""
+        try:
+            n = int(n)
+        except (TypeError, ValueError):
+            return "—"
+        if n >= 1_000_000:
+            return f"{n / 1_000_000:.1f}".replace(".", ",") + " Mn"
+        if n >= 1000:
+            return f"{round(n / 1000)} B"
+        return str(n)
+
+    app.jinja_env.filters["kisa_sayi"] = kisa_sayi
+    # Dil açılırları TEK KAYNAKTAN türetilir. Elle yazılan listeler bir tuzaktı:
+    # kanalın dili listede yoksa hiçbir option 'selected' olmuyor, tarayıcı İLKİNİ
+    # (Türkçe) seçiyor ve o sayfadan yapılan HERHANGİ bir kayıt kanalın dilini
+    # sessizce Türkçeye çeviriyordu (Japonca kanal kurulurken yakalandı).
+    from short_bot.locale import LANGUAGE_NAMES, SUPPORTED_LANGUAGES
+    app.jinja_env.globals["LANGUAGES"] = [(c, LANGUAGE_NAMES[c])
+                                          for c in SUPPORTED_LANGUAGES]
+
     # Register blueprints
     from short_bot.web.routes import register_blueprints
     register_blueprints(app)
@@ -180,7 +202,19 @@ def create_app(
                                         Run.ended_at.is_(None)).count()
         except Exception:
             running = 0
-        return {"system_running_count": running}
+        # Navigasyondaki "Shorts" rozeti: karar bekleyen video sayısı.
+        # Operatörün asıl işi bu; hangi sayfada olursa olsun görünmeli.
+        try:
+            from short_bot.web.models import Short, YoutubeUpload
+            yuklenen = (db.session.query(YoutubeUpload.short_id)
+                        .filter(YoutubeUpload.status == "success"))
+            pending = (Short.query
+                       .filter(Short.deleted_at.is_(None),
+                               ~Short.id.in_(yuklenen))
+                       .count())
+        except Exception:  # noqa: BLE001 — rozet yüzünden sayfa düşmesin
+            pending = 0
+        return {"system_running_count": running, "pending_review_count": pending}
 
     # Serve mp4 files from output directory
     @app.route("/output/<path:filename>")
