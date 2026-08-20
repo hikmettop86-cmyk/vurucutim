@@ -23,8 +23,8 @@
 
   {# --- HATA --- #}
   {% if job and job.status == 'error' %}
-  <div class="mb-6 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm
-              text-red-700">
+  <div class="mb-6 px-4 py-3 rounded-lg bg-claude-error-soft border border-claude-error/30 text-sm
+              text-claude-error">
     <b>Başarısız.</b> <span class="font-mono text-xs">{{ job.error }}</span>
   </div>
   {% endif %}
@@ -90,8 +90,8 @@
      Otomatik düzeltmiyoruz: "Alman tarihi hakkında TÜRKÇE kanal" da geçerli bir istek.
      Menü hüküm verir; biz çelişkiyi SÖYLERİZ. #}
   {% if plan and plan.lang_conflict %}
-  <div class="mb-6 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm
-              text-red-700">
+  <div class="mb-6 px-4 py-3 rounded-lg bg-claude-error-soft border border-claude-error/30 text-sm
+              text-claude-error">
     <b>⚠ Dil çelişkisi.</b> Yazdığın metin
     <b>{{ lang_names[plan.lang_conflict] }}</b> yayın istiyor gibi görünüyor, ama dil
     menüsü <b>{{ lang_names[plan.language] }}</b> seçili.

@@ -358,6 +358,13 @@ class ChannelConfig:
     handle: str
     output_dir: str
     enabled: bool
+    # archived: kanal PASİFE alındı. `enabled`den AYRI bir eksendir ve
+    # bilinçlidir: `enabled` cron'un çalışıp çalışmadığını, `archived` kanalın
+    # Kokpit'te görünüp görünmediğini söyler. Cron'u kapalı ama elle
+    # çalıştırılan kanallar var (ölçüldü: gundem-yorum kapalıyken bir günde 9
+    # video üretti) — ikisini tek bayrağa bağlamak onları listeden düşürürdü.
+    # Pasif kanal Kanallar sayfasında durur, hiçbir şeyi silinmez.
+    archived: bool = False
     # Beğeni/abone CTA alanları KALDIRILDI (2026-07-16, kullanıcı kararı) —
     # eski YAML'lardaki 'cta:' bölümü loader'da okunmaz, sessizce atlanır.
     language: str = "tr"
@@ -619,6 +626,7 @@ def load_channel(path: Path) -> ChannelConfig:
         handle=data["handle"],
         output_dir=data["output_dir"],
         enabled=bool(data.get("enabled", True)),
+        archived=bool(data.get("archived", False)),
         language=language,
         dna=dna,
         script_model=data.get("script_model"),
@@ -653,6 +661,8 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
         "output_dir": cfg.output_dir,
         "enabled": cfg.enabled,
     }
+    if cfg.archived:
+        data["archived"] = True
     if cfg.dynamic_dna:
         data["dynamic_dna"] = True
     if cfg.negative_keywords:

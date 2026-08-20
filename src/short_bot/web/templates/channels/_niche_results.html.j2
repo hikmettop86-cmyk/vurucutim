@@ -9,12 +9,12 @@
   {{ src }} ile niş aranıyor… (~1-2 dk sürebilir)
 </div>
 {% elif status == "error" %}
-<div class="mt-3 p-4 rounded-lg bg-red-100 text-red-800 text-sm">
+<div class="mt-3 p-4 rounded-lg bg-claude-error-soft text-claude-error text-sm">
   Niş bulunamadı: {{ error }}
   {% if mode == 'ai' %}
-  <div class="text-xs mt-1 text-red-600">İpucu: Claude aboneliği yoksa OpenRouter anahtarı gerekir (Ayarlar).</div>
+  <div class="text-xs mt-1 text-claude-error">İpucu: Claude aboneliği yoksa OpenRouter anahtarı gerekir (Ayarlar).</div>
   {% else %}
-  <div class="text-xs mt-1 text-red-600">İpucu: YouTube Data API anahtarı gerekir (Ayarlar). AI Niş Bulucu'yu da deneyebilirsin.</div>
+  <div class="text-xs mt-1 text-claude-error">İpucu: YouTube Data API anahtarı gerekir (Ayarlar). AI Niş Bulucu'yu da deneyebilirsin.</div>
   {% endif %}
 </div>
 {% else %}

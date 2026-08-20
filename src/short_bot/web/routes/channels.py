@@ -90,6 +90,32 @@ def toggle(slug):
     return redirect(url_for("channels.list_view"))
 
 
+@bp.route("/channels/<slug>/archive", methods=["POST"])
+def archive(slug):
+    """Kanalı pasife alır / geri açar.
+
+    `enabled`den AYRI bir eksendir. `enabled` cron'un çalışıp çalışmadığını
+    söyler; `archived` kanalın Kokpit'te görünüp görünmediğini. Cron'u kapalı
+    ama elle çalıştırılan kanallar var (gundem-yorum kapalıyken bir günde 9
+    video üretti) — tek bayrağa bağlamak onları Kokpit'ten düşürürdü.
+
+    Pasif kanal SİLİNMEZ: yapılandırması, videoları ve istatistikleri durur,
+    yalnız Kokpit listesinden çıkar.
+    """
+    cfg_dir: Path = current_app.config["SHORTBOT_CONFIG_DIR"]
+    yaml_path = cfg_dir / "channels" / f"{slug}.yaml"
+    if not yaml_path.exists():
+        abort(404)
+    cfg = load_channel(yaml_path)
+    new_cfg = type(cfg)(**{**cfg.__dict__, "archived": not cfg.archived})
+    save_channel(yaml_path, new_cfg)
+    flash(f"'{slug}' {'pasife alındı' if new_cfg.archived else 'aktife alındı'}.",
+          "success")
+    if request.headers.get("HX-Request"):
+        return render_template("_partials/channel_row.html.j2", c=new_cfg)
+    return redirect(url_for("channels.list_view"))
+
+
 @bp.route("/channels/<slug>/clone", methods=["POST"])
 def clone(slug):
     """Duplicate a channel as <slug>-copy (yaml + css)."""

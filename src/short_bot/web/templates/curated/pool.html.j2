@@ -69,7 +69,7 @@
           {{ g.orient }}{% if g.duration %} · {{ g.duration }}s{% endif %}
         </span>
         {% if g.score %}
-        <span class="absolute top-1 right-1 text-[10px] px-1.5 py-0.5 rounded font-bold text-white {% if g.score >= 8 %}bg-claude-accent{% elif g.score >= 6 %}bg-amber-500{% else %}bg-black/50{% endif %}"
+        <span class="absolute top-1 right-1 text-[10px] px-1.5 py-0.5 rounded font-bold text-white {% if g.score >= 8 %}bg-claude-accent{% elif g.score >= 6 %}bg-claude-wait{% else %}bg-black/50{% endif %}"
               title="Tona-duyarlı skor (1-10)">🔥 {{ g.score|round(0)|int }}</span>
         {% endif %}
       </div>
@@ -83,7 +83,7 @@
             <input type="hidden" name="pool_id" value="{{ g.id }}">
             <input type="hidden" name="channel" value="{{ slug }}">
             <button type="submit"
-                    class="text-[11px] text-claude-muted hover:text-red-600 px-1.5 py-1">Ele</button>
+                    class="text-[11px] text-claude-muted hover:text-claude-error px-1.5 py-1">Ele</button>
           </form>
           <form method="post" action="{{ url_for('curated.pool_produce') }}">
             <input type="hidden" name="pool_id" value="{{ g.id }}">

@@ -7,7 +7,7 @@
         x-data="{ start: {{ r.started_at.timestamp() }}, now: Date.now() / 1000 }"
         x-init="setInterval(() => now = Date.now() / 1000, 1000)">
       <div class="flex items-center gap-3 mb-3">
-        <span class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse flex-shrink-0"></span>
+        <span class="w-2 h-2 rounded-full bg-claude-wait animate-pulse flex-shrink-0"></span>
         <span class="font-medium">{{ r.channel }}</span>
         <span class="text-claude-muted text-xs">{{ r.trigger }}</span>
         <span class="text-claude-muted text-xs">başladı {{ r.started_at.strftime('%H:%M:%S') }}</span>
@@ -15,7 +15,7 @@
            sonsuza dek "çalışıyor" kalır — kendini temizleyecek kimse yoktur.
            Normal üretim 8-14 dk sürüyor; bunun üstü şüphelidir. #}
         <span x-show="(now - start) > {{ stale_after_s }}"
-              class="text-xs px-2 py-0.5 rounded bg-red-500/15 text-red-500 font-medium">
+              class="text-xs px-2 py-0.5 rounded bg-claude-error/15 text-claude-error font-medium">
           takılmış olabilir
         </span>
         <span class="ml-auto font-mono text-xs text-claude-muted">
@@ -28,7 +28,7 @@
               onsubmit="return confirm('Bu koşu iptal edilsin mi?')">
           <button type="submit"
                   class="text-xs px-2 py-1 rounded border border-claude-border
-                         text-claude-muted hover:text-red-500 hover:border-red-500">
+                         text-claude-muted hover:text-claude-error hover:border-claude-error">
             ✕ İptal
           </button>
         </form>

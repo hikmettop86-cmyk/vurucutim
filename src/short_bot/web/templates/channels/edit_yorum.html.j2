@@ -6,7 +6,7 @@
     <div>
       <div class="flex items-center gap-3">
         <h1 class="font-serif text-3xl font-bold">🎙️ {{ c.name }}</h1>
-        <span class="bg-red-600 text-white text-xs font-semibold px-3 py-1 rounded-full">Gündem Yorum · {{ c.voice.provider }}</span>
+        <span class="bg-claude-error text-white text-xs font-semibold px-3 py-1 rounded-full">Gündem Yorum · {{ c.voice.provider }}</span>
         {% if not c.enabled %}<span class="bg-claude-surface-alt text-claude-muted text-xs px-2 py-1 rounded">kapalı</span>{% endif %}
       </div>
       <div class="text-sm text-claude-muted mt-1">{{ c.slug }} · {{ c.language }} · bölge {{ c.trends_region or 'dilden' }} · min hacim {{ c.trends_min_volume }} · {{ c.schedule_cron }}</div>

@@ -6,7 +6,7 @@
   Reddit cevherleri taranıyor…
 </div>
 {% elif status == "error" %}
-<div class="mt-4 p-4 rounded-lg bg-red-100 text-red-800 text-sm">Cevher bulunamadı: {{ error }}</div>
+<div class="mt-4 p-4 rounded-lg bg-claude-error-soft text-claude-error text-sm">Cevher bulunamadı: {{ error }}</div>
 {% else %}
 <div class="mt-4">
   {% if not gems %}
@@ -33,7 +33,7 @@
         {% if g.produced %}
         <span class="absolute top-1 right-1 text-[10px] px-1.5 py-0.5 rounded bg-claude-success text-white font-medium">✓ üretildi</span>
         {% elif g.curiosity %}
-        <span class="absolute top-1 right-1 text-[10px] px-1.5 py-0.5 rounded font-bold text-white {% if g.curiosity >= 8 %}bg-claude-accent{% elif g.curiosity >= 6 %}bg-amber-500{% else %}bg-black/50{% endif %}"
+        <span class="absolute top-1 right-1 text-[10px] px-1.5 py-0.5 rounded font-bold text-white {% if g.curiosity >= 8 %}bg-claude-accent{% elif g.curiosity >= 6 %}bg-claude-wait{% else %}bg-black/50{% endif %}"
               title="Vision merak/gülme skoru (1-10)">🔥 {{ g.curiosity }}</span>
         {% endif %}
       </div>

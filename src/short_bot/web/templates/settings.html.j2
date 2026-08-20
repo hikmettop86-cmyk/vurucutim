@@ -186,7 +186,7 @@
             <input type="checkbox" name="footage_src_pixabay" value="pixabay"
                    {% if 'pixabay' in _fp %}checked{% endif %}>
             Pixabay
-            {% if not pixabay_key_set %}<span class="text-amber-600 text-xs">(anahtar yok)</span>{% endif %}
+            {% if not pixabay_key_set %}<span class="text-claude-wait text-xs">(anahtar yok)</span>{% endif %}
           </label>
         </div>
         <input type="hidden" name="footage_order" value="{{ _fp | join(',') }}">
@@ -382,7 +382,7 @@
       <div class="text-xs text-claude-muted mt-2">
         Bu ay harcanan: <b>{{ '{:,}'.format(cartesia_month_usage).replace(',', '.') }}</b> kredi
         (1 karakter = 1 kredi; PRO ses 1,5×; $5 plan = {{ '{:,}'.format(cartesia_month_budget).replace(',', '.') }}/ay, devretmez)
-        {% if _pct >= 90 %}<span class="text-amber-600 font-semibold">— %{{ '%.0f'|format(_pct) }} doldu, kredi bitmek üzere</span>
+        {% if _pct >= 90 %}<span class="text-claude-wait font-semibold">— %{{ '%.0f'|format(_pct) }} doldu, kredi bitmek üzere</span>
         {% else %}— %{{ '%.1f'|format(_pct) }}{% endif %}
       </div>
       <div class="text-xs text-claude-subtle mt-1">
@@ -424,7 +424,7 @@
             <input type="checkbox" name="trends_src_youtube" value="1"
                    {% if 'youtube' in _srcs %}checked{% endif %}>
             YouTube Trending
-            {% if not youtube_key_set %}<span class="text-amber-600 text-xs">(API key gerekli)</span>{% endif %}
+            {% if not youtube_key_set %}<span class="text-claude-wait text-xs">(API key gerekli)</span>{% endif %}
           </label>
         </div>
       </div>

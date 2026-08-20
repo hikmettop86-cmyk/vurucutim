@@ -13,28 +13,32 @@
       theme: {
         extend: {
           colors: {
+            /* Onaylanan Kokpit tasarımının paleti. Krem zemin ve terracotta
+               aksan korundu; nötrler ve durum renkleri KONTRAST İÇİN
+               koyulaştırıldı — eskiler uzun süre ekrana bakan biri için
+               yeterince ayrışmıyordu (ölçüm yorumlarda). */
             'claude-bg': '#faf9f5',
-            'claude-surface': '#f5f2ea',
-            'claude-surface-alt': '#ece8dc',
-            'claude-text': '#141413',
+            'claude-surface': '#f4f1e8',
+            'claude-surface-alt': '#eae5d8',
+            'claude-text': '#14140f',
             'claude-muted': '#55524a',   /* 8,1:1 (eski #6b6863 = 5,3:1) */
             'claude-subtle': '#726e64',  /* 5,6:1 (eski #94918a = 3,0:1) */
-            'claude-accent': '#c96442',
-            'claude-accent-hover': '#b85638',
-            'claude-accent-soft': '#f4ddd3',
-            'claude-border': '#e3e0d4',
-            'claude-border-strong': '#cfcbb8',
-            'claude-error': '#cc3333',
-            'claude-success': '#3a7d44',
+            'claude-accent': '#bc5533',
+            'claude-accent-hover': '#a4462a',
+            'claude-accent-soft': '#f7e2d8',
+            'claude-border': '#e0dcce',
+            'claude-border-strong': '#c6c0ac',
             /* Durum renkleri aksandan (terracotta) AYRI tutulur: aksan
-               "tıklanır" demek, bunlar "bilgi" demek. Kokpit ekranı bu
-               ayrımın üstüne kurulu. */
-            'claude-wait': '#9a6b12',
-            'claude-wait-soft': '#fbf3e0',
-            'claude-idle': '#5b6779',
-            'claude-idle-soft': '#eeeff2',
-            'claude-success-soft': '#e8f1eb',
-            'claude-error-soft': '#f9e9e7',
+               "tıklanır" demek, bunlar "bilgi" demek. Kokpit bu ayrımın
+               üstüne kurulu. */
+            'claude-error': '#9e271f',
+            'claude-error-soft': '#f9e6e3',
+            'claude-success': '#216745',
+            'claude-success-soft': '#e4efe8',
+            'claude-wait': '#855808',
+            'claude-wait-soft': '#fbf1dc',
+            'claude-idle': '#47546a',
+            'claude-idle-soft': '#eceef2',
           },
           fontFamily: {
             serif: ['"Source Serif 4"', 'Georgia', 'serif'],
@@ -55,7 +59,31 @@
     /* 14px'ti; uzun süre ekrana bakan operatör için 15,5px'e çıkarıldı. */
     body { font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased;
            font-size: 15.5px; line-height: 1.55; }
-    h1, h2, h3 { font-family: 'Source Serif 4', Georgia, serif; letter-spacing: -0.01em; }
+    /* ---- Kokpit tasarımının ÖLÇEĞİ, tüm sayfalara ----
+       Utility sınıfları yazan şablonlar bunları ezer; ezmeyenler ölçeği
+       otomatik alır. Böylece 25 şablonu tek tek düzenlemeden panelin
+       tamamı aynı tipografiye oturuyor. */
+    h1, h2, h3 { font-family: 'Source Serif 4', Georgia, serif; letter-spacing: -0.015em; }
+    h1 { font-size: 34px; line-height: 1.15; }
+    h2 { font-size: 22px; line-height: 1.25; }
+    h3 { font-size: 17px; line-height: 1.3; }
+
+    /* Tablo başlıkları: 12px, seyrek harf aralıklı, sessiz.
+       Panelde çoğu tablo başlığı gövde metniyle aynı puntodaydı ve
+       başlıkla veri birbirine karışıyordu. */
+    table th {
+      font-size: 12px; font-weight: 600; letter-spacing: .05em;
+      text-transform: uppercase; color: #726e64;
+    }
+    table td { font-size: 14.5px; }
+
+    /* Form denetimleri gövdeyle aynı ölçekte olsun — tarayıcı varsayılanı
+       13px'e düşürüyor ve formlar sayfanın geri kalanından küçük kalıyordu. */
+    input, select, textarea, button { font-size: inherit; font-family: inherit; }
+
+    /* Tailwind'in en küçük iki sınıfı okunmuyordu; tabanları yükseltildi. */
+    .text-xs { font-size: 13px; line-height: 1.45; }
+    .text-sm { font-size: 14.5px; line-height: 1.5; }
     .nav-link { position: relative; transition: color 150ms ease; }
     .nav-link::after {
       content: '';
@@ -74,16 +102,20 @@
 </head>
 <body class="bg-claude-bg text-claude-text min-h-screen flex flex-col">
   {% set p = request.path %}
-  <nav class="bg-claude-surface/80 backdrop-blur border-b border-claude-border sticky top-0 z-40">
-    <div class="container mx-auto max-w-7xl px-5 py-3 flex items-center gap-4">
-      <a href="/" class="flex items-center gap-2 group flex-shrink-0">
-        <span class="w-8 h-8 rounded-md bg-claude-accent text-white flex items-center justify-center font-serif italic text-lg shadow-soft group-hover:bg-claude-accent-hover transition-colors">V</span>
-        <span class="font-serif font-bold text-claude-text text-base tracking-tight">Vurucu <span class="text-claude-accent">TİM</span></span>
+  {# Üst çubuk. Kırpma TUZAĞI: menü kapsayıcısında overflow-x-auto vardı ve
+     "Daha fazla" açılırı mutlak konumlu olduğu için görünmeden kesiliyordu —
+     düğme çalışıyor ama hiçbir şey açılmıyor sanılıyordu. Kapsayıcı artık
+     taşmayı kesmiyor; dar ekranda başlıklar sarıyor. #}
+  <nav class="bg-white border-b border-claude-border sticky top-0 z-40">
+    <div class="container mx-auto max-w-7xl px-7 h-[60px] flex items-center gap-6">
+
+      <a href="/" class="flex items-center gap-2.5 group flex-shrink-0">
+        <span class="w-8 h-8 rounded-lg bg-claude-accent text-white flex items-center justify-center
+                     font-serif text-[19px] group-hover:bg-claude-accent-hover transition-colors">V</span>
+        <span class="font-serif font-bold text-[17px] tracking-tight">Vurucu <span class="text-claude-accent">TİM</span></span>
       </a>
-      {# Üst çubukta YALNIZ her gün kullanılanlar. Cevher/Cron/Diller ve
-         Akış/RSS Havuzu "Daha fazla" altına indi: on iki başlık çubuğu
-         taşırıyor ve göz aradığını bulamıyordu. Hiçbir sayfa kaybolmadı. #}
-      <div class="flex items-center gap-1 flex-1 min-w-0 overflow-x-auto whitespace-nowrap">
+
+      <div class="flex items-center gap-1 flex-1 min-w-0">
         {% set nav_ana = [
           ('/', 'Kokpit', p == '/'),
           ('/shorts', 'Shorts', p.startswith('/shorts')),
@@ -93,7 +125,7 @@
         ] %}
         {% for yol, ad, etkin in nav_ana %}
         <a href="{{ yol }}"
-           class="px-3 py-2 rounded-lg text-[14.5px] transition-colors
+           class="px-3 py-2 rounded-lg text-[14.5px] whitespace-nowrap transition-colors
                   {% if etkin %}bg-claude-surface-alt text-claude-text font-semibold
                   {% else %}text-claude-muted hover:bg-claude-surface hover:text-claude-text{% endif %}">
           {{ ad }}{% if ad == 'Shorts' and pending_review_count %}
@@ -102,12 +134,14 @@
         </a>
         {% endfor %}
 
-        <div class="relative" x-data="{ acik: false }" x-on:click.outside="acik = false">
-          <button type="button" x-on:click="acik = !acik" x-bind:aria-expanded="acik"
-                  class="px-3 py-2 rounded-lg text-[14.5px] text-claude-muted hover:bg-claude-surface hover:text-claude-text transition-colors">
+        <div class="relative" x-data="{ acik: false }" x-on:keydown.escape.window="acik = false">
+          <button type="button" x-on:click.stop="acik = !acik" x-bind:aria-expanded="acik"
+                  class="px-3 py-2 rounded-lg text-[14.5px] whitespace-nowrap transition-colors
+                         text-claude-muted hover:bg-claude-surface hover:text-claude-text">
             Daha fazla <span class="text-[11px]">⌄</span>
           </button>
-          <div x-show="acik" x-cloak x-transition.opacity.duration.120ms
+          <div x-show="acik" x-cloak x-on:click.outside="acik = false"
+               x-transition.opacity.duration.120ms
                class="absolute top-full left-0 mt-2 z-50 w-56 p-1.5 rounded-xl bg-white border border-claude-border shadow-card">
             {% set nav_diger = [
               ('/activity', 'Akış', 'canlı üretim'),
@@ -124,7 +158,7 @@
               {% else %}
               <a href="{{ yol }}"
                  class="flex items-center justify-between gap-3 px-3 py-2 rounded-lg text-[14.5px] transition-colors
-                        {% if p.startswith(yol) and yol != '/' %}bg-claude-surface-alt text-claude-text
+                        {% if p.startswith(yol) %}bg-claude-surface-alt text-claude-text
                         {% else %}text-claude-muted hover:bg-claude-surface hover:text-claude-text{% endif %}">
                 <span>{{ ad }}</span>
                 {% if ipucu %}<span class="text-xs text-claude-subtle">{{ ipucu }}</span>{% endif %}
@@ -134,49 +168,45 @@
           </div>
         </div>
       </div>
-      <span class="flex items-center gap-2 text-xs flex-shrink-0">
-        {# Cron health badge #}
+
+      <div class="flex items-center gap-2.5 flex-shrink-0">
+        {# Cron rozeti YALNIZ sorun varken. Sağlıklıyken sıradaki üretimi
+           Kokpit zaten gösteriyor; çubukta ikinci kez yazmak yer yiyordu. #}
         <span x-data="cronHealthBadge()" x-init="poll()">
-          <template x-if="loading">
-            <span class="px-2.5 py-1 rounded-full bg-claude-surface ring-1 ring-claude-border text-claude-muted">
-              &#x23F1; ...
-            </span>
-          </template>
           <template x-if="!loading && error">
-            <span class="px-2.5 py-1 rounded-full bg-red-50 ring-1 ring-red-200 text-red-700"
-                  :title="error">&#x23F1; Cron sorun</span>
+            <a href="/scheduler/timeline"
+               class="px-3 py-1.5 rounded-full text-[13px] font-medium bg-claude-error-soft text-claude-error"
+               :title="error">⏱ Cron sorun</a>
           </template>
           <template x-if="!loading && !error && jobCount === 0">
-            <span class="px-2.5 py-1 rounded-full bg-yellow-50 ring-1 ring-yellow-200 text-yellow-700"
-                  title="Hicbir kanal cron'u kayitli degil">&#x23F1; Cron bos</span>
-          </template>
-          <template x-if="!loading && !error && jobCount > 0">
             <a href="/scheduler/timeline"
-               class="px-2.5 py-1 rounded-full bg-claude-accent-soft ring-1 ring-claude-border text-claude-accent hover:bg-claude-accent hover:text-white transition-colors"
-               :title="`${jobCount} kanal · sonraki: ${nextRunHuman}`">
-              &#x23F1; <span x-text="jobCount"></span> cron &middot; <span x-text="nextCountdown"></span>
-            </a>
+               class="px-3 py-1.5 rounded-full text-[13px] font-medium bg-claude-wait-soft text-claude-wait"
+               title="Hiçbir kanal cron'u kayıtlı değil">⏱ Cron boş</a>
           </template>
         </span>
 
         {% if system_running_count and system_running_count > 0 %}
-          <span class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-yellow-50 ring-1 ring-yellow-200 text-yellow-700">
-            <span class="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse"></span>
+          <a href="/activity" class="flex items-center gap-2 px-3 py-1.5 rounded-full text-[13px] font-medium bg-claude-wait-soft text-claude-wait">
+            <span class="w-1.5 h-1.5 rounded-full bg-current animate-pulse"></span>
             {{ system_running_count }} çalışıyor
-          </span>
+          </a>
         {% else %}
-          <span class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-claude-success/10 ring-1 ring-claude-success/30 text-claude-success">
-            <span class="w-1.5 h-1.5 rounded-full bg-claude-success"></span>
-            idle
+          <span class="flex items-center gap-2 px-3 py-1.5 rounded-full text-[13px] font-medium bg-claude-success-soft text-claude-success">
+            <span class="w-1.5 h-1.5 rounded-full bg-current"></span>Boşta
           </span>
         {% endif %}
-      </span>
-      <a href="/settings" class="nav-link text-sm text-claude-muted hover:text-claude-text flex-shrink-0 {% if p.startswith('/settings') %}active{% endif %}">Ayarlar</a>
-      <button hx-post="/system/restart"
-              hx-confirm="Sunucu yeniden başlatılsın mı? (5 saniye sürer)"
-              hx-swap="none"
-              class="text-xs px-2.5 py-1 rounded-full bg-claude-surface ring-1 ring-claude-border text-claude-muted hover:text-claude-text hover:bg-claude-surface-alt transition-colors flex-shrink-0"
-              title="Sunucuyu yeniden başlat">↻</button>
+
+        <a href="/settings" title="Ayarlar"
+           class="w-[34px] h-[34px] rounded-lg border border-claude-border grid place-items-center transition-colors
+                  {% if p.startswith('/settings') %}bg-claude-surface-alt text-claude-text
+                  {% else %}text-claude-muted hover:bg-claude-surface hover:text-claude-text{% endif %}">⚙</a>
+
+        <button hx-post="/system/restart"
+                hx-confirm="Sunucu yeniden başlatılsın mı? (5 saniye sürer)"
+                hx-swap="none" title="Sunucuyu yeniden başlat"
+                class="w-[34px] h-[34px] rounded-lg border border-claude-border grid place-items-center
+                       text-claude-muted hover:bg-claude-surface hover:text-claude-text transition-colors">↻</button>
+      </div>
     </div>
   </nav>
   <script>

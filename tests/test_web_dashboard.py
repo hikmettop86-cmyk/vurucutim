@@ -129,7 +129,8 @@ def test_kokpit_ham_cron_ifadesi_gostermez(app):
 
 def test_pencere_secici_calisir(app):
     body = app.test_client().get("/?w=7g").data.decode("utf-8")
-    assert body.count("bg-claude-text text-claude-bg") == 1   # tek seçili
+    # Segmented denetimde TEK bir seçili sekme olmalı.
+    assert body.count("bg-white text-claude-text font-semibold shadow-soft") == 1
 
     body24 = app.test_client().get("/").data.decode("utf-8")
     assert "son 24 saatin üretimi" in body24
@@ -433,3 +434,64 @@ def test_rss_kanalinda_yalniz_dil_gosterilir():
 
     assert _source_label(Rss()) == "RSS"
     assert _locale_label(Rss()) == "ES"
+
+
+# ----------------------------------------------------- pasif (archived) -----
+
+def test_pasif_kanal_kokpitte_gorunmez(tmp_path):
+    """`archived`, `enabled`den AYRI eksendir: cron'u kapalı ama elle
+    çalıştırılan kanallar Kokpit'te kalmalı, yalnız pasifler düşmeli."""
+    app = _make_app(tmp_path)
+    yol = app.config["SHORTBOT_CONFIG_DIR"] / "channels" / "demo.yaml"
+
+    assert "Demo Kanal" in app.test_client().get("/").data.decode("utf-8")
+
+    yol.write_text(CHANNEL_YAML + "archived: true\n", encoding="utf-8")
+    assert "Demo Kanal" not in app.test_client().get("/").data.decode("utf-8")
+
+
+def test_cron_kapali_kanal_kokpitte_kalir(tmp_path):
+    """REGRESYON: kapalı olmak pasif olmak DEĞİLDİR."""
+    app = _make_app(tmp_path)
+    yol = app.config["SHORTBOT_CONFIG_DIR"] / "channels" / "demo.yaml"
+    yol.write_text(CHANNEL_YAML.replace("enabled: true", "enabled: false"),
+                   encoding="utf-8")
+
+    body = app.test_client().get("/").data.decode("utf-8")
+    assert "Demo Kanal" in body
+    assert "kapalı" in body
+
+
+def test_pasife_alma_endpointi_yamli_gunceller(tmp_path):
+    app = _make_app(tmp_path)
+    client = app.test_client()
+    yol = app.config["SHORTBOT_CONFIG_DIR"] / "channels" / "demo.yaml"
+
+    client.post("/channels/demo/archive")
+    assert "archived: true" in yol.read_text(encoding="utf-8")
+
+    client.post("/channels/demo/archive")          # geri al
+    assert "archived: true" not in yol.read_text(encoding="utf-8")
+
+
+def test_pasife_alma_kanali_silmez(tmp_path):
+    """Pasif kanal Kanallar sayfasında durmaya devam eder."""
+    app = _make_app(tmp_path)
+    client = app.test_client()
+    client.post("/channels/demo/archive")
+
+    assert (app.config["SHORTBOT_CONFIG_DIR"] / "channels" / "demo.yaml").exists()
+    assert "Demo Kanal" in client.get("/channels").data.decode("utf-8")
+
+
+# ------------------------------------------------------- canlı üretim -------
+
+def test_canli_uretim_silinmis_videolari_da_listeler(app):
+    """Eski 'Son üretilenler' şeridi `deleted_at IS NULL` filtresi yüzünden
+    HEP BOŞTU — ne üretildiği hiç görünmüyordu."""
+    body = app.test_client().get("/").data.decode("utf-8")
+    assert "Canlı üretim" in body
+    assert "Alpha" in body       # yüklenip silinmiş
+    assert "Beta" in body        # yüklenmeden silinmiş
+    assert "yayında" in body
+    assert "elendi" in body

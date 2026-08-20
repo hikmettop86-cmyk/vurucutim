@@ -1,5 +1,5 @@
 {% if status == "error" %}
-<div class="p-3 rounded-lg bg-red-100 text-red-800 text-sm">Üretim başlatılamadı: {{ error }}</div>
+<div class="p-3 rounded-lg bg-claude-error-soft text-claude-error text-sm">Üretim başlatılamadı: {{ error }}</div>
 {% else %}
 <div class="p-3 rounded-lg bg-claude-success/10 ring-1 ring-claude-success/30 text-sm text-claude-success">
   ✓ “{{ title }}” üretimi başladı (~2 dk: indir → temizle → vision → senaryo → montaj).

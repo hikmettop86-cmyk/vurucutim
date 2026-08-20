@@ -24,7 +24,7 @@
   <div class="space-y-4">
   {% for d in diller %}
     <article class="rounded-xl border bg-white p-5
-                    {% if d.var %}border-claude-border{% else %}border-red-200 bg-red-50{% endif %}">
+                    {% if d.var %}border-claude-border{% else %}border-claude-error/30 bg-claude-error-soft{% endif %}">
       <div class="flex items-start justify-between gap-4">
         <div class="min-w-0">
           <h2 class="text-lg font-semibold text-claude-text">
@@ -52,7 +52,7 @@
           {% elif d.uretiliyor %}
             <p class="text-sm text-claude-muted mt-1">Üretiliyor… (Sonnet 5, birkaç dakika)</p>
           {% else %}
-            <p class="text-sm text-red-700 mt-1">
+            <p class="text-sm text-claude-error mt-1">
               <b>Paket yok.</b> Bu dilde kanal kurulamaz. Türkçe pakete düşülmez —
               Almanca bir kanalın ekranına Türkçe rozet/yönerge basması sessiz bir
               bozulmadır.

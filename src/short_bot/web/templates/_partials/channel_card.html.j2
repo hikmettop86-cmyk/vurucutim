@@ -11,7 +11,7 @@
           {{ c.name }}
           {% if c.dynamic_dna and cache_stats is defined and c.slug in cache_stats %}
             {% set st = cache_stats[c.slug] %}
-            <span class="text-[10px] bg-purple-900/40 text-purple-200 px-2 py-0.5 rounded-full"
+            <span class="text-[10px] bg-claude-idle/40 text-claude-idle px-2 py-0.5 rounded-full"
                   title="Dinamik DNA önbelleği: {{ st.rows }} benzersiz kayıt, {{ '%.0f' % (st.hit_rate * 100) }}% yeniden kullanım">
               🧬 dyn ({{ st.rows }} önbellek, {{ '%.0f' % (st.hit_rate * 100) }}% hit)
             </span>

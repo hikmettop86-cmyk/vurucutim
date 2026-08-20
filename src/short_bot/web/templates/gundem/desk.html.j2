@@ -38,7 +38,7 @@
               {% endif %}
               {% if item_age_h is not none %}<span>{% if item_age_h < 1 %}{{ (item_age_h * 60)|int }} dk{% else %}{{ item_age_h|int }} saat{% endif %} önce başladı</span><span>·</span>{% endif %}
               <span>{{ item.source|e }}</span>
-              {% if produced %}<span class="px-2.5 py-1 rounded-md bg-green-50 text-claude-success border border-green-200">✓ {{ produced|join(', ')|e }} üretti</span>{% endif %}
+              {% if produced %}<span class="px-2.5 py-1 rounded-md bg-claude-success-soft text-claude-success border border-claude-success/25">✓ {{ produced|join(', ')|e }} üretti</span>{% endif %}
             </div>
             <h2 class="font-serif text-[27px] font-bold leading-tight">
               <a href="{{ item.link|e }}" target="_blank" rel="noopener" class="hover:underline">{{ item.title|e }}</a>
@@ -136,7 +136,7 @@
             <div class="border-t border-claude-border pt-3 flex items-center gap-3 text-[13px]">
               <span class="text-claude-muted w-36">Cartesia kredisi</span>
               <span class="flex-1 h-1.5 rounded bg-claude-border relative overflow-hidden">
-                <span class="absolute left-0 top-0 bottom-0 {% if cartesia.pct >= 90 %}bg-amber-500{% else %}bg-claude-success{% endif %}" style="width: {{ '%.0f'|format(cartesia.pct if cartesia.pct < 100 else 100) }}%"></span>
+                <span class="absolute left-0 top-0 bottom-0 {% if cartesia.pct >= 90 %}bg-claude-wait{% else %}bg-claude-success{% endif %}" style="width: {{ '%.0f'|format(cartesia.pct if cartesia.pct < 100 else 100) }}%"></span>
               </span>
               <span class="text-claude-muted">%{{ '%.1f'|format(cartesia.pct) }}</span>
             </div>

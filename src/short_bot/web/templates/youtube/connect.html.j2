@@ -3,7 +3,7 @@
 <div class="max-w-3xl mx-auto p-6">
   <h1 class="text-2xl font-serif mb-4">YouTube Bağlantısı — {{ slug }}</h1>
 
-  <div class="bg-yellow-50 border border-yellow-300 rounded p-4 mb-4 text-sm">
+  <div class="bg-claude-wait-soft border border-claude-wait/30 rounded p-4 mb-4 text-sm">
     <p class="font-semibold mb-2">⚠ Önemli: Doğru Gmail hesabıyla yetkilendir</p>
     <p>Aşağıdaki URL'yi kopyala ve <strong>{{ slug }}</strong> kanalının ait olduğu Gmail hesabının
     aktif olduğu Chrome/Edge profile veya Incognito penceresinde aç.
@@ -16,7 +16,7 @@
       <input id="auth-url" type="text" readonly value="{{ auth_url }}"
              class="flex-1 bg-claude-surface border border-claude-border px-2 py-2 rounded text-xs font-mono">
       <button type="button" id="btn-copy"
-              class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+              class="px-4 py-2 bg-claude-idle text-white rounded hover:bg-claude-idle">
         📋 Kopyala
       </button>
     </div>
@@ -78,7 +78,7 @@
           const j = await r.json();
           if (j.connected) {
             status.textContent = '✓ Bağlantı başarılı! Yönlendiriliyor...';
-            status.className = 'mt-4 text-sm text-green-600 font-semibold';
+            status.className = 'mt-4 text-sm text-claude-success font-semibold';
             clearInterval(interval);
             setTimeout(() => { window.location.href = editUrl; }, 1000);
           }

@@ -19,18 +19,18 @@
 {# ---------- Sayfa başlığı + pencere seçici ---------- #}
 <div class="flex items-end justify-between gap-5 flex-wrap mb-5">
   <div>
-    <h1 class="font-serif text-3xl font-bold">Kokpit</h1>
-    <div class="text-[13px] text-claude-muted mt-0.5">
+    <h1 class="font-serif text-[34px] font-bold leading-tight">Kokpit</h1>
+    <div class="text-[15px] text-claude-muted mt-1">
       {{ now_local.strftime('%d.%m.%Y, %H:%M') }} ·
       {{ enabled_count }} kanal açık, {{ channel_count - enabled_count }} kapalı
     </div>
   </div>
-  <div class="flex border border-claude-border rounded-lg overflow-hidden bg-claude-surface">
+  <div class="flex gap-[3px] p-[3px] rounded-[10px] bg-claude-surface">
     {% for anahtar, etiket, _saat in windows %}
     <a href="/?w={{ anahtar }}"
-       class="text-xs px-3 py-1.5 border-r border-claude-border last:border-r-0 transition-colors
-              {% if anahtar == win_key %}bg-claude-text text-claude-bg
-              {% else %}text-claude-muted hover:bg-claude-surface-alt hover:text-claude-text{% endif %}">
+       class="text-[13.5px] px-4 py-1.5 rounded-[7px] transition-colors
+              {% if anahtar == win_key %}bg-white text-claude-text font-semibold shadow-soft
+              {% else %}text-claude-muted hover:text-claude-text{% endif %}">
       {{ etiket }}
     </a>
     {% endfor %}
@@ -38,87 +38,101 @@
 </div>
 
 {# ---------- 1. KATMAN: durum şeridi ---------- #}
-<section class="grid grid-cols-1 md:grid-cols-3 bg-claude-surface border border-claude-border rounded-xl shadow-soft overflow-hidden mb-8">
+<section class="grid grid-cols-1 md:grid-cols-[1.35fr_1fr_1fr] bg-white border border-claude-border rounded-xl shadow-soft overflow-hidden mb-10">
 
-  <div class="p-4 md:border-r border-b md:border-b-0 border-claude-border">
-    <div class="text-[10px] uppercase tracking-[0.09em] text-claude-subtle mb-2">
+  <div class="p-5 md:border-r border-b md:border-b-0 border-claude-border">
+    <div class="text-[12px] font-semibold uppercase tracking-[0.06em] text-claude-subtle mb-3.5">
       Üretim ve karar
     </div>
-    <div class="flex items-baseline gap-2.5 flex-wrap">
-      <a href="/shorts" class="flex items-baseline gap-1.5 group">
-        <span class="text-2xl font-bold tabular-nums group-hover:text-claude-accent transition-colors">{{ prod.produced }}</span>
-        <span class="text-xs text-claude-muted">üretildi</span>
+    {# Ok, kendinden SONRAKİ adımın parçasıdır. Ayrı bir öğe olduğunda satır
+       sonuna denk gelip tek başına sarkıyordu ("… 26 elendi →" / yeni satır).
+       Böylece hangi satıra düşerse ait olduğu adımla düşüyor. #}
+    <div class="flex items-baseline gap-3 flex-wrap">
+      <a href="/shorts" class="flex items-baseline gap-2 group">
+        <span class="text-[31px] font-bold tabular-nums leading-none tracking-tight group-hover:text-claude-accent transition-colors">{{ prod.produced }}</span>
+        <span class="text-[14px] text-claude-muted">üretildi</span>
       </a>
-      <span class="text-claude-border-strong">→</span>
-      <a href="/shorts?youtube=yes" class="flex items-baseline gap-1.5 group">
-        <span class="text-2xl font-bold tabular-nums text-claude-success">{{ prod.uploaded }}</span>
-        <span class="text-xs text-claude-muted">yayına</span>
+      <a href="/shorts?youtube=yes" class="flex items-baseline gap-2 group">
+        <span class="text-claude-border-strong text-[17px] mr-1">&rarr;</span>
+        <span class="text-[31px] font-bold tabular-nums leading-none tracking-tight text-claude-success">{{ prod.uploaded }}</span>
+        <span class="text-[14px] text-claude-muted">yayına</span>
       </a>
-      <span class="text-claude-border-strong">→</span>
-      <div class="flex items-baseline gap-1.5" title="Yüklenmeden silinenler — operatörün elediği">
-        <span class="text-2xl font-bold tabular-nums text-claude-idle">{{ prod.dropped }}</span>
-        <span class="text-xs text-claude-muted">elendi</span>
+      <div class="flex items-baseline gap-2" title="Yüklenmeden silinenler — operatörün elediği">
+        <span class="text-claude-border-strong text-[17px] mr-1">&rarr;</span>
+        <span class="text-[31px] font-bold tabular-nums leading-none tracking-tight text-claude-idle">{{ prod.dropped }}</span>
+        <span class="text-[14px] text-claude-muted">elendi</span>
       </div>
       {% if prod.pending %}
-      <span class="text-claude-border-strong">→</span>
-      <a href="/shorts" class="flex items-baseline gap-1.5 group">
-        <span class="text-2xl font-bold tabular-nums text-claude-wait">{{ prod.pending }}</span>
-        <span class="text-xs font-semibold text-claude-wait">bekliyor</span>
+      <a href="/shorts" class="flex items-baseline gap-2 group">
+        <span class="text-claude-border-strong text-[17px] mr-1">&rarr;</span>
+        <span class="text-[31px] font-bold tabular-nums leading-none tracking-tight text-claude-wait">{{ prod.pending }}</span>
+        <span class="text-[14px] font-semibold text-claude-wait">bekliyor</span>
       </a>
       {% endif %}
     </div>
+
+    {# Oran çubuğu: %40'ın ne demek olduğu okunmadan görülsün. #}
     {% if prod.accept_rate is not none %}
-    <div class="text-[11px] text-claude-subtle mt-2">
+    <div class="mt-4">
+      <div class="h-2 rounded-full bg-claude-surface-alt overflow-hidden flex">
+        <span class="h-full bg-claude-success" style="width: {{ (prod.accept_rate * 100)|round|int }}%"></span>
+        <span class="h-full bg-claude-idle opacity-45" style="width: {{ 100 - (prod.accept_rate * 100)|round|int }}%"></span>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if prod.accept_rate is not none %}
+    <div class="text-[13.5px] text-claude-muted mt-4">
       Karar verilenlerin <b class="text-claude-muted">%{{ (prod.accept_rate * 100)|round|int }}</b>'i yayına gitti
     </div>
     {% endif %}
   </div>
 
-  <div class="p-4 md:border-r border-b md:border-b-0 border-claude-border">
-    <div class="text-[10px] uppercase tracking-[0.09em] text-claude-subtle mb-2">
+  <div class="p-5 md:border-r border-b md:border-b-0 border-claude-border">
+    <div class="text-[12px] font-semibold uppercase tracking-[0.06em] text-claude-subtle mb-3.5">
       Sıradaki üretim
     </div>
     {% set sirada = rows|selectattr('enabled')|selectattr('next_at')|sort(attribute='next_at')|list %}
     {% if sirada %}
       {% set ilk = sirada[0] %}
       <div class="flex items-baseline gap-2">
-        <span class="text-xl font-bold tabular-nums">{{ ilk.next_at.strftime('%H:%M') }}</span>
-        <span class="text-xs text-claude-muted font-mono tabular-nums"
+        <span class="text-[28px] font-bold tabular-nums leading-none tracking-tight">{{ ilk.next_at.strftime('%H:%M') }}</span>
+        <span class="text-[14px] text-claude-muted tabular-nums"
               x-data="geriSayim('{{ ilk.next_at.isoformat() }}')" x-text="metin">…</span>
       </div>
       <div class="flex items-center gap-1.5 flex-wrap mt-2">
         {% for r in sirada if r.next_at == ilk.next_at %}
-        <span class="inline-flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded bg-claude-surface-alt border border-claude-border text-claude-muted">
+        <span class="inline-flex items-center gap-2 text-[13px] px-2.5 py-1 rounded-md bg-claude-surface text-claude-muted">
           <span class="w-[3px] h-3 rounded-sm" style="background: {{ r.color|e }}"></span>{{ r.slug|e }}
         </span>
         {% endfor %}
       </div>
     {% else %}
-      <div class="text-sm text-claude-muted">Açık kanal yok — hiçbir cron tetiklenmeyecek.</div>
+      <div class="text-[15px] text-claude-muted">Açık kanal yok — hiçbir cron tetiklenmeyecek.</div>
     {% endif %}
   </div>
 
-  <div class="p-4">
-    <div class="text-[10px] uppercase tracking-[0.09em] text-claude-subtle mb-2">Sağlık</div>
+  <div class="p-5">
+    <div class="text-[12px] font-semibold uppercase tracking-[0.06em] text-claude-subtle mb-3.5">Sağlık</div>
     {% set stall_sayi = tasks|selectattr('severity', 'equalto', 'stall')|sum(attribute='count') %}
-    <div class="space-y-1.5 text-[12.5px]">
+    <div class="space-y-2 text-[14.5px]">
       {% if stall_sayi %}
       <div class="flex items-center gap-2">
-        <span class="w-1.5 h-1.5 rounded-full bg-claude-error"></span>
+        <span class="w-2 h-2 rounded-full bg-claude-error"></span>
         <span><b class="tabular-nums">{{ stall_sayi }}</b> acil madde</span>
       </div>
       {% else %}
       <div class="flex items-center gap-2">
-        <span class="w-1.5 h-1.5 rounded-full bg-claude-success"></span>
+        <span class="w-2 h-2 rounded-full bg-claude-success"></span>
         <span>Acil bir şey yok</span>
       </div>
       {% endif %}
       <div class="flex items-center gap-2 text-claude-muted">
-        <span class="w-1.5 h-1.5 rounded-full bg-claude-idle"></span>
+        <span class="w-2 h-2 rounded-full bg-claude-idle"></span>
         <span><b class="tabular-nums">{{ tasks|length }}</b> madde kuyrukta</span>
       </div>
       <a href="/logs" class="flex items-center gap-2 text-claude-muted hover:text-claude-accent transition-colors">
-        <span class="w-1.5 h-1.5 rounded-full bg-claude-border-strong"></span>
+        <span class="w-2 h-2 rounded-full bg-claude-border-strong"></span>
         <span>Logları aç →</span>
       </a>
     </div>
@@ -131,7 +145,7 @@
    ızgara denendi ve bırakıldı — göz her satırda tür/saat kolonunu yeniden
    arıyordu. #}
 <div class="flex items-baseline gap-3 mb-3">
-  <h2 class="font-serif text-xl font-bold">Üretimi tetikle</h2>
+  <h2 class="font-serif text-[22px] font-bold">Üretimi tetikle</h2>
   <span class="text-[14px] text-claude-subtle">
     {{ channel_count }} kanal · sırasını beklemeden çalıştır
   </span>
@@ -189,7 +203,7 @@
       <span class="hidden lg:block leading-tight overflow-hidden">
         {% if r.produced %}
         <span class="text-[15px] font-bold tabular-nums">{{ r.produced }}</span>
-        <span class="text-[12.5px] text-claude-subtle">video</span>
+        <span class="text-[14px] text-claude-subtle">video</span>
         <span class="block text-[12.5px] tabular-nums mt-px">
           {%- if r.uploaded %}<span class="text-claude-success font-semibold">{{ r.uploaded }} yayına</span>{% endif -%}
           {%- if r.uploaded and r.pending %} · {% endif -%}
@@ -236,12 +250,81 @@
   Satıra tıkla → o kanal sırasını beklemeden üretime girer
 </div>
 
-{# ---------- 3. KATMAN: seni bekleyen ---------- #}
-<div class="flex items-baseline gap-3 mb-3">
-  <h2 class="font-serif text-xl font-bold">Seni bekleyen</h2>
-  <span class="text-[12.5px] text-claude-subtle">elle yapılması gereken işler</span>
+{# ---------- 3. KATMAN: canlı üretim ----------
+   Eski "Son üretilenler" şeridi `deleted_at IS NULL` ile filtreliydi ve
+   operatör listeyi boşalttığı için HEP BOŞTU: ne üretildiği hiç
+   görünmüyordu. Burada silinme bir filtre değil, GÖSTERİLEN bilgi. #}
+<div class="flex items-baseline gap-3 mb-3 mt-10">
+  <h2 class="font-serif text-[22px] font-bold">Canlı üretim</h2>
+  <span class="text-[14px] text-claude-subtle">
+    {% if running %}{{ running|length }} koşu sürüyor{% else %}şu an çalışan koşu yok{% endif %}
+  </span>
   <span class="flex-1"></span>
-  <a href="/activity" class="text-[12.5px] text-claude-muted hover:text-claude-accent transition-colors">Tüm akış →</a>
+  <a href="/activity" class="text-[14px] text-claude-muted hover:text-claude-accent transition-colors">Tüm akış →</a>
+</div>
+
+<div class="bg-white border border-claude-border rounded-xl shadow-soft overflow-hidden mb-10"
+     hx-get="/activity/live-runs" hx-trigger="every 10s" hx-swap="none">
+
+  {% if running %}
+  <div class="divide-y divide-claude-border border-b border-claude-border">
+    {% for r in running %}
+    <div class="flex items-center gap-3.5 px-4 py-3.5"
+         x-data="{ bas: {{ r.started_at.timestamp() }}, simdi: Date.now() / 1000 }"
+         x-init="setInterval(() => simdi = Date.now() / 1000, 1000)">
+      <span class="w-2 h-2 rounded-full bg-claude-wait animate-pulse flex-shrink-0"></span>
+      <span class="text-[15px] font-semibold">{{ r.channel|e }}</span>
+      <span class="text-[13px] text-claude-subtle">{{ r.trigger|e }}</span>
+      <span class="flex-1"></span>
+      <span class="text-[13.5px] font-mono tabular-nums text-claude-muted">
+        <span x-text="String(Math.floor((simdi - bas) / 60)).padStart(2,'0') + ':' + String(Math.floor((simdi - bas) % 60)).padStart(2,'0')"></span> geçti
+      </span>
+      <form method="POST" action="/runs/{{ r.id }}/cancel" class="inline"
+            onsubmit="return confirm('Bu koşu iptal edilsin mi?')">
+        <button type="submit"
+                class="text-[13px] px-2.5 py-1 rounded-lg border border-claude-border text-claude-muted
+                       hover:text-claude-error hover:border-claude-error transition-colors">✕ İptal</button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if recent %}
+  <div class="divide-y divide-claude-border">
+    {% for v in recent %}
+    {% set stil = {'uploaded': 'bg-claude-success-soft text-claude-success',
+                   'pending':  'bg-claude-wait-soft text-claude-wait',
+                   'dropped':  'bg-claude-idle-soft text-claude-idle'} %}
+    <div class="flex items-center gap-3.5 px-4 py-3 hover:bg-claude-surface transition-colors">
+      <span class="w-[3px] h-7 rounded-sm flex-shrink-0"
+            style="background: {{ (rows|selectattr('slug','equalto',v.channel)|map(attribute='color')|first) or '#c6c0ac' }}"></span>
+      <a href="/shorts/{{ v.id }}" class="flex-1 min-w-0 truncate text-[14.5px] hover:text-claude-accent transition-colors">{{ v.title|e }}</a>
+      <span class="text-[13px] text-claude-subtle whitespace-nowrap hidden sm:block">{{ v.channel|e }}</span>
+      <span class="text-[13px] text-claude-muted tabular-nums whitespace-nowrap">{{ v.rel|e }}</span>
+      <span class="text-[12.5px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap {{ stil[v.state] }}">
+        {{ v.state_label }}
+      </span>
+      {% if v.video_id %}
+      <a href="https://www.youtube.com/watch?v={{ v.video_id|e }}" target="_blank" rel="noopener"
+         class="text-[13px] text-claude-muted hover:text-claude-accent" title="YouTube'da aç">↗</a>
+      {% else %}
+      <span class="w-[13px]"></span>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% elif not running %}
+  <div class="px-4 py-6 text-center text-[14.5px] text-claude-subtle">Henüz üretim yok.</div>
+  {% endif %}
+</div>
+
+{# ---------- 4. KATMAN: seni bekleyen ---------- #}
+<div class="flex items-baseline gap-3 mb-3">
+  <h2 class="font-serif text-[22px] font-bold">Seni bekleyen</h2>
+  <span class="text-[14px] text-claude-subtle">elle yapılması gereken işler</span>
+  <span class="flex-1"></span>
+  <a href="/activity" class="text-[14px] text-claude-muted hover:text-claude-accent transition-colors">Tüm akış →</a>
 </div>
 
 <div class="flex flex-col gap-2 mb-8">
@@ -310,12 +393,12 @@
 
 {# ---------- 3. KATMAN: kanal tablosu ---------- #}
 <div class="flex items-baseline gap-3 mb-3">
-  <h2 class="font-serif text-xl font-bold">Kanallar</h2>
-  <span class="text-[12.5px] text-claude-subtle">
+  <h2 class="font-serif text-[22px] font-bold">Kanallar</h2>
+  <span class="text-[14px] text-claude-subtle">
     {{ channel_count }} kanal · son {{ window_hours }} saatin üretimi
   </span>
   <span class="flex-1"></span>
-  <a href="/channels" class="text-[12.5px] text-claude-muted hover:text-claude-accent transition-colors">Kanal ayarları →</a>
+  <a href="/channels" class="text-[14px] text-claude-muted hover:text-claude-accent transition-colors">Kanal ayarları →</a>
 </div>
 
 <div class="bg-claude-surface border border-claude-border rounded-xl shadow-soft overflow-hidden mb-8">
@@ -455,10 +538,10 @@
 {% set toplam_saat = hours|sum(attribute='produced') %}
 {% if toplam_saat %}
 <div class="flex items-baseline gap-3 mb-3">
-  <h2 class="font-serif text-xl font-bold">Son 24 saatin akışı</h2>
-  <span class="text-[12.5px] text-claude-subtle">{{ toplam_saat }} video, saat saat</span>
+  <h2 class="font-serif text-[22px] font-bold">Son 24 saatin akışı</h2>
+  <span class="text-[14px] text-claude-subtle">{{ toplam_saat }} video, saat saat</span>
   <span class="flex-1"></span>
-  <a href="/shorts" class="text-[12.5px] text-claude-muted hover:text-claude-accent transition-colors">Shorts listesi →</a>
+  <a href="/shorts" class="text-[14px] text-claude-muted hover:text-claude-accent transition-colors">Shorts listesi →</a>
 </div>
 
 <div class="bg-claude-surface border border-claude-border rounded-xl shadow-soft p-5 mb-8">
@@ -496,10 +579,10 @@
 {# ---------- 5. KATMAN: karşılığı ---------- #}
 {% if growth or top %}
 <div class="flex items-baseline gap-3 mb-3">
-  <h2 class="font-serif text-xl font-bold">Karşılığı</h2>
-  <span class="text-[12.5px] text-claude-subtle">bağlı kanallar · son {{ spark_days }} gün</span>
+  <h2 class="font-serif text-[22px] font-bold">Karşılığı</h2>
+  <span class="text-[14px] text-claude-subtle">bağlı kanallar · son {{ spark_days }} gün</span>
   <span class="flex-1"></span>
-  <a href="/youtube" class="text-[12.5px] text-claude-muted hover:text-claude-accent transition-colors">YouTube paneli →</a>
+  <a href="/youtube" class="text-[14px] text-claude-muted hover:text-claude-accent transition-colors">YouTube paneli →</a>
 </div>
 
 <div class="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-3.5">

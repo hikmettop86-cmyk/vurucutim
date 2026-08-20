@@ -50,8 +50,8 @@
   {# SU SEVİYESİ. Otomasyon günde ~2-3 konu tüketiyor; banka kuruyunca üretim DURMAZ
      ama SESSİZCE BOZULUR (seri durur, konular LLM'in uydurmasına kalır). #}
   {% if low_water and rows|length < low_water %}
-  <div class="mb-6 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm
-              text-red-700">
+  <div class="mb-6 px-4 py-3 rounded-lg bg-claude-error-soft border border-claude-error/30 text-sm
+              text-claude-error">
     <b>⚠ Banka azaldı — {{ rows|length }} konu kaldı.</b>
     Sistem 4 saatte bir otomatik doldurmaya çalışıyor. Yine de azalıyorsa nişin
     arama havuzu tükeniyor demektir; en güçlü çare <b>referans kanal eklemek</b>

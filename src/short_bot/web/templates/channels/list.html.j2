@@ -4,7 +4,7 @@
 <div x-data="{ view: localStorage.getItem('channels_view') || 'table', search: '' }"
      x-init="$watch('view', v => localStorage.setItem('channels_view', v))">
   <div class="flex justify-between items-center mb-6">
-    <h1 class="font-serif text-3xl font-bold">Kanallar</h1>
+    <h1 class="font-serif font-bold">Kanallar</h1>
     <div class="flex items-center gap-3">
       {# View toggle #}
       <div class="flex items-center bg-claude-surface border border-claude-border rounded-lg p-0.5">
@@ -29,25 +29,25 @@
       <a href="/channels/new-curated" class="bg-claude-surface border border-claude-accent text-claude-accent hover:bg-claude-accent-soft px-4 py-2 rounded-lg font-semibold text-sm">
         💎 + Kürate Kanal
       </a>
-      <a href="/channels/new-yorum" class="bg-claude-surface border border-red-600 text-red-700 hover:bg-red-50 px-4 py-2 rounded-lg font-semibold text-sm">
+      <a href="/channels/new-yorum" class="bg-claude-surface border border-claude-error text-claude-error hover:bg-claude-error-soft px-4 py-2 rounded-lg font-semibold text-sm">
         🎙️ + Gündem Yorum
       </a>
     </div>
   </div>
 
   {# Table view #}
-  <div x-show="view === 'table'">
-    <table class="w-full text-sm border border-claude-border rounded-lg overflow-hidden">
+  <div x-show="view === 'table'" class="bg-white border border-claude-border rounded-xl shadow-soft overflow-hidden">
+    <table class="w-full border-collapse">
       <thead class="bg-claude-surface">
         <tr class="text-left">
-          <th class="p-3">Slug</th>
-          <th class="p-3">İsim</th>
-          <th class="p-3">Dil</th>
-          <th class="p-3">Archetype</th>
-          <th class="p-3">Cron</th>
-          <th class="p-3">DNA</th>
-          <th class="p-3">Durum</th>
-          <th class="p-3">Aksiyon</th>
+          <th class="px-3.5 py-3 text-left">Slug</th>
+          <th class="px-3.5 py-3 text-left">İsim</th>
+          <th class="px-3.5 py-3 text-left">Dil</th>
+          <th class="px-3.5 py-3 text-left">Archetype</th>
+          <th class="px-3.5 py-3 text-left">Cron</th>
+          <th class="px-3.5 py-3 text-left">DNA</th>
+          <th class="px-3.5 py-3 text-left">Durum</th>
+          <th class="px-3.5 py-3 text-left">Aksiyon</th>
         </tr>
       </thead>
       <tbody>

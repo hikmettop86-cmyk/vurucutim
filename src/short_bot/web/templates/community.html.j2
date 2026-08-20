@@ -30,17 +30,17 @@
     <div class="flex items-center justify-between mb-3">
       <div class="text-xs uppercase tracking-wider">
         {% if d.format == 'poll' %}
-          <span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded">📊 POLL</span>
+          <span class="bg-claude-idle-soft text-claude-idle px-2 py-0.5 rounded">📊 POLL</span>
         {% elif d.format == 'question' %}
-          <span class="bg-green-100 text-green-800 px-2 py-0.5 rounded">💬 SORU</span>
+          <span class="bg-claude-success-soft text-claude-success px-2 py-0.5 rounded">💬 SORU</span>
         {% elif d.format == 'nostalgia' %}
-          <span class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded">📸 NOSTALJİ</span>
+          <span class="bg-claude-wait-soft text-claude-wait px-2 py-0.5 rounded">📸 NOSTALJİ</span>
         {% elif d.format == 'tier_list' %}
-          <span class="bg-purple-100 text-purple-800 px-2 py-0.5 rounded">🏅 SIRALAMA</span>
+          <span class="bg-claude-idle-soft text-claude-idle px-2 py-0.5 rounded">🏅 SIRALAMA</span>
         {% elif d.format == 'hot_take' %}
-          <span class="bg-red-100 text-red-800 px-2 py-0.5 rounded">💥 HOT TAKE</span>
+          <span class="bg-claude-error-soft text-claude-error px-2 py-0.5 rounded">💥 HOT TAKE</span>
         {% else %}
-          <span class="bg-gray-100 text-gray-800 px-2 py-0.5 rounded">{{ d.format }}</span>
+          <span class="bg-claude-surface text-claude-text px-2 py-0.5 rounded">{{ d.format }}</span>
         {% endif %}
       </div>
       <button type="button"
@@ -53,7 +53,7 @@
               "
               class="text-xs px-3 py-1 rounded bg-claude-surface hover:bg-claude-surface-alt border border-claude-border">
         <span x-show="!copied">📋 Kopyala</span>
-        <span x-show="copied" class="text-green-700">✓ Kopyalandı</span>
+        <span x-show="copied" class="text-claude-success">✓ Kopyalandı</span>
       </button>
     </div>
 
@@ -63,7 +63,7 @@
 {% endfor %}{% endif %}</div>
 
     {% if d.image_hint %}
-    <div class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2 mt-3">
+    <div class="text-xs text-claude-wait bg-claude-wait-soft border border-claude-wait/30 rounded px-3 py-2 mt-3">
       💡 Görsel önerisi: {{ d.image_hint }}
     </div>
     {% endif %}

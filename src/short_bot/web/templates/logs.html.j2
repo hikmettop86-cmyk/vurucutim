@@ -11,7 +11,7 @@
             hx-post="/logs/clear"
             hx-confirm="Tüm log dosyaları silinecek. Emin misin?"
             hx-on::after-request="if(event.detail.successful) window.location.reload()"
-            class="bg-claude-surface hover:bg-red-900/40 border border-claude-border hover:border-red-700 px-3 py-2 rounded-lg text-sm text-red-400 hover:text-red-200">
+            class="bg-claude-surface hover:bg-claude-error/40 border border-claude-border hover:border-claude-error px-3 py-2 rounded-lg text-sm text-claude-error hover:text-claude-error">
       🗑 Tümünü sil
     </button>
   </div>

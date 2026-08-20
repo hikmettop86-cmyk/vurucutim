@@ -120,7 +120,7 @@
       const r = await fetch('/api/cartesia/voices?language=' + encodeURIComponent(lang));
       const j = await r.json();
       const voices = j.voices || [];
-      if (!voices.length) { say('⚠ ' + (j.error || 'Ses listesi alınamadı'), 'text-amber-600'); return; }
+      if (!voices.length) { say('⚠ ' + (j.error || 'Ses listesi alınamadı'), 'text-claude-wait'); return; }
       sel.innerHTML = '';
       for (const v of voices) {
         const o = document.createElement('option');
@@ -130,8 +130,8 @@
         sel.appendChild(o);
       }
       sel.style.display = '';
-      say('✓ ' + voices.length + ' ses — listeden seç, önizlemeyi dinle', 'text-green-600');
-    } catch (e) { say('⚠ Ses listesi alınamadı', 'text-amber-600'); }
+      say('✓ ' + voices.length + ' ses — listeden seç, önizlemeyi dinle', 'text-claude-success');
+    } catch (e) { say('⚠ Ses listesi alınamadı', 'text-claude-wait'); }
   });
   sel.addEventListener('change', () => {
     const o = sel.options[sel.selectedIndex]; if (!o) return;
@@ -143,8 +143,8 @@
     const fd = new FormData(); fd.append('voice_id', idInput.value); fd.append('model', document.getElementById('cartesia-model').value);
     try {
       const j = await (await fetch('/api/cartesia/health', { method: 'POST', body: fd })).json();
-      say((j.ok ? '✓ ' : '⚠ ') + j.message, j.ok ? 'text-green-600' : 'text-amber-600');
-    } catch (e) { say('⚠ Yoklama başarısız', 'text-amber-600'); }
+      say((j.ok ? '✓ ' : '⚠ ') + j.message, j.ok ? 'text-claude-success' : 'text-claude-wait');
+    } catch (e) { say('⚠ Yoklama başarısız', 'text-claude-wait'); }
   });
   document.getElementById('btn-cartesia-probe').addEventListener('click', async () => {
     say('Modeller sınanıyor (kredi harcar)…');
@@ -156,23 +156,23 @@
         const o = Array.from(modelSel.options).find(x => x.value === m.id);
         if (o) { o.disabled = !m.ok; o.textContent = m.id + (m.ok ? '' : ' — ' + m.reason); }
       }
-      say('✓ ' + ms.filter(m => m.ok).length + '/' + ms.length + ' model çalışıyor (' + (j.credits || 0) + ' kredi)', 'text-green-600');
-    } catch (e) { say('⚠ Model sınaması başarısız', 'text-amber-600'); }
+      say('✓ ' + ms.filter(m => m.ok).length + '/' + ms.length + ' model çalışıyor (' + (j.credits || 0) + ' kredi)', 'text-claude-success');
+    } catch (e) { say('⚠ Model sınaması başarısız', 'text-claude-wait'); }
   });
   document.getElementById('btn-cartesia-clone').addEventListener('click', async () => {
     const f = document.getElementById('cartesia-clone-file').files[0];
     const name = document.getElementById('cartesia-clone-name').value.trim();
-    if (!f || !name) { say('⚠ Dosya ve klon adı gerekli', 'text-amber-600'); return; }
+    if (!f || !name) { say('⚠ Dosya ve klon adı gerekli', 'text-claude-wait'); return; }
     const fd = new FormData(); fd.append('clip', f); fd.append('name', name);
     fd.append('language', '{{ c.language }}');
     say('Klonlanıyor…');
     try {
       const r = await fetch('/api/cartesia/clone', { method: 'POST', body: fd });
       const j = await r.json();
-      if (!r.ok) { say('⚠ ' + (j.error || 'Klonlama başarısız'), 'text-amber-600'); return; }
+      if (!r.ok) { say('⚠ ' + (j.error || 'Klonlama başarısız'), 'text-claude-wait'); return; }
       idInput.value = j.voice_id;
-      say('✓ Klon hazır: ' + j.voice_id + (j.trimmed ? ' (klip 9 sn\'ye kırpıldı)' : ''), 'text-green-600');
-    } catch (e) { say('⚠ Klonlama başarısız', 'text-amber-600'); }
+      say('✓ Klon hazır: ' + j.voice_id + (j.trimmed ? ' (klip 9 sn\'ye kırpıldı)' : ''), 'text-claude-success');
+    } catch (e) { say('⚠ Klonlama başarısız', 'text-claude-wait'); }
   });
 })();
 </script>

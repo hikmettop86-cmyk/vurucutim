@@ -39,7 +39,7 @@
       {% endif %}
       <form method="POST" action="/channels/{{ c.slug }}/delete" class="inline"
             onsubmit="return confirm('{{ c.slug }} kanalı silinsin mi? (yaml + css + output)')">
-        <button type="submit" class="bg-claude-error hover:bg-red-700 text-white px-3 py-2 rounded-lg text-sm">
+        <button type="submit" class="bg-claude-error hover:bg-claude-error text-white px-3 py-2 rounded-lg text-sm">
           Sil
         </button>
       </form>
@@ -391,7 +391,7 @@
                 {% elif r.status == 'cancelled' %}
                   <span class="text-claude-muted">⊘ cancelled</span>
                 {% elif r.status == 'running' or r.status is none %}
-                  <span class="text-yellow-600">● running</span>
+                  <span class="text-claude-wait">● running</span>
                 {% else %}
                   <span class="text-claude-muted">{{ r.status or '—' }}</span>
                 {% endif %}
@@ -608,14 +608,14 @@
               const j = await r.json();
               if (j.ok) {
                 el.textContent = `✓ Çalışıyor — IP: ${j.ip}` + (j.country ? ` (${j.country})` : '');
-                el.className = 'text-[10px] block mt-1 text-green-600 font-semibold';
+                el.className = 'text-[10px] block mt-1 text-claude-success font-semibold';
               } else {
                 el.textContent = `✗ ${j.error}`;
-                el.className = 'text-[10px] block mt-1 text-red-600';
+                el.className = 'text-[10px] block mt-1 text-claude-error';
               }
             } catch (e) {
               el.textContent = `✗ ${e.message}`;
-              el.className = 'text-[10px] block mt-1 text-red-600';
+              el.className = 'text-[10px] block mt-1 text-claude-error';
             }
           });
         })();
@@ -1267,9 +1267,9 @@
         </label>
       </div>
       {% if not pexels_key_set %}
-      <div class="bg-amber-900/30 border border-amber-700 text-amber-200 text-xs rounded px-3 py-2 mb-3">
+      <div class="bg-claude-wait/30 border border-claude-wait text-claude-wait text-xs rounded px-3 py-2 mb-3">
         ⚠ Pexels API key tanımlı değil.
-        <a href="/settings" class="underline hover:text-amber-100">Ayarlar sayfasından gir</a>.
+        <a href="/settings" class="underline hover:text-claude-wait-soft">Ayarlar sayfasından gir</a>.
       </div>
       {% endif %}
       <div class="grid grid-cols-3 gap-3">
@@ -1377,7 +1377,7 @@
             const voices = j.voices || [];
             if (!voices.length) {
               status.textContent = '⚠ ' + (j.error || 'Ses listesi alınamadı — API anahtarını kontrol et');
-              status.className = 'text-[10px] block mt-1 text-amber-600';
+              status.className = 'text-[10px] block mt-1 text-claude-wait';
               return;
             }
             dl.innerHTML = '';
@@ -1389,10 +1389,10 @@
               dl.appendChild(opt);
             }
             status.textContent = '✓ ' + voices.length + ' ses yüklendi — girdiye tıklayıp seç';
-            status.className = 'text-[10px] block mt-1 text-green-600';
+            status.className = 'text-[10px] block mt-1 text-claude-success';
           } catch (e) {
             status.textContent = '⚠ Ses listesi alınamadı — API anahtarını kontrol et';
-            status.className = 'text-[10px] block mt-1 text-amber-600';
+            status.className = 'text-[10px] block mt-1 text-claude-wait';
           }
         });
       })();

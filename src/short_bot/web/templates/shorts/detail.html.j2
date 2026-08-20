@@ -25,7 +25,7 @@
     <form method="POST" action="/shorts/{{ s.id }}/delete" class="inline"
           onsubmit="return confirm('Bu short silinsin mi?')">
       <button type="submit"
-              class="bg-claude-error hover:bg-red-700 text-white px-3 py-2 rounded-lg text-sm">
+              class="bg-claude-error hover:bg-claude-error text-white px-3 py-2 rounded-lg text-sm">
         Sil
       </button>
     </form>
@@ -144,8 +144,8 @@
     {% if narration_tr %}
     {# Yabancı dilli kanal: operatör anlatımı okuyamaz. Bu kutu, yayın kararının
        verilebildiği tek yer — kapı değil, pencere (bkz. lang_review.back_translate). #}
-    <div class="bg-claude-surface border border-amber-500/40 rounded-lg p-4">
-      <div class="text-xs text-amber-400 uppercase tracking-wider mb-1">
+    <div class="bg-claude-surface border border-claude-wait/40 rounded-lg p-4">
+      <div class="text-xs text-claude-wait uppercase tracking-wider mb-1">
         Anlatımın Türkçesi <span class="normal-case text-claude-muted">(otomatik geri çeviri — yayından önce oku)</span>
       </div>
       <div class="text-sm whitespace-pre-wrap leading-relaxed">{{ narration_tr }}</div>

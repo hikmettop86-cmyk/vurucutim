@@ -23,7 +23,8 @@ from short_bot.dashboard_stats import (STALE_RUN_MINUTES, ViewRate,
                                        daily_production, empty_runs,
                                        failed_runs, hourly_production,
                                        minutes_since, production_summary,
-                                       last_production, relative_time,
+                                       last_production, recent_productions,
+                                       relative_time,
                                        stalled_runs, to_local, top_videos)
 from short_bot.db import (cleanup_zombie_runs, clear_recent_failed_runs,
                           init_db)
@@ -394,7 +395,12 @@ def index():
     eng = init_db(current_app.config["SHORTBOT_DB_PATH"])
 
     win_key, win_hours = _window()
-    channels = list_channels(config_dir / "channels", enabled_only=False)
+    tum_kanallar = list_channels(config_dir / "channels", enabled_only=False)
+    # PASİF kanallar Kokpit'te görünmez ama SİLİNMEZ: üretimleri özet
+    # sayılarına girmeye devam eder (dün ne üretildiği pasife alınınca
+    # değişmez), yalnız listelerden ve iş kuyruğundan çıkarlar.
+    arsiv = [c for c in tum_kanallar if getattr(c, "archived", False)]
+    channels = [c for c in tum_kanallar if not getattr(c, "archived", False)]
     by_slug = {c.slug: c for c in channels}
 
     prod = production_summary(eng, hours=win_hours)
@@ -409,6 +415,8 @@ def index():
     avatars = _avatars(channels, creds)
     view_rates = channel_view_rate(eng)
     son_uretim = last_production(eng)
+    from short_bot.web.activity import list_running_runs
+    calisan = list_running_runs(eng)
     YOK = ViewRate(None, "istatistik hiç toplanmamış")
     KAPALI = ViewRate(None, "kanal bağlı değil")
 
@@ -467,6 +475,9 @@ def index():
         spark_days=SPARK_DAYS,
         enabled_count=sum(1 for c in channels if c.enabled),
         channel_count=len(channels),
+        archived_count=len(arsiv),
+        running=calisan,
+        recent=recent_productions(eng, limit=8),
         now_local=datetime.now().astimezone(),
     )
 

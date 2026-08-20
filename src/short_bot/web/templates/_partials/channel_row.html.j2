@@ -1,7 +1,7 @@
-<tr class="border-b border-claude-border hover:bg-claude-surface-alt" id="channel-{{ c.slug }}"
+<tr class="border-t border-claude-border bg-white hover:bg-claude-surface transition-colors" id="channel-{{ c.slug }}"
     {% if c.reel and c.reel.enabled %}style="border-left: 3px solid {{ c.reel.highlight_color }}"{% endif %}
     x-show="!search || '{{ c.slug }}'.toLowerCase().includes(search.toLowerCase()) || '{{ c.name|e }}'.toLowerCase().includes(search.toLowerCase())">
-  <td class="p-3 font-mono text-xs">
+  <td class="px-3.5 py-3 font-mono text-xs">
     {{ c.slug }}
     {% if c.content_source == 'generator' %}
       <span title="Generator (Sonnet)" class="text-claude-accent ml-1">✨</span>
@@ -12,12 +12,12 @@
       <span title="Reel (footage'lı ilginç bilgiler)" class="ml-1">🎬</span>
     {% endif %}
     {% if channel_format(c) == 'yorum' %}
-      <span title="Gündem Yorum (Trends + seslendirme)" class="ml-1 bg-red-600 text-white text-[10px] px-1.5 py-0.5 rounded">YORUM</span>
+      <span title="Gündem Yorum (Trends + seslendirme)" class="ml-1 bg-claude-error text-white text-[10px] px-1.5 py-0.5 rounded">YORUM</span>
     {% endif %}
   </td>
-  <td class="p-3">{{ c.name }}</td>
-  <td class="p-3">{{ c.language }}</td>
-  <td class="p-3 text-claude-muted">
+  <td class="px-3.5 py-3">{{ c.name }}</td>
+  <td class="px-3.5 py-3">{{ c.language }}</td>
+  <td class="px-3.5 py-3 text-claude-muted">
     {% if c.reel and c.reel.enabled %}
       <span class="font-semibold" style="color: {{ c.reel.highlight_color }}">🎬 Reel</span>
       <span class="text-xs">· {{ c.reel.target_duration_s[0] }}-{{ c.reel.target_duration_s[1] }}sn</span>
@@ -25,28 +25,48 @@
       {{ c.template }}
     {% endif %}
   </td>
-  <td class="p-3">
+  <td class="px-3.5 py-3">
     <span class="font-mono text-xs text-claude-muted" title="{{ c.schedule_cron }}">
       {{ c.schedule_cron|cron_human }}
     </span>
   </td>
-  <td class="p-3">
+  <td class="px-3.5 py-3">
     {% if c.dna %}
       <span class="bg-claude-success text-white px-2 py-0.5 rounded-lg text-xs">DNA</span>
     {% else %}
       <span class="text-claude-muted">—</span>
     {% endif %}
   </td>
-  <td class="p-3">
-    <button hx-post="/channels/{{ c.slug }}/toggle"
-            hx-target="#channel-{{ c.slug }}"
-            hx-swap="outerHTML"
-            class="px-2 py-0.5 rounded-lg text-xs
-                   {% if c.enabled %}bg-claude-success text-white{% else %}bg-claude-surface-alt text-claude-muted{% endif %}">
-      {{ 'AÇIK' if c.enabled else 'KAPALI' }}
-    </button>
+  {# İKİ AYRI EKSEN, bilinçli olarak yan yana:
+       Cron  → kanal kendi başına çalışıyor mu (`enabled`)
+       Durum → Kokpit'te görünüyor mu (`archived`)
+     Cron'u kapalı ama elle çalıştırdığın kanallar var; ikisini tek düğmeye
+     bağlamak onları Kokpit'ten düşürürdü. #}
+  <td class="px-3.5 py-3">
+    <div class="flex flex-col gap-1.5 items-start">
+      <button hx-post="/channels/{{ c.slug }}/toggle"
+              hx-target="#channel-{{ c.slug }}"
+              hx-swap="outerHTML"
+              title="{{ 'Cron çalışıyor — kapatmak için tıkla' if c.enabled else 'Cron kapalı — açmak için tıkla' }}"
+              class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors
+                     {% if c.enabled %}bg-claude-success-soft text-claude-success hover:bg-claude-success hover:text-white
+                     {% else %}bg-claude-surface-alt text-claude-muted hover:bg-claude-border-strong{% endif %}">
+        <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
+        Cron {{ 'açık' if c.enabled else 'kapalı' }}
+      </button>
+
+      <button hx-post="/channels/{{ c.slug }}/archive"
+              hx-target="#channel-{{ c.slug }}"
+              hx-swap="outerHTML"
+              title="{{ 'Pasife al — Kokpit listesinden çıkar (silinmez)' if not c.archived else 'Aktife al — Kokpit listesine geri koy' }}"
+              class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors
+                     {% if c.archived %}bg-claude-idle-soft text-claude-idle hover:bg-claude-idle hover:text-white
+                     {% else %}bg-claude-accent-soft text-claude-accent hover:bg-claude-accent hover:text-white{% endif %}">
+        {{ 'PASİF' if c.archived else 'AKTİF' }}
+      </button>
+    </div>
   </td>
-  <td class="p-3 whitespace-nowrap">
+  <td class="px-3.5 py-3 whitespace-nowrap">
     <button hx-post="/shorts/run-now"
             hx-vals='{"slug": "{{ c.slug }}"}'
             hx-on::after-request="if (event.detail.successful) window.location.href='/activity?channel={{ c.slug }}'"

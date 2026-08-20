@@ -18,7 +18,7 @@
   </div>
 
   {% if meta_error %}
-  <div class="text-sm text-red-400">Üretilemedi: {{ meta_error|e }}</div>
+  <div class="text-sm text-claude-error">Üretilemedi: {{ meta_error|e }}</div>
   <form hx-post="/shorts/{{ s.id }}/metadata" hx-target="#yt-meta" hx-swap="outerHTML" class="mt-2">
     <button type="submit" class="px-3 py-1.5 rounded-lg bg-claude-surface-alt border border-claude-border text-sm">
       Tekrar dene
@@ -49,7 +49,7 @@
       <div class="flex items-baseline justify-between">
         <span class="text-[11px] text-claude-subtle uppercase tracking-wider">Başlık</span>
         <div class="text-[11px] text-claude-subtle">
-          <span class="{% if yt_meta.title|length > 100 %}text-red-400{% endif %}">{{ yt_meta.title|length }}/100</span>
+          <span class="{% if yt_meta.title|length > 100 %}text-claude-error{% endif %}">{{ yt_meta.title|length }}/100</span>
           <button type="button" class="ml-2 text-claude-muted hover:text-claude-text"
                   x-on:click="kopyala($refs.baslik.textContent, $el)">⎘ kopyala</button>
         </div>

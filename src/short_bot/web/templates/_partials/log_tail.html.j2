@@ -1,7 +1,7 @@
 {% for line in lines %}
 <div class="leading-tight
             {% if 'ERROR' in line %}text-claude-error
-            {% elif 'WARN' in line %}text-yellow-600
+            {% elif 'WARN' in line %}text-claude-wait
             {% else %}text-claude-muted{% endif %}">{{ line }}</div>
 {% else %}
 <div class="text-claude-muted">Eşleşen log satırı yok.</div>

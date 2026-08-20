@@ -523,3 +523,46 @@ def last_production(eng: Engine) -> dict[str, datetime]:
         if dt is not None:
             out[r.channel] = dt
     return out
+
+
+def recent_productions(eng: Engine, *, limit: int = 8) -> list[dict]:
+    """Son üretilen videolar — başlığı ve akıbetiyle.
+
+    Eski dashboard'ın "Son üretilenler" şeridi ``deleted_at IS NULL``
+    filtresiyle kuruluydu ve operatör listeyi boşalttığı için HEP BOŞTU:
+    ekranda ne üretildiği hiç görünmüyordu. Burada silinme durumu bir
+    filtre değil, gösterilecek BİLGİDİR.
+    """
+    with eng.connect() as conn:
+        rows = conn.execute(
+            text("""
+                SELECT s.id, s.channel, s.title, s.created_at, s.deleted_at,
+                       (SELECT u.video_id FROM youtube_uploads u
+                        WHERE u.short_id = s.id AND u.status = 'success'
+                        LIMIT 1) AS video_id
+                FROM shorts s
+                WHERE s.created_at IS NOT NULL
+                ORDER BY s.created_at DESC
+                LIMIT :lim
+            """),
+            {"lim": limit},
+        ).all()
+
+    out = []
+    for r in rows:
+        yayinda = bool(r.video_id)
+        silinmis = r.deleted_at is not None
+        if yayinda:
+            durum, etiket = "uploaded", "yayında"
+        elif silinmis:
+            durum, etiket = "dropped", "elendi"
+        else:
+            durum, etiket = "pending", "bekliyor"
+        olusma = _parse_dt(r.created_at)
+        out.append({
+            "id": int(r.id), "channel": r.channel, "title": r.title or "",
+            "video_id": r.video_id, "state": durum, "state_label": etiket,
+            "at": to_local(olusma) if olusma else None,
+            "rel": relative_time(olusma) if olusma else "",
+        })
+    return out
