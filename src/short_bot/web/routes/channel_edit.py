@@ -518,6 +518,14 @@ def save(slug):
         script_model=cfg.script_model,
         content_source=new_content_source,
         trends_region=new_trends_region,
+        # TAŞINMASI ŞART: bu POST kanalı SIFIRDAN kuruyor — burada sayılmayan
+        # her alan varsayılana düşer. trends_min_volume zaten böyle sessizce
+        # 5000'den 1000'e iniyordu (kanal panelden bir kez kaydedilince gündem
+        # havuzu hava durumu/hisse aramalarıyla doluyordu). Aynı aile:
+        # saga sınırı ve DNA paleti tuzakları.
+        trends_min_volume=_form_get_int("trends_min_volume", cfg.trends_min_volume),
+        trends_intent=(request.form.get("trends_intent", cfg.trends_intent)
+                       if "trends_intent" in request.form else cfg.trends_intent),
         auto_feed_ids=auto_feed_ids,
         generator=new_generator,
         youtube=new_youtube,

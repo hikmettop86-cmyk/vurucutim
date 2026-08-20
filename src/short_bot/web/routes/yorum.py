@@ -150,6 +150,9 @@ def new_create():
         dna=dna, script_model=(request.form.get("script_model") or "opus").strip() or None,
         content_source="trends", trends_region=region,
         trends_min_volume=_form_int("trends_min_volume", 5000),
+        # Yorum formatı CEVAP verir: soru sorulan konu onun işi. Kart kanalı
+        # "breaking" alır → iki format aynı olayı iki kez anlatmaz.
+        trends_intent=(request.form.get("trends_intent") or "question"),
         youtube=YoutubeChannelConfig(auto_upload=False, ai_content=False, category_id="25",
                                      privacy_status="public", min_score_for_upload=6.0),
         voice=voice,
@@ -247,6 +250,7 @@ def edit_save(slug):
         min_score=_form_float("min_score", c.min_score),
         trends_region=region,
         trends_min_volume=_form_int("trends_min_volume", c.trends_min_volume),
+        trends_intent=(request.form.get("trends_intent") or c.trends_intent),
         script_model=(request.form.get("script_model") or c.script_model or "").strip() or None,
         voice=voice, youtube=yt,
     )

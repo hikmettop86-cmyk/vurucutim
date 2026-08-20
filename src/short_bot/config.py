@@ -396,6 +396,21 @@ class ChannelConfig:
     # ~25 gerçek gündem. Tempo kısıtı: toplu-üretim sinyali vermemek için
     # kanal az ama yüksek hacimli üretmeli (politika notu, 2026-08-20).
     trends_min_volume: int = 1000
+    # trends_intent: aynı trend havuzundan hangi tür olayı ÖNCE alacağı.
+    #
+    #   "any"      — yalnız arama hacmi (varsayılan, eski davranış)
+    #   "question" — ilişkili aramalarında SORU olan trendler öne (yorum formatı:
+    #                40 saniyede cevap veren video, arayanın istediği şey)
+    #   "breaking" — soru taşımayan saf olaylar öne (6 sn kart: akış için)
+    #
+    # Bu bir FİLTRE DEĞİL, sıra tercihidir: tercih edilen tür yoksa kalanlar
+    # normal hacim sırasıyla üretilir, kanal boş dönmez.
+    #
+    # ASIL FAYDASI ölçüldü ve arama DEĞİL: aynı YouTube kanalına üreten iki
+    # formatın (gundem + gundem-yorum) aynı olayı iki kez anlatmasını önler.
+    # Arama payı tüm kanallarda %2,2–2,9 (2026-08-20 ölçümü) — bu ayar
+    # trafiği DEVİRMEZ, havuzu böler.
+    trends_intent: Literal["any", "question", "breaking"] = "any"
     dna: DnaSpec | None = None
     script_model: str | None = None
     content_source: Literal["rss", "generator", "feed", "curated", "trends"] = "rss"
@@ -451,6 +466,23 @@ def load_settings(path: Path) -> Settings:
         # → build_footage_sources tanımadığı adı zaten atlar, burada temizlemek şart değil.
         footage_priority=list(ft_data.get("priority", ["pexels"])),
     )
+
+
+_TRENDS_INTENTS = ("any", "question", "breaking")
+
+
+def _trends_intent(raw, slug: str) -> str:
+    """trends_intent'i doğrula. Yazım hatası SESSİZCE 'any'e düşmemeli —
+    kanal ayarı açık sanılıp kapalı çalışan bir özellik en kötüsüdür
+    (bkz. saga sınırı: panel kaydı özelliği sessizce kapatıyordu)."""
+    if raw in (None, ""):
+        return "any"
+    val = str(raw).strip().lower()
+    if val not in _TRENDS_INTENTS:
+        raise ValueError(
+            f"channel {slug!r}: trends_intent {raw!r} geçersiz — "
+            f"{', '.join(_TRENDS_INTENTS)} olmalı")
+    return val
 
 
 def load_channel(path: Path) -> ChannelConfig:
@@ -580,6 +612,7 @@ def load_channel(path: Path) -> ChannelConfig:
         saga_window_days=int(data.get("saga_window_days") or 14),
         trends_region=trends_region,
         trends_min_volume=int(data.get("trends_min_volume") or 1000),
+        trends_intent=_trends_intent(data.get("trends_intent"), slug),
         reference_channels=list(data.get("reference_channels") or []),
         template=template,
         colors=dict(data["colors"]),
@@ -641,6 +674,8 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
         data["trends_region"] = cfg.trends_region
     if cfg.trends_min_volume != 1000:
         data["trends_min_volume"] = cfg.trends_min_volume
+    if cfg.trends_intent != "any":
+        data["trends_intent"] = cfg.trends_intent
     if cfg.auto_feed_ids:
         data["auto_feed_ids"] = list(cfg.auto_feed_ids)
     if cfg.generator is not None:

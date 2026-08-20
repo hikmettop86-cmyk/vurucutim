@@ -14,6 +14,8 @@ trends_region: TR
 # trends_min_volume=5000 ile günde ~25 gerçek gündem kalıyor, 6'sı yeter.
 schedule_cron: 0 7-22/3 * * *
 trends_min_volume: 5000
+# 6 sn kart AKIŞ içindir: saf olay önce (soru niyetli konuyu yoruma bırakır)
+trends_intent: breaking
 duration_s: 6
 # Puan burada SIRA değil KAPI: eşiği geçenlerden en yüksek arama hacmi seçilir.
 # 6.0 = "olay var, 3-4 cümleye sığar" (bkz. scorer._TREND_PROMPT_TEMPLATES).

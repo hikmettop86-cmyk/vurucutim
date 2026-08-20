@@ -1106,6 +1106,22 @@
           </select>
           <span class="text-claude-subtle">Dilden bağımsız: language=de + AT → Avusturya gündemi Almanca.</span>
         </div>
+        {# Trend havuzunun kapısı ve sırası. İkisi de burada GÖRÜNMEZSE POST
+           varsayılana düşürür (bkz. channel_edit.py notu). #}
+        <div class="mt-2 flex items-center gap-2 text-sm flex-wrap">
+          <label class="text-xs text-claude-muted uppercase">En az arama hacmi</label>
+          <input type="number" name="trends_min_volume" min="0" step="500"
+                 value="{{ c.trends_min_volume }}"
+                 class="bg-claude-surface border border-claude-border px-2 py-1 rounded-lg text-sm text-claude-text w-28">
+          <label class="text-xs text-claude-muted uppercase ml-2">Öncelik</label>
+          <select name="trends_intent"
+                  class="bg-claude-surface border border-claude-border px-2 py-1 rounded-lg text-sm text-claude-text">
+            {% for code, label in [('any', 'Yalnız hacim'), ('breaking', 'Son dakika (saf olay) önce'), ('question', 'Soru sorulan konular önce')] %}
+            <option value="{{ code }}" {% if (c.trends_intent or 'any') == code %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          <span class="text-claude-subtle">Filtre değil sıra: tercih edilen tür yoksa kalanlar üretilir.</span>
+        </div>
         <div class="mt-2">
           <label class="block text-xs text-claude-muted uppercase mb-1">Otomatik beslenecek feed'ler (çoklu seçim):</label>
           <select name="auto_feed_ids" multiple size="6"

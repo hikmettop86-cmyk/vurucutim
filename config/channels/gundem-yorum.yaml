@@ -24,6 +24,8 @@ script_model: opus
 content_source: trends
 trends_region: TR
 trends_min_volume: 5000
+# Yorum videosu CEVAP verir: ilişkili aramalarında soru olan konular önce
+trends_intent: question
 youtube:
   auto_upload: false
   ai_content: false

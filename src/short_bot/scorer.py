@@ -401,13 +401,31 @@ def select_top(scored: list[ScoredItem], min_score: float, n: int = 1) -> list[S
 
 def select_by_volume(
     scored: list[ScoredItem], min_score: float, n: int = 1,
+    *, intent: str = "any", language: str = "tr",
 ) -> list[ScoredItem]:
     """Trend kanalı seçimi: min_score eşiğini geçenler arasından en yüksek
     ARAMA HACMİ (item.trend_volume) önce, eşitlikte puan. Puan burada sıra
     değil KAPI — 'hikâyesiz fayda araması' eşiğin altında kalıp elenir,
-    kalanları ülkenin ne aradığı sıralar."""
+    kalanları ülkenin ne aradığı sıralar.
+
+    ``intent`` (bkz. ChannelConfig.trends_intent) hacimden ÖNCE gelen bir
+    tercih basamağı ekler; filtre değildir, tercih edilen tür yoksa liste
+    yine dolu döner:
+        "question" — ilişkili aramalarında soru olanlar önce
+        "breaking" — soru taşımayanlar (saf olay) önce
+        "any"      — eski davranış, yalnız hacim
+    """
     above = [s for s in scored if s.score >= min_score]
-    above.sort(key=lambda s: (s.item.trend_volume, s.score), reverse=True)
+    if intent in ("question", "breaking"):
+        from short_bot.search_intent import has_question_intent
+        want_q = intent == "question"
+
+        def _pref(s: ScoredItem) -> int:
+            return int(has_question_intent(s.item, language=language) == want_q)
+    else:
+        def _pref(s: ScoredItem) -> int:
+            return 0
+    above.sort(key=lambda s: (_pref(s), s.item.trend_volume, s.score), reverse=True)
     return above[:n]
 
 

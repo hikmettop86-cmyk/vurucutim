@@ -98,3 +98,44 @@ def test_post_rss_keeps_no_trends_region(app, tmp_path):
     app.test_client().post("/channels/demo/edit", data=form)
     raw = _yaml(tmp_path)
     assert "trends_region" not in raw
+
+
+def test_panel_kaydi_hacim_esigini_ve_niyeti_sifirlamaz(app, tmp_path):
+    """POST kanalı SIFIRDAN kurar: sayılmayan alan varsayılana düşer.
+
+    SESSİZ bozulmaydı — trends_min_volume panelden bir kez kaydedilince
+    5000'den 1000'e iniyordu ve gündem havuzu hava durumu/hisse aramalarıyla
+    doluyordu. (Aynı aile: saga sınırı, DNA paleti.)
+    """
+    path = tmp_path / "config" / "channels" / "demo.yaml"
+    path.write_text(path.read_text(encoding="utf-8")
+                    + "content_source: trends\ntrends_region: TR\n"
+                      "trends_min_volume: 5000\ntrends_intent: breaking\n",
+                    encoding="utf-8")
+    form = _base_post()
+    form["content_source"] = "trends"
+    form["trends_region"] = "TR"          # form eski alanları GÖNDERMİYOR
+    app.test_client().post("/channels/demo/edit", data=form)
+    raw = _yaml(tmp_path)
+    assert raw["trends_min_volume"] == 5000
+    assert raw["trends_intent"] == "breaking"
+
+
+def test_panel_niyeti_degistirebilir(app, tmp_path):
+    path = tmp_path / "config" / "channels" / "demo.yaml"
+    path.write_text(path.read_text(encoding="utf-8")
+                    + "content_source: trends\ntrends_region: TR\n", encoding="utf-8")
+    form = _base_post()
+    form.update({"content_source": "trends", "trends_region": "TR",
+                 "trends_intent": "question", "trends_min_volume": "8000"})
+    app.test_client().post("/channels/demo/edit", data=form)
+    raw = _yaml(tmp_path)
+    assert raw["trends_intent"] == "question" and raw["trends_min_volume"] == 8000
+
+
+def test_edit_sayfasi_niyet_secicisini_gosterir(app, tmp_path):
+    path = tmp_path / "config" / "channels" / "demo.yaml"
+    path.write_text(path.read_text(encoding="utf-8")
+                    + "content_source: trends\ntrends_region: TR\n", encoding="utf-8")
+    body = app.test_client().get("/channels/demo/edit").data.decode("utf-8")
+    assert 'name="trends_intent"' in body and 'name="trends_min_volume"' in body
