@@ -151,12 +151,20 @@ class TrendBoostConfig(BaseModel):
 class VoiceConfig(BaseModel):
     """Voiced (seslendirmeli) üretim ayarları. Blok yoksa kanal sessiz üretir."""
     enabled: bool = False
-    voice_id: str = ""          # ai33 voice id (prefix'li ya da ham)
+    # provider: TTS sağlayıcısı. Sağlayıcılar birbirine YEDEK DEĞİL — ses evrenleri
+    # farklı (ai33 = ElevenLabs kimlikleri, Cartesia kendi kütüphanesi); biri düşünce
+    # diğerine geçmek kanalın sesini sessizce değiştirirdi. Eski YAML'lar ai33.
+    provider: Literal["ai33", "cartesia"] = "ai33"
+    voice_id: str = ""          # ai33 voice id (prefix'li ya da ham) | cartesia UUID
     speed: float = Field(default=1.0, ge=0.5, le=1.5)
     persona: str = "enerjik, meraklı anlatıcı"
     target_duration_s: tuple[int, int] = (45, 60)
     # Anlatım altındaki müzik seviyesi (~-18 dB).
     music_volume: float = Field(default=0.12, ge=0.0, le=1.0)
+    # --- Cartesia'ya özgü (ai33'te yok sayılır) ---
+    model: str = ""             # boş = sonic-3.5 (tts/cartesia_client.DEFAULT_MODEL)
+    volume: float = Field(default=1.0, ge=0.5, le=2.0)   # API aralığı ölçüldü
+    emotion: str = ""           # transcript önüne yönerge ("[sakin, güven veren]")
 
     @field_validator("target_duration_s", mode="before")
     @classmethod
@@ -172,6 +180,10 @@ class VoiceConfig(BaseModel):
             )
         if self.enabled and not self.voice_id.strip():
             raise ValueError("voice.enabled=true ise voice_id zorunlu")
+        # Cartesia hız tabanı 0.6: faceless-2'de UI 0.5'e izin verip API'de sessizce
+        # kırpılıyordu. Burada kayıt anında reddedilir ki ne yazıldıysa o çalsın.
+        if self.provider == "cartesia" and self.speed < 0.6:
+            raise ValueError("Cartesia için speed en az 0.6 olmalı (API aralığı 0.6-1.5)")
         return self
 
 
@@ -664,12 +676,19 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
     if cfg.voice is not None:
         data["voice"] = {
             "enabled": cfg.voice.enabled,
+            "provider": cfg.voice.provider,
             "voice_id": cfg.voice.voice_id,
             "speed": cfg.voice.speed,
             "persona": cfg.voice.persona,
             "target_duration_s": list(cfg.voice.target_duration_s),
             "music_volume": cfg.voice.music_volume,
         }
+        if cfg.voice.model:
+            data["voice"]["model"] = cfg.voice.model
+        if cfg.voice.volume != 1.0:
+            data["voice"]["volume"] = cfg.voice.volume
+        if cfg.voice.emotion:
+            data["voice"]["emotion"] = cfg.voice.emotion
     if cfg.reel is not None:
         data["reel"] = {
             "enabled": cfg.reel.enabled,

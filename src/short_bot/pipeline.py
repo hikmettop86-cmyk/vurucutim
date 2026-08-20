@@ -1369,7 +1369,7 @@ def _run_rss(*, channel, run_id, log, eng, settings,
                              if effective_dna is not None else "none"),
             sfx_overlays=sfx_overlays, bg_video_path=bg_video_path,
             item=picked.item, body=body, script=script, bg_image_path=bg,
-            log=log, llm_call=script_call,
+            log=log, llm_call=script_call, cache_dir=cache_dir,
         )
         render_ms = int((time.perf_counter() - t0) * 1000)
         log.info(f"  → {out_path.name} ({render_ms}ms)")
@@ -1926,7 +1926,7 @@ def _render_and_compose(
     *, job, archetype, templates_dir, frames_dir, music, out_path,
     channel, settings, secrets, ui_labels, dna_css, animation_style,
     sfx_overlays, bg_video_path, item, body, script, bg_image_path, log,
-    llm_call,
+    llm_call, cache_dir=None,
 ) -> Path:
     """Kanal voiced ise seslendirmeli üretime devreder, değilse sessiz akış.
 
@@ -1936,15 +1936,18 @@ def _render_and_compose(
     voice = getattr(channel, "voice", None)
 
     if voice is not None and voice.enabled:
-        from short_bot.tts.ai33_client import resolve_ai33_api_key
+        from short_bot.tts.providers import resolve_tts
         from short_bot.voiced import produce_voiced_video
-        log.info("  voiced mod: ai33 seslendirme")
+        tts = resolve_tts(getattr(voice, "provider", "ai33"))
+        log.info(f"  voiced mod: {tts.label} seslendirme")
         return produce_voiced_video(
             item=item, body=body, script=script,
             bg_image_path=bg_image_path, music_path=music,
             channel=channel, templates_dir=templates_dir,
             work_dir=Path(frames_dir).parent, out_path=out_path,
-            api_key=resolve_ai33_api_key(secrets),
+            api_key=tts.resolve_api_key(secrets),
+            ticker_items=tuple(getattr(job, "ticker_items", ()) or ()),
+            usage_dir=Path(cache_dir) if cache_dir else None,
             ffmpeg_path=settings.ffmpeg_path,
             fps=30, browser=settings.playwright_browser,
             ui_labels=ui_labels, dna_css=dna_css,

@@ -23,24 +23,29 @@ from short_bot.renderer import render_frames as _render_frames
 from short_bot.tts.ai33_client import health_check as _health_check
 from short_bot.tts.ai33_client import synthesize as _synthesize
 from short_bot.tts.align import build_timeline
+from short_bot.tts.providers import resolve_tts
 from short_bot.tts.align import transcribe_words as _transcribe_words
 
 log = logging.getLogger(__name__)
 
 _PREFLIGHT_ERRORS = {
-    "no-key": "ai33 seslendirme için AI33_API_KEY tanımlı değil "
-              "(Ayarlar → API anahtarları).",
-    "auth": "ai33 reddetti: AI33_API_KEY geçersiz ya da kredi bitmiş.",
+    "no-key": "{label} seslendirme için {key_hint} tanımlı değil.",
+    "auth": "{label} reddetti: {key_hint} geçersiz ya da kredi bitmiş.",
     "no-voice": "Kanal voice.voice_id boş — panelden bir ses seç.",
-    "stalled": "ai33 kuyruk takılı görünüyor (preflight zaman aşımı); "
+    "voice-missing": "{label}: bu voice_id bulunamadı — panelden geçerli bir ses seç.",
+    "model": "{label}: model kimliği geçersiz — panelden ölçülmüş bir model seç.",
+    "stalled": "{label} kuyruk takılı görünüyor (preflight zaman aşımı); "
                "üretim iptal edildi, kredi harcanmadı.",
-    "error": "ai33 preflight başarısız — servis şu an yanıt vermiyor.",
+    "error": "{label} preflight başarısız — servis şu an yanıt vermiyor.",
 }
 
 
 @dataclass(frozen=True)
 class VoicedDeps:
-    """Enjekte edilebilir dış bağımlılıklar (testte sahteleri geçilir)."""
+    """Enjekte edilebilir dış bağımlılıklar (testte sahteleri geçilir).
+
+    ``health_check``/``synthesize`` varsayılanı ai33; ``for_provider`` kanalın
+    sağlayıcısına göre doğru çifti kurar."""
     write_narration: Callable = _write_narration
     health_check: Callable = _health_check
     synthesize: Callable = _synthesize
@@ -48,6 +53,11 @@ class VoicedDeps:
     transcribe_words: Callable = _transcribe_words
     render_frames: Callable = _render_frames
     compose_video: Callable = _compose_video
+
+    @classmethod
+    def for_provider(cls, provider: str) -> "VoicedDeps":
+        p = resolve_tts(provider)
+        return cls(health_check=p.health_check, synthesize=p.synthesize)
 
 
 def produce_voiced_video(
@@ -79,22 +89,29 @@ def produce_voiced_video(
     llm_backend: str = "claude_cli",
     llm_api_key: str | None = None,
     deps: VoicedDeps | None = None,
+    ticker_items: tuple[str, ...] = (),
+    usage_dir: Path | None = None,
 ) -> Path:
     """Seslendirmeli videoyu üretip ``out_path``'e yazar."""
     voice = getattr(channel, "voice", None)
     if voice is None or not voice.enabled:
         raise ValueError("produce_voiced_video: channel.voice etkin değil")
 
-    d = deps or VoicedDeps()
+    provider = resolve_tts(getattr(voice, "provider", "ai33"))
+    d = deps or VoicedDeps.for_provider(provider.name)
     work_dir = Path(work_dir)
     work_dir.mkdir(parents=True, exist_ok=True)
 
     # 1) Preflight — LLM/TTS kredisi harcamadan servisin canlı olduğunu doğrula.
     verdict = d.health_check(voice_id=voice.voice_id, api_key=api_key,
                              tmp_dir=work_dir)
-    if verdict != "healthy":
-        raise RuntimeError(_PREFLIGHT_ERRORS.get(verdict, f"ai33 preflight: {verdict}"))
-    log.info("  ai33 preflight: healthy")
+    # 'yavas' BAŞARIDIR: preflight penceresi doldu ama görev ilerliyordu, yani
+    # servis canlı. Bunu 'ölü' saymak üretimi durduruyordu (panel koşusu #1585);
+    # asıl sentezin kendi 600sn bütçesi gerçek arızayı zaten yakalar.
+    if verdict not in ("healthy", "yavas"):
+        msg = _PREFLIGHT_ERRORS.get(verdict, "{label} preflight: " + str(verdict))
+        raise RuntimeError(msg.format(label=provider.label, key_hint=provider.key_hint))
+    log.info(f"  {provider.label} preflight: {verdict}")
 
     # 2) Anlatım senaryosu
     narration = d.write_narration(item, body, channel=channel,
@@ -103,14 +120,51 @@ def produce_voiced_video(
     log.info(f"  narration: {narration.word_count()} kelime, "
              f"{len(narration.beats)} beat")
 
-    # 3) TTS
-    narration_mp3 = work_dir / "narration.mp3"
-    d.synthesize(narration.full_text(), voice_id=voice.voice_id, api_key=api_key,
-                 out_path=narration_mp3, speed=voice.speed)
+    # Anlatımın kendisi + Türkçesi script'e yazılır; pipeline script'i JSON olarak
+    # kaydeder ve panel /shorts/<id>'de gösterir. PENCERE, kapı değil: back_translate
+    # zaten fail-open, burada da hiçbir hata üretimi durdurmaz.
+    try:
+        script.narration_text = narration.full_text()
+        if channel.language != "tr":
+            from short_bot.lang_review import back_translate
+            script.body_paragraph_tr = back_translate(
+                narration.full_text(), language=channel.language,
+                backend=llm_backend, model=llm_model,
+                api_key=llm_api_key, claude_path=llm_claude_path)
+            if script.body_paragraph_tr:
+                log.info(f"  anlatım TR: {script.body_paragraph_tr[:160]}")
+    except Exception as e:  # noqa: BLE001 — çeviri yokluğu videoyu engellemez
+        log.info(f"  anlatım TR alınamadı ({e})")
 
-    # 4) Süre + kelime hizalama
-    duration_s = d.probe_duration_s(narration_mp3, ffprobe_path=ffprobe_path)
-    words = d.transcribe_words(narration_mp3, language=channel.language)
+    # 3) TTS — sağlayıcının kabul ettiği ek anahtarlar yalnız ona iletilir
+    # (ai33'e volume/model geçmek TypeError verirdi).
+    narration_mp3 = work_dir / "narration.mp3"
+    extra = {}
+    if "volume" in provider.extra_kwargs:
+        extra["volume"] = getattr(voice, "volume", 1.0)
+    if "model" in provider.extra_kwargs and getattr(voice, "model", ""):
+        extra["model"] = voice.model
+    if "emotion" in provider.extra_kwargs and getattr(voice, "emotion", ""):
+        extra["emotion"] = voice.emotion
+    if "language" in provider.extra_kwargs:
+        extra["language"] = channel.language
+    if "usage_dir" in provider.extra_kwargs and usage_dir is not None:
+        extra["usage_dir"] = usage_dir
+    result = d.synthesize(narration.full_text(), voice_id=voice.voice_id, api_key=api_key,
+                          out_path=narration_mp3, speed=voice.speed, **extra)
+    # ai33 düz yol döndürür; Cartesia SynthesisResult (yol + kelimeler). Dönen yolu
+    # kullan: Cartesia .wav yazar, dosya adı uzantıya göre değişir.
+    synth_words = list(getattr(result, "words", []) or [])
+    narration_audio = Path(getattr(result, "path", result) or narration_mp3)
+
+    # 4) Süre + kelime hizalama — sentez kelime zamanı verdiyse whisper ATLANIR
+    # (cron çakışmasında whisper ölüyordu; Cartesia zamanları zaten kesin).
+    duration_s = d.probe_duration_s(narration_audio, ffprobe_path=ffprobe_path)
+    if synth_words:
+        words = synth_words
+        log.info(f"  kelime zamanları sentezden geldi ({len(words)} kelime), whisper atlandı")
+    else:
+        words = d.transcribe_words(narration_audio, language=channel.language)
     timeline = build_timeline(narration, words, duration_s=duration_s)
     log.info(f"  ses {duration_s:.1f}s, {len(timeline.words)} kelime hizalandı")
 
@@ -128,9 +182,30 @@ def produce_voiced_video(
         language=channel.language,
         rss_source=getattr(item, "source", None),
         narration=timeline,
+        ticker_items=tuple(ticker_items or ()),
     )
     frames_dir = work_dir / "frames"
-    d.render_frames(job, Path(templates_dir) / "narrator.html.j2", frames_dir,
+    # Seslendirme şablonu üç kademede aranır:
+    #   <slug>-narrator → <arketip>-narrator → narrator
+    # NEDEN: ortak narrator tam ekran foto + karaoke çizer; haber-kartı kimliği
+    # (manşet bandı, çerçeveli foto) olan bir kanal seslendirmeye geçince o
+    # kimliği kaybediyordu. RenderJob hem `script` hem `narration` taşıdığı için
+    # ikisini birlikte çizen bir şablon mümkün. Arketip kademesi sayesinde aynı
+    # arketipteki kanallar tek şablonu paylaşır (kopya dosya tutmaya gerek yok);
+    # slug kademesi tek bir kanalı ayrıştırmak isteyene açık kapı bırakır.
+    # Hiçbiri yoksa ortak narrator'a düşer — mevcut kanalların davranışı aynı kalır.
+    tpl = None
+    for aday in (f"{getattr(channel, 'slug', '')}-narrator.html.j2",
+                 f"{getattr(channel, 'template', '')}-narrator.html.j2",
+                 "narrator.html.j2"):
+        p = Path(templates_dir) / aday
+        if p.exists():
+            tpl = p
+            break
+    if tpl is None:      # narrator.html.j2 kodla gelir; yoksa kurulum bozuk
+        raise RuntimeError(f"seslendirme şablonu bulunamadı: {templates_dir}")
+    log.info(f"  şablon: {tpl.name}")
+    d.render_frames(job, tpl, frames_dir,
                     fps=fps, browser=browser, ui_labels=ui_labels,
                     dna_css=dna_css, animation_style=animation_style)
 
@@ -143,6 +218,6 @@ def produce_voiced_video(
         bg_video_path=bg_video_path,
         bg_blur_px=bg_blur_px, bg_dim=bg_dim, fg_scale=fg_scale,
         duration_s=cap_s,
-        narration_path=narration_mp3,
+        narration_path=narration_audio,
     )
     return out_path
