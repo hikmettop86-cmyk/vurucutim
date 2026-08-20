@@ -1065,7 +1065,7 @@
     {# ── TAB: Icerik ─────────────────────────────────────────────────── #}
     <div x-show="currentTab === 'icerik'">
 
-    {# ── Card: İçerik Kaynağı (rss / feed) ──────────────────────────── #}
+    {# ── Card: İçerik Kaynağı (rss / feed / trends) ─────────────────── #}
     <div class="bg-white border border-claude-border rounded-xl shadow-soft mb-4">
       <div class="px-5 py-3 border-b border-claude-border/40">
         <h2 class="font-serif text-base font-semibold flex items-center gap-2">
@@ -1083,6 +1083,29 @@
             {% if c.content_source == 'feed' %}checked{% endif %}>
           Özel RSS Feed'leri
         </label>
+        <label class="flex items-center gap-2 text-sm">
+          <input type="radio" name="content_source" value="trends"
+            {% if c.content_source == 'trends' %}checked{% endif %}>
+          Google Trends (ülkenin en çok arananları)
+        </label>
+        <div class="ml-6 flex items-center gap-2 text-xs">
+          <span class="text-claude-muted uppercase">Bölge</span>
+          {% set _regions = [('', 'Dilden türet'), ('TR', 'TR · Türkiye'), ('DE', 'DE · Almanya'),
+                             ('ES', 'ES · İspanya'), ('US', 'US · ABD'), ('FR', 'FR · Fransa'),
+                             ('JP', 'JP · Japonya'), ('GB', 'GB · Birleşik Krallık'),
+                             ('AT', 'AT · Avusturya'), ('MX', 'MX · Meksika')] %}
+          {% set _region_codes = _regions|map(attribute=0)|list %}
+          <select name="trends_region"
+                  class="bg-claude-surface border border-claude-border px-2 py-1 rounded-lg text-sm text-claude-text">
+            {% for code, label in _regions %}
+            <option value="{{ code }}" {% if (c.trends_region or '') == code %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+            {% if c.trends_region and c.trends_region not in _region_codes %}
+            <option value="{{ c.trends_region }}" selected>{{ c.trends_region }}</option>
+            {% endif %}
+          </select>
+          <span class="text-claude-subtle">Dilden bağımsız: language=de + AT → Avusturya gündemi Almanca.</span>
+        </div>
         <div class="mt-2">
           <label class="block text-xs text-claude-muted uppercase mb-1">Otomatik beslenecek feed'ler (çoklu seçim):</label>
           <select name="auto_feed_ids" multiple size="6"

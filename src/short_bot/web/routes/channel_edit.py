@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 from flask import (Blueprint, abort, current_app, flash, jsonify, redirect,
@@ -431,13 +432,25 @@ def save(slug):
         new_reel = cfg.reel
 
     new_content_source = request.form.get("content_source", cfg.content_source)
-    if new_content_source not in ("rss", "generator", "feed"):
+    if new_content_source not in ("rss", "generator", "feed", "trends"):
         new_content_source = cfg.content_source
     auto_feed_ids = [int(x) for x in request.form.getlist("auto_feed_ids")
                      if x.strip().isdigit()]
     if new_content_source == "feed" and not auto_feed_ids:
         flash("Feed modu için en az bir feed seçmelisin.", "error")
         return redirect(url_for("channel_edit.edit", slug=slug))
+    # trends_region yalnız trends kaynağında anlamlı; formdan gelmezse eski
+    # değer korunur (başka bir kartın POST'u bölgeyi sessizce silmesin).
+    new_trends_region = cfg.trends_region
+    if new_content_source == "trends":
+        if "trends_region" in request.form:
+            raw_region = request.form.get("trends_region", "").strip().upper()
+            if raw_region and not re.fullmatch(r"[A-Z]{2}", raw_region):
+                flash("Trend bölgesi iki harfli ISO kodu olmalı (TR, DE, ES…).", "error")
+                return redirect(url_for("channel_edit.edit", slug=slug))
+            new_trends_region = raw_region or None
+    else:
+        new_trends_region = None
 
     new_cfg = ChannelConfig(
         slug=cfg.slug,
@@ -466,6 +479,7 @@ def save(slug):
         dna=new_dna,
         script_model=cfg.script_model,
         content_source=new_content_source,
+        trends_region=new_trends_region,
         auto_feed_ids=auto_feed_ids,
         generator=new_generator,
         youtube=new_youtube,
