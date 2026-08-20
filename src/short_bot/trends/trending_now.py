@@ -178,3 +178,63 @@ def fetch_trending_articles(
     if not calls:
         return {}
     return parse_articles_response(_post(calls, timeout_s))
+
+
+# --- NewsItem dönüşümü --------------------------------------------------------
+
+def _fmt_int(n: int) -> str:
+    """50000 → '50.000' (Türkçe/Avrupa binlik ayracı; dilden bağımsız okunur)."""
+    return f"{n:,}".replace(",", ".")
+
+
+def _describe(e: TrendingEntry, other_titles: list[str]) -> str:
+    """Puanlayıcı ve senaryo yazarının gördüğü bağlam satırı. Dil-nötr etiketler."""
+    head = f"Google Trends · {_fmt_int(e.volume)} arama"
+    if e.growth_pct:
+        head += f" · +%{_fmt_int(e.growth_pct)}"
+    parts = [head]
+    if e.breakdown:
+        parts.append(", ".join(e.breakdown[:6]))
+    if other_titles:
+        parts.append(" | ".join(t for t in other_titles[:2] if t))
+    return " · ".join(parts)
+
+
+def trending_as_news_items(
+    entries: list[TrendingEntry],
+    articles_by_index: dict[int, list[TrendingArticle]],
+    *,
+    min_volume: int = 1000,
+) -> list[NewsItem]:
+    """Her trende TEK NewsItem: ilk haberin URL'si guid/link, başlığı title.
+
+    - Haberi olmayan ya da `min_volume` altındaki trend elenir (hikâye yok).
+    - Aynı haberi paylaşan iki trend ('atletico madrid' / 'atletico madrid -
+      malaga') tek kalemde birleşir; yüksek hacimli olan kalır.
+    - Çıktı hacme göre azalan sıralı — pipeline'daki `[:max_candidates_per_run]`
+      kesimi bu sayede 'en çok aranan ilk N'i puanlatır.
+    """
+    best: dict[str, NewsItem] = {}
+    for idx, e in enumerate(entries):
+        if e.volume < min_volume:
+            continue
+        arts = articles_by_index.get(idx) or []
+        if not arts:
+            continue
+        first = arts[0]
+        if not first.url or not first.title:
+            continue
+        item = NewsItem(
+            guid=first.url,
+            title=first.title,
+            link=first.url,
+            source=first.source or None,
+            pub_date=e.started_at,
+            thumb_url=first.image_url,
+            description=_describe(e, [a.title for a in arts[1:]]),
+            trend_volume=e.volume,
+        )
+        prev = best.get(item.guid)
+        if prev is None or item.trend_volume > prev.trend_volume:
+            best[item.guid] = item
+    return sorted(best.values(), key=lambda i: i.trend_volume, reverse=True)

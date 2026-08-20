@@ -145,3 +145,58 @@ def test_fetch_trending_now_raises_on_http_error(monkeypatch):
                         lambda *a, **k: _Resp("rate limited", status=429))
     with pytest.raises(requests.HTTPError):
         tn.fetch_trending_now("TR", language="tr")
+
+
+# --- NewsItem dönüşümü --------------------------------------------------------
+
+def _entry(term, volume, news_ids=(1,), breakdown=(), started=None, pct=500):
+    from short_bot.trends.trending_now import TrendingEntry
+    return TrendingEntry(term, volume, pct, started, (), tuple(breakdown), tuple(news_ids))
+
+
+def _art(title, url, source="Kaynak", image="https://img/x.jpg"):
+    from short_bot.trends.trending_now import TrendingArticle
+    return TrendingArticle(title, url, source, None, image)
+
+
+def test_as_news_items_uses_first_article_and_sorts_by_volume():
+    from short_bot.trends.trending_now import trending_as_news_items
+    started = datetime(2026, 8, 19, 17, 20, tzinfo=timezone.utc)
+    entries = [
+        _entry("ajet", 20000, breakdown=("ajet", "ajet bilet"), started=started, pct=200),
+        _entry("şener üşümezsoy", 100000, breakdown=("şener üşümezsoy", "istanbul deprem")),
+    ]
+    arts = {
+        0: [_art("AJet'ten 55 liraya bilet", "https://ntv/ajet"),
+            _art("AJet 29 dolar", "https://aa/ajet")],
+        1: [_art("Marmara 8 saatte 36 kez sallandı", "https://milliyet/deprem")],
+    }
+    items = trending_as_news_items(entries, arts)
+    assert [i.trend_volume for i in items] == [100000, 20000]
+    ajet = items[1]
+    assert ajet.guid == "https://ntv/ajet" and ajet.link == "https://ntv/ajet"
+    assert ajet.title == "AJet'ten 55 liraya bilet"
+    assert ajet.source == "Kaynak"
+    assert ajet.thumb_url == "https://img/x.jpg"
+    assert ajet.pub_date == started
+    assert "20.000" in ajet.description and "%200" in ajet.description
+    assert "ajet bilet" in ajet.description
+    assert "AJet 29 dolar" in ajet.description   # diğer başlık bağlam olarak
+
+
+def test_as_news_items_drops_entries_without_articles_or_below_min_volume():
+    from short_bot.trends.trending_now import trending_as_news_items
+    entries = [_entry("habersiz", 50000), _entry("küçük", 500), _entry("iyi", 5000)]
+    arts = {0: [], 2: [_art("İyi haber", "https://x/iyi")]}
+    items = trending_as_news_items(entries, arts, min_volume=1000)
+    assert [i.guid for i in items] == ["https://x/iyi"]
+
+
+def test_as_news_items_merges_same_article_keeping_highest_volume():
+    from short_bot.trends.trending_now import trending_as_news_items
+    entries = [_entry("atletico madrid", 5000), _entry("atletico madrid - malaga", 10000)]
+    arts = {0: [_art("Atletico sezona galibiyetle başladı", "https://x/atleti")],
+            1: [_art("Atletico sezona galibiyetle başladı", "https://x/atleti")]}
+    items = trending_as_news_items(entries, arts)
+    assert len(items) == 1
+    assert items[0].trend_volume == 10000
