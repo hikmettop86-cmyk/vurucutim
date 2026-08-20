@@ -138,18 +138,25 @@ def run_auto_upload(*, eng, short_id: int, channel, credentials,
     except Exception:
         pass
     generated = None
+    # Derleme (uzun-form) kendi metadata'sını taşır: başlık + bölüm zaman damgaları,
+    # #shorts YOK. LLM metadata yazarı #shorts'u zorunlu kıldığı için atlanır.
+    if isinstance(script.get("compilation_meta"), dict):
+        cm = script["compilation_meta"]
+        generated = {"title": cm.get("title", ""), "description": cm.get("description", ""),
+                     "tags": list(cm.get("tags") or [])}
     try:
-        meta = generate_youtube_metadata(
-            channel=channel, script=script,
-            rss_source=rss_source, rss_link=rss_link,
-            claude_path=claude_path, model=model,
-            backend=backend, api_key=api_key,
-            hook_patterns=hook_pats,
-            # Reel'in ürettiği kısa SEO başlığını temel al (row.title); mizah
-            # kanalında metadata bunu koruyup haber tonuna sapmasın.
-            base_title=(row.title or ""),
-        )
-        generated = {"title": meta.title, "description": meta.description, "tags": meta.tags}
+        if generated is None:
+            meta = generate_youtube_metadata(
+                channel=channel, script=script,
+                rss_source=rss_source, rss_link=rss_link,
+                claude_path=claude_path, model=model,
+                backend=backend, api_key=api_key,
+                hook_patterns=hook_pats,
+                # Reel'in ürettiği kısa SEO başlığını temel al (row.title); mizah
+                # kanalında metadata bunu koruyup haber tonuna sapmasın.
+                base_title=(row.title or ""),
+            )
+            generated = {"title": meta.title, "description": meta.description, "tags": meta.tags}
     except Exception:
         pass
 

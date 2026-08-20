@@ -227,3 +227,41 @@ def edit_save(slug):
     save_channel(path, new_cfg)
     flash("Gündem Yorum ayarları kaydedildi.", "success")
     return redirect(url_for("yorum.edit", slug=slug))
+
+
+@bp.route("/channels/<slug>/compile-day", methods=["POST"])
+def compile_day(slug):
+    """Günün derlemesini elle üret (panel düğmesi). Süre eşiğin altındaysa uyarır;
+    ``force=1`` ile yine de üretir (Shorts sayılacağını bilerek)."""
+    from datetime import date
+
+    from short_bot.compilation import MIN_TOTAL_S, pick_day_clips, produce_daily_compilation, total_seconds
+    from short_bot.db import init_db
+    path = _channels_dir() / f"{slug}.yaml"
+    if not path.exists():
+        abort(404)
+    c = load_channel(path)
+    eng = init_db(current_app.config["SHORTBOT_DB_PATH"])
+    settings = current_app.config["SHORTBOT_SETTINGS"]
+    day = date.today()
+    force = request.form.get("force") == "1"
+    try:
+        clips = pick_day_clips(eng, slug, day)
+        total = total_seconds(clips)
+        if not clips:
+            flash("Bugün derlenecek klip yok.", "error")
+            return redirect(url_for("yorum.edit", slug=slug))
+        if total < MIN_TOTAL_S and not force:
+            flash(f"Bugünkü {len(clips)} klip toplam {total:.0f} sn — 3 dk 10 sn altı YouTube'da Shorts "
+                  f"sayılır. Daha fazla klip biriksin ya da 'yine de üret' için force=1 gönder.", "error")
+            return redirect(url_for("yorum.edit", slug=slug))
+        sid = produce_daily_compilation(
+            c, eng=eng, day=day, templates_dir=current_app.config["SHORTBOT_TEMPLATES_DIR"],
+            output_root=current_app.config["SHORTBOT_OUTPUT_ROOT"], ffmpeg=settings.ffmpeg_path,
+            browser=settings.playwright_browser, force=force)
+    except Exception as e:  # noqa: BLE001 — panel düğmesi; hata kullanıcıya
+        flash(f"Derleme başarısız: {e}", "error")
+        return redirect(url_for("yorum.edit", slug=slug))
+    flash(f"Günün derlemesi üretildi (short #{sid}, {total:.0f} sn). Yükleme elle.", "success")
+    return redirect(url_for("shorts.detail", short_id=sid) if "shorts.detail" in current_app.view_functions
+                    else url_for("yorum.edit", slug=slug))

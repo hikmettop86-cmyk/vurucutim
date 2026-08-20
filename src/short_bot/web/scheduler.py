@@ -55,13 +55,37 @@ def init_scheduler(app):
             trigger="cron",
         )
 
+    def _daily_compilation_for(slug: str):
+        """Gece 23:30: Gündem Yorum kanalının o günkü kliplerinden uzun-form derleme.
+        Süre 3 dk 10 sn altındaysa atlanır (Shorts sayılırdı). Hata cron'u düşürmez."""
+        try:
+            from datetime import date
+            from short_bot.compilation import produce_daily_compilation
+            cfg = load_channel(app.config["SHORTBOT_CONFIG_DIR"] / "channels" / f"{slug}.yaml")
+            settings = app.config["SHORTBOT_SETTINGS"]
+            eng = init_db(app.config["SHORTBOT_DB_PATH"])
+            sid = produce_daily_compilation(
+                cfg, eng=eng, day=date.today(), templates_dir=app.config["SHORTBOT_TEMPLATES_DIR"],
+                output_root=app.config["SHORTBOT_OUTPUT_ROOT"], ffmpeg=settings.ffmpeg_path,
+                browser=settings.playwright_browser)
+            _LOG.info(f"[derleme] {slug}: {'short #' + str(sid) if sid else 'atlandı'}")
+        except Exception as e:  # noqa: BLE001 — cron must not crash
+            _LOG.warning(f"[derleme] {slug} başarısız: {e}")
+
     def _reload_jobs():
         cfg_dir = app.config["SHORTBOT_CONFIG_DIR"]
         # Remove all per-channel jobs (keep _reload_jobs)
         for job in list(scheduler.get_jobs()):
             if job.id != "_reload_jobs":
                 scheduler.remove_job(job.id)
+        from short_bot.formats import channel_format
         for cfg in list_channels(cfg_dir / "channels", enabled_only=True):
+            # Gündem Yorum: günün derlemesi gece 23:30 (kanal cron'undan bağımsız).
+            if channel_format(cfg) == "yorum":
+                scheduler.add_job(
+                    _daily_compilation_for, CronTrigger(hour=23, minute=30),
+                    args=[cfg.slug], id=f"{cfg.slug}__derleme",
+                    max_instances=1, replace_existing=True)
             # AUTOPILOT AÇIKSA CRON KAYDEDİLMEZ — bkz. channel_cron_enabled.
             if not channel_cron_enabled(cfg):
                 continue

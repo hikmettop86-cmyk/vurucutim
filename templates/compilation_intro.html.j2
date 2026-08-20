@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="{{ language }}">
+<head>
+<meta charset="utf-8">
+<title>Derleme — Giriş</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@600;700&family=Barlow:wght@500;600;700&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1080px; height: 1920px; overflow: hidden; background: #141414; color: #fff;
+    font-family: 'Barlow', 'Segoe UI', Arial, sans-serif; }
+  .stage { position: relative; width: 1080px; height: 1920px; background: linear-gradient(180deg, #141414 0%, #0e0e0e 100%); }
+  .topbar { position: absolute; top: 0; left: 0; right: 0; height: 120px; background: #d0021b; display: flex; align-items: center; justify-content: space-between; padding: 0 48px; }
+  .logo { font-family: 'Oswald', sans-serif; font-weight: 700; font-size: 64px; text-transform: uppercase; letter-spacing: 0.02em; display: flex; gap: 18px; align-items: center; }
+  .logo .tag { padding: 6px 14px; background: #fff; color: #d0021b; font-size: 26px; letter-spacing: 0.1em; }
+  .strip { position: absolute; top: 120px; left: 0; right: 0; height: 64px; background: #ffe600; color: #111; display: flex; align-items: center; padding-left: 48px; font-family: 'Oswald', sans-serif; font-weight: 700; font-size: 36px; letter-spacing: 0.16em; text-transform: uppercase; white-space: nowrap; overflow: hidden; }
+  .title { position: absolute; top: 300px; left: 48px; right: 48px; font-family: 'Oswald', sans-serif; font-weight: 700; font-size: 150px; line-height: 0.92; text-transform: uppercase; }
+  .title .red { display: inline-block; background: #d0021b; padding: 4px 22px 10px; margin-top: 14px; font-size: 96px; line-height: 1; }
+  .date { position: absolute; top: 760px; left: 48px; right: 48px; background: #fff; color: #111; padding: 14px 24px; font-family: 'Oswald', sans-serif; font-weight: 600; font-size: 44px; text-transform: uppercase; }
+  .list { position: absolute; top: 900px; left: 48px; right: 48px; display: flex; flex-direction: column; gap: 18px; }
+  .row { display: grid; grid-template-columns: 72px 1fr; gap: 18px; align-items: start; font-size: 40px; line-height: 1.25; font-weight: 500; color: #ececec; }
+  .row .n { font-family: 'Oswald', sans-serif; font-weight: 700; font-size: 44px; color: #ffe600; border-bottom: 6px solid #d0021b; line-height: 1; padding-bottom: 4px; width: 60px; text-align: center; }
+  .foot { position: absolute; left: 48px; right: 48px; bottom: 48px; display: flex; justify-content: space-between; font-family: 'Oswald', sans-serif; font-size: 26px; letter-spacing: 0.1em; text-transform: uppercase; color: #9a9a9a; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="topbar"><div class="logo"><span>{{ handle|replace('@','') }}</span><span class="tag">{{ language|upper }}</span></div><div style="font-family:'Oswald',sans-serif;font-size:34px;letter-spacing:.06em">GÜNÜN DERLEMESİ</div></div>
+  <div class="strip">SON DAKİKA &nbsp;·&nbsp; SON DAKİKA &nbsp;·&nbsp; SON DAKİKA &nbsp;·&nbsp; SON DAKİKA</div>
+  <div class="title">TÜRKİYE<br><span class="red">BUGÜN NE ARADI?</span></div>
+  <div class="date">{{ day_label }} · {{ count }} gündem</div>
+  <div class="list">
+    {% for h in headlines %}
+    <div class="row"><div class="n">{{ loop.index }}</div><div>{{ h }}</div></div>
+    {% endfor %}
+  </div>
+  <div class="foot"><span>{{ handle }}</span><span>Google Trends · tarafsız yorum</span></div>
+</div>
+</body>
+</html>

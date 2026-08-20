@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="{{ language }}">
+<head>
+<meta charset="utf-8">
+<title>Derleme — Kapanış</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@600;700&family=Barlow:wght@500;600;700&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1080px; height: 1920px; overflow: hidden; background: #141414; color: #fff; font-family: 'Barlow', 'Segoe UI', Arial, sans-serif; }
+  .stage { position: relative; width: 1080px; height: 1920px; background: linear-gradient(180deg, #141414 0%, #0e0e0e 100%); }
+  .topbar { position: absolute; top: 0; left: 0; right: 0; height: 120px; background: #d0021b; display: flex; align-items: center; padding: 0 48px; font-family: 'Oswald', sans-serif; font-weight: 700; font-size: 64px; text-transform: uppercase; }
+  .mid { position: absolute; top: 700px; left: 48px; right: 48px; text-align: center; }
+  .big { font-family: 'Oswald', sans-serif; font-weight: 700; font-size: 120px; line-height: 0.95; text-transform: uppercase; }
+  .sub { margin-top: 40px; font-size: 44px; color: #ececec; line-height: 1.3; }
+  .handle { margin-top: 60px; display: inline-block; background: #ffe600; color: #111; padding: 14px 30px; font-family: 'Oswald', sans-serif; font-weight: 700; font-size: 48px; letter-spacing: 0.08em; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="topbar">{{ handle|replace('@','') }}</div>
+  <div class="mid">
+    <div class="big">YARIN<br>YİNE BURADA</div>
+    <div class="sub">Türkiye'nin her gün ne aradığını,<br>kimsenin adamı olmadan yorumluyoruz.</div>
+    <div class="handle">{{ handle }}</div>
+  </div>
+</div>
+</body>
+</html>

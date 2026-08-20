@@ -153,3 +153,26 @@ def test_edit_post_invalid_speed_is_rejected(app, tmp_path):
                                data={"voice_speed": "0.5", "voice_id": "c1cf"}, follow_redirects=True)
     assert r.status_code == 200
     assert _yaml(tmp_path, "yorum")["voice"]["speed"] == 1.05
+
+
+def test_compile_day_warns_when_no_clips(app):
+    r = app.test_client().post("/channels/yorum/compile-day", follow_redirects=True)
+    assert r.status_code == 200
+    assert "derlenecek klip yok" in r.data.decode("utf-8")
+
+
+def test_compile_day_calls_producer_when_enough(app, monkeypatch):
+    from datetime import datetime
+    from pathlib import Path
+    from short_bot import compilation as comp
+    from short_bot.web.routes import yorum as yroute
+    clips = [comp.Clip(i, f"K{i}", Path("x"), 45.0, datetime.now()) for i in range(5)]
+    monkeypatch.setattr("short_bot.compilation.pick_day_clips", lambda *a, **k: clips)
+    seen = {}
+
+    def _produce(c, **kw):
+        seen["slug"] = c.slug; seen["force"] = kw.get("force")
+        return 77
+    monkeypatch.setattr("short_bot.compilation.produce_daily_compilation", _produce)
+    r = app.test_client().post("/channels/yorum/compile-day")
+    assert r.status_code == 302 and seen == {"slug": "yorum", "force": False}
