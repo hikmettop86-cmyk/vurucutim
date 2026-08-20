@@ -233,6 +233,7 @@ def trending_as_news_items(
             thumb_url=first.image_url,
             description=_describe(e, [a.title for a in arts[1:]]),
             trend_volume=e.volume,
+            extra_links=tuple(a.url for a in arts[1:3] if a.url and a.url != first.url),
         )
         prev = best.get(item.guid)
         if prev is None or item.trend_volume > prev.trend_volume:
@@ -248,6 +249,7 @@ def _item_to_dict(i: NewsItem) -> dict:
         "pub_date": i.pub_date.isoformat() if i.pub_date else None,
         "thumb_url": i.thumb_url, "description": i.description,
         "trend_volume": i.trend_volume,
+        "extra_links": list(i.extra_links),
     }
 
 
@@ -258,6 +260,7 @@ def _item_from_dict(d: dict) -> NewsItem:
         pub_date=datetime.fromisoformat(pd) if pd else None,
         thumb_url=d.get("thumb_url"), description=d.get("description"),
         trend_volume=int(d.get("trend_volume") or 0),
+        extra_links=tuple(d.get("extra_links") or ()),
     )
 
 

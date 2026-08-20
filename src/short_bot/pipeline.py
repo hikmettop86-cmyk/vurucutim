@@ -983,6 +983,31 @@ def _produce_from_item(
                      short_path=out_path, error=None, short_id=short_id)
 
 
+_EXTRA_SOURCE_MAX_CHARS = 1500
+
+
+def _extra_source_bodies(item, *, log) -> list[tuple[str, str]]:
+    """Yorum formatı: trendin diğer makalelerinin gövdeleri ``[(url, gövde), …]``.
+    Çekilemeyen atlanır; hiçbir hata üretimi durdurmaz (ana makale yeter)."""
+    out: list[tuple[str, str]] = []
+    for url in getattr(item, "extra_links", ()) or ():
+        try:
+            u = url
+            if _is_google_news_url(u):
+                from short_bot.google_news_resolver import resolve as _resolve_gnews
+                u = _resolve_gnews(u) or u
+            body = extract_article(u)
+        except Exception as e:  # noqa: BLE001 — ek kaynak isteğe bağlı
+            if log:
+                log.info(f"  ek kaynak atlandı ({e}): {url[:80]}")
+            continue
+        if body and body.strip():
+            out.append((url, body.strip()[:_EXTRA_SOURCE_MAX_CHARS]))
+    if log and out:
+        log.info(f"  ek kaynak: {len(out)} makale")
+    return out
+
+
 def _ticker_items_for_trends(
     scored: list[ScoredItem], picked: ScoredItem, *, min_score: float, limit: int = 4,
 ) -> tuple[str, ...]:

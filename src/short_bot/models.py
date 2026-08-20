@@ -23,6 +23,10 @@ class NewsItem:
     # sırası bu alana dayanır (hacim sıralı + AI kapısı). RSS/feed kaynaklarında
     # 0 kalır; varsayılanlı olduğu için mevcut kurucular kırılmaz.
     trend_volume: int = 0
+    # extra_links: aynı haberin başka yayıncılardaki makaleleri (Google Trends her
+    # trende 3 haber verir). Yorum formatı bunları ek kaynak olarak okur — 'en az
+    # iki kaynak adı' kuralı buradan beslenir. 6 sn kart yolu kullanmaz.
+    extra_links: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

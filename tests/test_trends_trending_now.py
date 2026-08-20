@@ -295,3 +295,13 @@ def test_fetch_items_returns_empty_when_no_source_and_no_cache(tmp_path, monkeyp
     monkeypatch.setattr(tn.requests, "post", lambda *a, **k: _Resp("x", status=500))
     monkeypatch.setattr(tn.requests, "get", lambda *a, **k: _Resp("x", status=500))
     assert tn.fetch_trending_items("TR", language="tr", cache_dir=tmp_path) == []
+
+
+def test_as_news_items_carries_extra_links():
+    from short_bot.trends.trending_now import trending_as_news_items
+    entries = [_entry("deprem", 50000)]
+    arts = {0: [_art("Ana haber", "https://a/1"), _art("İkinci", "https://b/2"), _art("Üçüncü", "https://c/3")]}
+    items = trending_as_news_items(entries, arts)
+    assert items[0].extra_links == ("https://b/2", "https://c/3")
+    single = trending_as_news_items([_entry("tek", 5000)], {0: [_art("Tek", "https://a/1")]})
+    assert single[0].extra_links == ()
