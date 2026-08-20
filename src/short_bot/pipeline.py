@@ -28,8 +28,9 @@ from short_bot.youtube.auto_upload import (
 )
 from short_bot.models import RenderJob
 from short_bot.fetcher import fetch_rss, fetch_feed_url
+from short_bot.trends.trending_now import fetch_trending_items
 from short_bot.dedup import filter_new
-from short_bot.scorer import score_items, select_top, select_newest_above
+from short_bot.scorer import score_items, select_top, select_newest_above, select_by_volume
 from short_bot.extractor import (
     extract_article,
     extract_og_image_url,
@@ -47,7 +48,7 @@ from short_bot.overflow import (
 )
 from short_bot.templates_config import ARCHETYPE_OVERFLOW_FIELDS
 from short_bot.composer import compose_video
-from short_bot.locale import ui_labels_for
+from short_bot.locale import ui_labels_for, trend_region_for
 from short_bot.generator import (
     GeneratorRetryExhausted, check_duplicate, generate_quote,
 )
@@ -985,9 +986,20 @@ def _produce_from_item(
 def _run_rss(*, channel, run_id, log, eng, settings,
              music_root, templates_dir, cache_dir,
              defer_upload: bool = False) -> RunResult:
-    """Existing 8-stage RSS pipeline body, extracted verbatim. Returns RunResult."""
-    log.info("[1/8] fetch_rss")
-    items = fetch_rss(channel.keywords, channel.rss_locale)
+    """Existing 8-stage RSS pipeline body, extracted verbatim. Returns RunResult.
+
+    content_source="trends" de bu gövdeyi kullanır: yalnız [1/8] kaynağı ve
+    seçim kuralı farklıdır (hacim sıralı + AI kapısı), kalan 7 adım ortak."""
+    is_trends = channel.content_source == "trends"
+    if is_trends:
+        region = (channel.trends_region or trend_region_for(channel.language)).upper()
+        log.info(f"[1/8] fetch_trending_now region={region}")
+        items = fetch_trending_items(
+            region, language=channel.language,
+            cache_dir=Path(cache_dir) / "trends", log=log)
+    else:
+        log.info("[1/8] fetch_rss")
+        items = fetch_rss(channel.keywords, channel.rss_locale)
     log.info(f"  → {len(items)} items")
 
     if channel.max_age_hours > 0:
@@ -1091,8 +1103,13 @@ def _run_rss(*, channel, run_id, log, eng, settings,
     )
     scored = _apply_category_quota(scored, channel=channel, eng=eng, log=log)
     scored = _apply_saga_penalty(scored, channel=channel, eng=eng, log=log)
-    top_n_candidates = select_top(scored, min_score=channel.min_score,
-                                  n=_IMAGE_RETRY_MAX)
+    if is_trends:
+        # Puan kapı, hacim sıra: ülkenin en çok aradığı OLAY önce.
+        top_n_candidates = select_by_volume(scored, min_score=channel.min_score,
+                                            n=_IMAGE_RETRY_MAX)
+    else:
+        top_n_candidates = select_top(scored, min_score=channel.min_score,
+                                      n=_IMAGE_RETRY_MAX)
     if not top_n_candidates:
         log.info(f"no item ≥ {channel.min_score} → finish")
         for s in scored:
@@ -1132,8 +1149,9 @@ def _run_rss(*, channel, run_id, log, eng, settings,
     script = None
     bg = None
     for attempt, candidate in enumerate(top_n_candidates, 1):
+        vol = (f" volume={candidate.item.trend_volume}" if is_trends else "")
         log.info(f"[4-6/8] candidate {attempt}/{len(top_n_candidates)} "
-                 f"score={candidate.score:.1f} | {candidate.item.title[:80]}")
+                 f"score={candidate.score:.1f}{vol} | {candidate.item.title[:80]}")
 
         # Resolve google-news redirect URLs to the publisher URL so BOTH the
         # body extractor AND the og:image fetch see the real article page
