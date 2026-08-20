@@ -19,6 +19,10 @@ class NewsItem:
     pub_date: datetime | None
     thumb_url: str | None
     description: str | None
+    # trend_volume: Google Trends kaynağında arama hacmi (50000 gibi). Seçim
+    # sırası bu alana dayanır (hacim sıralı + AI kapısı). RSS/feed kaynaklarında
+    # 0 kalır; varsayılanlı olduğu için mevcut kurucular kırılmaz.
+    trend_volume: int = 0
 
 
 @dataclass(frozen=True)
