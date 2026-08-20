@@ -225,6 +225,9 @@ def build_yorum_prompt(item, body: str, channel, *, extra_sources: list[tuple[st
             f"- CLOSING: {variation.closing}\n"
         )
 
+    from short_bot.followup import followup_block as _followup_block
+    followup = _followup_block(item)
+
     banned = ", ".join(f'"{p}"' for p in BANNED_PHRASES)
 
     return f"""You are writing a spoken commentary script for a {lo_s}-{hi_s} second vertical
@@ -237,7 +240,7 @@ COMMENTATOR PERSONA: {voice.persona}
 HEADLINE: {item.title}
 PRIMARY SOURCE ({primary_src}):
 {body[:3000]}
-{extra_block}{shape}
+{extra_block}{followup}{shape}
 OUTPUT a JSON object with exactly these fields:
 - "hook": the FIRST spoken sentence, written in the OPENING style above.
 - "beats": 3-5 beats. Each beat: {{"text": spoken sentence(s) (10-400 chars),

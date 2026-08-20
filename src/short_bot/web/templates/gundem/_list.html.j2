@@ -43,7 +43,7 @@
       <div class="min-w-0">
         <div class="text-[13.5px] leading-snug {% if sel %}font-semibold{% else %}font-medium{% endif %}">{{ r.title|e }}</div>
         <div class="text-[11px] text-claude-subtle mt-0.5">
-          {{ r.source|e }}{% if r.age_h is not none %} · {% if r.age_h < 1 %}{{ (r.age_h * 60)|int }} dk{% else %}{{ r.age_h|int }} sa{% endif %}{% endif %}{% if r.sources > 1 %} · {{ r.sources }} kaynak{% endif %}
+          {{ r.source|e }}{% if r.age_h is not none %} · {% if r.age_h < 1 %}{{ (r.age_h * 60)|int }} dk{% else %}{{ r.age_h|int }} sa{% endif %}{% endif %}{% if r.sources > 1 %} · {{ r.sources }} kaynak{% endif %}{% if r.intent == 'soru' %} · <span class="text-claude-accent font-semibold">soru</span>{% endif %}
         </div>
       </div>
     </a>

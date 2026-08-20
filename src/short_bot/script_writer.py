@@ -134,6 +134,8 @@ TONE OF VOICE:
 
     source = item.source or "—"
     trend_block, trend_rules = _trend_context(item, channel)
+    from short_bot.followup import followup_block as _followup_block
+    followup = _followup_block(item)
     return f"""You are writing a {lang_name} YouTube Shorts script.
 
 ORIGINAL HEADLINE: {item.title}
@@ -141,7 +143,7 @@ SOURCE: {source}
 
 ARTICLE BODY:
 {body}
-{trend_block}
+{trend_block}{followup}
 {arch_instructions}
 {tone_text}
 TASK: Convert this news into a 3-layer Short script. Output language: {lang_name}.

@@ -12,6 +12,7 @@ kapısı ATLANIR, çünkü seçimi zaten operatör yaptı.
 """
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -22,7 +23,9 @@ from sqlalchemy import func, select
 from short_bot.config import list_channels, load_channel
 from short_bot.db import init_db, is_processed, rss_items, shorts
 from short_bot.formats import FORMAT_LABELS, channel_format
+from short_bot.followup import previous_coverage, summarize
 from short_bot.locale import trend_region_for
+from short_bot.search_intent import intent_label
 from short_bot.trends.trending_now import fetch_trending_items
 from short_bot.web.runs import launch_pipeline
 
@@ -90,13 +93,21 @@ def _age_hours(pub) -> float | None:
 
 
 def _rows(items, channels, eng) -> list[dict]:
+    # Soru kalıpları DİLE özgü ("gelecek mi" ≠ "kommt"). Bölgeyi üreten kanalın
+    # dilini kullan; kanal yoksa Türkçe (panelin varsayılan bölgesi TR).
+    lang = next((c["cfg"].language for c in channels if c.get("cfg")), "tr")
     rows = []
     for it in items:
         produced = [c["slug"] for c in channels if is_processed(eng, it.guid, c["slug"])]
         rows.append({"guid": it.guid, "title": it.title, "source": it.source or "",
                      "volume": it.trend_volume, "growth": it.trend_growth_pct,
                      "age_h": _age_hours(it.pub_date), "produced": produced,
-                     "sources": 1 + len(it.trend_articles)})
+                     "sources": 1 + len(it.trend_articles),
+                     # Niyet rozeti: ilişkili aramalarında SORU olan trend, cevap
+                     # veren formatın (yorum) işidir; kanal seçimi bunu zaten
+                     # sırada tercih eder (ChannelConfig.trends_intent).
+                     "intent": intent_label(it, language=lang),
+                     "queries": list(it.trend_related)[:6]})
     return rows
 
 
@@ -162,8 +173,29 @@ def _channel_status(eng, channels) -> list[dict]:
                      if last else None),
             "next": _next_fire(cfg.schedule_cron) if cfg.enabled else None,
             "enabled": cfg.enabled,
+            # Aramanın payı (28 gün). Aşama 1'in etkisi ancak bu oran zaman
+            # içinde izlenirse görülür; başlangıç ölçümü %2,2–2,9 idi.
+            "search_pct": _search_pct(eng, cfg),
         })
     return out
+
+
+def _search_pct(eng, cfg) -> float | None:
+    """Bu kanalın izlenmelerinin yüzde kaçı YouTube ARAMASINDAN geliyor.
+
+    İstatistik tazelemesi yazar (youtube/stats_refresh.py). Ölçüm yoksa None —
+    panel "—" gösterir, uydurma sayı ÜRETMEZ."""
+    import json as _json
+    from short_bot.db import kv_value
+    from short_bot.youtube import auth as _yt_auth
+    for slug in (_yt_auth.creds_slug(cfg), cfg.slug):
+        raw = kv_value(eng, f"traffic:{slug}")
+        if raw:
+            try:
+                return float((_json.loads(raw) or {}).get("search_pct"))
+            except (ValueError, TypeError):
+                return None
+    return None
 
 
 def _cartesia_usage() -> dict:
@@ -223,6 +255,20 @@ def produce():
     if item is None:
         flash("Bu haber artık listede değil — listeyi yenileyip tekrar dene.", "error")
         return redirect(url_for("gundem.desk", region=region))
+    followup_note = ""
+    if request.form.get("followup") == "1":
+        # TAKİP: önceki videonun metni prompta girer → yeni video yalnız YENİ
+        # gelişmeyi anlatır. Önce aynı kanalın kaydı aranır (üslup sürekliliği),
+        # yoksa herhangi bir kanalınki (kart → yorum takibi meşrudur).
+        eng = _eng()
+        prev = (previous_coverage(eng, guid, channel=slug)
+                or previous_coverage(eng, guid))
+        note = summarize(prev)
+        if note:
+            item = replace(item, followup_of=note)
+            followup_note = " (takip)"
+        else:
+            flash("Önceki video bulunamadı — normal üretim olarak başlatıldı.", "info")
     launch_pipeline(
         channel=channel,
         settings=current_app.config["SHORTBOT_SETTINGS"],
@@ -235,6 +281,6 @@ def produce():
         trigger="manual_gundem",
         preselected_item=item,
     )
-    flash(f"Üretim başladı: {item.title[:60]} → {channel.name}. İlerleme Akış/Loglar'da.",
-          "success")
+    flash(f"Üretim başladı{followup_note}: {item.title[:60]} → {channel.name}. "
+          f"İlerleme Akış/Loglar'da.", "success")
     return redirect(url_for("gundem.desk", region=region, guid=guid))

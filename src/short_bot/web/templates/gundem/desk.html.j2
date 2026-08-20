@@ -121,6 +121,9 @@
               <span class="w-2.5 h-2.5 rounded-full flex-none {% if s.enabled %}bg-claude-success{% else %}bg-claude-border-strong{% endif %}"></span>
               <span class="font-semibold w-40 truncate">{{ s.name|e }}{% if s.label != s.name %} · {{ s.label|e }}{% endif %}</span>
               <span class="text-claude-muted">{{ s.today }} video{% if s.last %} · son {{ s.last }}{% endif %}</span>
+              {% if s.search_pct is not none %}
+              <span class="text-claude-subtle" title="Son 28 günde izlenmelerin yüzde kaçı YouTube aramasından geldi">arama %{{ '%.1f'|format(s.search_pct) }}</span>
+              {% endif %}
               <span class="ml-auto text-claude-subtle">{% if s.next %}sıradaki koşu {{ s.next }}{% else %}cron kapalı{% endif %}</span>
             </div>
             {% else %}
@@ -152,9 +155,13 @@
             <input type="hidden" name="region" value="{{ region }}">
             <input type="hidden" name="channel_slug" value="{{ c.slug|e }}">
             <input type="hidden" name="guid" value="{{ item.guid|e }}">
-            <button type="submit" {% if done %}disabled{% endif %}
+            {# Üretilmiş haber KİLİTLİ değil: 24-48 saat sonra gelişme olduğunda
+               "takip" videosu üretilir. Önceki videonun metni prompta girer ki
+               yeni video aynı şeyi tekrar anlatmasın (bkz. followup.py). #}
+            {% if done %}<input type="hidden" name="followup" value="1">{% endif %}
+            <button type="submit"
                     class="w-full flex items-center gap-3.5 rounded-xl p-3.5 text-left border transition
-                           {% if done %}bg-claude-surface border-claude-border opacity-60 cursor-default
+                           {% if done %}bg-claude-surface border-claude-border-strong border-dashed hover:bg-claude-surface-alt
                            {% elif c.format == 'yorum' %}bg-claude-accent hover:bg-claude-accent-hover border-claude-accent text-white
                            {% else %}bg-claude-surface hover:bg-claude-surface-alt border-claude-border-strong{% endif %}">
               <span class="flex-none rounded-md overflow-hidden relative bg-[#141413]" style="width: 54px; height: 96px;">
@@ -171,7 +178,7 @@
               <span class="flex-1 min-w-0">
                 <span class="block text-[15px] font-bold truncate">{{ c.name|e }} · {% if c.format == 'yorum' %}35-50 sn{% else %}6 sn kart{% endif %}</span>
                 <span class="block text-xs mt-0.5 leading-snug {% if c.format == 'yorum' and not done %}opacity-90{% else %}text-claude-muted{% endif %}">
-                  {% if done %}Bu haber bu kanalda zaten üretildi.
+                  {% if done %}Üretildi — takip videosu YALNIZ yeni gelişmeyi anlatır.
                   {% elif c.format == 'yorum' %}{{ 1 + item.trend_articles|length }} kaynaktan tarafsız yorum + seslendirme. ~3 dk.
                   {% else %}Manşet + gövde + fotoğraf. ~40 sn.{% endif %}
                 </span>
@@ -180,7 +187,7 @@
                            {% if done %}bg-claude-surface-alt text-claude-muted
                            {% elif c.format == 'yorum' %}bg-white text-claude-accent
                            {% else %}bg-claude-bg border border-claude-border-strong{% endif %}">
-                {% if done %}✓{% else %}Üret{% endif %}
+                {% if done %}↻ Takip{% else %}Üret{% endif %}
               </span>
             </button>
           </form>

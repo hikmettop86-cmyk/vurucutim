@@ -118,7 +118,9 @@ def test_selecting_by_guid_switches_detail(app, fake_trends):
     assert "10.000" in body
 
 
-def test_produced_item_is_marked_and_button_disabled(app, fake_trends, tmp_path):
+def test_produced_item_is_marked_and_offers_a_followup(app, fake_trends, tmp_path):
+    """Üretilmiş haber KİLİTLİ değil: gelişme olduğunda takip videosu üretilir.
+    (Ölçüm 2026-08-20: arama talebi tekrar ediyor, tek video onu karşılamıyor.)"""
     from short_bot.db import init_db, mark_processed
     eng = init_db(tmp_path / "x.sqlite")
     mark_processed(eng, guid="https://a/1", channel="gundem", title="t")
@@ -126,6 +128,69 @@ def test_produced_item_is_marked_and_button_disabled(app, fake_trends, tmp_path)
     assert "✓ üretildi" in body                       # kuyrukta işaret
     # seçim üretilmemiş ilk habere kayar
     assert "asgari ücret zam" in body
+    # üretilmiş haberi elle seçince: düğme açık ve takip modunda
+    done = app.test_client().get("/gundem?region=TR&guid=https://a/1").data.decode("utf-8")
+    assert "↻ Takip" in done and 'name="followup" value="1"' in done
+    assert "disabled" not in done.split("data-produce")[1][:900]
+
+
+def test_queue_marks_question_intent(app, monkeypatch):
+    """Soru niyetli trend kuyrukta işaretlenir — cevap veren format onun işidir.
+    Saf olay ("istanbul deprem") işaretlenmez."""
+    items = [
+        NewsItem(guid="https://q/1", title="Asgari ücret", link="l", source="Dünya",
+                 pub_date=None, thumb_url=None, description="d", trend_volume=20000,
+                 trend_related=("asgari ücrete zam gelecek mi", "asgari ücret")),
+        NewsItem(guid="https://e/2", title="Deprem", link="l", source="NTV",
+                 pub_date=None, thumb_url=None, description="d", trend_volume=90000,
+                 trend_related=("istanbul deprem", "son dakika deprem")),
+    ]
+    monkeypatch.setattr("short_bot.web.routes.gundem.fetch_trending_items",
+                        lambda region, **kw: items if region == "TR" else [])
+    body = app.test_client().get("/gundem?region=TR").data.decode("utf-8")
+    assert body.count(">soru<") == 1
+
+
+def test_followup_carries_previous_narration_into_the_item(app, fake_trends, monkeypatch, tmp_path):
+    """Takip üretimi önceki metni prompta taşır; taşımazsa video aynı şeyi tekrar anlatır."""
+    import json
+    from short_bot.db import init_db, record_short
+    eng = init_db(tmp_path / "x.sqlite")
+    record_short(eng, channel="gundem", rss_item_guid="https://a/1", title="ÖNCEKİ KART",
+                 file_path="f.mp4", duration_s=6,
+                 script_json=json.dumps({"narration_text": "Gece 36 sarsıntı oldu."}),
+                 render_ms=1)
+    seen = {}
+    monkeypatch.setattr("short_bot.web.routes.gundem.launch_pipeline",
+                        lambda **kw: seen.update(kw))
+    app.test_client().post("/gundem/produce", data={
+        "region": "TR", "channel_slug": "gundem-yorum", "guid": "https://a/1",
+        "followup": "1"})
+    it = seen["preselected_item"]
+    assert "ÖNCEKİ KART" in it.followup_of and "36 sarsıntı" in it.followup_of
+    assert it.trend_volume == 100000          # haberin geri kalanı bozulmadı
+
+
+def test_followup_without_previous_video_falls_back_to_normal(app, fake_trends, monkeypatch):
+    seen = {}
+    monkeypatch.setattr("short_bot.web.routes.gundem.launch_pipeline",
+                        lambda **kw: seen.update(kw))
+    r = app.test_client().post("/gundem/produce", data={
+        "region": "TR", "channel_slug": "gundem", "guid": "https://a/1",
+        "followup": "1"}, follow_redirects=True)
+    assert seen["preselected_item"].followup_of == ""
+    assert "Önceki video bulunamadı" in r.data.decode("utf-8")
+
+
+def test_normal_produce_never_sets_followup(app, fake_trends, monkeypatch):
+    """Otomatik/normal üretim ASLA takip moduna girmez — yoksa aynı haberi
+    iki kez anlatan bot oluruz."""
+    seen = {}
+    monkeypatch.setattr("short_bot.web.routes.gundem.launch_pipeline",
+                        lambda **kw: seen.update(kw))
+    app.test_client().post("/gundem/produce", data={
+        "region": "TR", "channel_slug": "gundem", "guid": "https://a/1"})
+    assert seen["preselected_item"].followup_of == ""
 
 
 def test_known_gate_score_is_shown(app, fake_trends, tmp_path):
