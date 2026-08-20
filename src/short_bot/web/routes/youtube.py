@@ -183,9 +183,13 @@ def upload(short_id):
     proxy_session = build_proxied_requests_session(proxy_url) if proxy_url else None
     proxy_http = build_proxied_http(proxy_url) if proxy_url else None
 
+    # Kimlik kanalın KENDİ slug'ında olmayabilir: aynı YouTube kanalına üreten
+    # ikinci format (ör. gundem-yorum → gundem) youtube.credentials_from ile
+    # bağlantıyı paylaşır. Ham slug kullanmak "Önce YouTube bağla" hatası veriyordu.
+    _cslug = yt_auth.creds_slug(cfg)
     try:
         creds = yt_auth.load_credentials(
-            _yt_root(), s.channel, proxy_session=proxy_session,
+            _yt_root(), _cslug, proxy_session=proxy_session,
         )
     except (requests.exceptions.ProxyError,
             requests.exceptions.ConnectionError,
@@ -200,7 +204,8 @@ def upload(short_id):
         return redirect(url_for("shorts.detail", short_id=short_id))
 
     if creds is None:
-        flash("Önce YouTube bağla (kanal edit sayfasından).", "error")
+        flash(f"Önce YouTube bağla — '{_cslug}' kanalının bağlantısı yok "
+              f"(Kanallar → {_cslug} → Düzenle → YouTube).", "error")
         return redirect(url_for("shorts.detail", short_id=short_id))
 
     yt_cfg = cfg.youtube

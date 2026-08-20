@@ -31,6 +31,7 @@ enabled: true
 
 
 def _write(tmp_path, slug, extra=""):
+    tmp_path.mkdir(parents=True, exist_ok=True)
     p = tmp_path / f"{slug}.yaml"
     p.write_text(_BASE.format(slug=slug) + extra, encoding="utf-8")
     return p
@@ -103,3 +104,54 @@ def test_repo_gundem_yorum_borrows_gundem():
         pytest.skip("config/channels takipsiz olabilir")
     cfg = load_channel(p)
     assert ya.creds_slug(cfg) == "gundem"
+
+
+# --- panel yolları: ödünç kimlik her yerde çözülmeli --------------------------------
+
+_SETTINGS = ("ffmpeg_path: ffmpeg\nclaude_cli_path: claude\nplaywright_browser: chromium\n"
+             "web: {host: 127.0.0.1, port: 5005}\nfuzzy_dedup_threshold: 0.85\nlog_level: INFO\n"
+             "claude_models: {dna: opus, default: haiku}\n")
+
+
+@pytest.fixture
+def app_with_borrow(tmp_path):
+    from short_bot.web import create_app
+    cfg_dir = tmp_path / "config"
+    (cfg_dir / "channels").mkdir(parents=True)
+    (cfg_dir / "settings.yaml").write_text(_SETTINGS, encoding="utf-8")
+    _write(cfg_dir / "channels", "gundem")
+    _write(cfg_dir / "channels", "gundem-yorum",
+           "youtube:\n  credentials_from: gundem\n  auto_upload: false\n")
+    (tmp_path / "data").mkdir()
+    app = create_app(config_dir=cfg_dir, db_path=tmp_path / "data" / "x.sqlite",
+                     secrets_path=tmp_path / "data" / "secrets.yaml", scheduler=False)
+    _connect(tmp_path / "data" / "youtube_credentials", "gundem",
+             channel_id="UCKAOS", title="Kaos Dayı")
+    return app
+
+
+def test_manual_upload_uses_borrowed_credentials(app_with_borrow, monkeypatch):
+    """Kullanıcı bildirimi: '↑ YouTube'a Yükle' → 'Önce YouTube bağla' diyordu."""
+    from short_bot.db import init_db, record_short
+    from short_bot.web.routes import youtube as yroute
+    eng = init_db(app_with_borrow.config["SHORTBOT_DB_PATH"])
+    sid = record_short(eng, channel="gundem-yorum", rss_item_guid="g", title="t",
+                       file_path="yok.mp4", duration_s=40, script_json="{}", render_ms=0)
+    seen = {}
+
+    def _load(root, slug, **kw):
+        seen["slug"] = slug
+        return None            # burada duruyoruz; ilgimiz HANGİ slug sorulduğunda
+    monkeypatch.setattr(yroute.yt_auth, "load_credentials", _load)
+    r = app_with_borrow.test_client().post(f"/shorts/{sid}/upload-youtube", follow_redirects=False)
+    assert r.status_code in (302, 303)
+    assert seen["slug"] == "gundem"          # ham 'gundem-yorum' DEĞİL
+
+
+def test_short_detail_shows_connected_for_borrowing_channel(app_with_borrow):
+    from short_bot.db import init_db, record_short
+    eng = init_db(app_with_borrow.config["SHORTBOT_DB_PATH"])
+    sid = record_short(eng, channel="gundem-yorum", rss_item_guid="g2", title="t",
+                       file_path="yok.mp4", duration_s=40, script_json="{}", render_ms=0)
+    body = app_with_borrow.test_client().get(f"/shorts/{sid}").data.decode("utf-8")
+    assert "Önce kanal edit sayfasından YouTube bağla" not in body

@@ -63,9 +63,10 @@ def edit_reel(slug):
     if yt_root:
         try:
             from short_bot.youtube import auth as _yt_auth
-            yt_connected = bool(_yt_auth.has_credentials(yt_root, slug))
+            _cslug = _yt_auth.creds_slug(cfg)
+            yt_connected = bool(_yt_auth.has_credentials(yt_root, _cslug))
             if yt_connected:
-                yt_info = _yt_auth.load_channel_info(yt_root, slug)
+                yt_info = _yt_auth.load_channel_info(yt_root, _cslug)
             yt_has_secrets = (yt_root / slug / "client_secrets.json").is_file()
             yt_secrets_abs = str((yt_root / slug).resolve())
         except Exception:
