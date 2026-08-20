@@ -14,7 +14,7 @@ def register_blueprints(app: Flask) -> None:
         generator_test, system, youtube, youtube_stats, youtube_overview,
         activity, community, feeds, reel_new, reel_edit,
         topic_bank, series, autopilot, lang_packs,
-        curated, cartesia_api, yorum,
+        curated, cartesia_api, yorum, gundem,
     )
     # Kanal formatı TEK yerden: liste parçaları düzenle bağlantısını ve rozeti
     # buradan alır (formats.channel_format) — if-zinciri kopyalanmasın.
@@ -46,3 +46,4 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(curated.bp)
     app.register_blueprint(cartesia_api.bp)
     app.register_blueprint(yorum.bp)
+    app.register_blueprint(gundem.bp)

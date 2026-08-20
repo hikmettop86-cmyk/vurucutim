@@ -922,20 +922,19 @@ def _produce_from_item(
         bg_video_path = _resolve_pexels_bg(
             channel=channel, cache_dir=cache_dir,
             secrets_path=secrets_path, log=log)
-        bv = channel.bg_video
-        template_path = templates_dir / f"{archetype}.html.j2"
-        render_frames(job, template_path, frames_dir, fps=30,
-                      browser=settings.playwright_browser, ui_labels=ui_labels,
-                      dna_css=dna_css,
-                      animation_style=(effective_dna.animation_style
-                                       if effective_dna is not None else "none"))
-        compose_video(frames_dir, music, out_path, fps=30,
-                      ffmpeg_path=settings.ffmpeg_path, sfx_overlays=sfx_overlays,
-                      bg_video_path=bg_video_path,
-                      bg_blur_px=bv.blur_px if bv else 30,
-                      bg_dim=bv.dim if bv else 0.4,
-                      fg_scale=bv.scale if (bv and bg_video_path) else 1.0,
-                      duration_s=channel.duration_s)
+        # Voiced/yorum kanalı panelden (Canlı Gündem, RSS havuzu) seçilen haberle
+        # de seslendirmeli üretsin: eskiden bu yol yalnız sessiz kart çiziyordu.
+        _render_and_compose(
+            job=job, archetype=archetype, templates_dir=templates_dir,
+            frames_dir=frames_dir, music=music, out_path=out_path,
+            channel=channel, settings=settings, secrets=secrets,
+            ui_labels=ui_labels, dna_css=dna_css,
+            animation_style=(effective_dna.animation_style
+                             if effective_dna is not None else "none"),
+            sfx_overlays=sfx_overlays, bg_video_path=bg_video_path,
+            item=item, body=body, script=script, bg_image_path=bg,
+            log=log, llm_call=script_call, cache_dir=cache_dir,
+        )
         render_ms = int((time.perf_counter() - t0) * 1000)
         log.info(f"  → {out_path.name} ({render_ms}ms)")
 

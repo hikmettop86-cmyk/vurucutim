@@ -1,0 +1,37 @@
+{% extends "base.html.j2" %}
+{% block title %}Vurucu TİM — Canlı Gündem{% endblock %}
+{% block content %}
+<div class="max-w-7xl mx-auto">
+  <div class="flex items-start justify-between mb-4 gap-4">
+    <div>
+      <h1 class="font-serif text-3xl font-bold">📡 Canlı Gündem</h1>
+      <p class="text-claude-muted text-sm mt-1">
+        Google Trends'in son 24 saatlik listesi, arama hacmine göre. Tablo {{ refresh_seconds // 60 }} dakikada bir
+        kendiliğinden tazelenir; bir haberi seçip satırındaki kanala tek tıkla üret.
+        Seçtiğin haber dedup/puanlama kapısından geçmeden o kanalın hattına girer.
+      </p>
+    </div>
+    <form method="get" action="/gundem" class="flex items-center gap-2 flex-shrink-0">
+      <select name="region" onchange="this.form.submit()"
+              class="bg-claude-surface border border-claude-border px-3 py-1.5 rounded-lg text-sm">
+        {% for code, label in regions %}<option value="{{ code }}" {% if code == region %}selected{% endif %}>{{ code }} · {{ label }}</option>{% endfor %}
+      </select>
+      <button type="button"
+              hx-get="/gundem/table?region={{ region }}&force=1" hx-target="#gundem-table" hx-swap="innerHTML"
+              class="bg-claude-accent hover:bg-claude-accent-hover text-white px-4 py-1.5 rounded-lg text-sm font-semibold">⟳ Şimdi yenile</button>
+    </form>
+  </div>
+
+  {% if not channels %}
+  <div class="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg p-3 text-sm mb-4">
+    {{ region }} bölgesini üreten trends kanalı yok. <a href="/channels/new-yorum" class="underline">Gündem Yorum kanalı</a>
+    ya da kanal düzenleme sayfasından kaynağı "Google Trends" yap.
+  </div>
+  {% endif %}
+
+  <div id="gundem-table"
+       hx-get="/gundem/table?region={{ region }}" hx-trigger="every {{ refresh_seconds }}s" hx-swap="innerHTML">
+    {% include "gundem/_table.html.j2" %}
+  </div>
+</div>
+{% endblock %}

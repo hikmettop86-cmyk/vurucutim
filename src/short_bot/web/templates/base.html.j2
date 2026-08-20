@@ -73,6 +73,7 @@
         <a href="/" class="nav-link hover:text-claude-text {% if p == '/' %}active{% endif %}">Dashboard</a>
         <a href="/activity" class="nav-link hover:text-claude-text {% if p.startswith('/activity') %}active{% endif %}">Akış</a>
         <a href="/shorts" class="nav-link hover:text-claude-text {% if p.startswith('/shorts') %}active{% endif %}">Shorts</a>
+        <a href="/gundem" class="nav-link hover:text-claude-text {% if p.startswith('/gundem') %}active{% endif %}">Gündem</a>
         <a href="/curated" class="nav-link hover:text-claude-text {% if p.startswith('/curated') %}active{% endif %}">Cevher</a>
         <a href="{{ url_for('feeds.list_view') }}" class="nav-link hover:text-claude-text {% if p.startswith('/feeds') %}active{% endif %}">RSS Havuzu</a>
         <a href="/channels" class="nav-link hover:text-claude-text {% if p.startswith('/channels') %}active{% endif %}">Kanallar</a>
