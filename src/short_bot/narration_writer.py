@@ -186,6 +186,60 @@ BANNED_PHRASES: tuple[str, ...] = (
 )
 
 
+# ALMANCA YORUMCU. Türkçe personanın ÇEVİRİSİ DEĞİL — Alman medya kültürünün
+# kendi kalıbı: Tagesthemen sonundaki "Kommentar" geleneği. Orada yorumcu adıyla
+# konuşur, önce SACHLICH anlatır, sonra EINORDNUNG yapar (bu kelime Alman haber
+# dilinin merkezinde: olayı bağlama oturtmak), tartar ve net bir hükümle biter.
+# Türk "sokak bilgesi" tonu ("bakın", "şimdi") Almancaya çevrilse kabalaşır.
+YORUM_PERSONA_DE = (
+    "Du kommentierst die Nachrichtenlage in Deutschland: parteilos, aber nicht "
+    "meinungslos. Zuerst sagst du sachlich, was passiert ist. Dann ordnest du ein — "
+    "was daran neu ist, was es konkret für die Menschen bedeutet, was offen bleibt. "
+    "Du wägst ab, drückst dich aber nicht: am Ende steht ein klares, faires Urteil. "
+    "Du stehst auf der Seite der Bürgerinnen und Bürger, nicht auf der einer Partei, "
+    "einer Behörde oder eines Konzerns. Trockener Humor ja, Häme nein; bei Opfern und "
+    "Trauer bist du respektvoll. Sprache: kurze Hauptsätze, Aktiv statt Passiv, "
+    "'Der Reihe nach', 'Fakt ist', 'Bleibt die Frage'. Keine Behördenfloskeln "
+    "('teilte mit', 'wurde bekannt gegeben'), keine Anglizismen-Show. "
+    "Pressekodex: Verdächtige NIE mit vollem Namen — 'mutmaßlich', 'Max M.'."
+)
+
+YORUM_PERSONAS: dict[str, str] = {"tr": YORUM_PERSONA_TR, "de": YORUM_PERSONA_DE}
+
+
+def default_yorum_persona(language: str = "tr") -> str:
+    """Kanalın dili için varsayılan yorumcu personası.
+
+    Bilinmeyen dilde Türkçe personayı DÖNDÜRMEZ — çok dilli tuzakların en
+    sinsisi tam buydu (bkz. reel_narration._language_name: bilinmeyen dilde
+    'Turkish' dönüp Japonca sese Türkçe metin okutuyordu). Karşılığı olmayan
+    dilde boş döner: panel operatörden persona ister, sessizce yanlış dilde
+    yazmaz."""
+    return YORUM_PERSONAS.get((language or "").split("-")[0].lower(), "")
+
+
+# YASAK KALIPLAR DİLE ÖZGÜDÜR. Almanca kanala "Peki sizce" yasağı koymak boşa
+# kürek: model o kalıbı zaten üretmez, ürettiği Alman gazetecilik klişesidir
+# ("Es bleibt abzuwarten" — Almanca haber metinlerinin en yıpranmış kapanışı).
+BANNED_PHRASES_DE: tuple[str, ...] = (
+    # Arama verisi: konuyu seçer, KONUŞULMAZ.
+    "Google Trends", "Suchanfragen", "haben danach gesucht", "im Trend",
+    "trendet", "viral gegangen", "Suchvolumen",
+    # AI-slop / klişe kapanışlar
+    "Es bleibt abzuwarten", "Zusammenfassend", "Abschließend lässt sich sagen",
+    "Letztendlich", "Am Ende des Tages", "Schauen wir mal", "Nicht zuletzt",
+    "Was meint ihr", "Schreibt es in die Kommentare", "abonniert", "unseren Kanal",
+)
+
+_BANNED: dict[str, tuple[str, ...]] = {"tr": BANNED_PHRASES, "de": BANNED_PHRASES_DE}
+
+
+def banned_phrases(language: str = "tr") -> tuple[str, ...]:
+    """Bu dilde yasak kalıplar. Listesi olmayan dilde boş — uydurma yasak
+    koymaktansa hiç koymamak yeğdir."""
+    return _BANNED.get((language or "").split("-")[0].lower(), ())
+
+
 def build_yorum_prompt(item, body: str, channel, *, extra_sources: list[tuple[str, str]],
                        variation=None) -> str:
     """Yorum anlatımı promptu. Çıktı şeması ``Narration`` ile aynı (hook/beats/
@@ -228,7 +282,11 @@ def build_yorum_prompt(item, body: str, channel, *, extra_sources: list[tuple[st
     from short_bot.followup import followup_block as _followup_block
     followup = _followup_block(item)
 
-    banned = ", ".join(f'"{p}"' for p in BANNED_PHRASES)
+    _bans = banned_phrases(channel.language)
+    # Listesi olmayan dilde satır HİÇ yazılmaz: "BANNED PHRASES:" deyip boş
+    # bırakmak modele anlamsız bir kural verir ve prompt'a gürültü katar.
+    banned_line = ("\n- BANNED PHRASES (do not use, in any inflection): "
+                   + ", ".join(f'"{p}"' for p in _bans)) if _bans else ""
 
     return f"""You are writing a spoken commentary script for a {lo_s}-{hi_s} second vertical
 short video. A text-to-speech voice reads it; the news card stays on screen while a
@@ -260,7 +318,7 @@ HARD RULES:
 - NEVER MENTION how many people searched this, search engines, trends, or that the topic is
   "trending" — that is our internal selection signal, not content. The viewer must not be
   able to tell how the topic was chosen.
-- BANNED PHRASES (do not use, in any inflection): {banned}
+{banned_line}
 - Every fact must come from the sources above. Invent nothing — no names, numbers, dates.
 - Plain spoken language, no markdown, no emoji, no brackets, numbers written as spoken.
 - Vary sentence length, but EVERY sentence must stand on its own: never write a short

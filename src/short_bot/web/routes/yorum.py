@@ -17,7 +17,7 @@ from pydantic import ValidationError
 from short_bot.config import (ChannelConfig, VoiceConfig, YoutubeChannelConfig, list_channels,
                               load_channel, save_channel)
 from short_bot.formats import channel_format
-from short_bot.narration_writer import YORUM_PERSONA_TR
+from short_bot.narration_writer import YORUM_PERSONAS, default_yorum_persona
 
 bp = Blueprint("yorum", __name__)
 
@@ -81,13 +81,17 @@ def _form_float(name, default):
         return default
 
 
-def _voice_from_form(old: VoiceConfig | None) -> VoiceConfig:
+def _voice_from_form(old: VoiceConfig | None, language: str = "tr") -> VoiceConfig:
     return VoiceConfig(
         enabled=True,
         provider=(request.form.get("voice_provider") or (old.provider if old else "cartesia")),
         voice_id=(request.form.get("voice_id") or (old.voice_id if old else "")).strip(),
         speed=_form_float("voice_speed", old.speed if old else 1.05),
-        persona=(request.form.get("voice_persona") or "").strip() or (old.persona if old else YORUM_PERSONA_TR),
+        # Persona kanalın DİLİNDE varsayılır. Türkçe personayı Almanca kanala
+        # koymak sessiz bozulmadır: ses Almanca, metin Türkçe çıkar.
+        persona=((request.form.get("voice_persona") or "").strip()
+                 or (old.persona if old else "")
+                 or default_yorum_persona(language)),
         target_duration_s=(_form_int("voice_target_min", old.target_duration_s[0] if old else 35),
                            _form_int("voice_target_max", old.target_duration_s[1] if old else 50)),
         music_volume=_form_float("voice_music_volume", old.music_volume if old else 0.05),
@@ -118,7 +122,9 @@ def _cron_from_form(default: str) -> str:
 @bp.route("/channels/new-yorum")
 def new_form():
     return render_template("channels/new_yorum.html.j2", regions=REGIONS,
-                           runs=sorted(RUNS_PER_DAY_CRON), default_persona=YORUM_PERSONA_TR)
+                           runs=sorted(RUNS_PER_DAY_CRON),
+                           default_persona=default_yorum_persona("tr"),
+                           personas=dict(YORUM_PERSONAS))
 
 
 @bp.route("/channels/new-yorum", methods=["POST"])
@@ -129,7 +135,7 @@ def new_create():
         flash("Kanal adı gerekli.", "error")
         return redirect(url_for("yorum.new_form"))
     try:
-        voice = _voice_from_form(None)
+        voice = _voice_from_form(None, language)
         region = _region_from_form("TR")
     except (ValidationError, ValueError) as e:
         flash(f"Ayar geçersiz: {e}", "error")
@@ -217,7 +223,8 @@ def edit(slug):
                            recent=_recent(slug), yt_connected=yt_connected,
                            yt_info=yt_info, creds_slug=cslug, linkable=linkable,
                            yt_clash=yt_clash,
-                           default_persona=YORUM_PERSONA_TR)
+                           default_persona=default_yorum_persona(c.language)
+                           or default_yorum_persona("tr"))
 
 
 @bp.route("/channels/<slug>/edit-yorum", methods=["POST"])
@@ -228,7 +235,7 @@ def edit_save(slug):
         abort(404)
     c = load_channel(path)
     try:
-        voice = _voice_from_form(c.voice)
+        voice = _voice_from_form(c.voice, c.language)
         region = _region_from_form(c.trends_region)
     except (ValidationError, ValueError) as e:
         first = e.errors()[0].get("msg", str(e)) if isinstance(e, ValidationError) and e.errors() else str(e)

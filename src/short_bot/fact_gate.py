@@ -37,6 +37,8 @@ were is are be been only also now still just even than then from into over
 """.split())
 
 _KELIME = re.compile(r"[^\W\d_]+(?:['’][^\W\d_]+)?", re.UNICODE)
+# Sayıları da yakalayan bölme (yalnız ad-dilleri için, bkz. _proper_nouns).
+_TOKEN = re.compile(r"\d+|[^\W\d_]+(?:['’][^\W\d_]+)?", re.UNICODE)
 _SAYI = re.compile(r"\d+")
 # Cümle sonu: . ! ? ve İspanyolca ters işaretler cümle BAŞLATIR.
 _CUMLE_SONU = re.compile(r"[.!?…]+\s*")
@@ -53,7 +55,56 @@ def _fold(s: str) -> str:
     return s.casefold().replace("’", "'")
 
 
-def _proper_nouns(text: str) -> list[str]:
+# ADLARI BÜYÜK HARFLE YAZAN DİLLER. Almancada HER ad büyük harfle başlar
+# ("der Streit", "ein Wechsel", "die Konkurrenz") — "cümle içinde büyük harf =
+# özel ad" sezgiseli bu dilde çöker ve kapı her anlatımı uydurma ilan eder.
+#
+# CANLI VAKA (2026-08-20, Deutschland Klartext ilk koşusu): kapı
+# ['Überläufer', 'Reihe', 'Konkurrenz', 'Streit', 'Wechsel', 'Kontoauszug']
+# listesini "kaynakta geçmeyen isim" sayıp boşuna bir yeniden yazım turu
+# harcadı. İkinci tur da takılsaydı video düşecekti.
+#
+# AYIRT EDİCİ: Almancada sıradan adın önünde neredeyse her zaman bir belirteç
+# vardır (der/die/das, ein/eine, im/am/zum, dieser, kein…). Özel ad çoğunlukla
+# belirteçsiz gelir ("in Stendal", "Bernd Prange spendet"). Kısaltmalar (CDU,
+# AfD) ve arka arkaya iki büyük harfli sözcük (kişi/yer adı) HER ZAMAN adaydır.
+_NOUN_CAPITALIZING: frozenset[str] = frozenset({"de"})
+
+_DE_BELIRTEC: frozenset[str] = frozenset("""
+der die das den dem des ein eine einen einem einer eines
+kein keine keinen keinem keiner keines
+mein meine meinen meinem meiner dein deine sein seine seinen seinem seiner
+ihr ihre ihren ihrem ihrer unser unsere unseren unserem unserer euer eure
+dieser diese dieses diesen diesem jeder jede jedes jeden jedem
+im am zum zur beim vom ins ans aufs
+viele mehrere einige manche alle solche beide welche
+""".split())
+
+
+def _cok_buyuk_harf(k: str) -> bool:
+    """CDU, AfD, ARD gibi kısaltma mı (içinde ikinci bir büyük harf var mı)."""
+    return sum(1 for c in k if c.isupper()) >= 2
+
+
+# 'als'/'wie' sonrası ROL gelir, ad değil ("als Überläufer", "wie Nachbarn").
+# Sayıdan sonra BİRİM gelir ("zehntausend Euro", "60 Häuser") — sayının kendisi
+# zaten ayrıca denetleniyor.
+_DE_ROL_ONCESI: frozenset[str] = frozenset({"als", "wie"})
+_DE_SAYI_SONU = ("tausend", "hundert", "zig", "millionen", "milliarden",
+                 "million", "milliarde")
+_DE_SAYI_KELIME: frozenset[str] = frozenset("""
+ein eine zwei drei vier funf sechs sieben acht neun zehn elf zwolf
+dutzend etliche rund etwa knapp uber mehr weniger
+""".split())
+
+
+def _sayi_gibi(k: str) -> bool:
+    f = _fold(k)
+    return (any(c.isdigit() for c in k) or f in _DE_SAYI_KELIME
+            or f.endswith(_DE_SAYI_SONU))
+
+
+def _proper_nouns(text: str, language: str = "tr") -> list[str]:
     """Özel isim adayları.
 
     Cümle İÇİNDE büyük harfle başlayan her kelime adaydır. Cümle BAŞINDAKİ
@@ -67,16 +118,39 @@ def _proper_nouns(text: str) -> list[str]:
     ölçüt konumsal olmalı. Gerçek uydurmalar kaçmaz: bir kulüp/kişi adı
     anlatımda neredeyse her zaman cümle içinde de geçer.
     """
+    ad_dili = (language or "tr").split("-")[0].lower() in _NOUN_CAPITALIZING
     ic_konumda: set[str] = set()
     adaylar: list[tuple[str, bool]] = []
 
     for cumle in _CUMLE_SONU.split(text):
-        kelimeler = _KELIME.findall(cumle)
+        # Ad dillerinde SAYILAR da belirteç sayılır ("60 Häuser" → birim, ad
+        # değil); bu yüzden orada rakamları da içeren bir bölme kullanılır.
+        # Diğer dillerde bölme AYNEN korunur — sayı eklemek cümle-başı kuralını
+        # kaydırıp Türkçede yeni yanlış pozitifler doğururdu.
+        kelimeler = (_TOKEN.findall(cumle) if ad_dili else _KELIME.findall(cumle))
+        buyukler = [bool(k[:1].isupper()) for k in kelimeler]
         for i, k in enumerate(kelimeler):
             if len(k) < 3 or not k[:1].isupper():
                 continue
             if _fold(k) in _STOP:
                 continue
+            if ad_dili:
+                # Kısaltma ya da arka arkaya büyük harfli sözcük dizisi (kişi/yer
+                # adı) her hâlükârda aday; tek başına duran bir ad ancak önünde
+                # belirteç YOKSA aday olur.
+                komsu_buyuk = ((i > 0 and buyukler[i - 1] and i - 1 != 0)
+                               or (i + 1 < len(kelimeler) and buyukler[i + 1]))
+                onceki_ham = kelimeler[i - 1] if i > 0 else ""
+                onceki = _fold(onceki_ham)
+                if not _cok_buyuk_harf(k) and not komsu_buyuk and i > 0 and (
+                        onceki in _DE_ROL_ONCESI or _sayi_gibi(onceki_ham)):
+                    continue
+                if not (_cok_buyuk_harf(k) or komsu_buyuk
+                        or (i > 0 and onceki not in _DE_BELIRTEC)):
+                    continue
+                if i > 0 and onceki in _DE_BELIRTEC and not (
+                        _cok_buyuk_harf(k) or komsu_buyuk):
+                    continue
             cumle_basi = i == 0
             adaylar.append((k, cumle_basi))
             if not cumle_basi:
@@ -113,7 +187,7 @@ def unverified_claims(narration_text: str, source_text: str, *,
     eksik: list[str] = []
     gorulen: set[str] = set()
 
-    for aday in _proper_nouns(narration_text):
+    for aday in _proper_nouns(narration_text, language):
         anahtar = _fold(aday)
         if anahtar in gorulen:
             continue

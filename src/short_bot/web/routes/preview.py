@@ -7,6 +7,7 @@ from short_bot.config import load_channel
 from short_bot.locale import ui_labels_for
 from short_bot.models import Highlight, RenderJob, Script
 from short_bot.renderer import build_html
+from short_bot.text_normalize import language as lang_context
 from short_bot.dna import build_css_override, DnaSpec, DnaPalette, DnaFonts, DnaTone
 
 bp = Blueprint("preview", __name__)
@@ -30,13 +31,27 @@ def dna_defaults():
 
 
 def _load_sample_script(language: str) -> Script:
+    """Panel önizlemesinin örnek kartı — KANALIN DİLİNDE.
+
+    ``with lang_context`` ŞART: Script'in aksan doğrulayıcısı hedef dili
+    ContextVar'dan okur; bağlam açılmazsa TÜRK alfabesine göre budar ve
+    Almanca 'späte' → 'spate', İspanyolca 'año' → 'ano', Fransızca 'être' →
+    'etre' olur. Üretim yolu bağlamı açıyor (pipeline), panel önizlemesi
+    AÇMIYORDU: operatör kanalı Türkçe-bozuk bir örnekle değerlendiriyordu.
+    """
     samples = Path(__file__).resolve().parents[1] / "sample_scripts"
     sample_path = samples / f"sample_script_{language}.json"
     if not sample_path.exists():
         sample_path = samples / "sample_script_tr.json"
+        language = "tr"
     data = json.loads(sample_path.read_text(encoding="utf-8"))
-    data["highlights"] = [Highlight(**h) for h in data.get("highlights", [])]
-    return Script(**data)
+    # Highlight'lar da AYNI bağlamda kurulmalı: onların da kendi aksan
+    # doğrulayıcısı var ve dışarıda kurulunca 'salario mínimo' → 'salario
+    # minimo' oluyor; sonra Script "vurgu paragrafta birebir geçmiyor" diye
+    # reddediyor. Eskiden ikisi de bozuluyordu, o yüzden hata görünmüyordu.
+    with lang_context(language):
+        data["highlights"] = [Highlight(**h) for h in data.get("highlights", [])]
+        return Script(**data)
 
 
 def _default_dna_for(template: str, channel) -> DnaSpec:
