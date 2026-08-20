@@ -19,6 +19,8 @@ from short_bot.audio_probe import probe_duration_s as _probe_duration_s
 from short_bot.composer import compose_video as _compose_video
 from short_bot.models import RenderJob
 from short_bot.narration_writer import write_narration as _write_narration
+from short_bot.narration_writer import write_yorum_narration as _write_yorum_narration
+from short_bot.formats import channel_format
 from short_bot.renderer import render_frames as _render_frames
 from short_bot.tts.ai33_client import health_check as _health_check
 from short_bot.tts.ai33_client import synthesize as _synthesize
@@ -47,6 +49,7 @@ class VoicedDeps:
     ``health_check``/``synthesize`` varsayılanı ai33; ``for_provider`` kanalın
     sağlayıcısına göre doğru çifti kurar."""
     write_narration: Callable = _write_narration
+    write_yorum_narration: Callable = _write_yorum_narration
     health_check: Callable = _health_check
     synthesize: Callable = _synthesize
     probe_duration_s: Callable = _probe_duration_s
@@ -91,6 +94,7 @@ def produce_voiced_video(
     deps: VoicedDeps | None = None,
     ticker_items: tuple[str, ...] = (),
     usage_dir: Path | None = None,
+    extra_sources: list[tuple[str, str]] | None = None,
 ) -> Path:
     """Seslendirmeli videoyu üretip ``out_path``'e yazar."""
     voice = getattr(channel, "voice", None)
@@ -113,10 +117,17 @@ def produce_voiced_video(
         raise RuntimeError(msg.format(label=provider.label, key_hint=provider.key_hint))
     log.info(f"  {provider.label} preflight: {verdict}")
 
-    # 2) Anlatım senaryosu
-    narration = d.write_narration(item, body, channel=channel,
-                                   claude_path=llm_claude_path, model=llm_model,
-                                   backend=llm_backend, api_key=llm_api_key)
+    # 2) Anlatım senaryosu — format 'yorum' ise yorumcu yazarı (çok-kaynak +
+    # Trends bağlamı), değilse mevcut anlatım yazarı.
+    if channel_format(channel) == "yorum":
+        narration = d.write_yorum_narration(
+            item, body, channel=channel, extra_sources=list(extra_sources or []),
+            claude_path=llm_claude_path, model=llm_model,
+            backend=llm_backend, api_key=llm_api_key)
+    else:
+        narration = d.write_narration(item, body, channel=channel,
+                                       claude_path=llm_claude_path, model=llm_model,
+                                       backend=llm_backend, api_key=llm_api_key)
     log.info(f"  narration: {narration.word_count()} kelime, "
              f"{len(narration.beats)} beat")
 

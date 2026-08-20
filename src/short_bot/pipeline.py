@@ -29,6 +29,7 @@ from short_bot.youtube.auto_upload import (
 from short_bot.models import RenderJob
 from short_bot.fetcher import fetch_rss, fetch_feed_url
 from short_bot.trends.trending_now import fetch_trending_items
+from short_bot.formats import channel_format
 from short_bot.dedup import filter_new
 from short_bot.scorer import score_items, select_top, select_newest_above, select_by_volume
 from short_bot.extractor import (
@@ -1973,6 +1974,8 @@ def _render_and_compose(
             api_key=tts.resolve_api_key(secrets),
             ticker_items=tuple(getattr(job, "ticker_items", ()) or ()),
             usage_dir=Path(cache_dir) if cache_dir else None,
+            extra_sources=(_extra_source_bodies(item, log=log)
+                           if channel_format(channel) == "yorum" else None),
             ffmpeg_path=settings.ffmpeg_path,
             fps=30, browser=settings.playwright_browser,
             ui_labels=ui_labels, dna_css=dna_css,
