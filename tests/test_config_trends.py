@@ -72,3 +72,17 @@ def test_save_omits_trends_region_when_unset(tmp_path):
     out = tmp_path / "out.yaml"
     save_channel(out, cfg)
     assert "trends_region" not in yaml.safe_load(out.read_text(encoding="utf-8"))
+
+
+def test_repo_gundem_channel_loads():
+    from pathlib import Path
+    p = Path(__file__).resolve().parents[1] / "config" / "channels" / "gundem.yaml"
+    if not p.exists():
+        pytest.skip("config/channels takipsiz olabilir (worktree)")
+    cfg = load_channel(p)
+    assert cfg.content_source == "trends"
+    assert cfg.trends_region == "TR"
+    assert cfg.schedule_cron == "0 */2 * * *"
+    assert cfg.trend_boost is None or cfg.trend_boost.enabled is False
+    assert cfg.dna is not None and cfg.dna.archetype == cfg.template == "broadcast"
+    assert cfg.youtube is not None and cfg.youtube.auto_upload is False
