@@ -424,6 +424,16 @@ class ChannelConfig:
     # Arama payı tüm kanallarda %2,2–2,9 (2026-08-20 ölçümü) — bu ayar
     # trafiği DEVİRMEZ, havuzu böler.
     trends_intent: Literal["any", "question", "breaking"] = "any"
+    # trends_vertical: kanalın DİKEYİ (bkz. trends/verticals.py). Trend havuzu
+    # tanımı gereği "her şey"dir; hacim sıralı seçim onu ülkenin en kalabalık
+    # konusuna (ölçüldü 2026-08-21: TR hacminin %64'ü spor) sürükler ve Shorts
+    # algoritması kanalı tek bir kitleyle eşleştiremez. Dikey, havuzu kanalın
+    # kimliğine daraltır. None = eski davranış, süzme yok.
+    trends_vertical: str | None = None
+    # trends_min_candidates: dikey süzgecinden sonra bu sayının altında aday
+    # kalırsa koşu boş biter. Havuzu SESSİZCE genişletmek yasak — tam da
+    # düzeltilen sorunu geri getirir ve görünmez yapar.
+    trends_min_candidates: int = 4
     dna: DnaSpec | None = None
     script_model: str | None = None
     content_source: Literal["rss", "generator", "feed", "curated", "trends"] = "rss"
@@ -497,6 +507,21 @@ def _trends_intent(raw, slug: str) -> str:
         raise ValueError(
             f"channel {slug!r}: trends_intent {raw!r} geçersiz — "
             f"{', '.join(_TRENDS_INTENTS)} olmalı")
+    return val
+
+
+def _trends_vertical(raw, slug: str) -> str | None:
+    """trends_vertical'ı doğrula. Yazım hatası SESSİZCE None'a düşmemeli:
+    kanal dikeyli sanılıp 'her şey' üreten bir kanal en kötüsüdür
+    (bkz. _trends_intent'teki aynı gerekçe)."""
+    if raw in (None, ""):
+        return None
+    from short_bot.trends.verticals import VERTICALS
+    val = str(raw).strip().lower()
+    if val not in VERTICALS:
+        raise ValueError(
+            f"channel {slug!r}: trends_vertical {raw!r} geçersiz — "
+            f"{', '.join(sorted(VERTICALS))} olmalı")
     return val
 
 
@@ -628,6 +653,8 @@ def load_channel(path: Path) -> ChannelConfig:
         trends_region=trends_region,
         trends_min_volume=int(data.get("trends_min_volume") or 1000),
         trends_intent=_trends_intent(data.get("trends_intent"), slug),
+        trends_vertical=_trends_vertical(data.get("trends_vertical"), slug),
+        trends_min_candidates=int(data.get("trends_min_candidates") or 4),
         reference_channels=list(data.get("reference_channels") or []),
         template=template,
         colors=dict(data["colors"]),
@@ -694,6 +721,10 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
         data["trends_min_volume"] = cfg.trends_min_volume
     if cfg.trends_intent != "any":
         data["trends_intent"] = cfg.trends_intent
+    if cfg.trends_vertical:
+        data["trends_vertical"] = cfg.trends_vertical
+    if cfg.trends_min_candidates != 4:
+        data["trends_min_candidates"] = cfg.trends_min_candidates
     if cfg.auto_feed_ids:
         data["auto_feed_ids"] = list(cfg.auto_feed_ids)
     if cfg.generator is not None:
