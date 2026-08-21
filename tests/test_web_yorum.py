@@ -131,7 +131,10 @@ def test_edit_redirects_non_yorum_channel(app):
 
 def test_edit_post_updates_fields(app, tmp_path):
     form = {"name": "Yorum 2", "handle": "@y2", "trends_region": "DE", "trends_min_volume": "8000",
-            "runs_per_day": "3", "min_score": "7.0", "enabled": "1", "auto_upload": "on",
+            "runs_per_day": "3", "min_score": "7.0", "enabled": "1",
+            # Ortak çekirdek birleşmesi: alan adı auto_upload -> yt_auto_upload
+            # ve değeri "on" -> "1" (dört formatta AYNI ad kullanılıyor artık).
+            "enabled_present": "1", "yt_auto_upload": "1",
             "voice_provider": "cartesia", "voice_id": "c1cf", "voice_speed": "1.1", "voice_persona": "yeni p",
             "voice_target_min": "30", "voice_target_max": "45", "voice_music_volume": "0.08",
             "voice_model": "sonic-preview", "voice_volume": "1.2", "voice_emotion": "[sakin]",

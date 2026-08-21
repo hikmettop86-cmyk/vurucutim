@@ -253,26 +253,24 @@ def edit_save(slug):
         first = e.errors()[0].get("msg", str(e)) if isinstance(e, ValidationError) and e.errors() else str(e)
         flash(f"Ayar geçersiz: {first}", "error")
         return redirect(url_for("yorum.edit", slug=slug))
-    yt = c.youtube or YoutubeChannelConfig()
-    upd = {"auto_upload": request.form.get("auto_upload") == "on"}
-    if "credentials_from" in request.form:
-        # Boş = kendi bağlantısını kullan; kendi slug'ı da "kendi" demektir.
-        cf = (request.form.get("credentials_from") or "").strip()
-        upd["credentials_from"] = None if (not cf or cf == slug) else cf
-    yt = yt.model_copy(update=upd)
-    new_cfg = dataclasses.replace(
-        c,
-        name=(request.form.get("name") or c.name).strip(),
-        handle=(request.form.get("handle") or c.handle).strip(),
-        enabled=(request.form.get("enabled") == "1"),
+    # Ortak alanlar (ad, handle, enabled, archived, YouTube bloğunun TAMAMI) tek
+    # okuyucudan gelir. Bu sayfada eskiden yalnız `auto_upload` ve
+    # `credentials_from` vardı; gizlilik, kategori, yükleme eşiği ve AI etiketi
+    # UI'de HİÇ YOKTU — YAML'da olsalar bile panelden değiştirilemiyorlardı.
+    from short_bot.web.core_fields import core_updates
+    guncel = dict(
+        # Bu formatta cron "günde kaç video"dan TÜRETİLİR; formda `schedule_cron`
+        # alanı yok, bu yüzden core_updates ona dokunmaz.
         schedule_cron=_cron_from_form(c.schedule_cron),
         min_score=_form_float("min_score", c.min_score),
         trends_region=region,
         trends_min_volume=_form_int("trends_min_volume", c.trends_min_volume),
         trends_intent=(request.form.get("trends_intent") or c.trends_intent),
         script_model=(request.form.get("script_model") or c.script_model or "").strip() or None,
-        voice=voice, youtube=yt,
+        voice=voice,
     )
+    guncel.update(core_updates(request.form, c))
+    new_cfg = dataclasses.replace(c, **guncel)
     save_channel(path, new_cfg)
     flash("Gündem Yorum ayarları kaydedildi.", "success")
     return redirect(url_for("yorum.edit", slug=slug))

@@ -20,8 +20,15 @@
   </div>
   <div class="px-5 py-4 space-y-3">
     {# Zengin cron seçici (preset + saat/gün toplayıcı) — eskiden yalnız kart
-       sayfasında vardı, artık dört formatta da var. #}
-    {% include "_partials/core/_cron_picker.html.j2" %}
+       sayfasında vardı.
+
+       `cron_picker=false` ile kapatılabilir: Gündem Yorum formatı cron'u
+       "günde kaç video" seçiminden TÜRETİYOR (`_cron_from_form`). İki ayrı
+       `schedule_cron` alanı aynı formda olsaydı hangisinin kazandığı
+       tarayıcının alan sırasına kalırdı. #}
+    {% if cron_picker is not defined or cron_picker %}
+      {% include "_partials/core/_cron_picker.html.j2" %}
+    {% endif %}
 
     <input type="hidden" name="enabled_present" value="1">
     <input type="hidden" name="archived_present" value="1">
