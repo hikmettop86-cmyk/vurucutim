@@ -44,12 +44,50 @@ class TasarimSonucu:
     tur: int = 0
 
 
+# Vision kapısının ÖLÇTÜĞÜ ŞEY. Model neye göre yargılanacağını bilmeden
+# yazıyordu — ve daha kötüsü, "çalışan örnekler" diye verilen üç şablonun ÜÇÜ
+# DE bu kapıdan geçmiyor (ölçüldü 2026-08-21, aynı uç metinlerle):
+#
+#   stadium  manşet sağ kenarda kesilmiş + SON DAKİKA rozetiyle çakışıyor,
+#            gövdenin son satırı solarak kesiliyor
+#   flas     bant ve şerit gövde metninin üstüne binmiş
+#   newscast gövdenin son satırı alt kenarda yarıya kesilmiş
+#
+# Yani örneği birebir taklit etmek REDDEDİLMEK demekti. Uzunluklar üretimden
+# ölçüldü (1159 senaryo, shorts.script_json).
+KABUL_OLCUTU = """KABUL ÖLÇÜTÜ — şablonun ÜÇ uç metinle render edilip karesine
+bakılacak. Şunlardan biri varsa REDDEDİLİR:
+  - manşet ya da gövde metni kutusuna sığmamış, kesilmiş ya da taşmış
+  - metin zeminden okunmuyor (kontrast yetersiz)
+  - öğeler üst üste binmiş
+  - kare boş ya da tek renk
+
+SIĞDIRMAN GEREKEN EN UZUN METİNLER (üretimden ölçüldü, 1159 senaryo):
+  script.header_top      25 karakter
+  script.header_bottom   35 karakter
+  script.photo_overlay   40 karakter
+  body_html             ~300 karakter
+
+DİKKAT — aşağıdaki örnek şablonlar bu uzunluklarda TAŞIYOR ve bu kapıdan
+GEÇMİYOR: manşetleri sağ kenarda kesiliyor, gövdelerinin son satırı solarak
+kırpılıyor. Yapıyı ve sözleşmeyi onlardan al ama SIĞDIRMAYI onlardan öğrenme:
+manşette `data-fit-width` + `data-fit-min/max`, gövdede `data-fit-min/max` +
+`data-fit-pad` kullan, kutuların genişliğini ve YÜKSEKLİĞİNİ sabitle, hiçbir
+katmanı üst üste bindirme.
+
+TÜRKÇE GLİFLER: manşet fontu Ç Ğ İ Ö Ş Ü harflerini göstermeli. Ölçüldü: bir
+adayın manşeti 'MANŞET' yerine 'MANSET' render oldu ('Anton'); aynı metin
+'Oswald' ile doğru çıktı. Yedek zincirine Türkçe destekleyen font koy."""
+
+
 def _prompt(niyet: str, spec_metni: str, ornekler: dict[str, str],
             onceki_hata: str = "") -> str:
     p = [
         "Bir YouTube Shorts kanalı için YENİ bir görsel şablon (Jinja2 + HTML + CSS) yaz.",
         "",
         f"İSTENEN GÖRÜNÜM: {niyet}",
+        "",
+        KABUL_OLCUTU,
         "",
         "ZORUNLU SÖZLEŞME (uymayan şablon reddedilir):",
         spec_metni,
@@ -72,8 +110,20 @@ def _sablonu_ayikla(ham: str) -> str:
     return m.group(0) if m else ham.strip()
 
 
+# `unicodedata` tek başına 'ı' ve 'ş'yi düşürüyor — `channel_chat._SLUG_MAP`
+# ile AYNI tablo. Şablon adı KALICI dosya adı: canlıda "Bayern Münih"
+# `bayern-m-nih.html.j2` oldu (ü silindi, yerine tire kaldı).
+_SLUG_MAP = str.maketrans({"ı": "i", "İ": "I", "ş": "s", "Ş": "S", "ğ": "g",
+                           "Ğ": "G", "ç": "c", "Ç": "C", "ö": "o", "Ö": "O",
+                           "ü": "u", "Ü": "U", "ä": "a", "Ä": "A", "ß": "ss"})
+
+
 def _slugify(ad: str) -> str:
-    s = re.sub(r"[^a-zA-Z0-9]+", "-", (ad or "")).strip("-").lower()
+    import unicodedata
+    s = (ad or "").translate(_SLUG_MAP)
+    s = unicodedata.normalize("NFKD", s)
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    s = re.sub(r"[^a-zA-Z0-9]+", "-", s).strip("-").lower()
     return s or "arketip"
 
 
@@ -89,8 +139,17 @@ def tasarla(niyet: str, *, ad: str, templates_dir: Path, settings,
                  olması testin Playwright'a bağımlı olmamasını sağlar.
     """
     templates_dir = Path(templates_dir)
+    # SPEC KIRPILMAZ. Eskiden ilk 6000 karakter gidiyordu; oysa metni kutuya
+    # SIĞDIRMA sözleşmesi çok sonra başlıyor (ölçüldü: `body-text` 8531,
+    # `data-fit-min` 8542, `_auto_fit.js.j2` 8836, `data-fit-width` 9321,
+    # "Zorunlu öğeler" 13345). Model taşmayı önleyen tek mekanizmayı HİÇ
+    # görmüyordu ve ilk gerçek koşuda üç turun üçü de vision kapısında
+    # "manşet kutusuna sığmayıp kesilmiş" diye düştü — şans değil, kaçınılmaz.
+    #
+    # Spec 14 KB, iki örnek 17 KB. Toplam ~31 KB ≈ 8K token: bu iş kanal başına
+    # bir kez koşuyor, burada cimrilik yanlış yerde tasarruf.
     spec_yolu = Path("TEMPLATE-SPEC.md")
-    spec_metni = (spec_yolu.read_text(encoding="utf-8")[:6000]
+    spec_metni = (spec_yolu.read_text(encoding="utf-8")
                   if spec_yolu.exists() else
                   "TEMPLATE-SPEC bulunamadı; örneklerdeki yapıyı birebir izle.")
     ornekler = {}
@@ -212,21 +271,16 @@ def gercek_vision(*, settings, secrets):
 
 
 def _kayit_ekle(slug: str, ad: str) -> None:
-    """`config/archetypes.json`'a giriş ekler — panel açılırında görünsün.
+    """`config/archetypes.json`'a giriş ekler — VE arketipi anında geçerli kılar.
 
-    Kayıt yazılamazsa şablon yine de kullanılabilir (ARCHETYPES listesi JSON'u
-    okuyamazsa boş listeye düşüyor ve sabit dördü kalıyor); bu yüzden hata
-    üretimi durdurmaz, uyarı olarak geçer.
+    Eskiden burası dosyayı CWD'ye göre kendisi yazıyordu; `dna.py` ise onu
+    dosyaya göre okuyor ve YALNIZ IMPORT ANINDA. Sonuç (canlıda ölçüldü):
+    şablon üretildi, kanal ona geçirildi, sonra `load_channel`
+    "unknown archetype" diyerek kanalı REDDETTİ. Kayıt tek bir yerden
+    yönetilsin diye iş `dna.register_designed_archetype`e devredildi.
     """
-    p = Path("config/archetypes.json")
+    from short_bot.dna import register_designed_archetype
     try:
-        kayit = json.loads(p.read_text(encoding="utf-8")) if p.exists() else []
-        if any(a.get("slug") == slug for a in kayit):
-            return
-        kayit.append({"slug": slug, "label": ad,
-                      "subtitle": "Claude tarafından tasarlandı",
-                      "pexels_queries": [], "defaults": {}})
-        p.write_text(json.dumps(kayit, ensure_ascii=False, indent=2),
-                     encoding="utf-8")
-    except Exception as e:   # noqa: BLE001
-        log.warning(f"[arketip] archetypes.json güncellenemedi: {e}")
+        register_designed_archetype(slug, ad)
+    except Exception as e:   # noqa: BLE001 — şablon VAR, kayıt ikincil
+        log.warning(f"[arketip] arketip kaydı eklenemedi ({slug}): {e}")

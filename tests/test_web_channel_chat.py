@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import re
+import time
 
 import pytest
 
@@ -55,6 +56,17 @@ def _kimlik_sahte(monkeypatch):
                         lambda **kw: _fake_dna())
     monkeypatch.setattr("short_bot.web.routes.channel_chat.smoke_render_dna",
                         lambda *a, **kw: (True, "ok"))
+    # ARKETİP TASARIMI DA SAHTE. Kurulum artık tasarımı arka planda başlatıyor;
+    # yamanmazsa her `/kur` testi gerçek Opus'a gider (canlıda ölçüldü: tur
+    # başına ~2 dk, üç tur).
+    from short_bot.archetype_design import TasarimSonucu
+    monkeypatch.setattr("short_bot.web.routes.channel_chat.tasarla",
+                        lambda niyet, **kw: TasarimSonucu(False, sebep="test",
+                                                          tur=1))
+    monkeypatch.setattr("short_bot.web.routes.channel_chat.gercek_render",
+                        lambda **kw: (lambda *a: []))
+    monkeypatch.setattr("short_bot.web.routes.channel_chat.gercek_vision",
+                        lambda **kw: None)
 
 
 def _sahte_llm(monkeypatch, cevap, sayac=None):
@@ -445,3 +457,92 @@ def test_TEK_BOZUK_KARAR_partiyi_dusurmez(app, monkeypatch):
     c.post(f"/channels/sohbet/{oid}/uygula")
     c.post(f"/channels/sohbet/{oid}/kur", follow_redirects=True)
     assert (app.config["_CH_DIR"] / "saglam.yaml").exists(), "kanal kurulmadı"
+
+
+# --- KURULUM SIFIRDAN TASARIM BAŞLATIR -------------------------------------
+#
+# KULLANICI BİLDİRİMİ (2026-08-21): "bayern münich için üretim bu hala eski
+# arketipler üzerinden yamalıyor sıfırdan üretmiyor". Doğru: `generate_dna`
+# arketipi 40 hazır şablondan SEÇİYOR ve üstüne `custom_css` yamıyor.
+# `bayern-munih-gundem.yaml` → template: stadium.
+#
+# Kanal HEMEN kurulur (DNA ~70 sn), yeni şablon ARKA PLANDA tasarlanır
+# (ölçüldü: 376 sn, 2. turda geçti). Geçerse kanal ona döner, geçmezse DNA'nın
+# seçtiği arketiple kalır ve sebep panelde YAZILI kalır — sessizce eskiye
+# dönmek kullanıcının şikâyetini geri getirirdi.
+
+def test_kurulum_SIFIRDAN_TASARIMI_baslatir(app, monkeypatch):
+    from short_bot.web.routes.channel_chat import slug_isi
+    _kur(app, monkeypatch)
+    i = slug_isi("besiktas-gundem")
+    assert i is not None, "kurulumda arketip tasarımı hiç başlamadı"
+    # DURUM SABİTLENMEZ: iş arka planda koşuyor, testin baktığı anda bitmiş de
+    # olabilir. Sabitlenen şey işin BAŞLADIĞI ve niyetin yazıldığı.
+    assert i["niyet"]
+
+
+def test_tasarim_niyeti_KANALIN_KIMLIGINDEN_turer(app, monkeypatch):
+    """Niyet boşsa model jenerik bir haber kartı yazar — kanalın kimliği
+    (ad + DNA paleti/personası) niyete girmeli."""
+    from short_bot.web.routes.channel_chat import slug_isi
+    _kur(app, monkeypatch)
+    niyet = slug_isi("besiktas-gundem")["niyet"]
+    assert "Beşiktaş Gündem" in niyet
+    assert "#000000" in niyet, "palet niyete girmiyor"
+    assert "siyah beyaz kartal" in niyet, "persona niyete girmiyor"
+
+
+def test_kanal_sayfasi_KOSAN_TASARIMI_gosterir(app, monkeypatch):
+    """Tasarım koşarken kullanıcı bunu görmeli, yoksa "yine eski arketip" sanır."""
+    import threading as _th
+    from short_bot.archetype_design import TasarimSonucu
+    bekle = _th.Event()
+    monkeypatch.setattr(
+        "short_bot.web.routes.channel_chat.tasarla",
+        lambda niyet, **kw: (bekle.wait(10), TasarimSonucu(False, sebep="x"))[1])
+    try:
+        _kur(app, monkeypatch)
+        html = app.test_client().get(
+            "/channels/besiktas-gundem").get_data(as_text=True)
+        assert "arketip-durum/" in html, "koşan tasarım sayfada görünmüyor"
+        assert "Claude şablonu yazıyor" in html
+    finally:
+        bekle.set()
+
+
+def test_tasarim_GECEMEZSE_sebep_kanal_sayfasinda_YAZILI_kalir(app, monkeypatch):
+    """Sessizce eski arketiple kalmak kullanıcının şikâyetini geri getirirdi."""
+    _kur(app, monkeypatch)          # autouse sahte tasarım "test" sebebiyle düşer
+    for _ in range(50):
+        from short_bot.web.routes.channel_chat import slug_isi
+        if (slug_isi("besiktas-gundem") or {}).get("durum") == "hata":
+            break
+        time.sleep(0.05)
+    html = app.test_client().get("/channels/besiktas-gundem").get_data(as_text=True)
+    assert "Tasarım kaydedilmedi" in html and "test" in html
+
+
+def test_tasarim_KANALI_OKUNAMAZ_hale_getiremez(app, monkeypatch):
+    """Tasarlanan şablon `DnaSpec.archetype` doğrulamasından geçmezse kanal
+    YAML'ı okunamaz olur — canlıda tam bu oldu ("unknown archetype:
+    'bayern-m-nih'"). Kayıt düzeltildi ama kapı da olmalı: kanalı bozmaktansa
+    tasarımı bırakmak yeğdir."""
+    from short_bot.archetype_design import TasarimSonucu
+    from short_bot.web.routes.channel_chat import _arketip_isi, _is_oku
+    import short_bot.dna as dna
+    monkeypatch.setattr(dna, "register_designed_archetype", lambda *a, **k: None)
+    # DNA'sı OLAN bir kanal gerek: geçersiz arketipi reddeden `DnaSpec`.
+    _kur(app, monkeypatch)
+    monkeypatch.setattr("short_bot.web.routes.channel_chat.tasarla",
+                        lambda niyet, **kw: TasarimSonucu(True, slug="kayitsiz",
+                                                          tur=1))
+    with app.app_context():
+        _arketip_isi("jx", niyet="x", ad="Beşiktaş Gündem",
+                     slug="besiktas-gundem",
+                     channels_dir=app.config["_CH_DIR"],
+                     templates_dir=app.config["SHORTBOT_TEMPLATES_DIR"],
+                     settings=app.config["SHORTBOT_SETTINGS"], secrets={})
+    cfg = load_channel(app.config["_CH_DIR"] / "besiktas-gundem.yaml")
+    assert cfg.template == "stat-hero" and cfg.dna.archetype == "stat-hero"
+    assert _is_oku("jx")["durum"] == "hata"
+    assert "kayitsiz" in _is_oku("jx")["sebep"]

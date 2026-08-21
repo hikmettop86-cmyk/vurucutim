@@ -138,19 +138,32 @@ def test_ornek_sablonlar_prompta_girer(sablonlar, monkeypatch, tmp_path):
     assert "newscast.html.j2" in p["ilk"] and "flas.html.j2" in p["ilk"]
 
 
-def test_kaydedilen_arketip_JSON_kaydina_girer(sablonlar, monkeypatch, tmp_path):
-    """Panel açılırında görünmezse yeni arketip seçilemez."""
+def test_kaydedilen_arketip_ANINDA_GECERLI_olur(sablonlar, monkeypatch, tmp_path):
+    """Kayıt, `dna.py`'nin OKUDUĞU dosyaya yazılmalı ve arketip yeniden
+    başlatma beklemeden geçerli olmalı.
+
+    Eski test CWD'ye göre yazılan dosyaya bakıyordu — yani hatanın kendisini
+    sabitliyordu. Canlıda `dna.py` başka bir dosyayı, üstelik yalnız import
+    anında okuduğu için kanal `unknown archetype` ile reddediliyordu.
+    """
     import json
-    monkeypatch.chdir(tmp_path)
-    (tmp_path / "config").mkdir()
-    (tmp_path / "config" / "archetypes.json").write_text("[]", encoding="utf-8")
+    import short_bot.dna as dna
+    yol = tmp_path / "archetypes.json"
+    yol.write_text("[]", encoding="utf-8")
+    monkeypatch.setattr(dna, "_REGISTRY_PATH", yol)
+    for ad in ("ARCHETYPES", "ARCHETYPE_LABELS", "ARCHETYPE_DEFAULTS",
+               "_DESIGNED_ARCHETYPES"):
+        monkeypatch.setattr(dna, ad, type(getattr(dna, ad))(getattr(dna, ad)))
+    monkeypatch.chdir(tmp_path)          # CWD kasten farklı
+
     from short_bot.archetype_design import tasarla
     s = tasarla("x", ad="Yeni Kalıp", templates_dir=sablonlar, settings=None,
                 metin_llm=lambda p: GECERLI,
                 vision_call=lambda y: {"sorun": False}, render_fn=_render_ok)
     assert s.ok
-    kayit = json.loads((tmp_path / "config" / "archetypes.json").read_text(encoding="utf-8"))
-    assert any(a["slug"] == s.slug for a in kayit)
+    assert any(a["slug"] == s.slug
+               for a in json.loads(yol.read_text(encoding="utf-8")))
+    assert s.slug in dna.ARCHETYPES, "yeniden başlatmadan geçerli olmuyor"
 
 
 # --- ADAY ŞABLON PAYLAŞILAN PARÇALARLA BİRLİKTE RENDER EDİLMELİ ------------
@@ -198,3 +211,90 @@ def test_render_dizini_TEMIZLENIR(sablonlar, monkeypatch, tmp_path):
     kalanlar = sorted(p.name for p in sablonlar.iterdir())
     assert kalanlar == ["_auto_fit.js.j2", "flas.html.j2", "newscast.html.j2",
                         f"{s.slug}.html.j2"], kalanlar
+
+
+# --- MODEL SÖZLEŞMENİN TAMAMINI GÖRMELİ -----------------------------------
+#
+# ÖLÇÜLDÜ (2026-08-21): prompt `TEMPLATE-SPEC.md`'yi ilk 6000 karaktere
+# kırpıyordu. Ama metni kutuya SIĞDIRMA sözleşmesi çok sonra başlıyor:
+#
+#     body-text        8531. karakter
+#     data-fit-min     8542
+#     _auto_fit.js.j2  8836
+#     data-fit-width   9321
+#     "Zorunlu öğeler" 13345
+#
+# Yani model, taşmayı önleyen tek mekanizmayı HİÇ görmüyordu ve vision kapısı
+# ilk gerçek koşuda üç turun üçünü de "manşet kutusuna sığmayıp kesilmiş"
+# diye reddetti. Şans değil, kaçınılmazdı. Spec 14 KB — Opus için hiçbir şey.
+
+def test_prompt_SPECIN_TAMAMINI_tasir(sablonlar, monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    imza = "SIGDIRMA-SOZLESMESI-BURADA"
+    (tmp_path / "TEMPLATE-SPEC.md").write_text(
+        "x" * 9000 + imza + "y" * 4000, encoding="utf-8")
+    gorulen: list[str] = []
+
+    from short_bot.archetype_design import tasarla
+    tasarla("x", ad="Spec", templates_dir=sablonlar, settings=None,
+            metin_llm=lambda p: (gorulen.append(p), GECERLI)[1],
+            vision_call=lambda yol: {"sorun": False}, render_fn=_render_ok)
+    assert gorulen, "model hiç çağrılmadı"
+    assert imza in gorulen[0], (
+        "spec kırpılıyor — sığdırma sözleşmesi modele hiç ulaşmıyor")
+
+
+def test_prompt_CALISAN_ORNEKLERI_de_tasir(sablonlar, monkeypatch, tmp_path):
+    """Örnekler kırpılmamalı: yapı oradan öğreniliyor."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "TEMPLATE-SPEC.md").write_text("spec", encoding="utf-8")
+    gorulen: list[str] = []
+    from short_bot.archetype_design import tasarla
+    tasarla("x", ad="Ornek", templates_dir=sablonlar, settings=None,
+            metin_llm=lambda p: (gorulen.append(p), GECERLI)[1],
+            vision_call=lambda yol: {"sorun": False}, render_fn=_render_ok)
+    assert "newscast.html.j2" in gorulen[0] and "flas.html.j2" in gorulen[0]
+
+
+# --- MODEL NEYE GÖRE YARGILANDIĞINI BİLMELİ --------------------------------
+#
+# ÖLÇÜLDÜ (2026-08-21): prompt kabul ölçütünü hiç söylemiyordu. Daha kötüsü,
+# "ÇALIŞAN ÖRNEKLER — yapıyı bunlardan al" diye verilen üç şablonun ÜÇÜ DE
+# vision kapısından geçmiyor (aynı uç metinlerle sınandı):
+#
+#   stadium  REDDEDİLDİ  manşet sağ kenarda kesilmiş, SON DAKİKA rozetiyle
+#                        çakışıyor, gövdenin son satırı solarak kesiliyor
+#   flas     REDDEDİLDİ  bant ve şerit gövde metninin üstüne binmiş
+#   newscast REDDEDİLDİ  gövdenin son satırı alt kenarda yarıya kesilmiş
+#
+# Yani örneği birebir taklit etmek REDDEDİLMEK demekti ve model bunu
+# bilmiyordu.
+
+def test_prompt_KABUL_OLCUTUNU_ve_UZUNLUKLARI_soyler(sablonlar, monkeypatch,
+                                                     tmp_path):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "TEMPLATE-SPEC.md").write_text("spec", encoding="utf-8")
+    gorulen: list[str] = []
+    from short_bot.archetype_design import tasarla
+    tasarla("x", ad="Olcut", templates_dir=sablonlar, settings=None,
+            metin_llm=lambda p: (gorulen.append(p), GECERLI)[1],
+            vision_call=lambda yol: {"sorun": False}, render_fn=_render_ok)
+    p = gorulen[0]
+    for beklenen in ("25", "35", "40", "300"):
+        assert beklenen in p, f"sığdırılacak uzunluk {beklenen} söylenmiyor"
+    assert "data-fit-width" in p
+    # NOT: `str.lower()` Türkçe değil ("TAŞIYOR" → "taşiyor"); büyük harfle ara.
+    assert "TAŞIYOR" in p and "GEÇMİYOR" in p, (
+        "örneklerin bu kapıdan geçmediği söylenmiyor — model onları taklit eder")
+
+
+def test_slug_TURKCE_HARFLERI_dusurmez():
+    """Şablon adı KALICI dosya adı. `re.sub("[^a-zA-Z0-9]+", "-", ...)` Türkçe
+    harfleri komple siliyordu: canlıda "Bayern Münih" → `bayern-m-nih.html.j2`
+    (ü düştü, yerine tire kaldı). `channel_chat._slugify` bunu doğru yapıyor —
+    aynı eşleme tablosu burada da olmalı."""
+    from short_bot.archetype_design import _slugify
+    assert _slugify("Bayern Münih") == "bayern-munih"
+    assert _slugify("Beşiktaş Gündem") == "besiktas-gundem"
+    assert _slugify("Işık & Gölge") == "isik-golge"
+    assert _slugify("") == "arketip"

@@ -37,3 +37,26 @@ def _olgu_denetimi_kapali(monkeypatch):
     # Mizah kapısı da GERÇEK LLM çağırıyor — persona'lı üretim testleri onu kaçırmasın.
     # (test_reel_narration_persona.py kendi monkeypatch'iyle bunu EZER.)
     monkeypatch.setattr(RN, "check_humor", lambda *a, **kw: [], raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _arketip_kaydi_yalitimi(tmp_path_factory, monkeypatch):
+    """Arketip kaydını DEPODAN uzak tut.
+
+    `dna._REGISTRY_PATH` sabit bir depo yolu (`config/archetypes.json`) ve
+    `register_designed_archetype` oraya YAZIYOR. Yalıtılmazsa arketip tasarım
+    testleri kullanıcının deposunu kirletiyor — ölçüldü (2026-08-21): tek bir
+    koşudan sonra dosyada `a`, `spec`, `ornek`, `olcut`, `temiz`, `komsulu`,
+    `citli`, `ikinci`, `yeni-kalip`, `besiktas-mono` diye ON tane şablonsuz
+    kayıt birikmişti. Bunlar panelin arketip listesinde görünür ve seçilirse
+    render `TemplateNotFound` verir.
+
+    Modül-globalleri de kopyalanır: liste/sözlük mutasyonu testler arası sızar.
+    """
+    import short_bot.dna as dna
+    yol = tmp_path_factory.mktemp("arketip") / "archetypes.json"
+    yol.write_text("[]", encoding="utf-8")
+    monkeypatch.setattr(dna, "_REGISTRY_PATH", yol)
+    for ad in ("ARCHETYPES", "ARCHETYPE_LABELS", "ARCHETYPE_DEFAULTS",
+               "_DESIGNED_ARCHETYPES"):
+        monkeypatch.setattr(dna, ad, type(getattr(dna, ad))(getattr(dna, ad)))

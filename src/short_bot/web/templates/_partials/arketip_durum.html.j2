@@ -1,3 +1,7 @@
+{# `is_`/`jid` doğrudan render edildiğinde rotadan gelir; kanal sayfasına
+   include edildiğinde `arketip_isi` üzerinden. #}
+{% set is_ = is_ | default(arketip_isi, true) %}
+{% set jid = jid | default(is_.jid if is_ else "", true) %}
 {# Yeni arketip tasarımının durumu. Tasarım DAKİKALAR sürüyor (LLM şablon
    yazar → 3 uç metinle render → vision kapısı, en fazla 3 tur), o yüzden
    kendi kendini yokluyor — `curated/_results.html.j2` deseni. #}

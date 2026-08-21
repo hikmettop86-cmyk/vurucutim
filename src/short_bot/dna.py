@@ -8,6 +8,7 @@ code change needed.
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Literal
 
@@ -16,6 +17,8 @@ from pydantic import BaseModel, Field, field_validator
 from short_bot.claude_cli import run_json
 from short_bot.locale import LANGUAGE_NAMES
 
+
+log = logging.getLogger(__name__)
 
 # Hardcoded existing archetypes — these have custom script-writer prompts,
 # custom overflow configs, and custom Pexels queries. Cannot be replaced by
@@ -41,21 +44,91 @@ ARCHETYPE_LABELS: dict[str, str] = {
 }
 
 
+# Eksik alanların yerine konan güvenli değerler. TEK BOZUK KAYIT PANELİ
+# DÜŞÜRMEMELİ: bu fonksiyon modül IMPORT'unda koşuyor ve eskiden `arch
+# ["defaults"]["colors"]` diye açıyordu — `_kayit_ekle` `"defaults": {}`
+# yazdığı için ilk tasarlanan arketipten sonra `dna.py` import edilemez
+# oluyordu, yani panel hiç açılmıyordu (canlıda 2026-08-21 ölçüldü).
+_VARSAYILAN_DEFAULT = {
+    "primary": "#d0021b", "accent": "#ffe600",
+    "bg_grad_1": "#3a3a3a", "bg_grad_2": "#141414",
+    "body_bg_1": "#101010", "body_bg_2": "#1f1f1f",
+    "text_main": "#ffffff", "text_muted": "#cccccc",
+    "font_headline": "Oswald", "font_body": "Inter",
+}
+
+
 def _designed_to_default(arch: dict) -> dict:
-    """Translate archetypes.json entry to internal ARCHETYPE_DEFAULTS shape."""
-    d = arch["defaults"]
+    """Translate archetypes.json entry to internal ARCHETYPE_DEFAULTS shape.
+
+    Eksik/yarım kayıt hata vermez, varsayılana düşer.
+    """
+    d = arch.get("defaults") or {}
+    renk = d.get("colors") or {}
+    grad = renk.get("bg_gradient") or []
+    govde = d.get("body_bg") or []
+    v = _VARSAYILAN_DEFAULT
     return {
-        "primary": d["colors"]["primary"],
-        "accent": d["colors"]["accent"],
-        "bg_grad_1": d["colors"]["bg_gradient"][0],
-        "bg_grad_2": d["colors"]["bg_gradient"][1],
-        "body_bg_1": d["body_bg"][0],
-        "body_bg_2": d["body_bg"][1],
-        "text_main": d["text_main"],
-        "text_muted": d["text_muted"],
-        "font_headline": d["font_headline"],
-        "font_body": d["font_body"],
+        "primary": renk.get("primary") or v["primary"],
+        "accent": renk.get("accent") or v["accent"],
+        "bg_grad_1": (grad[0] if len(grad) > 0 else v["bg_grad_1"]),
+        "bg_grad_2": (grad[1] if len(grad) > 1 else v["bg_grad_2"]),
+        "body_bg_1": (govde[0] if len(govde) > 0 else v["body_bg_1"]),
+        "body_bg_2": (govde[1] if len(govde) > 1 else v["body_bg_2"]),
+        "text_main": d.get("text_main") or v["text_main"],
+        "text_muted": d.get("text_muted") or v["text_muted"],
+        "font_headline": d.get("font_headline") or v["font_headline"],
+        "font_body": d.get("font_body") or v["font_body"],
     }
+
+def register_designed_archetype(slug: str, label: str = "",
+                                defaults: dict | None = None) -> None:
+    """Yeni tasarlanan arketipi ANINDA geçerli kıl ve kayda yaz.
+
+    ÜÇ AYRI KIRIK BURADA BULUŞUYORDU (canlıda ölçüldü, 2026-08-21 —
+    `bayern-m-nih` şablonu tasarlandı, kanal ona geçirildi, sonra kanal
+    OKUNAMAZ oldu):
+
+    1. Kayıt CWD'ye göre yazılıyordu (`Path("config/archetypes.json")`) ama
+       burası dosyaya göre okuyor. CWD depo kökü değilse iki AYRI dosya.
+    2. Kayıt yalnız IMPORT ANINDA okunuyordu; yeni arketip panel yeniden
+       başlatılana kadar `ARCHETYPES` içinde YOKTU ve `DnaSpec` doğrulaması
+       "unknown archetype" diyerek kanalı reddediyordu.
+    3. Yazılan kayıtta `defaults` boştu ve `_designed_to_default` onu açarken
+       patlıyordu → sonraki açılışta modül import edilemez, panel hiç açılmaz.
+
+    Bu fonksiyon üçünü de kapatır: TEK yer hem belleği hem dosyayı günceller.
+
+    BİLİNEN SINIR: `_REGISTRY_PATH` KAYNAK DOSYAYA göre çözülüyor
+    (`<src>/../../config/archetypes.json`), panelin `SHORTBOT_CONFIG_DIR`ine
+    göre değil. Depodan koşarken ikisi aynı; paketlenmiş Electron kurulumunda
+    farklı olabilir ve tasarlanan arketip yanlış yere yazılır. Okuyan da yazan
+    da artık AYNI yolu kullandığı için tutarsızlık yok, ama taşınabilir değil.
+    """
+    slug = (slug or "").strip()
+    if not slug or slug in ARCHETYPES:
+        return
+    kayit = {"slug": slug, "label": label or slug,
+             "subtitle": "Claude tarafından tasarlandı",
+             "pexels_queries": [], "defaults": defaults or {}}
+    _DESIGNED_ARCHETYPES.append(kayit)
+    ARCHETYPES.append(slug)
+    ARCHETYPE_LABELS[slug] = kayit["label"]
+    ARCHETYPE_DEFAULTS[slug] = _designed_to_default(kayit)
+    try:
+        mevcut = (json.loads(_REGISTRY_PATH.read_text(encoding="utf-8"))
+                  if _REGISTRY_PATH.exists() else [])
+        if not any(a.get("slug") == slug for a in mevcut):
+            mevcut.append(kayit)
+            _REGISTRY_PATH.parent.mkdir(parents=True, exist_ok=True)
+            _REGISTRY_PATH.write_text(
+                json.dumps(mevcut, ensure_ascii=False, indent=2),
+                encoding="utf-8")
+    except (OSError, json.JSONDecodeError) as e:   # noqa: BLE001
+        # Dosya yazılamasa da BELLEK güncellendi: kanal bu oturumda çalışır,
+        # yeniden başlatmada arketip kaybolur. Sessiz kalmaz.
+        log.warning(f"[dna] arketip kaydı yazılamadı ({slug}): {e}")
+
 
 _ANIMATIONS_CSS_PATH = Path(__file__).resolve().parent.parent.parent / "templates" / "css" / "_animations.css"
 

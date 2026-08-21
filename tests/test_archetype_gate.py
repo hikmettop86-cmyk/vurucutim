@@ -178,3 +178,48 @@ def test_vision_TEK_karede_sorun_bulursa_reddeder():
     ok, sebep = vision_kapisi([__file__, __file__, __file__], vision_call=_v)
     assert not ok
     assert "ikinci kare" in sebep
+
+
+# --- UÇ METİNLER MODELİN SINIRLARINDA DURMALI ------------------------------
+#
+# FATAL BULGU (2026-08-21, üç canlı koşu): `Script` modeli `header_top`'ı 25,
+# `header_bottom`'ı 35 karakterde KIRPIYOR (models._TRIM_LIMITS — bilinçli:
+# bir karakterlik taşma koca bir üretimi düşürmesin). Uç metinler 44 ve 56
+# karakterdi; fixture'ın KENDİSİ kelime ortasından kesiliyordu:
+#
+#     'ÇOK UZUN BİR MANŞET ÜST S'   ← 'ÜST SATIRI BURADA DURUYOR' kesildi
+#     'Ve alt satırı da en az onun kadar u'
+#
+# Vision kapısı doğal olarak her adayı "manşet kelime ortasında kesilmiş"
+# diye reddetti — HİÇBİR şablon geçemezdi. Üretimdeki `stadium` bile geçmedi
+# (aynı kareyle sınandı).
+#
+# ÖLÇÜM (1159 üretim senaryosu, shorts.script_json):
+#     header_top     p50 11  p90 17  p99 23  max 25
+#     header_bottom  p50 24  p90 30  p99 34  max 35
+#     photo_overlay  p50 19  p90 26  p99 34  max 40
+#     body_paragraph p50 181 p90 226 p99 261 max 302   (model limiti 800 —
+#                                                       üretimde hiç görülmüyor)
+
+def test_UC_METINLER_model_tarafindan_KIRPILMIYOR():
+    from short_bot.archetype_gate import UC_HAM, UC_METINLER
+    from short_bot.models import Script
+    assert len(UC_HAM) == len(UC_METINLER)
+    for ham, s in zip(UC_HAM, UC_METINLER):
+        for alan, deger in ham.items():
+            assert getattr(s, alan) == deger, (
+                f"{alan} kırpıldı: {deger!r} -> {getattr(s, alan)!r} — "
+                f"uç metin modelin sınırını aşıyor, kapı hiçbir şablonu geçirmez")
+
+
+def test_UC_METINLER_URETIMIN_UST_SINIRLARINI_zorlar():
+    """Sınırın çok altında kalan fixture da işe yaramaz: kısa metinle geçen
+    şablon uzun manşette taşar. Ölçülen üretim maksimumlarına yakın olmalı."""
+    from short_bot.archetype_gate import UC_METINLER
+    en_uzun = {a: max(len(getattr(s, a)) for s in UC_METINLER)
+               for a in ("header_top", "header_bottom", "photo_overlay",
+                         "body_paragraph")}
+    assert en_uzun["header_top"] >= 24, en_uzun          # üretim max 25
+    assert en_uzun["header_bottom"] >= 34, en_uzun       # üretim max 35
+    assert en_uzun["photo_overlay"] >= 34, en_uzun       # üretim max 40
+    assert 250 <= en_uzun["body_paragraph"] <= 400, en_uzun   # üretim max 302

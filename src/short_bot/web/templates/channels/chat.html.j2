@@ -206,7 +206,13 @@
                          font-semibold whitespace-nowrap disabled:opacity-50">
             yeni arketip</button>
         </form>
-        <div id="arketip-durum" class="mt-2"></div>
+        {# Kurulumda tasarım OTOMATİK başlar; sayfa açıldığında koşuyorsa
+           durumu hemen göster ki kullanıcı "yine eski arketip" sanmasın. #}
+        <div id="arketip-durum" class="mt-2">
+          {% if arketip_isi %}
+          {% include "_partials/arketip_durum.html.j2" with context %}
+          {% endif %}
+        </div>
         <p class="text-[11px] text-claude-subtle mt-1.5 leading-relaxed">
           Claude YENİ bir şablon yazar, üç uç metinle render eder, kareye bakar.
           Kapılardan geçemezse hiçbir şey kaydedilmez.

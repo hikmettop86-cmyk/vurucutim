@@ -112,27 +112,45 @@ def yapi_kapisi(html: str) -> tuple[bool, str]:
 # ücretsiz. Yeni arketip nadiren üretiliyor — burada cimrilik yanlış yerde
 # tasarruf olurdu.
 
-UC_METINLER: tuple[Script, ...] = (
-    Script(
-        header_top="KISA",
-        header_bottom="Tek satır",
-        photo_overlay="ÖZET",
-        body_paragraph="Kısa bir gövde metni.",
-        category="Test", mood="neutral"),
-    Script(
-        header_top="ÇOK UZUN BİR MANŞET ÜST SATIRI BURADA DURUYOR",
-        header_bottom="Ve alt satırı da en az onun kadar uzun sürüyor arkadaşlar",
-        photo_overlay="ÇOK UZUN BİR FOTOĞRAF ÜSTÜ YAZISI DA BURADA",
-        body_paragraph=("Uzun gövde metni taşma sınırlarını zorlar. " * 6).strip(),
-        category="Test", mood="breaking"),
-    Script(
-        header_top="ORTA UZUNLUK",
-        header_bottom="Bir alt satır",
-        photo_overlay="ORTA",
-        body_paragraph=("Çok satırlı bir gövde. Cümle bir. Cümle iki. Cümle üç. "
-                        "Cümle dört. Cümle beş. Cümle altı. Cümle yedi."),
-        category="Test", mood="neutral"),
+# METİNLER MODELİN SINIRLARINDA DURUR, ÜSTÜNDE DEĞİL.
+#
+# FATAL BULGU (2026-08-21, üç canlı koşu): eski fixture 44/56 karakterlik
+# manşetler taşıyordu ama `Script` onları 25/35'te KIRPIYOR
+# (models._TRIM_LIMITS). Yani kapıya giden metin daha en baştan kelime
+# ortasından kesikti ('ÇOK UZUN BİR MANŞET ÜST S') ve vision her adayı
+# "manşet kesilmiş" diye reddediyordu. Hiçbir şablon geçemezdi — üretimdeki
+# `stadium` bile aynı kareyle sınandığında geçmedi.
+#
+# ÖLÇÜM (1159 üretim senaryosu, shorts.script_json):
+#     header_top     p50 11  p90 17  p99 23  max 25
+#     header_bottom  p50 24  p90 30  p99 34  max 35
+#     photo_overlay  p50 19  p90 26  p99 34  max 40
+#     body_paragraph p50 181 p90 226 p99 261 max 302  (model limiti 800 ama
+#                                                      üretimde hiç görülmüyor)
+# Uç metin bu maksimumlara yakın ve TAM KELİMEYLE biter.
+UC_HAM: tuple[dict, ...] = (
+    dict(header_top="KISA", header_bottom="Tek satır",
+         photo_overlay="ÖZET", body_paragraph="Kısa bir gövde metni.",
+         category="Test", mood="neutral"),
+    dict(header_top="DEV TRANSFERDE SON PERDE",
+         header_bottom="Yönetim kararı bu akşam açıklanacak",
+         photo_overlay="ALLIANZ ARENA'DA TARİHİ GECE YAŞANDI",
+         body_paragraph=(
+             "Kulüp yönetimi dün akşam toplandı ve transfer dosyasını yeniden "
+             "masaya yatırdı. Görüşmelerin ardından tarafların anlaşmaya çok "
+             "yaklaştığı, imzaların hafta içinde atılabileceği öğrenildi. "
+             "Teknik heyet oyuncuyu ilk on birde düşünüyor; sakatlık riski "
+             "nedeniyle temkinli davranılacak."),
+         category="Test", mood="breaking"),
+    dict(header_top="ORTA UZUNLUK", header_bottom="Bir alt satır",
+         photo_overlay="ORTA",
+         body_paragraph=("Çok satırlı bir gövde. Cümle bir. Cümle iki. "
+                         "Cümle üç. Cümle dört. Cümle beş. Cümle altı. "
+                         "Cümle yedi."),
+         category="Test", mood="neutral"),
 )
+
+UC_METINLER: tuple[Script, ...] = tuple(Script(**h) for h in UC_HAM)
 
 
 # --- vision kapısı ---------------------------------------------------------

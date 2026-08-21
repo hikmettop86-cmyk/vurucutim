@@ -332,6 +332,11 @@ def kanali_kur(oid):
         return redirect(url_for("channel_chat.kurma_sohbeti_devam", oid=oid))
 
     save_channel(hedef, cfg)
+    # SIFIRDAN TASARIM. `generate_dna` arketipi 40 hazır şablondan SEÇİP üstüne
+    # `custom_css` yamıyor; kullanıcının şikâyeti tam buydu ("hala eski
+    # arketipler üzerinden yamalıyor"). Kanal hemen kuruldu, kendi şablonu
+    # arkadan geliyor.
+    arketip_baslat(cfg)
     with _KILIT:
         _OTURUMLAR.pop(oid, None)
     # MESAJ DURUMU ANLATIR, VARSAYMAZ. Eskiden sabit "Cron KAPALI" yazıyordu;
@@ -374,7 +379,7 @@ def kanal_sayfasi(slug):
                            fmt=channel_format(cfg),
                            spec=FORMATS[channel_format(cfg)], cfg=cfg,
                            turlar=[], kurulum=False, bulgular=bulgular,
-                           diller=_diller())
+                           diller=_diller(), arketip_isi=slug_isi(slug))
 
 
 @bp.post("/channels/<slug>/bulgu/<kod>")
@@ -459,14 +464,76 @@ def _arketip_isi(jid: str, *, niyet: str, ad: str, slug: str, channels_dir,
         cfg = load_channel(yol)
         yeni_dna = (cfg.dna.model_copy(update={"archetype": sonuc.slug})
                     if cfg.dna is not None else None)
-        save_channel(yol, dataclasses.replace(cfg, template=sonuc.slug,
-                                              dna=yeni_dna))
+        yeni_cfg = dataclasses.replace(cfg, template=sonuc.slug, dna=yeni_dna)
+        # KANALI BOZMAKTANSA TASARIMI BIRAK. Canlıda şablon üretildi, kanal ona
+        # geçirildi ve kanal OKUNAMAZ oldu ("unknown archetype: bayern-m-nih"):
+        # `DnaSpec.archetype` kaydı yalnız import anında okuyordu. Kayıt
+        # düzeltildi ama kapı burada da dursun — şablon geçici, kanal kalıcı.
+        eksik = _okunamayan_kanal(yeni_cfg, yol)
+        if eksik:
+            _is_yaz(jid, durum="hata", sablon=sonuc.slug,
+                    sebep=(f"Şablon üretildi ({sonuc.slug}) ama kanala "
+                           f"bağlanamadı: {eksik} Kanal olduğu gibi bırakıldı."))
+            return
+        save_channel(yol, yeni_cfg)
     except Exception as e:   # noqa: BLE001 — şablon VAR, yalnız kanal geçemedi
         _is_yaz(jid, durum="hata", sablon=sonuc.slug,
                 sebep=f"Şablon üretildi ({sonuc.slug}) ama kanala bağlanamadı: {e}")
         return
 
     _is_yaz(jid, durum="bitti", sablon=sonuc.slug, tur=sonuc.tur)
+
+
+def slug_isi(slug: str) -> dict | None:
+    """Bu kanalın EN SON arketip tasarım işi. Kanal sayfası bunu gösterir."""
+    with _KILIT:
+        aday = [(jid, i) for jid, i in _ISLER.items() if i.get("slug") == slug]
+    if not aday:
+        return None
+    jid, i = aday[-1]
+    return dict(i, jid=jid)
+
+
+def tasarim_niyeti(cfg) -> str:
+    """Kanalın kimliğinden şablon tarifi üretir.
+
+    Niyet boş kalırsa model jenerik bir haber kartı yazar — oysa kanalın
+    paleti, personası ve adı zaten DNA'da duruyor. Bunları niyete koymak
+    "sıfırdan tasarım"ı gerçekten o kanala ait yapan şey.
+    """
+    parca = [f"{cfg.name} kanalı için özgün bir haber kartı düzeni"]
+    dna = getattr(cfg, "dna", None)
+    if dna is not None:
+        p = dna.palette
+        parca.append(f"palet: ana {p.primary}, vurgu {p.accent}, "
+                     f"zemin {' → '.join(p.bg_gradient)}")
+        if getattr(dna, "persona_summary", ""):
+            parca.append(f"kanalın kimliği: {dna.persona_summary}")
+        f = dna.fonts
+        if getattr(f, "headline", ""):
+            parca.append(f"manşet fontu {f.headline}, gövde {f.body}")
+    return "; ".join(parca)
+
+
+def arketip_baslat(cfg) -> str:
+    """Arka planda yeni şablon tasarımı başlatır, iş kimliğini döndürür.
+
+    KANAL BEKLETİLMEZ: kurulum DNA ile hemen biter (ölçüldü ~70 sn), şablon
+    tasarımı arkadan gelir (ölçüldü 376 sn, 2. turda geçti). Geçmezse kanal
+    DNA'nın seçtiği arketiple kalır ve sebep panelde yazılı durur.
+    """
+    jid = uuid.uuid4().hex[:12]
+    niyet = tasarim_niyeti(cfg)
+    _is_yaz(jid, durum="calisiyor", slug=cfg.slug, niyet=niyet)
+    threading.Thread(
+        target=_arketip_isi, args=(jid,),
+        kwargs=dict(niyet=niyet, ad=cfg.name or cfg.slug, slug=cfg.slug,
+                    channels_dir=_channels_dir(),
+                    templates_dir=current_app.config["SHORTBOT_TEMPLATES_DIR"],
+                    settings=current_app.config["SHORTBOT_SETTINGS"],
+                    secrets=_secrets()),
+        daemon=True).start()
+    return jid
 
 
 @bp.post("/channels/<slug>/arketip")
