@@ -116,7 +116,22 @@ def tasarla(niyet: str, *, ad: str, templates_dir: Path, settings,
         # pahalı, eksik slotlu şablon için harcanmasın.
         if render_fn is None:
             return TasarimSonucu(False, sebep="Render çağrısı verilmedi.", tur=deneme)
+        # ADAY, PAYLAŞILAN PARÇALARIN YANINDA RENDER EDİLİR. `renderer.py`
+        # Jinja arama yolunu şablonun BULUNDUĞU dizin yapıyor
+        # (FileSystemLoader(template_path.parent)); boş bir temp dizininde
+        # `{% include "_auto_fit.js.j2" %}` çözülemiyor.
+        #
+        # İLK GERÇEK KOŞUDA (2026-08-21) tam bu oldu: üç tur da
+        # "'_auto_fit.js.j2' not found in search path" ile düştü — yani bu
+        # akış hiç çalışmamıştı. Testler sahte `render_fn` enjekte ettiği
+        # için görünmüyordu.
+        #
+        # Kopya temp dizine alınır, `templates_dir`e geçici dosya YAZILMAZ:
+        # orası kullanıcının deposu.
         with tempfile.TemporaryDirectory() as tmp:
+            for paylasilan in templates_dir.glob("_*.j2"):
+                (Path(tmp) / paylasilan.name).write_text(
+                    paylasilan.read_text(encoding="utf-8"), encoding="utf-8")
             yol = Path(tmp) / f"{slug}.html.j2"
             yol.write_text(html, encoding="utf-8")
             try:

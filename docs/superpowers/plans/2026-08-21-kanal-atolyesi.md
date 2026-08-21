@@ -426,6 +426,11 @@ soru sorma, karar ver, gerekçe yaz, kullanıcı hiçbir şey yazmadan kurabilsi
       döndürür; **hiçbir YAML yazılmaz** (dizin sayısı değişmez)
 - [x] **Adım 2–4:** kırmızı → yeşil
 - [x] **Adım 5: "Kanalı kur" `apply_plan` benzeri yol — YAML + CSS + konu bankası**
+      — **YANLIŞ İŞARETLENMİŞTİ.** 2026-08-21'de canlıda görüldü: yalnız YAML
+      yazılıyordu. DNA üretimi, render kapısı ve CSS hiç bağlanmamıştı; sohbetle
+      kurulan ilk kanal (`besiktas-gundem`) taslağın sabit `flas` şablonu ve
+      kırmızı/sarı paletiyle kaydedildi. Konu bankası tohumu HÂLÂ bağlı değil
+      (otomatik doldurma 4 saatte bir dolduruyor, bilinçli bırakıldı).
 - [x] **Adım 6: Commit** — `feat(panel): kurma sohbeti`
 
 ---
@@ -509,6 +514,14 @@ orada üretim durmamalı, burada bozuk şablon diske yazılmamalı).
 - [x] **Adım 2–4:** kırmızı → yeşil
 - [x] **Adım 5: `TEMPLATE-SPEC.md` + iki örnek şablon prompt'a girer**
 - [x] **Adım 6: Commit** — `feat(arketip): Claude yeni şablon tasarlıyor (kapılı)`
+- [x] **Adım 7 (EKSİKTİ): akışı panele bağla.** `tasarla` hiçbir yerden
+      çağrılmıyordu — Faz III ölü koddu. Artık kanal sayfasında "yeni arketip":
+      arka plan işi + HTMX durum yoklaması (`_partials/arketip_durum.html.j2`).
+- [x] **Adım 8 (EKSİKTİ): render include hatası.** Aday şablon boş bir temp
+      dizininde render ediliyordu; `renderer.py` Jinja arama yolunu şablonun
+      dizini yapıyor ve `_auto_fit.js.j2` orada yok → akış HER denemede
+      patlıyordu. İlk gerçek koşuda görüldü; paylaşılan `_*.j2` parçalar artık
+      temp dizine kopyalanıyor.
 
 ---
 

@@ -43,6 +43,20 @@ def app(tmp_path):
     return a
 
 
+@pytest.fixture(autouse=True)
+def _kimlik_sahte(monkeypatch):
+    """HİÇBİR TEST GERÇEK OPUS ÇAĞIRMASIN.
+
+    `kanali_kur` artık görsel kimlik üretiyor. Bu fixture eklenmeden önce iki
+    test sessizce gerçek Opus'a gidiyordu: koşu 120 sn'de bitmedi ve kota
+    yakıyordu. Kimliği ÖLÇEN testler kendi sahtesiyle bunu eziyor.
+    """
+    monkeypatch.setattr("short_bot.web.routes.channel_chat.generate_dna",
+                        lambda **kw: _fake_dna())
+    monkeypatch.setattr("short_bot.web.routes.channel_chat.smoke_render_dna",
+                        lambda *a, **kw: (True, "ok"))
+
+
 def _sahte_llm(monkeypatch, cevap, sayac=None):
     """channel_chat rotasının kullandığı LLM'i değiştirir."""
     def _f():
@@ -246,9 +260,188 @@ def test_kurulum_mesaji_CRON_DURUMUNU_dogru_soyler(app, monkeypatch):
     _sahte_llm(monkeypatch, SohbetCevabi(
         mesaj="kurdum",
         kararlar=[Karar(alan="name", deger="Aç Kanal", ozet="ad", gerekce="g"),
+                  Karar(alan="keywords", deger=["a"], ozet="k", gerekce="g"),
                   Karar(alan="enabled", deger=True, ozet="açık", gerekce="g")]))
     c.post(f"/channels/sohbet/{oid}", data={"girdi": "kur"})
     c.post(f"/channels/sohbet/{oid}/uygula")
     m = c.post(f"/channels/sohbet/{oid}/kur", follow_redirects=True).get_data(as_text=True)
     assert "Cron AÇIK" in m
     assert "Cron KAPALI" not in m
+
+
+# --- KURULUM GÖRSEL KİMLİK ÜRETMELİ ----------------------------------------
+#
+# CANLI ARIZA (2026-08-21): sohbetle kurulan "Beşiktaş Gündem" kanalı
+# `template: flas` ve KIRMIZI/SARI paletle kaydedildi — Beşiktaş siyah-beyaz.
+# YAML'da `dna:` bloğu HİÇ YOKTU ve `templates/css/<slug>.css` yazılmamıştı.
+#
+# Sebep: eski sihirbaz (`channel_new.save`) `generate_dna` + `smoke_render_dna`
+# + `build_css_override` koşuyordu; sohbetin `kanali_kur`'u YALNIZ YAML
+# yazıyordu. Planda "Adım 5: YAML + CSS + konu bankası" işaretliydi ama CSS ve
+# DNA hiç bağlanmamıştı.
+
+def _fake_dna(archetype="stat-hero", primary="#000000"):
+    from short_bot.dna import DnaFonts, DnaPalette, DnaSpec, DnaTone
+    return DnaSpec(archetype=archetype,
+                   palette=DnaPalette(primary=primary, accent="#ffffff",
+                                      bg_gradient=["#111111", "#000000"],
+                                      body_bg=["#111111", "#000000"]),
+                   fonts=DnaFonts(), tone=DnaTone(voice="x", style="y"),
+                   persona_summary="siyah beyaz kartal")
+
+
+def _kur(app, monkeypatch, *, dna_ok=True, smoke=(True, "ok")):
+    from short_bot.channel_chat import Karar, SohbetCevabi
+    c = app.test_client()
+    oid = re.search(r'hx-post="/channels/sohbet/([0-9a-f]+)"',
+                    c.get("/channels/new/card").get_data(as_text=True)).group(1)
+    _sahte_llm(monkeypatch, SohbetCevabi(mesaj="kurdum", kararlar=[
+        Karar(alan="name", deger="Beşiktaş Gündem", ozet="ad", gerekce="g"),
+        Karar(alan="keywords", deger=["Beşiktaş", "BJK"], ozet="kelime",
+              gerekce="g")]))
+
+    def _dna(**kw):
+        if not dna_ok:
+            raise RuntimeError("Opus cevap vermedi")
+        return _fake_dna()
+    monkeypatch.setattr("short_bot.web.routes.channel_chat.generate_dna", _dna)
+    monkeypatch.setattr("short_bot.web.routes.channel_chat.smoke_render_dna",
+                        lambda *a, **kw: smoke)
+    c.post(f"/channels/sohbet/{oid}", data={"girdi": "Beşiktaş kanalı"})
+    c.post(f"/channels/sohbet/{oid}/uygula")
+    r = c.post(f"/channels/sohbet/{oid}/kur", follow_redirects=True)
+    return c, oid, r
+
+
+def test_kurulan_kanal_DNA_TASIR(app, monkeypatch):
+    _kur(app, monkeypatch)
+    cfg = load_channel(app.config["_CH_DIR"] / "besiktas-gundem.yaml")
+    assert cfg.dna is not None, "kanal DNA'sız kuruldu"
+    assert cfg.template == "stat-hero" == cfg.dna.archetype
+    assert cfg.colors["primary"] == "#000000", "taslağın sabit paleti kalmış"
+
+
+def test_kurulan_kanalin_CSSI_yazilir(app, monkeypatch):
+    _kur(app, monkeypatch)
+    css = app.config["SHORTBOT_TEMPLATES_DIR"] / "css" / "besiktas-gundem.css"
+    assert css.exists() and css.read_text(encoding="utf-8").strip()
+
+
+def test_DNA_URETILEMEZSE_kanal_KURULMAZ(app, monkeypatch):
+    """Kimliksiz kanal, kullanıcının şikâyet ettiği kanaldır. Oturum korunur ki
+    sohbet kaybolmasın; kullanıcı tekrar dener."""
+    c, oid, r = _kur(app, monkeypatch, dna_ok=False)
+    assert not (app.config["_CH_DIR"] / "besiktas-gundem.yaml").exists()
+    assert "Opus cevap vermedi" in r.get_data(as_text=True)
+    assert c.get(f"/channels/sohbet/{oid}").status_code == 200, "oturum düştü"
+
+
+def test_SMOKE_RENDER_patlarsa_kanal_KURULMAZ(app, monkeypatch):
+    """Bozuk yerleşim üreten DNA diske yazılmamalı (eski sihirbazın kapısı)."""
+    c, oid, r = _kur(app, monkeypatch, smoke=(False, "kare düz renk"))
+    assert not (app.config["_CH_DIR"] / "besiktas-gundem.yaml").exists()
+    assert "kare düz renk" in r.get_data(as_text=True)
+
+
+def test_EKSIK_kanal_diske_yazilmaz(app, monkeypatch):
+    """`load_channel` kaydedicinin bilmediği kuralları uyguluyor: rss kaynaklı
+    kanal keywords ister. Sohbet yalnız `name` kararı verirse eskiden dosya
+    YAZILIYOR ve sonra okunamıyordu (kanal sayfası patlıyordu)."""
+    from short_bot.channel_chat import Karar, SohbetCevabi
+    c = app.test_client()
+    oid = re.search(r'hx-post="/channels/sohbet/([0-9a-f]+)"',
+                    c.get("/channels/new/card").get_data(as_text=True)).group(1)
+    _sahte_llm(monkeypatch, SohbetCevabi(mesaj="ok", kararlar=[
+        Karar(alan="name", deger="Kelimesiz", ozet="ad", gerekce="g")]))
+    c.post(f"/channels/sohbet/{oid}", data={"girdi": "kanal"})
+    c.post(f"/channels/sohbet/{oid}/uygula")
+    r = c.post(f"/channels/sohbet/{oid}/kur", follow_redirects=True)
+    assert not (app.config["_CH_DIR"] / "kelimesiz.yaml").exists()
+    assert "keywords" in r.get_data(as_text=True)
+    # Sınama dosyası da ARKADA KALMAMALI.
+    assert not list(app.config["_CH_DIR"].glob(".*"))
+
+
+# --- YENİ ARKETİP TASARIMI -------------------------------------------------
+#
+# `archetype_design.tasarla` yazıldı ama HİÇBİR YERDEN ÇAĞRILMIYORDU (grep: 0
+# çağrı). Kullanıcının istediği "kendi tasarlasın" yeteneği ölü koddu.
+# Tasarım dakikalar sürüyor (LLM → 3 render → vision) → arka plan işi.
+
+def _sahte_tasarim(monkeypatch, ok=True, slug="kartal", sebep="geçemedi"):
+    from short_bot.archetype_design import TasarimSonucu
+    cagri = []
+
+    def _t(niyet, **kw):
+        cagri.append((niyet, kw.get("ad")))
+        return TasarimSonucu(ok, slug=slug if ok else "", sebep="" if ok else sebep,
+                             tur=1)
+    monkeypatch.setattr("short_bot.web.routes.channel_chat.tasarla", _t)
+    monkeypatch.setattr("short_bot.web.routes.channel_chat.gercek_render",
+                        lambda **kw: (lambda *a: []))
+    monkeypatch.setattr("short_bot.web.routes.channel_chat.gercek_vision",
+                        lambda **kw: None)
+    return cagri
+
+
+def test_arketip_tasarimi_ARKA_PLANDA_baslar(app, monkeypatch):
+    _sahte_tasarim(monkeypatch)
+    r = app.test_client().post("/channels/kart/arketip",
+                               data={"niyet": "siyah beyaz, kartal"})
+    assert r.status_code == 200
+    govde = r.get_data(as_text=True)
+    assert "arketip-durum/" in govde, "durum yoklaması bağlanmamış"
+
+
+def test_arketip_BASARILI_olunca_kanal_yeni_sablona_gecer(app, monkeypatch):
+    from short_bot.web.routes.channel_chat import _arketip_isi
+    cagri = _sahte_tasarim(monkeypatch, slug="kartal")
+    with app.app_context():
+        _arketip_isi("j1", niyet="siyah beyaz", ad="Kart",
+                     slug="kart", channels_dir=app.config["_CH_DIR"],
+                     templates_dir=app.config["SHORTBOT_TEMPLATES_DIR"],
+                     settings=app.config["SHORTBOT_SETTINGS"], secrets={})
+    assert cagri and cagri[0][0] == "siyah beyaz"
+    assert load_channel(app.config["_CH_DIR"] / "kart.yaml").template == "kartal"
+
+
+def test_arketip_GECEMEZSE_kanal_DEGISMEZ(app, monkeypatch):
+    """Üç turda kapılardan geçemeyen şablon kaydedilmiyor; kanal da
+    bozuk bir şablona geçirilmemeli."""
+    from short_bot.web.routes.channel_chat import _arketip_isi
+    _sahte_tasarim(monkeypatch, ok=False, sebep="manşet kesilmiş")
+    with app.app_context():
+        _arketip_isi("j2", niyet="x", ad="Kart", slug="kart",
+                     channels_dir=app.config["_CH_DIR"],
+                     templates_dir=app.config["SHORTBOT_TEMPLATES_DIR"],
+                     settings=app.config["SHORTBOT_SETTINGS"], secrets={})
+    assert load_channel(app.config["_CH_DIR"] / "kart.yaml").template == "newscast"
+    from short_bot.web.routes.channel_chat import _is_oku
+    assert "manşet kesilmiş" in _is_oku("j2")["sebep"]
+
+
+def test_kanal_sayfasi_GORSEL_KIMLIGI_gosterir(app):
+    """Kullanıcının şikâyeti tasarımdı ama sayfa tasarımı hiç göstermiyordu."""
+    html = app.test_client().get("/channels/kart").get_data(as_text=True)
+    assert "newscast" in html, "arketip adı görünmüyor"
+    assert 'action="/channels/kart/arketip"' in html
+
+
+def test_TEK_BOZUK_KARAR_partiyi_dusurmez(app, monkeypatch):
+    """Kart kanalında `voice.enabled` uygulanamaz. Eskiden filtre yalnız alan
+    ADINI sınıyordu; karar onay listesine giriyor, `uygula` partinin tamamını
+    reddediyordu — `name` bile yazılmıyordu."""
+    from short_bot.channel_chat import Karar, SohbetCevabi
+    c = app.test_client()
+    oid = re.search(r'hx-post="/channels/sohbet/([0-9a-f]+)"',
+                    c.get("/channels/new/card").get_data(as_text=True)).group(1)
+    _sahte_llm(monkeypatch, SohbetCevabi(mesaj="ok", kararlar=[
+        Karar(alan="name", deger="Sağlam", ozet="ad", gerekce="g"),
+        Karar(alan="voice.enabled", deger=True, ozet="ses", gerekce="g"),
+        Karar(alan="keywords", deger=["a"], ozet="k", gerekce="g")]))
+    tur = c.post(f"/channels/sohbet/{oid}", data={"girdi": "kur"}).get_data(as_text=True)
+    assert 'value="voice.enabled"' not in tur, "imkânsız karar onaya sunuldu"
+    assert "voice" in tur, "elenen karar kullanıcıya söylenmedi"
+    c.post(f"/channels/sohbet/{oid}/uygula")
+    c.post(f"/channels/sohbet/{oid}/kur", follow_redirects=True)
+    assert (app.config["_CH_DIR"] / "saglam.yaml").exists(), "kanal kurulmadı"

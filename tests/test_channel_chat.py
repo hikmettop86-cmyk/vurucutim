@@ -258,3 +258,38 @@ def test_uslup_KURULUMDA_CRON_ACMAYI_yasaklar():
     i = p.find("enabled")
     assert i > 0
     assert "kurulum" in p.lower()
+
+
+# --- OLMAYAN BLOĞUN ALANI LİSTELENMEZ --------------------------------------
+#
+# CANLI ARIZA (2026-08-21, scratch panel): kart kanalı kurulurken model 15
+# karar verdi — `voice.enabled`, `reel.cut_pacing`, `youtube.category_id`…
+# Kart taslağında `voice`/`reel`/`youtube` blokları YOK; `uygula` ilk
+# imkânsız kararda patlıyor ve BÜTÜN PARTİ düşüyor. Kullanıcı "İşaretlileri
+# uygula"ya bastı, hiçbir şey uygulanmadı, "Kanalı kur" da "adı yok" dedi.
+
+def test_prompt_OLMAYAN_BLOGUN_alanlarini_LISTELEMEZ():
+    from short_bot.channel_chat import prompt_kur, taslak
+    p = prompt_kur(cfg=taslak("card"), gecmis=[], girdi="x", fmt="card")
+    assert "voice.enabled" not in p
+    assert "reel.cut_pacing" not in p
+    assert "dna.body_max_chars" not in p, "DNA kurulumda henüz üretilmedi"
+
+
+def test_prompt_VAR_OLAN_blogun_alanlarini_listeler():
+    from short_bot.channel_chat import prompt_kur, taslak
+    p = prompt_kur(cfg=taslak("voiced"), gecmis=[], girdi="x", fmt="voiced")
+    assert "voice.enabled" in p and "voice.persona" in p
+    assert "reel.cut_pacing" not in p
+
+
+def test_taslak_YOUTUBE_blogu_TASIR():
+    """Kurulumda kategori/gizlilik belirlemek meşru (Beşiktaş → Spor 17) ve
+    varsayılanları etkisiz (auto_upload False)."""
+    from short_bot.channel_chat import prompt_kur, taslak
+    for fmt in ("card", "voiced", "yorum", "curated"):
+        cfg = taslak(fmt)
+        assert cfg.youtube is not None, fmt
+        assert cfg.youtube.auto_upload is False, fmt
+    assert "youtube.category_id" in prompt_kur(
+        cfg=taslak("card"), gecmis=[], girdi="x", fmt="card")

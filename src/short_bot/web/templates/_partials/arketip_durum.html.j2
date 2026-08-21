@@ -1,0 +1,38 @@
+{# Yeni arketip tasarımının durumu. Tasarım DAKİKALAR sürüyor (LLM şablon
+   yazar → 3 uç metinle render → vision kapısı, en fazla 3 tur), o yüzden
+   kendi kendini yokluyor — `curated/_results.html.j2` deseni. #}
+{% if is_ is none %}
+<div class="text-xs text-claude-error bg-claude-error-soft rounded-lg px-3 py-2">
+  Tasarım işi bulunamadı.
+</div>
+
+{% elif is_.durum == "calisiyor" %}
+<div hx-get="/channels/arketip-durum/{{ jid }}" hx-trigger="load delay:5s"
+     hx-swap="outerHTML"
+     class="flex items-start gap-2 text-xs text-claude-muted bg-claude-surface
+            border border-claude-border rounded-lg px-3 py-2.5">
+  <span class="w-3.5 h-3.5 mt-0.5 rounded-full border-2 border-claude-accent
+               border-t-transparent animate-spin flex-none"></span>
+  <span>
+    Claude şablonu yazıyor, sonra üç uç metinle render edip kareye bakacak.
+    Birkaç dakika sürer — sayfayı açık bırak.
+    <span class="block text-claude-subtle mt-0.5">“{{ is_.niyet|e }}”</span>
+  </span>
+</div>
+
+{% elif is_.durum == "bitti" %}
+<div class="text-xs bg-claude-success-soft text-claude-success rounded-lg px-3 py-2.5">
+  <b>{{ is_.sablon|e }}</b> şablonu {{ is_.tur }}. turda kapılardan geçti ve
+  kanal ona geçirildi.
+  <a href="/channels/{{ is_.slug }}" class="underline">Sayfayı yenile</a>
+</div>
+
+{% else %}
+{# GEÇEMEZSE HİÇBİR ŞEY YAZILMAZ — ne şablon, ne kanal değişikliği. #}
+<div class="text-xs bg-claude-error-soft text-claude-error rounded-lg px-3 py-2.5">
+  Tasarım kaydedilmedi: {{ is_.sebep|e }}
+  <span class="block text-claude-subtle mt-0.5">
+    Kanal olduğu gibi duruyor. Daha somut bir tarifle tekrar dene.
+  </span>
+</div>
+{% endif %}

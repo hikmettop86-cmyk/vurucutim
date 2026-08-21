@@ -151,3 +151,50 @@ def test_kaydedilen_arketip_JSON_kaydina_girer(sablonlar, monkeypatch, tmp_path)
     assert s.ok
     kayit = json.loads((tmp_path / "config" / "archetypes.json").read_text(encoding="utf-8"))
     assert any(a["slug"] == s.slug for a in kayit)
+
+
+# --- ADAY ŞABLON PAYLAŞILAN PARÇALARLA BİRLİKTE RENDER EDİLMELİ ------------
+#
+# CANLI ARIZA (2026-08-21, ilk gerçek koşu): aday şablon boş bir `tempfile`
+# dizinine yazılıp oradan render ediliyordu. Jinja'nın arama yolu şablonun
+# BULUNDUĞU dizin (`renderer.py`: FileSystemLoader(template_path.parent)) ve
+# orada `_auto_fit.js.j2` yok → `{% include %}` HER denemede patlıyordu:
+#
+#     3 denemede kapılardan geçemedi. Son sebep: Render sırasında hata:
+#     '_auto_fit.js.j2' not found in search path: '...\tmpb3ou2jv1'
+#
+# Yani Faz III hiçbir zaman çalışmamıştı. Testler sahte `render_fn` enjekte
+# ettiği için görünmüyordu — sahte render dizine hiç bakmıyor.
+
+def test_aday_sablon_PAYLASILAN_PARCALARLA_render_edilir(sablonlar, monkeypatch,
+                                                         tmp_path):
+    monkeypatch.chdir(tmp_path)
+    (sablonlar / "_auto_fit.js.j2").write_text("// paylasilan", encoding="utf-8")
+    gorulen: list[list[str]] = []
+
+    def _render(yol, metinler):
+        gorulen.append(sorted(p.name for p in Path(yol).parent.iterdir()))
+        return _render_ok(yol, metinler)
+
+    from short_bot.archetype_design import tasarla
+    tasarla("x", ad="Komsulu", templates_dir=sablonlar, settings=None,
+            metin_llm=lambda p: GECERLI,
+            vision_call=lambda yol: {"sorun": False}, render_fn=_render)
+    assert gorulen, "render hiç çağrılmadı"
+    assert "_auto_fit.js.j2" in gorulen[0], (
+        "aday, paylaşılan parçaların yanında render edilmiyor — "
+        f"dizinde yalnız {gorulen[0]}")
+
+
+def test_render_dizini_TEMIZLENIR(sablonlar, monkeypatch, tmp_path):
+    """Şablon dizinine geçici dosya bırakılmamalı: `templates/` kullanıcının
+    deposu, 41'inci kalıp orada durmasın."""
+    monkeypatch.chdir(tmp_path)
+    (sablonlar / "_auto_fit.js.j2").write_text("// paylasilan", encoding="utf-8")
+    from short_bot.archetype_design import tasarla
+    s = tasarla("x", ad="Temiz", templates_dir=sablonlar, settings=None,
+                metin_llm=lambda p: GECERLI,
+                vision_call=lambda yol: {"sorun": False}, render_fn=_render_ok)
+    kalanlar = sorted(p.name for p in sablonlar.iterdir())
+    assert kalanlar == ["_auto_fit.js.j2", "flas.html.j2", "newscast.html.j2",
+                        f"{s.slug}.html.j2"], kalanlar

@@ -12,6 +12,7 @@ Claude CLI çalıştırmak hem yavaş (her çağrı yeni süreç) hem gereksiz m
 from __future__ import annotations
 
 import dataclasses
+import logging
 import re
 import threading
 import unicodedata
@@ -21,15 +22,36 @@ from pathlib import Path
 from flask import (Blueprint, abort, current_app, flash, redirect,
                    render_template, request, url_for)
 
+from short_bot.archetype_design import gercek_render, gercek_vision, tasarla
 from short_bot.channel_chat import (Karar, SohbetCevabi, YasakAlan, fark,
                                     konus, taslak, uygula)
 from short_bot.config import list_channels, load_channel, save_channel
+from short_bot.dna import build_css_override, generate_dna
+from short_bot.dna_smoke import smoke_render_dna
 from short_bot.formats import FORMATS, channel_format
+
+log = logging.getLogger(__name__)
 
 bp = Blueprint("channel_chat", __name__)
 
 _OTURUMLAR: dict[str, dict] = {}
 _KILIT = threading.Lock()
+
+# Arketip tasarımı DAKİKALAR sürüyor (LLM şablon yazar → 3 uç metinle render →
+# vision kapısı, en fazla 3 tur). İstek içinde koşarsa tarayıcı zaman aşımına
+# uğrar; `curated._jobs` deseniyle arka planda koşuyor.
+_ISLER: dict[str, dict] = {}
+
+
+def _is_yaz(jid: str, **alanlar) -> None:
+    with _KILIT:
+        _ISLER.setdefault(jid, {}).update(alanlar)
+
+
+def _is_oku(jid: str) -> dict | None:
+    with _KILIT:
+        i = _ISLER.get(jid)
+        return dict(i) if i else None
 
 # unicodedata tek başına 'ı' ve 'ß' düşürüyor — elle eşliyoruz (channel_agent
 # ile aynı tablo).
@@ -141,14 +163,20 @@ def sohbet_turu(oid):
         cevap = SohbetCevabi(
             mesaj=f"Modele ulaşamadım: {e}. Ayarları elle düzenleyebilirsin.")
 
-    # Kararların uygulanabilirliği ŞİMDİ sınanır: yasak alan varsa kullanıcıya
-    # onay düğmesi gösterip sonra patlamak yerine burada eleriz.
+    # Kararların uygulanabilirliği ŞİMDİ sınanır — ve GERÇEK YAZMA YOLUYLA.
+    #
+    # Eskiden `fark()` ile sınanıyordu; o yalnız alan ADININ beyaz listede
+    # olduğuna bakıyor. Kart kanalında `voice.enabled` beyaz listede VAR ama
+    # `voice` bloğu YOK: karar onay listesine giriyor, kullanıcı "uygula"ya
+    # basınca `uygula` patlıyor ve BÜTÜN PARTİYİ reddediyor. Canlı koşuda
+    # (2026-08-21) 15 kararın hiçbiri uygulanmadı, kanal "adı yok" diye
+    # kurulamadı. `uygula([k], cfg)` yazma yolunun tamamını çalıştırır.
     gecerli, elenen = [], []
     for k in cevap.kararlar:
         try:
-            fark([k], o["cfg"])
+            uygula([k], o["cfg"])
             gecerli.append(k)
-        except YasakAlan as e:
+        except Exception as e:   # noqa: BLE001 — tur çökmesin, karar elensin
             elenen.append(f"{k.alan}: {e}")
     cevap = cevap.model_copy(update={"kararlar": gecerli})
 
@@ -204,9 +232,78 @@ def kurma_sohbeti_devam(oid):
                            bulgular=o.get("bulgular", []), diller=_diller())
 
 
+class _KimlikYok(RuntimeError):
+    """Görsel kimlik üretilemedi ya da render kapısından geçmedi."""
+
+
+def _gorsel_kimlik(cfg):
+    """DNA üret → render kapısından geçir → CSS yaz → cfg'ye işle.
+
+    KİMLİKSİZ KANAL KURULMAZ. Sohbetle kurulan ilk gerçek kanal
+    (`besiktas-gundem`, 2026-08-21) taslağın SABİT varsayılanlarıyla
+    kaydedildi: `template: flas` ve kırmızı/sarı palet — Beşiktaş siyah-beyaz.
+    YAML'da `dna:` bloğu yoktu, `templates/css/<slug>.css` hiç yazılmamıştı.
+
+    Eski sihirbaz (`channel_new.save`) tam bu üç adımı yapıyordu; sohbete
+    bağlanmamıştı. Planda "YAML + CSS + konu bankası" işaretliydi ama yalnız
+    YAML yazılıyordu.
+    """
+    from short_bot.config import resolve_ai_call
+    ayar = current_app.config["SHORTBOT_SETTINGS"]
+    templates_dir = Path(current_app.config["SHORTBOT_TEMPLATES_DIR"])
+    cagri = resolve_ai_call(ayar, _secrets(), "dna")
+    try:
+        dna = generate_dna(name=cfg.name, keywords=list(cfg.keywords),
+                           language=cfg.language,
+                           topic_hint=", ".join(cfg.keywords[:6]),
+                           claude_path=cagri.claude_path, model=cagri.model,
+                           backend=cagri.backend, api_key=cagri.api_key)
+    except Exception as e:   # noqa: BLE001 — sebebi kullanıcıya söylenir
+        raise _KimlikYok(f"Görsel kimlik üretilemedi: {e}") from e
+
+    # RENDER KAPISI: bozuk yerleşim diske yazılmasın (eski sihirbazın kapısı).
+    ok, sebep = smoke_render_dna(dna, channel_template=dna.archetype,
+                                 templates_dir=templates_dir, settings=ayar,
+                                 language=cfg.language)
+    if not ok:
+        raise _KimlikYok(f"Görsel kimlik render kapısından geçmedi: {sebep}")
+
+    css = templates_dir / "css" / f"{cfg.slug}.css"
+    css.parent.mkdir(parents=True, exist_ok=True)
+    css.write_text(build_css_override(dna), encoding="utf-8")
+
+    return dataclasses.replace(
+        cfg, dna=dna, template=dna.archetype,
+        colors={"primary": dna.palette.primary,
+                "accent": dna.palette.accent,
+                "bg_gradient": list(dna.palette.bg_gradient)})
+
+
+def _okunamayan_kanal(cfg, hedef: Path) -> str:
+    """YAML'ı yerine yazmadan ÖNCE okunabilir mi diye sına; hatayı döndürür.
+
+    `load_channel` kaydedicinin bilmediği kuralları uyguluyor (rss kaynağı
+    keywords ister, trends bölge ister, dil desteklenmeli…). Sohbet bunları
+    belirlemezse diske OKUNAMAYAN bir kanal yazılıyordu: dosya var, kanal
+    sayfası patlıyor. Ölçüldü: yalnız `name` kararı veren bir tur tam bunu
+    üretti.
+
+    Sınama dosyası `*.yaml` DEĞİL — `list_channels` globuna takılmasın.
+    """
+    gecici = hedef.parent / f".{hedef.stem}.dogrula"
+    try:
+        save_channel(gecici, cfg)
+        load_channel(gecici)
+        return ""
+    except Exception as e:   # noqa: BLE001 — sebebi kullanıcıya söylenir
+        return str(e)
+    finally:
+        gecici.unlink(missing_ok=True)
+
+
 @bp.post("/channels/sohbet/<oid>/kur")
 def kanali_kur(oid):
-    """Taslağı gerçek kanala çevirir: slug türetilir, YAML yazılır."""
+    """Taslağı gerçek kanala çevirir: slug + görsel kimlik + YAML + CSS."""
     o = _oturum(oid)
     if o is None or not o.get("kurulum"):
         abort(404)
@@ -220,7 +317,21 @@ def kanali_kur(oid):
     cfg = dataclasses.replace(cfg, slug=slug, output_dir=f"output/{slug}",
                               handle=(cfg.handle if cfg.handle.strip("@")
                                       else f"@{slug}"))
-    save_channel(_channels_dir() / f"{slug}.yaml", cfg)
+    hedef = _channels_dir() / f"{slug}.yaml"
+    eksik = _okunamayan_kanal(cfg, hedef)
+    if eksik:
+        flash(f"Kanal eksik kaldı: {eksik} Sohbette tamamla, sonra tekrar kur.",
+              "error")
+        return redirect(url_for("channel_chat.kurma_sohbeti_devam", oid=oid))
+
+    try:
+        cfg = _gorsel_kimlik(cfg)
+    except _KimlikYok as e:
+        # OTURUM KORUNUR: sohbet kaybolmasın, kullanıcı tekrar denesin.
+        flash(f"{e} Kanal kurulmadı — tekrar dene.", "error")
+        return redirect(url_for("channel_chat.kurma_sohbeti_devam", oid=oid))
+
+    save_channel(hedef, cfg)
     with _KILIT:
         _OTURUMLAR.pop(oid, None)
     # MESAJ DURUMU ANLATIR, VARSAYMAZ. Eskiden sabit "Cron KAPALI" yazıyordu;
@@ -294,3 +405,97 @@ def bulguyu_duzelt(slug, kod):
         return redirect(url_for("channel_chat.kanal_sayfasi", slug=slug))
     flash(f"Düzeltildi: {b.ozet}", "success")
     return redirect(url_for("channel_chat.kanal_sayfasi", slug=slug))
+
+
+# --- yeni arketip tasarımı -------------------------------------------------
+
+def _tasarim_llm(settings, secrets):
+    """Şablon YAZAN çağırıcı. Çıktı JSON değil HTML — `sonnet_json` olmaz.
+
+    Rol `dna`: görsel kimlik işi zaten Opus'ta (config/settings.yaml
+    `claude_models.dna`). Şablon yazmak DNA üretmekten daha zor bir iş.
+    """
+    from short_bot.claude_cli import _invoke_raw
+    from short_bot.config import resolve_ai_call
+    cagri = resolve_ai_call(settings, secrets, "dna")
+
+    def _f(prompt: str) -> str:
+        return _invoke_raw(prompt, backend=cagri.backend, model=cagri.model,
+                           claude_path=cagri.claude_path, api_key=cagri.api_key,
+                           timeout_s=600)
+    return _f
+
+
+def _arketip_isi(jid: str, *, niyet: str, ad: str, slug: str, channels_dir,
+                 templates_dir, settings, secrets: dict) -> None:
+    """Arka plan işi: yeni şablon tasarla, geçerse kanalı ona geçir.
+
+    `current_app` KULLANMAZ — thread'in uygulama bağlamı yok, gereken her şey
+    parametreyle gelir (`curated._run_fetch_job` deseni).
+
+    GEÇEMEZSE KANALA DOKUNULMAZ: `tasarla` üç turda kapılardan geçemeyen
+    şablonu zaten diske yazmıyor; kanalı var olmayan bir şablona geçirmek
+    onu tamamen kırardı.
+    """
+    _is_yaz(jid, durum="calisiyor", slug=slug, niyet=niyet)
+    try:
+        sonuc = tasarla(niyet, ad=ad, templates_dir=Path(templates_dir),
+                        settings=settings,
+                        metin_llm=_tasarim_llm(settings, secrets),
+                        vision_call=gercek_vision(settings=settings,
+                                                  secrets=secrets),
+                        render_fn=gercek_render(settings=settings))
+    except Exception as e:   # noqa: BLE001 — iş çökmesin, sebebi göster
+        log.warning(f"[arketip] {slug}: {e}")
+        _is_yaz(jid, durum="hata", sebep=str(e))
+        return
+
+    if not sonuc.ok:
+        _is_yaz(jid, durum="hata", sebep=sonuc.sebep)
+        return
+
+    try:
+        yol = Path(channels_dir) / f"{slug}.yaml"
+        cfg = load_channel(yol)
+        yeni_dna = (cfg.dna.model_copy(update={"archetype": sonuc.slug})
+                    if cfg.dna is not None else None)
+        save_channel(yol, dataclasses.replace(cfg, template=sonuc.slug,
+                                              dna=yeni_dna))
+    except Exception as e:   # noqa: BLE001 — şablon VAR, yalnız kanal geçemedi
+        _is_yaz(jid, durum="hata", sablon=sonuc.slug,
+                sebep=f"Şablon üretildi ({sonuc.slug}) ama kanala bağlanamadı: {e}")
+        return
+
+    _is_yaz(jid, durum="bitti", sablon=sonuc.slug, tur=sonuc.tur)
+
+
+@bp.post("/channels/<slug>/arketip")
+def arketip_tasarla(slug):
+    """Claude'a bu kanal için YENİ bir şablon yazdır. Arka planda koşar."""
+    yol = _channels_dir() / f"{slug}.yaml"
+    if not yol.exists():
+        abort(404)
+    cfg = load_channel(yol)
+    niyet = (request.form.get("niyet") or "").strip()
+    if not niyet:
+        niyet = (f"{cfg.name} kanalının kimliğine uyan özgün bir haber kartı "
+                 f"düzeni")
+
+    jid = uuid.uuid4().hex[:12]
+    _is_yaz(jid, durum="calisiyor", slug=slug, niyet=niyet)
+    threading.Thread(
+        target=_arketip_isi, args=(jid,),
+        kwargs=dict(niyet=niyet, ad=cfg.name or slug, slug=slug,
+                    channels_dir=_channels_dir(),
+                    templates_dir=current_app.config["SHORTBOT_TEMPLATES_DIR"],
+                    settings=current_app.config["SHORTBOT_SETTINGS"],
+                    secrets=_secrets()),
+        daemon=True).start()
+    return render_template("_partials/arketip_durum.html.j2",
+                           jid=jid, is_=_is_oku(jid), slug=slug)
+
+
+@bp.get("/channels/arketip-durum/<jid>")
+def arketip_durum(jid):
+    return render_template("_partials/arketip_durum.html.j2",
+                           jid=jid, is_=_is_oku(jid), slug="")

@@ -190,6 +190,24 @@ olacak; "ne diyeceğimi bilemem" durumunun çaresi.
 Türkçe yaz."""
 
 
+def yazilabilir_alanlar(cfg) -> list[str]:
+    """Bu kanalda GERÇEKTEN yazılabilecek alanlar.
+
+    Olmayan bloğun alanını listelemek modele imkânsız karar verdiriyor ve
+    bedeli ağır: `uygula` ilk imkânsız kararda patlıyor ve BÜTÜN PARTİYİ
+    reddediyor. Canlı koşuda (2026-08-21) kart kanalı için model 15 karar
+    verdi, biri `voice.enabled`di, hiçbiri uygulanmadı — kullanıcı
+    "İşaretlileri uygula"ya bastı, hiçbir şey olmadı, sonra "Kanalı kur"
+    "adı yok" dedi.
+
+    Kart formatında ses/montaj bloğu YOK (format tanımı gereği), DNA da
+    kurulumda henüz üretilmedi.
+    """
+    return [alan for alan in sorted(YAZILABILIR)
+            if "." not in alan
+            or getattr(cfg, alan.split(".", 1)[0], None) is not None]
+
+
 def prompt_kur(*, cfg, gecmis: Sequence[tuple[str, str]], girdi: str,
                bulgular: Sequence[Any] = (), fmt: str | None = None) -> str:
     """Sohbet prompt'u. Geçmiş buraya GÖMÜLÜR (CLI oturumu kullanılmaz).
@@ -202,9 +220,10 @@ def prompt_kur(*, cfg, gecmis: Sequence[tuple[str, str]], girdi: str,
 
     fmt = fmt or channel_format(cfg)
     ad = FORMATS[fmt].label if fmt in FORMATS else fmt
+    alanlar = yazilabilir_alanlar(cfg)
     satirlar = [_USLUP, "", f"KANAL: {cfg.slug} ({ad} formatı)",
                 "MEVCUT AYARLAR:"]
-    for alan in sorted(YAZILABILIR):
+    for alan in alanlar:
         deger = oku(cfg, alan)
         if deger is not None:
             satirlar.append(f"  {alan} = {json.dumps(deger, ensure_ascii=False, default=str)}")
@@ -214,7 +233,7 @@ def prompt_kur(*, cfg, gecmis: Sequence[tuple[str, str]], girdi: str,
         satirlar += [f"  - {b.ozet}: {b.gerekce}" for b in bulgular]
 
     satirlar += ["", "YAZILABİLİR ALANLAR (başkasını yazma):",
-                 "  " + ", ".join(sorted(YAZILABILIR))]
+                 "  " + ", ".join(alanlar)]
 
     if gecmis:
         satirlar += ["", "KONUŞMA:"]
@@ -236,7 +255,8 @@ def taslak(fmt: str, *, language: str = "tr", slug: str = "yeni-kanal"):
     kanalın adından türetilir. LLM'in slug yazmasına izin vermek dosya
     yollarını (output_dir, css, kimlik klasörü) tutarsız bırakırdı.
     """
-    from short_bot.config import ChannelConfig, ReelConfig, VoiceConfig
+    from short_bot.config import (ChannelConfig, ReelConfig, VoiceConfig,
+                                  YoutubeChannelConfig)
     from short_bot.locale import RSS_LOCALES
 
     ortak = dict(
@@ -250,6 +270,11 @@ def taslak(fmt: str, *, language: str = "tr", slug: str = "yeni-kanal"):
         # üretip sonucu görsün; açık kurmak, ayarları oturmamış bir kanalı
         # doğrudan üretime sokmak demek.
         enabled=False, language=language,
+        # YOUTUBE BLOĞU BAŞTAN VAR. Yoksa modelin verdiği her `youtube.*`
+        # kararı `uygula`da patlıyor ve bütün partiyi düşürüyor; oysa
+        # kurulumda kategori/gizlilik belirlemek meşru (Beşiktaş → Spor 17).
+        # Varsayılanlar etkisiz: auto_upload False.
+        youtube=YoutubeChannelConfig(),
     )
     # SES/MONTAJ BLOĞU KAPALI KURULUR. `VoiceConfig(enabled=True)` ve
     # `ReelConfig(enabled=True)` `voice_id` zorunlu kılıyor ve taslakta henüz

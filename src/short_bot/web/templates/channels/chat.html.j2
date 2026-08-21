@@ -177,15 +177,58 @@
                  'otomatik yükleme açık' if (cfg.youtube and cfg.youtube.auto_upload) else 'elle yükleme') }}
       </div>
 
+      {% if not kurulum %}
+      {# GÖRSEL KİMLİK. Kullanıcının şikâyeti tasarımdı ama sayfa tasarımı hiç
+         göstermiyordu: hangi arketip, hangi palet. #}
+      <div class="px-4 py-3 border-t border-claude-border">
+        <div class="flex items-center justify-between gap-2 mb-2">
+          <span class="text-[11px] text-claude-subtle uppercase tracking-wider font-semibold">
+            Görsel kimlik</span>
+          <span class="text-[12px] font-mono">{{ cfg.template }}</span>
+        </div>
+        <div class="flex gap-1.5 mb-2.5">
+          {% for renk in [cfg.colors.primary, cfg.colors.accent] + (cfg.colors.bg_gradient or []) %}
+          <span class="w-6 h-6 rounded border border-claude-border flex-none"
+                style="background: {{ renk }}" title="{{ renk }}"></span>
+          {% endfor %}
+        </div>
+        <form method="post" action="/channels/{{ cfg.slug }}/arketip"
+              hx-post="/channels/{{ cfg.slug }}/arketip"
+              hx-target="#arketip-durum" hx-swap="innerHTML"
+              hx-disabled-elt="find button, find input" class="flex gap-1.5">
+          <input type="text" name="niyet" autocomplete="off"
+                 placeholder="nasıl görünsün? (ör. siyah-beyaz, kartal)"
+                 class="flex-1 min-w-0 bg-white border border-claude-border-strong
+                        rounded-lg px-2.5 py-1.5 text-xs">
+          <button type="submit"
+                  class="bg-claude-surface hover:bg-claude-surface-alt border
+                         border-claude-border-strong px-3 py-1.5 rounded-lg text-xs
+                         font-semibold whitespace-nowrap disabled:opacity-50">
+            yeni arketip</button>
+        </form>
+        <div id="arketip-durum" class="mt-2"></div>
+        <p class="text-[11px] text-claude-subtle mt-1.5 leading-relaxed">
+          Claude YENİ bir şablon yazar, üç uç metinle render eder, kareye bakar.
+          Kapılardan geçemezse hiçbir şey kaydedilmez.
+        </p>
+      </div>
+      {% endif %}
+
       <div class="px-4 py-3.5 border-t border-claude-border bg-claude-surface flex flex-col gap-2">
         {% if kurulum %}
         <p class="text-[11.5px] text-claude-subtle leading-relaxed m-0">
           Hiçbir şey yazılmadı. "Kanalı kur"a basana kadar ne YAML var, ne CSS.
         </p>
-        <form method="post" action="/channels/sohbet/{{ oid }}/kur" class="flex gap-2">
+        {# KURMA ARTIK GÖRSEL KİMLİK ÜRETİYOR (~1 dk: Opus + render kapısı).
+           Düz form POST'u tarayıcıda dönen sekme gösterir ama düğme tıklanabilir
+           kalırsa kullanıcı iki kez basar. #}
+        <form method="post" action="/channels/sohbet/{{ oid }}/kur" class="flex gap-2"
+              onsubmit="var b=this.querySelector('button[type=submit]');
+                        b.disabled=true; b.textContent='Kuruluyor… (~1 dk)';">
           <button type="submit"
                   class="flex-1 bg-claude-accent hover:bg-claude-accent-hover text-white
-                         py-2 rounded-lg text-sm font-semibold">Kanalı kur</button>
+                         py-2 rounded-lg text-sm font-semibold
+                         disabled:opacity-60 disabled:cursor-wait">Kanalı kur</button>
           <a href="/channels" class="px-3 py-2 rounded-lg text-sm text-claude-muted
                                      border border-claude-border-strong bg-white">Vazgeç</a>
         </form>
