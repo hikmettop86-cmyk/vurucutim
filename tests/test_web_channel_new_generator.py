@@ -21,21 +21,31 @@ claude_models: {dna: opus, default: haiku}
     return app.test_client()
 
 
-def test_new_channel_form_has_content_source_radio(tmp_path, monkeypatch):
-    c = _client(tmp_path, monkeypatch)
-    r = c.get("/channels/new")
-    assert r.status_code == 200
-    body = r.data.decode("utf-8")
-    assert 'name="content_source"' in body
-    assert 'value="rss"' in body
-    assert 'value="generator"' in body
+def test_generator_kanali_DUZENLEME_sayfasindan_ayarlanir(tmp_path, monkeypatch):
+    """Eski DNA sihirbazının /channels/new formu kalktı — kurulum artık format
+    seçimi + sohbet.
 
-
-def test_new_channel_form_has_generator_topic_field(tmp_path, monkeypatch):
+    BİLİNEN BOŞLUK: düzenleme sayfasındaki içerik kaynağı listesinde
+    rss/feed/trends var, `generator` YOK — yani mevcut generator kanalı
+    düzenlenebilir ama bir kanalı generator'a ÇEVİRME yolu kalmadı.
+    Ölçüldü (2026-08-21): canlıda generator kullanan kanal YOK (4 trends,
+    1 curated, gerisi rss), o yüzden kapatılmadı. İhtiyaç doğarsa radio
+    listesine eklenir."""
     c = _client(tmp_path, monkeypatch)
-    r = c.get("/channels/new")
-    body = r.data.decode("utf-8")
+    yaml_metni = "\n".join([
+        "slug: genk", "name: Gen", "handle: '@genk'", "keywords: [a]",
+        "language: tr", "schedule_cron: '0 9 * * *'", "duration_s: 6",
+        "min_score: 6.0", "max_candidates_per_run: 10", "template: newscast",
+        "colors: {primary: '#000', accent: '#111', bg_gradient: ['#000','#111']}",
+        "output_dir: out", "enabled: true",
+        "content_source: generator",
+        "generator: {topic: 'ilginc bilgiler hakkinda kisa videolar'}", ""])
+    (tmp_path / "config" / "channels" / "genk.yaml").write_text(
+        yaml_metni, encoding="utf-8")
+    body = c.get("/channels/genk/edit").data.decode("utf-8")
     assert 'name="generator_topic"' in body
+    assert "ilginc bilgiler" in body
+    assert 'name="content_source"' in body
 
 
 from unittest.mock import patch

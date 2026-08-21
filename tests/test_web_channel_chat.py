@@ -198,19 +198,3 @@ def test_kanal_sayfasi_elle_duzenleme_yolunu_KAPATMAZ(app):
     html = app.test_client().get("/channels/kart").get_data(as_text=True)
     assert "/channels/kart/edit" in html
     assert "elle düzenle" in html
-
-
-# --- kanal kurma ajanı -----------------------------------------------------
-
-def test_ajan_sayfasi_ERISILEBILIR(app):
-    """Blueprint HİÇ KAYITLI DEĞİLDİ — /channels/agent 404 veriyordu.
-
-    Niş bulucu + YouTube outlier doğrulaması yazılmış ama panelden hiç
-    çalıştırılamıyordu. Sohbet onun yerine geçmiyor: sohbet ne istediğini
-    bilen kullanıcıyı hızlandırır, ajan nişi VERİYLE doğrular."""
-    assert app.test_client().get("/channels/agent").status_code == 200
-
-
-def test_format_secimi_ajana_baglanir(app):
-    html = app.test_client().get("/channels/new").get_data(as_text=True)
-    assert "/channels/agent" in html

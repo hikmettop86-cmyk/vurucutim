@@ -14,7 +14,7 @@ def register_blueprints(app: Flask) -> None:
         generator_test, system, youtube, youtube_stats, youtube_overview,
         activity, community, feeds,
         topic_bank, series, autopilot, lang_packs,
-        curated, cartesia_api, yorum, gundem, channel_chat, channel_agent,
+        curated, cartesia_api, yorum, gundem, channel_chat,
     )
     # Kanal formatı TEK yerden: liste parçaları düzenle bağlantısını ve rozeti
     # buradan alır (formats.channel_format) — if-zinciri kopyalanmasın.
@@ -28,11 +28,10 @@ def register_blueprints(app: Flask) -> None:
     # Sohbet blueprint'i channel_new'DEN ÖNCE: /channels/new artık format
     # seçimi ekranı (eski DNA sihirbazı değil).
     app.register_blueprint(channel_chat.bp)
-    # KANAL KURMA AJANI. Blueprint HİÇ KAYITLI DEĞİLDİ: /channels/agent
-    # 404 veriyordu, yani niş bulucu + YouTube outlier doğrulaması yazılmış
-    # ama panelden hiç çalıştırılamıyordu. Format seçimi ekranından
-    # bağlandı.
-    app.register_blueprint(channel_agent.bp)
+    # channel_agent BİLEREK KAYITLI DEĞİL — kullanıcı kararı (da87a24:
+    # 'Ajan'ı da kaldır'). /channels/agent 404 döner ve test_ajan_removed
+    # bunu korur. Modül duruyor: niş bulucu (web/niche_finder) ve
+    # voice_picker başka yerlerden kullanılıyor.
     app.register_blueprint(channel_new.bp)
     app.register_blueprint(channel_edit.bp)
     app.register_blueprint(preview.bp)
