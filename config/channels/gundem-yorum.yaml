@@ -23,8 +23,8 @@ enabled: false
 script_model: opus
 content_source: trends
 trends_region: TR
-trends_min_volume: 5000
-# Yorum videosu CEVAP verir: ilişkili aramalarında soru olan konular önce
+trends_min_volume: 1000
+trends_vertical: para
 trends_intent: question
 youtube:
   auto_upload: false
@@ -41,9 +41,9 @@ trend_boost:
 bg_image_blur: 8
 voice:
   enabled: true
-  provider: cartesia
-  voice_id: c1cfee3d-532d-47f8-8dd2-8e5b2b66bf1d
-  speed: 1.05
+  provider: ai33
+  voice_id: cWVxITrm3nn4UZgIKhad
+  speed: 1.15
   persona: 'Sen Türkiye''nin gündemini yorumlayan, kimsenin adamı olmayan bir sokak
     bilgesisin. Taraf tutmazsın ama görüşsüz de değilsin: olayı sade anlatır, herkesin
     aklındaki soruyu sen sorar, kimsenin bağlamadığı bir noktayı bağlar, sonunda adil
@@ -52,7 +52,7 @@ voice:
     cümleler, ''bakın'', ''şimdi'', ''bence''; spiker kalıpları yok (''açıklandı'',
     ''bildirildi'', ''kaydedildi'').'
   target_duration_s:
-  - 35
+  - 25
   - 50
   music_volume: 0.05
   model: sonic-3.5

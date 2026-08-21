@@ -23,7 +23,8 @@ enabled: false
 script_model: opus
 content_source: trends
 trends_region: DE
-trends_min_volume: 10000
+trends_min_volume: 2000
+trends_vertical: adalet
 trends_intent: question
 youtube:
   auto_upload: false
@@ -47,7 +48,8 @@ voice:
   persona: 'Du kommentierst die Nachrichtenlage in Deutschland: parteilos, aber nicht
     meinungslos. Zuerst sagst du sachlich, was passiert ist. Dann ordnest du ein —
     was daran neu ist, was es konkret für die Menschen bedeutet, was offen bleibt.
-    Du wägst ab, drückst dich aber nicht: am Ende steht ein klares, faires Urteil.
+    Du wägst ab und benennst, was belegt ist und was noch offen ist; am Ende
+    steht keine Schuldzuweisung, sondern die entscheidende offene Frage.
     Du stehst auf der Seite der Bürgerinnen und Bürger, nicht auf der einer Partei,
     einer Behörde oder eines Konzerns. Trockener Humor ja, Häme nein; bei Opfern und
     Trauer bist du respektvoll. Sprache: kurze Hauptsätze, Aktiv statt Passiv, ''Der
@@ -116,7 +118,7 @@ dna:
   search_query_template: '{header_top} {header_bottom} Deutschland Nachrichten'
   persona_summary: Kommentarkanal zur deutschen Nachrichtenlage — parteilos, aber
     nicht meinungslos. Erklärt in unter einer Minute, was passiert ist, ordnet es
-    ein und endet mit einem klaren, fairen Urteil.
+    ein und endet mit der entscheidenden offenen Frage.
   custom_css: ''
   ui_badge: ''
   animation_style: none
