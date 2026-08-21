@@ -96,7 +96,10 @@
     font-size: var(--size-headline-top, 168px);
     line-height: 0.92; letter-spacing: 0.005em; text-transform: uppercase;
     color: #fff; text-shadow: 0 4px 24px rgba(0,0,0,0.7);
-    text-wrap: balance;
+    /* nowrap: genişlik-sığdırma yalnız kırılmayan metinde çalışır — metin
+       sarılırsa scrollWidth clientWidth'i geçmez ve küçültme hiç tetiklenmez
+       (stat-hero'da aynı sözleşme: "NOWRAP with width-fit JS shrink"). */
+    white-space: nowrap;
   }
   .header .bot {
     display: inline-block; margin-top: 6px;
@@ -106,8 +109,8 @@
     font-weight: 700;
     font-size: var(--size-headline-bot, 84px);
     line-height: 1.02; letter-spacing: 0.01em; text-transform: uppercase;
-    text-wrap: balance;
-    box-decoration-break: clone; -webkit-box-decoration-break: clone;
+    white-space: nowrap;
+    max-width: 100%;
   }
   /* Beyaz KJ alt satırı (TV) — photo_overlay buraya; sınıf adı overflow sözleşmesi için .yellow */
   .header .yellow {
@@ -223,8 +226,13 @@
   {% endif %}
 
   <div class="header">
-    <span class="top">{{ script.header_top }}</span>
-    <span class="bot">{{ script.header_bottom }}</span>
+    {# GENİŞLİK-SIĞDIRMA (data-fit-width, bkz. _auto_fit.js.j2): manşet TEK
+       SATIRDA kalır, sığmazsa punto düşer. Şart, çünkü .header (top 640) ile
+       .body (top 1070) arasında yalnız 430px var ve ikisi de absolute —
+       manşet iki satıra kırılınca İTMEZ, gövdenin ÜSTÜNE BİNER.
+       Vaka: shorts/1763, 598px blok → 168px çakışma, 42 sn okunamaz video. #}
+    <span class="top" data-fit-width="0" data-fit-min="92" data-fit-max="{{ dna_size_top | default(168) }}">{{ script.header_top }}</span>
+    <span class="bot" data-fit-width="44" data-fit-min="44" data-fit-max="{{ dna_size_bot | default(84) }}">{{ script.header_bottom }}</span>
     {% if script.photo_overlay %}<span class="yellow">{{ script.photo_overlay }}</span>{% endif %}
   </div>
 
