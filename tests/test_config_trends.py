@@ -113,7 +113,17 @@ def test_repo_gundem_yorum_channel_loads():
         pytest.skip("config/channels takipsiz olabilir (worktree)")
     cfg = load_channel(p)
     assert channel_format(cfg) == "yorum"
-    assert cfg.voice.provider == "cartesia" and cfg.voice.target_duration_s == (35, 50)
+    # SAĞLAYICI SABİTLENMİYOR. Test önce `provider == "cartesia"` diye
+    # bağlıyordu ve kullanıcı sesi ai33'e çevirince kırıldı — oysa değişen şey
+    # bir hata değil, bir tercih (Cartesia karakter başına ücretli).
+    # Formatın gerektirdiği şey SES OLMASI ve süre aralığının yorum uzunluğunda
+    # kalması; hangi sağlayıcı olduğu kanalın kararı.
+    assert cfg.voice is not None and cfg.voice.enabled and cfg.voice.voice_id
+    # Süre de SABİTLENMİYOR — kullanıcı 35-50'yi 25-50 yaptı ve bu bir tercih.
+    # Formatın gerektirdiği şey: yorum uzunluğunda kalması (Shorts sınırı 60 sn,
+    # 6 sn karttan belirgin uzun).
+    alt, ust = cfg.voice.target_duration_s
+    assert 20 <= alt < ust <= 60
     assert cfg.template == "flas" and cfg.schedule_cron.startswith("30 ")
     assert cfg.youtube.auto_upload is False
     assert "kimsenin adamı olmayan" in cfg.voice.persona
