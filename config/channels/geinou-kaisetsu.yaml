@@ -10,13 +10,13 @@ duration_s: 6
 min_score: 6.0
 max_candidates_per_run: 25
 max_age_hours: 24
-template: flas
+template: geinou-sports-shimbun
 colors:
-  primary: '#d0021b'
-  accent: '#ffe600'
+  primary: '#c81e1e'
+  accent: '#ffea3b'
   bg_gradient:
-  - '#3a3a3a'
-  - '#141414'
+  - '#f7f3ee'
+  - '#e0d6cc'
 handle: '@geinou-kaisetsu'
 output_dir: output/geinou-kaisetsu
 enabled: false
@@ -42,3 +42,53 @@ voice:
   - 30
   - 50
   music_volume: 0.05
+dna:
+  archetype: geinou-sports-shimbun
+  palette:
+    primary: '#c81e1e'
+    accent: '#ffea3b'
+    bg_gradient:
+    - '#f7f3ee'
+    - '#e0d6cc'
+    body_bg:
+    - '#ffffff'
+    - '#f7f3ee'
+    text_main: '#111111'
+    text_muted: '#5a5148'
+    header_top_color: ''
+    header_bottom_color: ''
+  fonts:
+    headline: Noto Sans JP
+    body: Noto Sans JP
+    google_imports:
+    - Noto Sans JP:wght@700;900
+    - Zen Kaku Gothic New:wght@700;900
+    size_headline_top: null
+    size_headline_bottom: null
+  tone:
+    voice: 落ち着いていて明快、事実に忠実
+    style: 発表内容を先に、次に誰が・いつ・どこで、最後に確認できていない点
+    forbidden:
+    - 未確認の情報を断定する
+    - 私生活の憶測
+    - 「衝撃」「まさかの」などのワイドショー常套句
+    - 毎行の感嘆符
+    - 他人を笑いものにする表現
+    - 訃報での軽い言葉遣い
+    sentence_max_words: 26
+    paragraph_sentences:
+    - 3
+    - 4
+    body_max_chars: 180
+    headline_style_hint: 上段は主語ひとつ（1-2語、例『藤井風』）、下段は何が起きたか（2-5語、例『タイ公演中止を発表』）、photo_overlay
+      は数字・所属・場所の帯（例『12月バンコク公演 払い戻し対応へ』）
+  banner_shape: flat
+  highlight_style: underline
+  chip_style: rounded
+  categories: []
+  category_icon: 🎬
+  search_query_template: '{header_top} {header_bottom} 芸能 日本'
+  persona_summary: 日本の芸能ニュースを、発表された事実と未確認の情報に分けて伝える解説チャンネル。私生活の憶測はせず、作品や活動については率直に評価する。
+  custom_css: ''
+  ui_badge: ''
+  animation_style: none

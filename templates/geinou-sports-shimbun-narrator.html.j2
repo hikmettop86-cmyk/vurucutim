@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="{{ language }}">
+<head>
+<meta charset="utf-8">
+<title>Yorum · Short — Nihon Tabloid News</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@700;900&family=Zen+Kaku+Gothic+New:wght@700;900&display=swap');
+
+  {{ dna_css|safe }}
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  
+  html, body {
+    width: 1080px;
+    height: 1920px;
+    overflow: hidden;
+    font-family: 'Noto Sans JP', sans-serif;
+    color: var(--text-main, #111111);
+    background-color: #f7f3ee;
+    background-image: radial-gradient(#d6ccc2 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+
+  .stage {
+    position: relative;
+    width: 1080px;
+    height: 1920px;
+    display: flex;
+    flex-direction: column;
+    padding: 60px 50px 140px 50px;
+  }
+
+  /* Kategori Rozeti (Japon Spor Gazetesi Tarzı) */
+  .stage-badge {
+    position: absolute;
+    top: 50px;
+    right: 50px;
+    background: var(--primary, #c81e1e);
+    color: #ffffff;
+    font-family: var(--font-headline, 'Noto Sans JP'), sans-serif;
+    font-size: 32px;
+    font-weight: 900;
+    padding: 8px 24px;
+    letter-spacing: 2px;
+    z-index: 10;
+    transform: rotate(3deg);
+    box-shadow: 4px 4px 0px #000000;
+  }
+
+  /* Manşet Alanı (İki Renkli, Sert Noktalı Desen) */
+  .header {
+    margin-top: 40px;
+    background-color: #ffffff;
+    border: 6px solid #000000;
+    padding: 30px 40px;
+    position: relative;
+    box-shadow: 8px 8px 0px var(--primary, #c81e1e);
+  }
+
+  .header::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-image: radial-gradient(#000000 15%, transparent 16%);
+    background-size: 8px 8px;
+    opacity: 0.05;
+    pointer-events: none;
+  }
+
+  .header .top {
+    display: block;
+    font-family: var(--font-headline, 'Noto Sans JP'), sans-serif;
+    font-size: 52px;
+    font-weight: 900;
+    color: #000000;
+    line-height: 1.2;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  .header .bot {
+    display: block;
+    font-family: var(--font-headline, 'Noto Sans JP'), sans-serif;
+    font-size: 64px;
+    font-weight: 900;
+    color: var(--primary, #c81e1e);
+    line-height: 1.15;
+    text-transform: uppercase;
+    padding-top: 8px;
+    border-top: 4px dashed #000000;
+  }
+
+  /* Fotoğraf Alanı ve Kicker Çerçevesi */
+  .photo {
+    position: relative;
+    width: 100%;
+    height: 640px;
+    margin-top: 50px;
+    border: 6px solid #000000;
+    background: #000000;
+    overflow: hidden;
+    box-shadow: 8px 8px 0px #000000;
+  }
+
+  .photo .bg-img {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-size: cover;
+    background-position: center;
+    filter: contrast(1.15) saturate(1.1);
+  }
+
+  .photo .yellow {
+    position: absolute;
+    bottom: 24px;
+    left: 24px;
+    right: 24px;
+    background: var(--accent, #ffea3b);
+    color: #000000;
+    /* SESLENDİRME: kartlar üst üste durur, konuşulan beat'inki görünür. */
+    opacity: 0;
+    transition: opacity 0.25s ease;
+    font-family: var(--font-headline, 'Noto Sans JP'), sans-serif;
+    font-size: 38px;
+    font-weight: 900;
+    padding: 16px 24px;
+    border: 4px solid #000000;
+    box-shadow: 5px 5px 0px #000000;
+    line-height: 1.3;
+  }
+
+  .photo .yellow.on { opacity: 1; }
+
+  /* Gövde Alanı (Kesin Sınırlı, Taşma Yapmaz) */
+  .body {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    margin-top: 50px;
+    background: #ffffff;
+    border: 6px solid #000000;
+    padding: 36px 40px;
+    overflow: hidden;
+    box-shadow: 8px 8px 0px #000000;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .body-text {
+    font-family: var(--font-body, 'Noto Sans JP'), sans-serif;
+    font-weight: 700;
+    color: #111111;
+    line-height: 1.6;
+    width: 100%;
+  }
+
+  /* Highlight Kuralları (Japon Gazete Vurgu Şeritleri) */
+  .body .hl-r {
+    background: var(--primary, #c81e1e);
+    color: #ffffff;
+    padding: 2px 10px;
+    margin: 0 4px;
+    border-radius: 0px;
+    display: inline;
+    box-shadow: 3px 3px 0px #000000;
+  }
+
+  .body .hl-y {
+    background: var(--accent, #ffea3b);
+    color: #000000;
+    padding: 2px 10px;
+    margin: 0 4px;
+    border-radius: 0px;
+    display: inline;
+    box-shadow: 3px 3px 0px #000000;
+  }
+
+  /* İlerleme Çubuğu ve Sabit Alt Öğeler (Kesinlikle 1920px İçinde Güvenli Alan) */
+  .progress {
+    position: absolute;
+    left: 50px;
+    right: 50px;
+    bottom: 95px;
+    height: 10px;
+    background: #e0d6cc;
+    border: 3px solid #000000;
+    z-index: 11;
+  }
+
+  .progress::after {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    background: var(--primary, #c81e1e);
+    width: var(--progress, 0%);
+  }
+
+  @keyframes fill {
+    from { width: 0; }
+    to { width: 100%; }
+  }
+
+  .handle {
+    position: absolute;
+    left: 50px;
+    right: 50px;
+    bottom: 35px;
+    text-align: center;
+    font-size: 30px;
+    font-weight: 900;
+    color: #000000;
+    font-family: var(--font-headline, 'Noto Sans JP'), sans-serif;
+    letter-spacing: 1px;
+    z-index: 12;
+  }
+
+  .source-credit {
+    position: absolute;
+    top: 55px;
+    left: 50px;
+    background: #000000;
+    color: #ffffff;
+    font-size: 16px;
+    font-weight: 700;
+    padding: 4px 12px;
+    border: 2px solid #000000;
+    z-index: 50;
+    white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+<div class="stage dna-anim-{{ animation_style|default('none') }}">
+
+  {% if rss_source %}<div class="source-credit">{{ ui_source }}: {{ rss_source }}</div>{% endif %}
+  {% if script.category %}<div class="stage-badge">{{ ui_breaking }}</div>{% endif %}
+
+  <div class="header">
+    <span class="top" data-fit-width="80" data-fit-min="32" data-fit-max="52">{{ script.header_top }}</span>
+    <span class="bot" data-fit-width="80" data-fit-min="38" data-fit-max="64">{{ script.header_bottom }}</span>
+  </div>
+
+  <div class="photo">
+    <div class="bg-img" style="background-image: url('{{ bg_image_url|default("") }}');
+         {% if not bg_image_url %}display: none;{% endif %}"></div>
+    {# Sarı bant = o an konuşulan beat'in ekran kartı. 40 sn boyunca hiç
+       değişmeyen ekran durgun kalırdı; ilk beat başlayana dek photo_overlay. #}
+    <div class="yellow card on" data-s="0" data-e="{{ narration.beats[0].start_s if narration.beats else narration.duration_s }}">{{ script.photo_overlay }}</div>
+    {% for b in narration.beats %}
+    <div class="yellow card" data-s="{{ b.start_s }}" data-e="{{ b.end_s }}">{{ b.on_screen }}</div>
+    {% endfor %}
+  </div>
+
+  <div class="body">
+    <div class="body-text" data-fit-min="26" data-fit-max="42" data-fit-pad="10">
+      {{ body_html|safe }}
+    </div>
+  </div>
+
+  <div class="progress" id="__progress"></div>
+  <div class="handle">{{ handle }}</div>
+</div>
+
+{% include "_auto_fit.js.j2" %}
+<script>
+// renderer.py, narration varsa her kare için __seek(t_ms) çağırır. Karaoke yok:
+// yalnız beat kartı ve ilerleme çubuğu zamanlanır. Son beat bitince son kart
+// kalır (boş sarı bant görünmesin).
+const CARDS = Array.from(document.querySelectorAll('.photo .card'));
+const PROGRESS = document.getElementById('__progress');
+const DURATION_S = {{ narration.duration_s }};
+window.__seek = function (tMs) {
+  const t = tMs / 1000;
+  let active = null;
+  for (const c of CARDS) {
+    const s = parseFloat(c.dataset.s), e = parseFloat(c.dataset.e);
+    if (t >= s && t < e) active = c;
+  }
+  if (!active && CARDS.length) active = CARDS[CARDS.length - 1];
+  for (const c of CARDS) c.classList.toggle('on', c === active);
+  if (PROGRESS) {
+    const pct = Math.max(0, Math.min(100, (t / DURATION_S) * 100));
+    PROGRESS.style.setProperty('--progress', pct + '%');
+  }
+};
+</script>
+</body>
+</html>

@@ -925,5 +925,106 @@
       "us news studio"
     ],
     "defaults": {}
+  },
+  {
+    "slug": "orduspor-kart",
+    "label": "Orduspor Kart",
+    "subtitle": "Claude tarafından tasarlandı",
+    "pexels_queries": [
+      "purple and white smoke flare stadium",
+      "football fans cheering waving scarfs tribune",
+      "dramatic dramatic night stadium floodlights fog",
+      "black sea coast waves dramatic drone shot"
+    ],
+    "defaults": {}
+  },
+  {
+    "slug": "orduspor-kartlari",
+    "label": "Orduspor Kartları",
+    "subtitle": "Claude tarafından tasarlandı",
+    "pexels_queries": [
+      "purple and white smoke flare stadium crowd",
+      "historic football stadium empty seats dramatic lighting",
+      "aerial drone view of a green football pitch near the black sea coast",
+      "passionate football fans cheering waving scarves in stadium"
+    ],
+    "defaults": {}
+  },
+  {
+    "slug": "magazin-turkiye",
+    "label": "Magazin Türkiye",
+    "subtitle": "Claude tarafından tasarlandı",
+    "pexels_queries": [
+      "paparazzi camera flash dark street",
+      "luxury red carpet event crowd flashes",
+      "breaking news studio desk background",
+      "gllamorous celebrity couple walking away",
+      "smartphone screen scrolling social media feed"
+    ],
+    "defaults": {}
+  },
+  {
+    "slug": "ultraaslan",
+    "label": "ultraaslan",
+    "subtitle": "Claude tarafından tasarlandı",
+    "pexels_queries": [
+      "stadium red flare smoke crowd",
+      "football fans jumping celebrating goal",
+      "huge tifo choreography stadium",
+      "football match night stadium lights"
+    ],
+    "design_language": "miro",
+    "defaults": {}
+  },
+  {
+    "slug": "real-madrid-espanol",
+    "label": "Real Madrid Español",
+    "subtitle": "Claude tarafından tasarlandı",
+    "pexels_queries": [
+      "Santiago Bernabeu stadium exterior aerial view night",
+      "football fans celebrating in stadium stands waving white flags",
+      "professional soccer player scoring a goal in a crowded stadium",
+      "close up of football coach celebrating passionately on sideline"
+    ],
+    "design_language": "ferrari",
+    "defaults": {}
+  },
+  {
+    "slug": "weltgeschehen-aktuell",
+    "label": "Weltgeschehen Aktuell",
+    "subtitle": "Claude tarafından tasarlandı",
+    "pexels_queries": [
+      "global network data streams digital world map",
+      "stock market financial ticker screen glowing",
+      "newsroom anchor desk monitors background",
+      "busy city traffic aerial view at night blurred"
+    ],
+    "design_language": "ibm",
+    "defaults": {}
+  },
+  {
+    "slug": "real-madrid-en-espanol",
+    "label": "Real Madrid En Español",
+    "subtitle": "Claude tarafından tasarlandı",
+    "pexels_queries": [
+      "Santiago Bernabeu stadium exterior aerial view night lights",
+      "football players celebrating a goal on pitch dramatic lighting",
+      "soccer player signing a contract in a modern office transfer news",
+      "champions league trophy spinning close up gold confetti"
+    ],
+    "design_language": "linear.app",
+    "defaults": {}
+  },
+  {
+    "slug": "geinou-sports-shimbun",
+    "label": "Geinou Sports Shimbun",
+    "subtitle": "Claude tarafından tasarlandı",
+    "pexels_queries": [
+      "japanese celebrity press conference",
+      "tokyo entertainment news",
+      "japanese pop star stage"
+    ],
+    "design_language": "",
+    "defaults": {}
   }
 ]
