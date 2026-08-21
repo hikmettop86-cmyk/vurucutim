@@ -124,6 +124,7 @@
               {% if s.search_pct is not none %}
               <span class="text-claude-subtle" title="Son 28 günde izlenmelerin yüzde kaçı YouTube aramasından geldi">arama %{{ '%.1f'|format(s.search_pct) }}</span>
               {% endif %}
+              {% if s.dikey %}<span class="text-claude-subtle" title="Kanalın dikeyi">dikey: {{ s.dikey }}</span>{% endif %}
               <span class="ml-auto text-claude-subtle">{% if s.next %}sıradaki koşu {{ s.next }}{% else %}cron kapalı{% endif %}</span>
             </div>
             {% else %}
@@ -151,7 +152,11 @@
         <div class="grid gap-4" style="grid-template-columns: repeat({{ channels|length if channels else 1 }}, minmax(0, 1fr));">
           {% for c in channels %}
           {% set done = c.slug in produced %}
-          <form method="post" action="/gundem/produce" data-produce="{{ loop.index }}">
+          {# Dikey dışı haber: üretim ENGELLENMEZ (elle üretim meşru geçersiz
+             kılmadır) ama sessiz kalmaz — kanalın kimliğini bozan tek tıklama. #}
+          {% set dikey_disi = kanal_uyum is defined and not kanal_uyum.get(c.slug, True) %}
+          <form method="post" action="/gundem/produce" data-produce="{{ loop.index }}"
+                {% if dikey_disi %}onsubmit="return confirm('Bu haber {{ c.name|e }} kanalının dikeyi dışında. Yine de üretilsin mi?')"{% endif %}>
             <input type="hidden" name="region" value="{{ region }}">
             <input type="hidden" name="channel_slug" value="{{ c.slug|e }}">
             <input type="hidden" name="guid" value="{{ item.guid|e }}">
@@ -159,6 +164,9 @@
                "takip" videosu üretilir. Önceki videonun metni prompta girer ki
                yeni video aynı şeyi tekrar anlatmasın (bkz. followup.py). #}
             {% if done %}<input type="hidden" name="followup" value="1">{% endif %}
+            {% if dikey_disi %}
+            <div class="text-[11px] text-claude-wait font-semibold mb-1">⚠ dikey dışı — {{ c.cfg.trends_vertical }} değil</div>
+            {% endif %}
             <button type="submit"
                     class="w-full flex items-center gap-3.5 rounded-xl p-3.5 text-left border transition
                            {% if done %}bg-claude-surface border-claude-border-strong border-dashed hover:bg-claude-surface-alt

@@ -100,6 +100,21 @@ def _dikey() -> str:
     return d if d in VERTICALS else ""
 
 
+def _channel_fit(channels, picked) -> dict[str, bool]:
+    """Seçili haber her kanalın dikeyine uyuyor mu? (slug -> uyuyor mu)
+
+    Masa kuyruğu kanal dikeylerinin BİRLEŞİMİNE süzülür; bölgede iki kanal
+    varsa kuyrukta ikisinin de haberi olur ve operatör yanlış düğmeye basabilir.
+    Üretim ENGELLENMEZ (elle üretim meşru bir geçersiz kılmadır) ama düğme
+    bunu söylemelidir — sessiz üretim kanalın kimliğini bozar.
+    """
+    if picked is None:
+        return {c["slug"]: True for c in channels}
+    return {c["slug"]: vertical_matches(picked.trend_categories,
+                                        (c.get("cfg") and c["cfg"].trends_vertical))
+            for c in channels}
+
+
 def _filter_by_dikey(items, dikey: str, channel_verticals: list[str]):
     """Masa kuyruğunu süz. ÜRETİM yolunu (produce) etkilemez: operatör süzgeç
     dışındaki bir haberi hâlâ elle üretebilmeli."""
@@ -214,6 +229,9 @@ def _channel_status(eng, channels) -> list[dict]:
             # Aramanın payı (28 gün). Aşama 1'in etkisi ancak bu oran zaman
             # içinde izlenirse görülür; başlangıç ölçümü %2,2–2,9 idi.
             "search_pct": _search_pct(eng, cfg),
+            # Kanalın dikeyi durum satırında görünür: operatör hangi kanalın
+            # neyi ürettiğini masadan okuyabilmeli.
+            "dikey": cfg.trends_vertical or "",
         })
     return out
 
@@ -291,6 +309,7 @@ def _context(region: str, *, guid: str | None, force: bool = False,
         "produced": ([r for r in rows if r["guid"] == picked.guid][0]["produced"] if picked else []),
         "score": _known_score(eng, picked.guid) if picked else None,
         "status": _channel_status(eng, channels),
+        "kanal_uyum": _channel_fit(channels, picked),
         "cartesia": _cartesia_usage(),
         "mock": _card_mock(channels),
         "cache_age": _cache_age_minutes(region),

@@ -120,3 +120,28 @@ def test_kanalin_dikeyi_yoksa_hepsi_gelir():
     from short_bot.web.routes.gundem import _filter_by_dikey
     items = [_news((17,)), _news((3,))]
     assert len(_filter_by_dikey(items, "", [])) == 2
+
+
+# --- kanal eşleştirme ---------------------------------------------------------
+
+def test_secili_haber_kanalin_dikeyine_uyuyor_mu():
+    """Bölgede iki kanal varsa operatör futbol haberini para kanalına basabilir;
+    düğme bunu SÖYLEMELİ. Sessiz üretim kanalın kimliğini bozar."""
+    from short_bot.web.routes.gundem import _channel_fit
+    kanallar = [{"slug": "para-ch", "cfg": _cfg("para-ch", "para")},
+                {"slug": "spor-ch", "cfg": _cfg("spor-ch", "spor")}]
+    out = _channel_fit(kanallar, _news((3,)))
+    assert out["para-ch"] is True
+    assert out["spor-ch"] is False
+
+
+def test_dikeysiz_kanal_her_habere_uyar():
+    from short_bot.web.routes.gundem import _channel_fit
+    out = _channel_fit([{"slug": "a", "cfg": _cfg("a", None)}], _news((17,)))
+    assert out["a"] is True
+
+
+def test_haber_secilmemisse_uyari_yok():
+    from short_bot.web.routes.gundem import _channel_fit
+    out = _channel_fit([{"slug": "a", "cfg": _cfg("a", "para")}], None)
+    assert out["a"] is True
