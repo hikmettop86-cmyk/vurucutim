@@ -1,0 +1,44 @@
+{# ORTAK ÇEKİRDEK — kimlik. Her formatta AYNI parçadan çizilir.
+   Gereken context: c (ChannelConfig)
+
+   DİL KİLİTLİ: kanalın dili kurulumda belirlenir ve sonradan değiştirilmesi
+   DNA'yı, dil paketini, ses seçimini ve konu bankasını tutarsız bırakır. Salt
+   okunur göstermek, açılırın ilk seçeneğe düşüp kanalı sessizce Türkçeye
+   çevirmesi tuzağını da kapatır (Japonca kanal kurulurken yakalandı). #}
+<div class="bg-white border border-claude-border rounded-xl shadow-soft">
+  <div class="px-5 py-3 border-b border-claude-border bg-claude-surface rounded-t-xl">
+    <h2 class="font-serif text-base font-semibold flex items-center gap-2">
+      <span class="opacity-70">◈</span> Kimlik
+      <span class="ml-auto text-[10.5px] uppercase tracking-wider text-claude-subtle font-sans font-semibold">ortak</span>
+    </h2>
+  </div>
+  <div class="px-5 py-4 space-y-3">
+    <label class="block">
+      <span class="text-xs text-claude-muted">Kanal adı</span>
+      <input type="text" name="name" value="{{ c.name|e }}"
+             class="bg-claude-surface border border-claude-border px-3 py-1.5 rounded-lg w-full text-sm mt-1">
+    </label>
+
+    <div class="grid grid-cols-2 gap-3">
+      <label class="block">
+        <span class="text-xs text-claude-muted">Dil</span>
+        <div class="bg-claude-surface-alt border border-claude-border px-3 py-1.5 rounded-lg text-sm mt-1
+                    flex items-center justify-between gap-2 text-claude-muted">
+          <span>{% for kod, ad in LANGUAGES %}{% if kod == c.language %}{{ ad }}{% endif %}{% endfor %}</span>
+          <span class="text-[10px] uppercase tracking-wider text-claude-subtle">kilitli</span>
+        </div>
+      </label>
+      <label class="block">
+        <span class="text-xs text-claude-muted">Slug</span>
+        <div class="bg-claude-surface-alt border border-claude-border px-3 py-1.5 rounded-lg text-sm mt-1
+                    font-mono text-xs text-claude-muted flex items-center h-[34px]">{{ c.slug }}</div>
+      </label>
+    </div>
+
+    <label class="block">
+      <span class="text-xs text-claude-muted">YouTube handle</span>
+      <input type="text" name="handle" value="{{ c.handle|e }}"
+             class="bg-claude-surface border border-claude-border px-3 py-1.5 rounded-lg w-full text-sm mt-1 font-mono text-xs">
+    </label>
+  </div>
+</div>

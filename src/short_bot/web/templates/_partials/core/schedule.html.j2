@@ -1,0 +1,54 @@
+{# ORTAK ÇEKİRDEK — zamanlama ve durum. Her formatta AYNI parçadan çizilir.
+   Gereken context: c (ChannelConfig). İsteğe bağlı: cron_human
+
+   İKİ AYRI EKSEN, bilinçli olarak yan yana:
+     Cron  → kanal kendi başına çalışıyor mu (`enabled`)
+     Durum → Kokpit'te görünüyor mu (`archived`)
+   Cron'u kapalı ama elle çalıştırılan kanallar var (ölçüldü: gundem-yorum
+   kapalıyken bir günde 9 video üretti); ikisini tek düğmeye bağlamak onları
+   Kokpit'ten düşürürdü.
+
+   `*_present` gizli alanları ŞART: işaretsiz onay kutusu POST'ta HİÇ
+   gönderilmez, o yüzden "kutu bu formda var mıydı" bilgisi ayrıca taşınmalı —
+   yoksa alanı olmayan her kısmi kaydet kanalı kapatırdı. #}
+<div class="bg-white border border-claude-border rounded-xl shadow-soft">
+  <div class="px-5 py-3 border-b border-claude-border bg-claude-surface rounded-t-xl">
+    <h2 class="font-serif text-base font-semibold flex items-center gap-2">
+      <span class="opacity-70">⏱</span> Zamanlama ve durum
+      <span class="ml-auto text-[10.5px] uppercase tracking-wider text-claude-subtle font-sans font-semibold">ortak</span>
+    </h2>
+  </div>
+  <div class="px-5 py-4 space-y-3">
+    <label class="block">
+      <span class="text-xs text-claude-muted">Cron</span>
+      <input type="text" name="schedule_cron" value="{{ c.schedule_cron }}"
+             class="bg-claude-surface border border-claude-border px-3 py-1.5 rounded-lg w-full text-sm mt-1 font-mono text-xs">
+      <span class="text-[11px] text-claude-subtle block mt-1">
+        {{ cron_human if cron_human is defined and cron_human else c.schedule_cron|cron_human }}
+      </span>
+    </label>
+
+    <input type="hidden" name="enabled_present" value="1">
+    <input type="hidden" name="archived_present" value="1">
+
+    <label class="flex items-center justify-between gap-3 text-sm py-1">
+      <span>
+        Cron çalışsın
+        <span class="block text-[11px] text-claude-subtle">kapalıyken kanal yalnız elle üretir</span>
+      </span>
+      <input type="checkbox" name="enabled" value="1" {% if c.enabled %}checked{% endif %}
+             class="w-4 h-4 accent-claude-success">
+    </label>
+
+    {# Kutu doğrudan `archived` alanıdır — "görünsün" diye ters mantık kurup iki
+       aynı isimli alan yazmak kırılgandı. Etiket alanın kendisini söylüyor. #}
+    <label class="flex items-center justify-between gap-3 text-sm py-1 border-t border-claude-border/60 pt-3">
+      <span>
+        Pasife al
+        <span class="block text-[11px] text-claude-subtle">Kokpit listesinden çıkar — hiçbir şey silinmez, cron ayrı</span>
+      </span>
+      <input type="checkbox" name="archived" value="1" {% if c.archived %}checked{% endif %}
+             class="w-4 h-4 accent-claude-idle">
+    </label>
+  </div>
+</div>

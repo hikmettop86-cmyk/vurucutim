@@ -1,0 +1,153 @@
+{# ORTAK ÇEKİRDEK — YouTube. Her formatta AYNI parçadan çizilir.
+   Gereken context: c, yt_connected, yt_info, yt_has_secrets, yt_secrets_abs,
+                    linkable, yt_clash, creds_slug
+   İsteğe bağlı: proxy_url (yoksa proxy bölümü çizilmez)
+
+   Bu parçanın varlık sebebi ölçülmüş bir hata: aynı blok dört düzenleme
+   sayfasında ayrı ayrı yazılmıştı ve dördü de eksikti —
+     kürate:  yalnız "otomatik yükle"  (gizlilik, eşik, kategori YOK)
+     yorum:   otomatik yükle + credentials_from  (gizlilik, eşik, kategori YOK)
+     kart:    hepsi VAR ama credentials_from YOK
+   Oysa gundem ile gundem-yorum aynı YouTube kanalına üretiyor.
+
+   Aksiyon butonları ana kaydet formunun DIŞINDAKİ gizli formlara `form="<id>"`
+   ile bağlanır (HTML5 iç içe form yasak) — bkz. _partials/youtube_hidden_forms. #}
+<div class="bg-white border border-claude-border rounded-xl shadow-soft">
+  <div class="px-5 py-3 border-b border-claude-border bg-claude-surface rounded-t-xl">
+    <h2 class="font-serif text-base font-semibold flex items-center gap-2">
+      <span class="opacity-70">▶</span> YouTube
+      <span class="ml-auto text-[10.5px] uppercase tracking-wider text-claude-subtle font-sans font-semibold">ortak</span>
+    </h2>
+  </div>
+  <div class="px-5 py-4 space-y-3">
+
+    {% if yt_connected and yt_info %}
+      <div class="flex items-center gap-3">
+        <span class="w-2 h-2 rounded-full bg-claude-success flex-none"></span>
+        <div class="flex-1 text-sm min-w-0">
+          <div class="font-semibold truncate">{{ yt_info.snippet.title|e }}</div>
+          <div class="text-xs text-claude-muted">
+            {{ yt_info.statistics.subscriberCount }} abone ·
+            {{ yt_info.statistics.videoCount }} video
+            {% if creds_slug and creds_slug != c.slug %}
+              · <span class="text-claude-accent">{{ creds_slug }} bağlantısı</span>
+            {% endif %}
+          </div>
+        </div>
+        <button form="yt-disconnect-form" formmethod="POST"
+                formaction="/channels/{{ c.slug }}/youtube/disconnect"
+                onclick="return confirm('YouTube bağlantısı kaldırılsın mı? (token silinecek, kanal bilgisi kalır)');"
+                class="text-xs px-3 py-1.5 rounded-lg bg-claude-error-soft text-claude-error whitespace-nowrap">
+          Bağlantıyı kes
+        </button>
+      </div>
+    {% elif yt_has_secrets %}
+      <button form="yt-connect-form" formmethod="POST"
+              formaction="/channels/{{ c.slug }}/youtube/connect"
+              class="bg-claude-accent hover:bg-claude-accent-hover text-white px-4 py-2 rounded-lg text-sm">
+        ▶ YouTube Bağla
+      </button>
+      <div class="text-[11px] text-claude-subtle">
+        Tarayıcı Google'a yönlendirecek; izin verince bu kanal YouTube hesabınla eşleşir.
+      </div>
+    {% else %}
+      <div class="text-xs text-claude-muted space-y-2">
+        <div><strong>Adım 1:</strong>
+          <a href="https://console.cloud.google.com/" target="_blank" rel="noopener"
+             class="text-claude-accent underline">Google Cloud Console</a>
+          → proje → YouTube Data API v3 + Analytics API → OAuth Client (Web,
+          redirect <code>http://127.0.0.1:5005/oauth/callback</code>) → JSON indir.
+        </div>
+        <div><strong>Adım 2:</strong> İndirdiğin <code>client_secrets.json</code>'u seç:</div>
+        <div class="flex items-center gap-2">
+          <input type="file" name="client_secrets" accept="application/json,.json" required
+                 form="yt-upload-secrets-form"
+                 class="text-xs flex-1 file:bg-claude-surface-alt file:border-0 file:px-3 file:py-1.5 file:rounded file:text-claude-text file:cursor-pointer file:mr-2">
+          <button form="yt-upload-secrets-form" type="submit"
+                  class="bg-claude-accent hover:bg-claude-accent-hover text-white px-3 py-1.5 rounded-lg text-xs">
+            ↑ Yükle
+          </button>
+        </div>
+        {% if yt_secrets_abs %}
+        <div class="text-[10px] text-claude-subtle">Kaydedilecek yer:
+          <code class="break-all">{{ yt_secrets_abs }}</code></div>
+        {% endif %}
+      </div>
+    {% endif %}
+
+    {# Bağlantı paylaşımı: aynı YouTube kanalına üreten iki format (6 sn kart +
+       seslendirmeli yorum) tek bağlantıyı, tek kotayı, tek istatistik geçmişini
+       paylaşır. Ayrı OAuth açmak yanlış çözüm: kanal iki kez bağlanır. #}
+    <label class="block pt-3 border-t border-claude-border/60">
+      <span class="text-xs text-claude-muted">Hangi bağlantı kullanılsın</span>
+      <select name="yt_credentials_from"
+              class="bg-claude-surface border border-claude-border px-3 py-1.5 rounded-lg w-full text-sm mt-1">
+        <option value="">Kendi bağlantım ({{ c.slug }})</option>
+        {% for l in (linkable or []) %}
+        <option value="{{ l.slug|e }}"
+                {% if c.youtube and c.youtube.credentials_from == l.slug %}selected{% endif %}>
+          {{ l.name|e }}{% if l.yt %} · {{ l.yt|e }}{% endif %}{% if not l.connected %} · henüz bağlı değil{% endif %}
+        </option>
+        {% endfor %}
+      </select>
+      <span class="text-[11px] text-claude-subtle block mt-1">
+        Aynı YouTube kanalına üreten başka kanalını seç — ayrı OAuth açman gerekmez.
+      </span>
+    </label>
+
+    {% if yt_clash %}
+    <div class="text-[11px] bg-claude-wait-soft text-claude-wait rounded-lg px-3 py-2">
+      Bu bağlantı şu kanallarla aynı YouTube kanalına gidiyor ama paylaşım beyan
+      edilmemiş: <b>{{ yt_clash|join(', ') }}</b>. Yanlış marka kanalına bağlanmış olabilir.
+    </div>
+    {% endif %}
+
+    <div class="grid grid-cols-2 gap-3 pt-3 border-t border-claude-border/60">
+      <label class="flex items-center gap-2 text-xs">
+        <input type="checkbox" name="yt_auto_upload" value="1"
+               {% if c.youtube and c.youtube.auto_upload %}checked{% endif %}>
+        Otomatik yükle (render bitince)
+      </label>
+      <label class="flex items-center gap-2 text-xs">
+        <input type="checkbox" name="yt_ai_content" value="1"
+               {% if (c.youtube.ai_content if c.youtube else True) %}checked{% endif %}>
+        AI içerik etiketi (önerilen)
+      </label>
+      <label class="block">
+        <span class="text-xs text-claude-muted">Gizlilik</span>
+        {% set p = (c.youtube.privacy_status if c.youtube else 'public') %}
+        <select name="yt_privacy_status"
+                class="bg-claude-surface border border-claude-border px-2 py-1 rounded w-full text-xs mt-1">
+          <option value="public"   {% if p == 'public'   %}selected{% endif %}>Herkese açık</option>
+          <option value="unlisted" {% if p == 'unlisted' %}selected{% endif %}>Liste dışı</option>
+          <option value="private"  {% if p == 'private'  %}selected{% endif %}>Özel</option>
+        </select>
+      </label>
+      <label class="block">
+        <span class="text-xs text-claude-muted">Yükleme puan eşiği</span>
+        <input type="number" step="0.5" min="0" max="10" name="yt_min_score_for_upload"
+               value="{{ (c.youtube.min_score_for_upload if c.youtube else 8.0) }}"
+               class="bg-claude-surface border border-claude-border px-2 py-1 rounded w-full text-xs mt-1">
+        <span class="text-[10px] text-claude-subtle">Puanı bunun altındaki video otomatik yüklenmez. 0 = filtre yok.</span>
+      </label>
+      <label class="block col-span-2">
+        <span class="text-xs text-claude-muted">Kategori ID</span>
+        <input type="text" name="yt_category_id"
+               value="{{ (c.youtube.category_id if c.youtube else '24') }}"
+               class="bg-claude-surface border border-claude-border px-2 py-1 rounded w-full text-xs mt-1 font-mono">
+        <span class="text-[10px] text-claude-subtle">24=Eğlence · 28=Teknoloji · 17=Spor · 22=İnsanlar · 25=Haber</span>
+      </label>
+    </div>
+
+    {% if proxy_url is defined %}
+    <label class="block pt-3 border-t border-claude-border/60">
+      <span class="text-xs text-claude-muted">Yükleme proxy URL'i
+        <span class="text-claude-subtle text-[10px]">(opsiyonel — aynı IP riski için)</span></span>
+      <input type="text" name="yt_proxy_url" value="{{ proxy_url|e }}"
+             placeholder="http://user:pass@host:8080  ·  socks5://host:1080"
+             class="bg-claude-surface border border-claude-border px-2 py-1 rounded w-full text-xs mt-1 font-mono">
+      <span class="text-[10px] text-claude-subtle block mt-1">secrets.yaml'da saklanır, kanal yaml'ına yazılmaz.</span>
+    </label>
+    {% endif %}
+  </div>
+</div>

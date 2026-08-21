@@ -31,11 +31,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 # Her formatta AYNI çizilen ortak alanlar. Sıra ekrandaki sıradır.
+#
+# Otomasyon (autopilot) BİLEREK yok: kendi sayfası var (/autopilot) ve hiçbir
+# düzenleme sayfasında alanı bulunmuyor. Buraya koymak, olmayan bir şeyi vaat
+# etmek olurdu.
 CORE_PARTIALS: tuple[str, ...] = (
     "core/identity",    # ad, dil (kilitli), slug, handle
     "core/schedule",    # cron, enabled (cron çalışsın), archived (Kokpit'te görünsün)
     "core/youtube",     # bağlantı, auto_upload, gizlilik, kategori, eşik, credentials_from
-    "core/autopilot",   # otomasyon
 )
 
 
