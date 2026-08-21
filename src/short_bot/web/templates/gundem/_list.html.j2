@@ -27,7 +27,7 @@
           {% endfor %}
         </select>
       </form>
-      <button type="button" hx-get="/gundem/list?region={{ region }}&force=1&dikey={{ dikey|urlencode }}{% if item %}&guid={{ item.guid|urlencode }}{% endif %}"
+      <button type="button" hx-get="/gundem/list?region={{ region }}&force=1{% if dikey %}&dikey={{ dikey|urlencode }}{% endif %}{% if item %}&guid={{ item.guid|urlencode }}{% endif %}"
               hx-target="#gundem-list" hx-swap="innerHTML"
               class="px-2.5 py-1 rounded-full bg-claude-bg border border-claude-border text-claude-muted hover:text-claude-text">⟳ yenile</button>
       <span class="ml-auto text-claude-subtle">{{ rows|length }} konu{% if elenen %} · <span title="dikey dışında kaldı">{{ elenen }} elendi</span>{% endif %}</span>
@@ -37,7 +37,7 @@
   <div class="flex-1 overflow-y-auto">
     {% for r in rows %}
     {% set sel = item and r.guid == item.guid %}
-    <a href="/gundem?region={{ region }}&amp;dikey={{ dikey|urlencode }}&amp;guid={{ r.guid|urlencode }}"
+    <a href="/gundem?region={{ region }}{% if dikey %}&amp;dikey={{ dikey|urlencode }}{% endif %}&amp;guid={{ r.guid|urlencode }}"
        data-row="{{ loop.index0 }}"
        class="grid grid-cols-[62px_1fr] gap-2.5 px-4 py-3 border-b border-claude-border/70 hover:bg-claude-surface-alt/60
               {% if sel %}bg-claude-bg{% endif %} {% if r.produced %}opacity-60{% endif %}"
