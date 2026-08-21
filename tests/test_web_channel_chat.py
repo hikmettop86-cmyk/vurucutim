@@ -198,3 +198,57 @@ def test_kanal_sayfasi_elle_duzenleme_yolunu_KAPATMAZ(app):
     html = app.test_client().get("/channels/kart").get_data(as_text=True)
     assert "/channels/kart/edit" in html
     assert "elle düzenle" in html
+
+
+# --- BEKLEME GÖSTERGESİ ----------------------------------------------------
+#
+# KULLANICI BİLDİRİMİ (2026-08-21): "kendi cümlenle yaz'a yazıyorum hiç tepki
+# yok". Ölçüldü: bir sohbet turu canlıda 55-110 saniye sürüyor ve formda
+# HİÇBİR bekleme göstergesi yoktu. `this.reset()` bile ancak istek bitince
+# çalıştığı için ekran bir dakika boyunca donmuş görünüyordu — başarılı turda
+# bile.
+
+def _sohbet_sayfalari(app):
+    c = app.test_client()
+    return {"kurma": c.get("/channels/new/card").get_data(as_text=True),
+            "kanal": c.get("/channels/kart").get_data(as_text=True)}
+
+
+@pytest.mark.parametrize("nere", ["kurma", "kanal"])
+def test_sohbet_formu_BEKLEME_GOSTERIR(app, nere):
+    html = _sohbet_sayfalari(app)[nere]
+    m = re.search(r'hx-indicator="#([\w-]+)"', html)
+    assert m, "sohbet formunda bekleme göstergesi yok"
+    assert f'id="{m.group(1)}"' in html, "gösterge elemanı sayfada yok"
+
+
+@pytest.mark.parametrize("nere", ["kurma", "kanal"])
+def test_sohbet_gonder_dugmesi_ISTEK_SURERKEN_kilitlenir(app, nere):
+    """Kilitlenmezse kullanıcı ikinci kez basar ve iki tur paralel koşar."""
+    assert "hx-disabled-elt" in _sohbet_sayfalari(app)[nere]
+
+
+def test_bekleme_metni_SUREYI_soyler(app):
+    """'Yükleniyor' yetmez: bir dakika bekleneceğini bilmek gerekiyor."""
+    html = _sohbet_sayfalari(app)["kurma"]
+    i = html.find('id="dusunuyor"')
+    assert i > 0
+    assert "dakika" in html[i:i + 400]
+
+
+def test_kurulum_mesaji_CRON_DURUMUNU_dogru_soyler(app, monkeypatch):
+    """Mesaj sabit "Cron KAPALI" diyordu; model `enabled: True` kararı verip
+    kullanıcı onaylayınca mesaj yalan oluyordu."""
+    from short_bot.channel_chat import Karar, SohbetCevabi
+    c = app.test_client()
+    oid = re.search(r'hx-post="/channels/sohbet/([0-9a-f]+)"',
+                    c.get("/channels/new/card").get_data(as_text=True)).group(1)
+    _sahte_llm(monkeypatch, SohbetCevabi(
+        mesaj="kurdum",
+        kararlar=[Karar(alan="name", deger="Aç Kanal", ozet="ad", gerekce="g"),
+                  Karar(alan="enabled", deger=True, ozet="açık", gerekce="g")]))
+    c.post(f"/channels/sohbet/{oid}", data={"girdi": "kur"})
+    c.post(f"/channels/sohbet/{oid}/uygula")
+    m = c.post(f"/channels/sohbet/{oid}/kur", follow_redirects=True).get_data(as_text=True)
+    assert "Cron AÇIK" in m
+    assert "Cron KAPALI" not in m

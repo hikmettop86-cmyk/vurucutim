@@ -92,3 +92,104 @@ def test_openrouter_modeli_SONNET():
 def test_zaman_asimi_comert():
     # Uzun prompt (banka + kanıt) + uzun çıktı. Ölçüldü: 240 sn YETMEDİ.
     assert TIMEOUT_S >= 480
+
+
+# --- ŞEMA MODELE SÖYLENMELİ ------------------------------------------------
+#
+# ÖLÇÜLDÜ (2026-08-21, canlı panel): `sonnet_json` şemayı yalnız DOĞRULAMA için
+# kullanıyor, modele HİÇ söylemiyordu. Kanal sohbeti bu yüzden gerçek modelle
+# HİÇ çalışmadı — `SohbetCevabi.mesaj` zorunluydu ama prompt'ta adı bile
+# geçmiyordu; model onsuz JSON üretti, iki deneme de aynı hatayla düştü ve
+# kullanıcı 111 saniye sonra hata mesajı gördü.
+#
+# Testler sahte LLM enjekte ettiği için boşluk görünmüyordu: sahte cevap zaten
+# geçerliydi. Kapıyı buraya koyuyoruz — şemayı prompt'a KİM koyuyorsa test onu
+# sınamalı, çağıran değil.
+
+class _Zorunlu(BaseModel):
+    mesaj: str
+    sayi: int = 0
+
+
+def _yakala(cevaplar):
+    """invoke sahtesi: gördüğü prompt'ları biriktirir, sıradaki cevabı döner."""
+    promptlar = []
+
+    def _invoke(prompt, **kw):
+        promptlar.append(prompt)
+        return cevaplar[min(len(promptlar) - 1, len(cevaplar) - 1)]
+    return _invoke, promptlar
+
+
+def test_prompt_SEMAYI_tasir():
+    inv, promptlar = _yakala(['{"mesaj": "ok"}'])
+    sonnet_json("merhaba", _Zorunlu, invoke=inv)
+    p = promptlar[0]
+    assert "merhaba" in p, "asıl prompt korunmalı"
+    for alan in _Zorunlu.model_fields:
+        assert alan in p, f"'{alan}' alanı modele hiç söylenmiyor"
+
+
+def test_ZORUNLU_alanlar_ayrica_isaretlenir():
+    """Şema JSON'u uzun; zorunlu alan listesi ayrıca yazılmalı ki gözden kaçmasın."""
+    inv, promptlar = _yakala(['{"mesaj": "ok"}'])
+    sonnet_json("merhaba", _Zorunlu, invoke=inv)
+    p = promptlar[0]
+    i = p.find("ZORUNLU")
+    assert i > 0, "zorunlu alan vurgusu yok"
+    assert "mesaj" in p[i:i + 200]
+
+
+def test_retry_HATAYI_geri_besler():
+    """İkinci deneme birincinin hatasını görmeli.
+
+    Görmezse aynı prompt aynı yanlışı üretir: canlıda tam bu oldu, iki deneme
+    de `mesaj` alanını atladı ve 111 saniye boşa gitti.
+    """
+    inv, promptlar = _yakala(['{"sayi": 1}', '{"mesaj": "ok"}'])
+    assert sonnet_json("merhaba", _Zorunlu, invoke=inv).mesaj == "ok"
+    assert len(promptlar) == 2
+    assert "mesaj" in promptlar[1]
+    assert promptlar[1] != promptlar[0], "ikinci deneme aynı prompt'u yollamış"
+    assert "REDDEDİLDİ" in promptlar[1] or "hata" in promptlar[1].lower()
+
+
+# --- DÜŞME YOLU SONNET KALMALI ---------------------------------------------
+#
+# ÖLÇÜLDÜ (2026-08-21): modülün sözü "düşme yolu AYNI MODELİ kullanır" ama
+# çağıranların HEPSİ `settings.openrouter_models["script"]` geçiriyor ve o
+# anahtar canlıda `google/gemini-3.1-flash-lite` — sistemin EN UCUZ modeli.
+# Sonnet'i tutan anahtar `dna`. topic_bank'in kendi notu bu modelin konu
+# bankasının %85'ini çöpe çevirdiğini yazıyor; sohbetin kanal kararlarını da
+# aynı model verirdi. Canlı ölçüm: flash-lite cevabı 1,8 sn'de KESİLDİ
+# (Unterminated string) — güvenlik ağı hem ucuz hem bozuktu.
+
+def test_OPENROUTER_dusme_yolu_SONNET_kalir():
+    from short_bot.claude_cli import ClaudeCliError
+    cagri = []
+
+    def _invoke(prompt, **kw):
+        cagri.append(kw)
+        if kw["backend"] == "claude_cli":
+            raise ClaudeCliError("yok")
+        return '{"mesaj": "ok"}'
+
+    sonnet_json("m", _Zorunlu, invoke=_invoke, openrouter_key="k",
+                openrouter_model="google/gemini-3.1-flash-lite")
+    assert "sonnet" in cagri[1]["model"], "düşme yolu ucuz modele indi"
+
+
+def test_SONNET_varyanti_gecirilebilir():
+    """Sonnet ailesinden bir model açıkça verilirse ona saygı duyulur."""
+    from short_bot.claude_cli import ClaudeCliError
+    cagri = []
+
+    def _invoke(prompt, **kw):
+        cagri.append(kw)
+        if kw["backend"] == "claude_cli":
+            raise ClaudeCliError("yok")
+        return '{"mesaj": "ok"}'
+
+    sonnet_json("m", _Zorunlu, invoke=_invoke, openrouter_key="k",
+                openrouter_model="anthropic/claude-sonnet-5-20260101")
+    assert cagri[1]["model"] == "anthropic/claude-sonnet-5-20260101"

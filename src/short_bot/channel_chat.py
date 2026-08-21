@@ -77,12 +77,18 @@ class Karar(BaseModel):
 
 
 class SohbetCevabi(BaseModel):
+    """Bir sohbet turunun çıktısı.
+
+    HER ALAN PANELDE KULLANILIR. `kurmaya_hazir: bool` alanı spec'te vardı ama
+    hiçbir yerde okunmuyordu: "Kanalı kur" düğmesi kurma sohbetinde zaten hep
+    görünür, kapı yok. Okunmayan alan bedava değildir — her prompt'ta şemayla
+    birlikte modele gider ve her cevapta doldurulur.
+    """
     mesaj: str
     kararlar: list[Karar] = []
     # Composer'ın üstündeki tıklanabilir öneriler — boş kutuya bakıp donmayı
     # önler ("ne diyeceğimi bilemem").
     oneriler: list[str] = []
-    kurmaya_hazir: bool = False
 
 
 # --- alan okuma / yazma ----------------------------------------------------
@@ -160,15 +166,25 @@ Bilinmesi ŞART olan bir sonuç varsa (fatura artışı, ayrı YouTube kanalı,
 otomatik yüklemenin açılması gibi) o kararda dikkat=true koy — kararı yine
 sen ver, ama gözden kaçmasın.
 
-Her karar için:
+TEK İSTİSNA — YENİ KANAL KURULUMUNDA `enabled` ve `youtube.auto_upload`
+KAPALI KALIR. Kullanıcı önce birkaç video üretip sonucu görsün; ayarları
+oturmamış bir kanalı doğrudan zamanlanmış üretime ya da yayına sokmak
+geri alınması pahalı tek karardır. Bunları açmayı ÖNER (`oneriler`), açma.
+
+`mesaj`: kullanıcıya söylediğin bir-iki cümle — ne yaptığını ve sırada ne
+olduğunu anlat ("Beşiktaş kart kanalını kurdum, günde 3 video çıkar. İstersen
+tonu sertleştiririz."). ASLA BOŞ BIRAKMA: karar üretmediğin turda bile yaz,
+yoksa panelde sohbet sessiz kalır.
+
+`kararlar`: verdiğin ayar değişiklikleri. Her karar için:
 - alan   : aşağıdaki YAZILABİLİR listesinden bir ad (başkasını YAZMA)
 - deger  : yeni değer
 - ozet   : tek satır, kullanıcının diliyle ("Bölge Avusturya (AT)")
 - gerekce: NEDEN böyle seçtiğin, ölçü ya da sonuçla ("Bölge ve dil bağımsız
            alanlar; Avusturya gündemini Almanca anlatır")
 
-Ayrıca 3-4 tane `oneriler` yaz: kullanıcının bir sonraki adımda söyleyebileceği
-kısa cümleler ("günde 3 olsun", "daha sert bir ton"). Bunlar tıklanabilir çip
+`oneriler`: 3-4 tane, kullanıcının bir sonraki adımda söyleyebileceği kısa
+cümleler ("günde 3 olsun", "daha sert bir ton"). Bunlar tıklanabilir çip
 olacak; "ne diyeceğimi bilemem" durumunun çaresi.
 
 Türkçe yaz."""

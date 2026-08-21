@@ -40,7 +40,7 @@ def test_sohbet_cevabi_bos_kararla_da_gecerli():
     """Kullanıcı soru sorduğunda (ör. 'klartext'ten farkı ne?') karar üretilmez."""
     from short_bot.channel_chat import SohbetCevabi
     c = SohbetCevabi(mesaj="Şöyle farklı…")
-    assert c.kararlar == [] and c.kurmaya_hazir is False
+    assert c.kararlar == [] and c.oneriler == []
 
 
 # --- prompt ----------------------------------------------------------------
@@ -203,3 +203,58 @@ def test_taslak_uzerinde_sohbet_kararlari_uygulanir():
 def test_taslak_dili_locale_ye_yansir():
     from short_bot.channel_chat import taslak
     assert "gl=DE" in taslak("card", language="de").rss_locale
+
+
+# --- ÇIKTI ALANLARI MODELE SÖYLENİYOR MU -----------------------------------
+#
+# CANLI ARIZA (2026-08-21): sohbet gerçek modelle HİÇ çalışmadı. Prompt
+# `SohbetCevabi`nin dört alanından yalnız birini (`oneriler`) adlandırıyordu;
+# zorunlu olan `mesaj` hiç geçmiyordu. Model `mesaj`sız JSON üretti, iki deneme
+# de aynı hatayla düştü, kullanıcı 111 saniye sonra hata gördü.
+#
+# Testler sahte LLM enjekte ettiği için boşluk görünmedi. Bu iki test ZİNCİRİ
+# sınıyor: sohbet prompt'u + sonnet_json'ın şema bloğu birlikte modele ne
+# söylüyor.
+
+def test_modele_giden_prompt_TUM_cikti_alanlarini_adlandirir():
+    from short_bot.channel_chat import SohbetCevabi, konus, taslak
+    from short_bot.llm_sonnet import sonnet_json
+
+    gorulen = []
+
+    def _invoke(prompt, **kw):
+        gorulen.append(prompt)
+        return '{"mesaj": "tamam"}'
+
+    def _llm(prompt, schema, **kw):
+        return sonnet_json(prompt, schema, invoke=_invoke)
+
+    konus(cfg=taslak("card"), gecmis=[], girdi="Beşiktaş kanalı",
+          llm=_llm, fmt="card")
+    p = gorulen[0]
+    for alan in SohbetCevabi.model_fields:
+        assert alan in p, f"'{alan}' modele hiç söylenmiyor — canlıda cevap reddedilir"
+
+
+def test_uslup_MESAJIN_ne_olacagini_anlatir():
+    """Alan adını bilmek yetmez: `mesaj` boş string de olabilir ve sohbet sessiz
+    kalır. Üslup kuralı ne yazılacağını da söylemeli."""
+    from short_bot.channel_chat import prompt_kur, taslak
+    p = prompt_kur(cfg=taslak("card"), gecmis=[], girdi="x", fmt="card")
+    assert "mesaj" in p
+    assert "ASLA BOŞ BIRAKMA" in p
+
+
+# --- KURULUMDA CRON AÇILMAZ ------------------------------------------------
+#
+# CANLI GÖZLEM (2026-08-21): ilk turda model `enabled: False → True` kararı
+# verdi ("Kanal aktif edildi"). `taslak()` cron'u BİLEREK kapalı kuruyor —
+# ayarları oturmamış bir kanalı doğrudan üretime sokmamak için — ve kurulum
+# sonrası mesaj "Cron KAPALI" diye yazıyordu. İkisi aynı anda doğru olamaz.
+
+def test_uslup_KURULUMDA_CRON_ACMAYI_yasaklar():
+    from short_bot.channel_chat import prompt_kur, taslak
+    p = prompt_kur(cfg=taslak("card"), gecmis=[], girdi="x", fmt="card")
+    i = p.find("enabled")
+    assert i > 0
+    assert "kurulum" in p.lower()

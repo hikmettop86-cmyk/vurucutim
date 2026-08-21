@@ -1,6 +1,11 @@
 {% extends "base.html.j2" %}
 {% block title %}Vurucu TİM — {{ cfg.name or spec.label }}{% endblock %}
 {% block content %}
+<style>
+  /* htmx istek boyunca göstergeye .htmx-request ekler (feeds.html.j2 ile aynı desen). */
+  #dusunuyor { display: none; }
+  #dusunuyor.htmx-request { display: flex; }
+</style>
 {# Solda sohbet, sağda kanalın kendisi. Kurulumda taslak, kurulu kanalda özet.
    Sayfa açılırken LLM ÇAĞRILMAZ: teşhis düz SQL'den gelir (channel_diag). #}
 <div class="max-w-6xl mx-auto">
@@ -106,16 +111,31 @@
         </div>
       </div>
 
-      <form class="flex gap-2 p-3.5 border-t border-claude-border bg-claude-surface mt-3"
+      {# BEKLEME GÖSTERGESİ ŞART. Bir sohbet turu canlıda 55-110 saniye sürüyor
+         ve gösterge yokken ekran o süre boyunca hiç değişmiyordu: kullanıcı
+         "yazıyorum, hiç tepki yok" dedi. `this.reset()` bile ancak istek
+         bitince çalıştığı için başarılı tur da donmuş görünüyordu. #}
+      <div id="dusunuyor" class="px-4 py-2.5 mt-3 items-center gap-2 text-sm text-claude-muted
+                                 border-t border-dashed border-claude-border">
+        <span class="w-3.5 h-3.5 rounded-full border-2 border-claude-accent
+                     border-t-transparent animate-spin flex-none"></span>
+        Claude düşünüyor… bir tur yaklaşık bir dakika sürüyor.
+      </div>
+
+      <form class="flex gap-2 p-3.5 border-t border-claude-border bg-claude-surface"
             hx-post="/channels/sohbet/{{ oid }}"
             hx-target="#thread" hx-swap="beforeend"
+            hx-indicator="#dusunuyor"
+            hx-disabled-elt="find button, find input"
             hx-on::after-request="this.reset(); document.getElementById('thread').scrollTop = 99999">
         <input type="text" name="girdi" id="girdi" autocomplete="off"
                placeholder="…ya da kendi cümlenle yaz"
-               class="flex-1 bg-white border border-claude-border-strong rounded-lg px-3 py-2 text-sm">
+               class="flex-1 bg-white border border-claude-border-strong rounded-lg px-3 py-2 text-sm
+                      disabled:bg-claude-surface-alt disabled:text-claude-subtle">
         <button type="submit"
                 class="bg-claude-accent hover:bg-claude-accent-hover text-white px-4 py-2
-                       rounded-lg text-sm font-semibold whitespace-nowrap">Gönder</button>
+                       rounded-lg text-sm font-semibold whitespace-nowrap
+                       disabled:opacity-50 disabled:cursor-wait">Gönder</button>
       </form>
     </div>
 

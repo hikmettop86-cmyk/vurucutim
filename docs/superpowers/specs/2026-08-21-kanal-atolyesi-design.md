@@ -207,8 +207,11 @@ class SohbetCevabi(BaseModel):
     mesaj: str
     kararlar: list[Karar]
     oneriler: list[str]       # öneri çipleri
-    kurmaya_hazir: bool
 ```
+
+> **Uygulamada düştü:** `kurmaya_hazir: bool` yazıldı ama hiçbir yerde okunmadı —
+> "Kanalı kur" düğmesi kurma sohbetinde zaten hep görünür, kapı yok. Okunmayan alan
+> bedava değil: her prompt'ta şemayla modele gider, her cevapta doldurulur. Kaldırıldı.
 
 **Hiçbir şey yazılmaz** — mevcut `build_plan`/`apply_plan` ayrımı korunur. "Kanalı kur"a
 basılana kadar ne YAML, ne CSS, ne konu bankası.

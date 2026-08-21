@@ -223,8 +223,14 @@ def kanali_kur(oid):
     save_channel(_channels_dir() / f"{slug}.yaml", cfg)
     with _KILIT:
         _OTURUMLAR.pop(oid, None)
-    flash(f"'{cfg.name}' kuruldu. Cron KAPALI — birkaç video üretip sonucu "
-          f"gördükten sonra açman önerilir.", "success")
+    # MESAJ DURUMU ANLATIR, VARSAYMAZ. Eskiden sabit "Cron KAPALI" yazıyordu;
+    # canlıda model ilk turda `enabled: True` kararı verdi ve kullanıcı onu
+    # onaylayabiliyordu — mesaj o an yalan oluyordu.
+    flash(f"'{cfg.name}' kuruldu. " + (
+        "Cron AÇIK — zamanlanmış üretim başlayacak."
+        if cfg.enabled else
+        "Cron KAPALI — birkaç video üretip sonucu gördükten sonra açman "
+        "önerilir."), "success")
     return redirect(url_for("channel_chat.kanal_sayfasi", slug=slug))
 
 
