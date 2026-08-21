@@ -86,14 +86,23 @@ def _secrets() -> dict:
 
 
 def _llm():
-    """Sohbet çağırıcısı — Claude CLI, patlarsa OpenRouter'daki AYNI model."""
+    """Sohbet çağırıcısı — AYARLARDAKİ 'script' sağlayıcısı, patlarsa Sonnet.
+
+    Eskiden yol koda sabitti (Claude CLI): kullanıcı ayarlardan ücretsiz Google
+    havuzunu seçse bile sohbet yine CLI'ye gidiyordu. Ölçüldü (2026-08-21): bir
+    sohbet turu CLI'da 52 sn, google_studio/gemini-3.5-flash-lite ile 6-7 sn.
+    """
+    from short_bot.config import resolve_ai_call
     from short_bot.llm_sonnet import sonnet_json
     ayar = current_app.config["SHORTBOT_SETTINGS"]
     gizli = _secrets()
+    cagri = resolve_ai_call(ayar, gizli, "script")
 
     def _f(prompt, schema, **kw):
         return sonnet_json(prompt, schema,
                            claude_path=ayar.claude_cli_path,
+                           backend=cagri.backend, model=cagri.model,
+                           api_key=cagri.api_key,
                            openrouter_model=ayar.openrouter_models.get(
                                "script", "anthropic/claude-sonnet-5"),
                            openrouter_key=gizli.get("openrouter_api_key"))

@@ -33,6 +33,11 @@ _FALLBACKS_LOCK = threading.Lock()
 # google_studio vision (8-yollu) ve openrouter paralelliği ETKİLENMEZ.
 _CLI_LOCK = threading.Lock()
 
+# Model ÇIKTI tavanı. Metin: arketip şablonu ~6 KB, senaryo/DNA JSON birkaç KB.
+# Görsel: vision yanıtı tek cümlelik JSON, geniş tavan gereksiz.
+TAVAN_METIN = 16000
+TAVAN_GORSEL = 2048
+
 # MALİYET ÖNCELİĞİ (kullanıcı direktifi 2026-07-16): OpenRouter neredeyse HİÇ tetiklenmemeli
 # (API-bazlı, pahalı). CLI hang'i rate-limit kaynaklı ve GEÇİCİ — ÖLÇÜLDÜ: bir çağrı takılınca
 # sonraki temizlenmiş pencerede başarılı (5 ardışıkta 1. takıldı, 2-5. hızlı). Bu yüzden CLI
@@ -243,15 +248,39 @@ def _invoke_primary(prompt: str, *, backend: str, model: str,
     """Tek-atış ham çıktı (fallback YOK). google_studio → havuz; claude_cli →
     subprocess; openrouter → HTTP. FileNotFoundError ve TimeoutExpired'i (claude_cli)
     yukarıya bırakır; diğer hatalarda ilgili *Error fırlatır."""
+    # ÇIKTI TAVANI: metin ve görsel farklı. `google_studio.generate` varsayılanı
+    # 1024 token — vision yanıtı (tek cümlelik JSON) için bol, ama arketip
+    # şablonu ~6 KB (2000+ token) ve SESSİZCE KESİLİRDİ. Ölçüldü: aynı prompt
+    # 16000 tavanla 6231 karakter döndürüyor.
+    _tavan = TAVAN_GORSEL if image_path is not None else TAVAN_METIN
     if backend == "google_studio":
         from short_bot import google_studio   # fonksiyon-içi import → circular önler
         return google_studio.generate(prompt, model=model, image_path=image_path,
-                                      timeout_s=timeout_s)
+                                      timeout_s=timeout_s, max_tokens=_tavan)
     if backend == "openrouter":
         from short_bot import openrouter_client   # fonksiyon-içi import → circular önler
         return openrouter_client.complete(prompt, model=model,
                                           api_key=api_key, timeout_s=timeout_s,
                                           image_path=image_path)
+    if backend == "gemini_direct":
+        # TEK anahtarla Google'ın kendi uç noktası — havuz istemcisinin HTTP
+        # katmanı yeniden kullanılır (aynı gövde, aynı hata sınıflandırması).
+        from short_bot import google_studio
+        return google_studio._http_generate(api_key or "", model, prompt,
+                                            image_path=image_path,
+                                            timeout_s=timeout_s,
+                                            max_tokens=_tavan)
+    # OpenAI-uyumlu sağlayıcılar (DeepSeek, Qwen, Groq, NVIDIA, ModelScope,
+    # OpenAI): hepsi aynı /chat/completions sözleşmesi, tek istemci yeter.
+    # KAYITTA DURUP BURADA KARŞILIĞI OLMAYAN AD SESSİZCE CLI'YE DÜŞERDİ —
+    # ayarda "DeepSeek" yazarken gerçekte Opus koşardı.
+    from short_bot.ai_providers import saglayici
+    _s = saglayici(backend)
+    if _s is not None and _s.base_url:
+        from short_bot import openai_compat
+        return openai_compat.complete(prompt, base_url=_s.base_url, model=model,
+                                      api_key=api_key, timeout_s=timeout_s,
+                                      image_path=image_path, max_tokens=_tavan)
     resolved_path = _resolve_claude_binary(claude_path)
     if image_path is not None:
         # Bütçeyi aşan görsel CLI'ye ULAŞMAZ (sessizce düşer) → önce sığdır.

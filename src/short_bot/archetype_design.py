@@ -75,6 +75,21 @@ manşette `data-fit-width` + `data-fit-min/max`, gövdede `data-fit-min/max` +
 `data-fit-pad` kullan, kutuların genişliğini ve YÜKSEKLİĞİNİ sabitle, hiçbir
 katmanı üst üste bindirme.
 
+GÖVDE KUTUSU — EN SIK DÜŞME SEBEBİ BURASI (ölçüldü):
+  1. `.body-text`in KAPSAYICISI (`.body`) YÜKSEKLİĞİ SINIRLI olmalı. `_auto_fit`
+     fontu `container.clientHeight`e göre küçültüyor; kapsayıcı içerikle
+     birlikte büyürse ölçüm anlamsız kalır, küçültme HİÇ çalışmaz ve yazı
+     1920 px'in dışına taşar. Çalışan iki desen:
+        .body { flex: 1; min-height: 0; overflow: hidden; }   (dikey flex sahne)
+        .body { position: absolute; top: Xpx; bottom: Ypx; overflow: hidden; }
+  2. `.body-text` üzerinde `-webkit-line-clamp` KULLANMA. Sabit satır sayısı
+     auto-fit'i etkisiz kılar: font küçülse bile N. satırdan sonrası kesilir.
+     ÖLÇÜLDÜ: `stadium` gövdesinde `line-clamp: 9` var; `data-fit-min`i 38'den
+     24'e düşürmek kareyi HİÇ değiştirmedi, clamp kaldırılınca 267 karakterin
+     TAMAMI taşmadan göründü. Yani clamp SIĞAN metni kesiyordu.
+  3. `data-fit-min` 24-28 arası olsun: 300 karakterlik gövdenin küçülecek yeri
+     kalsın.
+
 TÜRKÇE GLİFLER: manşet fontu Ç Ğ İ Ö Ş Ü harflerini göstermeli. Ölçüldü: bir
 adayın manşeti 'MANŞET' yerine 'MANSET' render oldu ('Anton'); aynı metin
 'Oswald' ile doğru çıktı. Yedek zincirine Türkçe destekleyen font koy."""

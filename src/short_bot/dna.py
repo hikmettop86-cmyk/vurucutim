@@ -81,6 +81,27 @@ def _designed_to_default(arch: dict) -> dict:
         "font_body": d.get("font_body") or v["font_body"],
     }
 
+_VARSAYILAN_REGISTRY_PATH = _REGISTRY_PATH
+
+
+def set_registry_path(path) -> None:
+    """Arketip kaydının yolunu ayarla (panel açılışında, config dizinine).
+
+    Yol KAYNAK DOSYAYA göre çözülüyordu ve `register_designed_archetype` oraya
+    YAZIYORDU. İki somut zarar (2026-08-21):
+      1. Depo dışında koşan her şey (scratch panel, ölçüm betiği) kullanıcının
+         DEPOSUNU kirletiyordu — `bayern-bedava` böyle sızdı, `test_pexels`
+         "3 sorgudan az" diye düştü.
+      2. Paketlenmiş Electron kurulumunda kaynak ağacı kullanıcının config
+         dizini değil; tasarlanan arketip yanlış yere yazılır.
+
+    `None` → varsayılana dön (testlerin küresel durumu geri alması için).
+    """
+    global _REGISTRY_PATH
+    _REGISTRY_PATH = (_VARSAYILAN_REGISTRY_PATH if path is None
+                      else Path(path))
+
+
 def register_designed_archetype(slug: str, label: str = "",
                                 defaults: dict | None = None) -> None:
     """Yeni tasarlanan arketipi ANINDA geçerli kıl ve kayda yaz.

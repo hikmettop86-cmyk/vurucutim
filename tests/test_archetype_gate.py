@@ -100,12 +100,39 @@ def test_calisan_sablonlar_KAPIDAN_GECER():
     from pathlib import Path
 
     from short_bot.archetype_gate import yapi_kapisi
-    for ad in ("stadium", "flas", "eilmeldung", "newscast", "comic", "brutalist"):
+    for ad in ("comic", "brutalist", "editorial", "minimal", "tabloid"):
         p = Path(f"templates/{ad}.html.j2")
         if not p.exists():
             continue
         ok, sebep = yapi_kapisi(p.read_text(encoding="utf-8"))
         assert ok, f"{ad}: {sebep}"
+
+
+def test_CLAMPLI_SABLONLAR_kapiyi_BILEREK_gecemez():
+    """Kapı burada BİLEREK üretimdeki bazı şablonların ÜSTÜNDE duruyor.
+
+    `stadium`, `flas`, `newscast`, `eilmeldung` gövdede `-webkit-line-clamp`
+    kullanıyor ve ÖLÇÜLDÜ (2026-08-21): stadium'dan clamp+maske kaldırılınca
+    267 karakterlik gövdenin TAMAMI taşmadan göründü — yani clamp SIĞAN metni
+    kesiyordu. Bu şablonların kesmesi bir olgu, kapının hatası değil.
+
+    Kalibrasyon ilkesi ("çalışan şablonu reddeden kapı yeni şablonu da haksız
+    reddeder") YAPISAL kontroller için geçerli; bu kural bilinçli bir kalite
+    yükseltmesi. Yeni şablon eskisinden İYİ olmalı.
+    """
+    from pathlib import Path
+
+    from short_bot.archetype_gate import yapi_kapisi
+    for ad in ("stadium", "flas", "newscast", "eilmeldung"):
+        p = Path(f"templates/{ad}.html.j2")
+        if not p.exists():
+            continue
+        ok, sebep = yapi_kapisi(p.read_text(encoding="utf-8"))
+        assert not ok and "clamp" in sebep.lower(), f"{ad}: {sebep}"
+        # BAŞKA bir eksiği olmamalı — yapısal kalibrasyon hâlâ doğru.
+        for baska in ('class="', "{{ ", "viewport", "_auto_fit.js.j2",
+                      "data-fit-min ve data-fit-max"):
+            assert baska not in sebep, f"{ad} clamp DIŞINDA da düşüyor: {sebep}"
 
 
 def test_sebep_LLM_E_GERI_YAZILABILIR():
@@ -223,3 +250,60 @@ def test_UC_METINLER_URETIMIN_UST_SINIRLARINI_zorlar():
     assert en_uzun["header_bottom"] >= 34, en_uzun       # üretim max 35
     assert en_uzun["photo_overlay"] >= 34, en_uzun       # üretim max 40
     assert 250 <= en_uzun["body_paragraph"] <= 400, en_uzun   # üretim max 302
+
+
+# --- GÖVDE KESİLMEMELİ: line-clamp YASAK -----------------------------------
+#
+# ÖLÇÜLDÜ (2026-08-21, canlı): arketip tasarımı Trabzonspor kanalında 3 turda
+# geçemedi, sebep hep aynıydı — "gövde metninin alt kısmı çerçevenin dışına
+# taşarak kesilmiş". Mekanizmayı deneyle çözdük:
+#
+#   `stadium.html.j2` .body-text kuralında `-webkit-line-clamp: 9` var (artı
+#   alt kenarda solma maskesi). Bu SABİT SATIR SAYISI — `_auto_fit` fontu
+#   küçültse bile 9. satırdan sonrası kesilir. `data-fit-min`'i 38'den 24'e
+#   düşürmek HİÇBİR ŞEYİ değiştirmedi (aynı kare çıktı).
+#
+#   Aynı şablondan clamp + maske kaldırılınca 267 karakterlik gövdenin TAMAMI
+#   göründü, taşma yok, ilerleme çubuğu/handle ile çakışma yok. Yani clamp
+#   SIĞAN metni kesiyordu.
+#
+# Depodaki 34 şablonun 26'sı zaten clamp kullanmıyor; yasak ev üslubuna aykırı
+# değil. Bu kontrol BEDAVA (render/vision harcamadan) ve sebebi modele geri
+# yazılıyor.
+
+_GOVDE_CLAMPLI = """<!DOCTYPE html><html><head><style>
+html,body{width:1080px;height:1920px}
+.body-text{display:-webkit-box;-webkit-line-clamp:9;-webkit-box-orient:vertical;overflow:hidden}
+</style></head><body>
+<div class="top">{{ script.header_top }}</div>
+<div class="bot">{{ script.header_bottom }}</div>
+<div class="bg-img"></div>
+<div class="body"><div class="body-text" data-fit-min="26" data-fit-max="42"
+  data-fit-pad="20">{{ body_html }}</div></div>
+<div class="progress"></div><div class="handle">{{ handle }}</div>
+<style>{{ dna_css }}</style><span>{{ duration_s }}</span>
+{% include "_auto_fit.js.j2" %}</body></html>"""
+
+
+def test_GOVDE_CLAMPI_reddedilir():
+    from short_bot.archetype_gate import yapi_kapisi
+    ok, sebep = yapi_kapisi(_GOVDE_CLAMPLI)
+    assert not ok
+    assert "clamp" in sebep.lower()
+
+
+def test_clampsiz_sablon_gecer():
+    from short_bot.archetype_gate import yapi_kapisi
+    ok, sebep = yapi_kapisi(_GOVDE_CLAMPLI.replace(
+        "-webkit-line-clamp:9;", ""))
+    assert ok, sebep
+
+
+def test_BASKA_yerdeki_clamp_serbest():
+    """Yasak yalnız GÖVDE için: manşette clamp kullanmak meşru olabilir."""
+    from short_bot.archetype_gate import yapi_kapisi
+    s = _GOVDE_CLAMPLI.replace(
+        ".body-text{display:-webkit-box;-webkit-line-clamp:9;",
+        ".top{-webkit-line-clamp:2}\n.body-text{display:-webkit-box;")
+    ok, sebep = yapi_kapisi(s)
+    assert ok, sebep

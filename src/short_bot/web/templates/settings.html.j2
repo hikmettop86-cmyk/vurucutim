@@ -136,6 +136,122 @@
       </div>
     </div>
 
+    <h2 class="font-serif text-lg font-bold mt-6 border-t border-claude-border pt-4">
+      AI Sağlayıcıları</h2>
+    <p class="text-xs text-claude-muted leading-relaxed -mt-1 mb-2">
+      Her iş için ayrı sağlayıcı seçebilirsin. Boş bırakılan rol yukarıdaki
+      <b>AI Kaynağı</b> ayarını kullanır.
+      <span class="block mt-1">Ölçüldü (arketip şablonu yazma, 33 KB istem):
+      <b>Claude CLI / opus 112,7 sn</b> · Google havuzu / gemini-3.5-flash-lite
+      <b>7,0 sn</b> (ücretsiz) · OpenRouter gemini-3.5-flash-lite 6,3 sn ·
+      DeepSeek 13,2 sn · Qwen3-coder 30,1 sn. Süre farkı modelden değil Claude
+      CLI'nin her çağrıda süreç açmasından geliyor; kalite ise aynı değil
+      (Opus'un yerleşimi daha temiz çıktı).</span>
+    </p>
+
+    <div class="bg-claude-surface border border-claude-border rounded-lg p-4 space-y-4">
+
+      {# --- ücretsiz Google havuzu --- #}
+      <div class="bg-claude-surface-alt border border-claude-border rounded-lg p-3">
+        <div class="flex items-center justify-between gap-2 flex-wrap">
+          <span class="text-xs uppercase text-claude-muted font-semibold">
+            Google AI Studio — ücretsiz havuz</span>
+          {% if google_havuz.var %}
+          <span class="text-xs text-claude-muted">
+            <b class="text-claude-text">{{ google_havuz.etkin }}</b> etkin /
+            {{ google_havuz.anahtar }} anahtar ·
+            bugün <b class="text-claude-text">{{ google_havuz.bugun }}</b>
+            / {{ google_havuz.gunluk_tavan }} çağrı
+            {% if google_havuz.tukenen %} · {{ google_havuz.tukenen }} kota doldu{% endif %}
+            {% if google_havuz.banli %} · {{ google_havuz.banli }} banlı{% endif %}
+          </span>
+          {% else %}
+          <span class="text-xs text-claude-error">havuz yok — {{ google_havuz.hata }}</span>
+          {% endif %}
+        </div>
+        <p class="text-[11px] text-claude-subtle mt-1 leading-relaxed">
+          Anahtarlar <code class="font-mono">{{ google_havuz.dizin }}</code> içinde
+          (<code class="font-mono">google-keys.json</code>). Anahtar başına günde 500
+          çağrı; tükenince sistem OpenRouter'a düşer.
+        </p>
+      </div>
+
+      {# --- rol başına sağlayıcı --- #}
+      {% for rol, etiket in roller %}
+      <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2 items-end">
+        <label class="block">
+          <span class="text-xs text-claude-muted uppercase">{{ etiket }}</span>
+          <select name="rol_provider_{{ rol }}"
+                  class="bg-claude-surface border border-claude-border px-3 py-2
+                         rounded-lg w-full mt-1 text-sm text-claude-text">
+            <option value="">— AI Kaynağı ayarını kullan —</option>
+            {% for ad, s in saglayicilar.items() %}
+            {% if rol != 'vision' or s.gorsel %}
+            <option value="{{ ad }}"
+                    {% if (ai_roles.get(rol) or {}).get('provider') == ad %}selected{% endif %}>
+              {{ s.etiket }}{% if s.ucretsiz %} — ücretsiz{% endif %}</option>
+            {% endif %}
+            {% endfor %}
+          </select>
+        </label>
+        <label class="block">
+          <span class="text-xs text-claude-muted uppercase">Model</span>
+          <input type="text" name="rol_model_{{ rol }}" list="modeller_{{ rol }}"
+                 value="{{ (ai_roles.get(rol) or {}).get('model', '') }}"
+                 placeholder="boş = sağlayıcının varsayılanı"
+                 class="bg-claude-surface border border-claude-border px-3 py-2
+                        rounded-lg w-full mt-1 text-sm text-claude-text font-mono">
+          <datalist id="modeller_{{ rol }}">
+            {% for ad, s in saglayicilar.items() %}{% for m in s.ornek_modeller %}
+            <option value="{{ m }}">{{ s.etiket }}</option>
+            {% endfor %}{% endfor %}
+          </datalist>
+        </label>
+      </div>
+      {% endfor %}
+
+      {# --- sağlayıcı anahtarları --- #}
+      <details class="border-t border-claude-border pt-3">
+        <summary class="text-xs uppercase text-claude-muted font-semibold cursor-pointer">
+          Sağlayıcı anahtarları</summary>
+        <div class="mt-3 space-y-3">
+          {% for ad, s in saglayicilar.items() %}
+          {% if s.gizli_anahtar %}
+          <div>
+            <label class="block">
+              <span class="text-xs text-claude-muted uppercase">{{ s.etiket }}
+                {% if saglayici_anahtar.get(ad) %}
+                <span class="normal-case">(mevcut: {{ saglayici_anahtar[ad] }})</span>
+                {% endif %}
+              </span>
+              <input type="password" name="key_{{ ad }}" autocomplete="new-password"
+                     placeholder="{{ s.gizli_anahtar }}"
+                     class="bg-claude-surface border border-claude-border px-3 py-2
+                            rounded-lg text-sm w-full mt-1 text-claude-text">
+            </label>
+            <label class="text-xs flex items-center gap-1 text-claude-muted mt-1">
+              <input type="checkbox" name="key_{{ ad }}_clear" value="1"> Key'i temizle
+            </label>
+            {% if s.not_ %}
+            <p class="text-[11px] text-claude-subtle mt-1 leading-relaxed">{{ s.not_ }}</p>
+            {% endif %}
+          </div>
+          {% endif %}
+          {% endfor %}
+        </div>
+      </details>
+
+      {# --- anahtarsız sağlayıcıların notu --- #}
+      <div class="border-t border-claude-border pt-3 space-y-1">
+        {% for ad, s in saglayicilar.items() %}
+        {% if not s.gizli_anahtar %}
+        <p class="text-[11px] text-claude-subtle leading-relaxed">
+          <b class="text-claude-muted">{{ s.etiket }}</b> — {{ s.not_ }}</p>
+        {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+
     <script>
       (function () {
         var sel = document.getElementById('ai_backend');

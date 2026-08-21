@@ -6,6 +6,7 @@ import yaml
 from flask import (Blueprint, current_app, flash, redirect, render_template,
                    request, url_for)
 
+from short_bot.ai_providers import ROLLER, SAGLAYICILAR
 from short_bot.config import load_settings
 from short_bot.openrouter_catalog import get_catalog
 
@@ -33,6 +34,20 @@ def _save_secrets(data: dict) -> None:
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
                  encoding="utf-8")
+
+
+def _havuz_durumu() -> dict:
+    """Ücretsiz Google havuzunun özeti — ayarlar sayfası bunu gösterir.
+
+    Hata YÜKSELTMEZ: bozuk bir state.json yüzünden ayarlar açılmamalı.
+    """
+    try:
+        from short_bot.google_studio import pool_durumu
+        return pool_durumu()
+    except Exception as e:   # noqa: BLE001
+        return {"var": False, "anahtar": 0, "etkin": 0, "bugun": 0,
+                "gunluk_tavan": 0, "tukenen": 0, "banli": 0,
+                "dizin": "", "hata": str(e)}
 
 
 def _mask_key(key: str) -> str:
@@ -135,6 +150,16 @@ def view():
                             openrouter_key_masked=openrouter_key_masked,
                             openrouter_key_set=bool(secrets.get("openrouter_api_key")),
                             openrouter_catalog=get_catalog(Path(cache_dir)),
+                            # AI SAĞLAYICILARI — rol başına seçim + anahtarlar
+                            # + ücretsiz Google havuzunun durumu. Havuz 38
+                            # anahtarla çalışıyordu ama panelde HİÇ görünmüyordu.
+                            saglayicilar=SAGLAYICILAR,
+                            roller=ROLLER,
+                            ai_roles=data.get("ai_roles", {}) or {},
+                            saglayici_anahtar={
+                                ad: _mask_key(secrets.get(sg.gizli_anahtar, "") or "")
+                                for ad, sg in SAGLAYICILAR.items() if sg.gizli_anahtar},
+                            google_havuz=_havuz_durumu(),
                             asset_library=_library_inventory(),
                             library_building=_LIB_BUILD.get("running", False),
                             library_status=_LIB_BUILD.get("status", ""))
@@ -188,6 +213,25 @@ def save():
     if or_models:
         data["openrouter_models"] = or_models
 
+    # AI SAĞLAYICILARI — rol başına {provider, model}
+    #
+    # Boş sağlayıcı = "bu rolde özel seçim yok" → kayıt SİLİNİR ve eski
+    # `ai_backend` mantığı devreye girer. Silinmezse boş provider adı
+    # `resolve_ai_call`da bilinmeyen sayılır ve ayar sessizce yok sayılırdı.
+    ai_roles = dict(data.get("ai_roles", {}) or {})
+    for rol, _etiket in ROLLER:
+        prov = (request.form.get(f"rol_provider_{rol}") or "").strip()
+        if f"rol_provider_{rol}" not in request.form:
+            continue                      # form bu alanı hiç göndermedi
+        if not prov or prov not in SAGLAYICILAR:
+            ai_roles.pop(rol, None)
+            continue
+        ai_roles[rol] = {
+            "provider": prov,
+            "model": (request.form.get(f"rol_model_{rol}") or "").strip(),
+        }
+    data["ai_roles"] = ai_roles
+
     # Trends block
     trends_data = data.get("trends", {}) or {}
     trends_data["enabled"] = (request.form.get("trends_enabled") == "1")
@@ -229,8 +273,25 @@ def save():
     path.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
                     encoding="utf-8")
 
-    # Pexels key — separate file
+    # SAĞLAYICI ANAHTARLARI — kayıttaki her sağlayıcı için tek döngü.
+    #
+    # Elle tek tek yazmak yeni sağlayıcı eklendiğinde UNUTULUYORDU: ayarda
+    # görünüyor, anahtar kaydedilmiyor, çağrı "anahtar girilmemiş" diyordu.
+    # BOŞ GÖNDERİM MEVCUDU SİLMEZ (kullanıcı alanı yeniden doldurmak zorunda
+    # kalmasın); silmek için ayrı `_clear` kutusu var.
     secrets = _load_secrets()
+    for _ad, _sg in SAGLAYICILAR.items():
+        if not _sg.gizli_anahtar:
+            continue
+        _yeni = (request.form.get(f"key_{_ad}") or "").strip()
+        if _yeni:
+            secrets[_sg.gizli_anahtar] = _yeni
+            _save_secrets(secrets)
+        elif request.form.get(f"key_{_ad}_clear") == "1":
+            secrets.pop(_sg.gizli_anahtar, None)
+            _save_secrets(secrets)
+
+    # Pexels key — separate file
     new_key = request.form.get("pexels_api_key", "").strip()
     clear = request.form.get("pexels_api_key_clear") == "1"
     if new_key:

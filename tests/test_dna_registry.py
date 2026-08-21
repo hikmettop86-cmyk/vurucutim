@@ -91,3 +91,58 @@ def test_DEPODAKI_kayit_dosyasi_okunabilir():
     from short_bot.dna import _designed_to_default
     for k in json.loads(p.read_text(encoding="utf-8")):
         _designed_to_default(k)          # patlarsa panel açılmaz
+
+
+# --- KAYIT YOLU YAPILANDIRILABİLİR OLMALI ----------------------------------
+#
+# `_REGISTRY_PATH` KAYNAK DOSYAYA göre çözülüyordu
+# (`<src>/../../config/archetypes.json`) ve `register_designed_archetype` oraya
+# YAZIYORDU. İki somut zarar (ikisi de 2026-08-21'de yaşandı):
+#
+#   1. Depo dışında koşan her şey (scratch panel, ölçüm betiği) kullanıcının
+#      DEPOSUNU kirletiyor. `bayern-bedava` kaydı böyle sızdı ve `test_pexels`
+#      "3 sorgudan az" diye düştü.
+#   2. Paketlenmiş Electron kurulumunda kaynak ağacı kullanıcının config
+#      dizini DEĞİL — tasarlanan arketip yanlış yere yazılır (ya da salt-okunur
+#      dizine yazılamaz).
+
+def test_kayit_yolu_DEGISTIRILEBILIR(tmp_path, monkeypatch):
+    import short_bot.dna as dna
+    for ad in ("ARCHETYPES", "ARCHETYPE_LABELS", "ARCHETYPE_DEFAULTS",
+               "_DESIGNED_ARCHETYPES"):
+        monkeypatch.setattr(dna, ad, type(getattr(dna, ad))(getattr(dna, ad)))
+    hedef = tmp_path / "cfg" / "archetypes.json"
+    dna.set_registry_path(hedef)
+    try:
+        dna.register_designed_archetype("yolluk", "Yolluk")
+        assert hedef.exists(), "verilen yola yazmadı"
+        assert json.loads(hedef.read_text(encoding="utf-8"))[0]["slug"] == "yolluk"
+    finally:
+        dna.set_registry_path(None)
+
+
+def test_None_ile_VARSAYILANA_doner(tmp_path):
+    """NOT: `conftest._arketip_kaydi_yalitimi` her testte yolu tmp'ye çekiyor;
+    burada sınanan şey MODÜL VARSAYILANINA dönüş."""
+    import short_bot.dna as dna
+    dna.set_registry_path(tmp_path / "x.json")
+    dna.set_registry_path(None)
+    assert dna._REGISTRY_PATH == dna._VARSAYILAN_REGISTRY_PATH
+
+
+def test_create_app_KAYIT_YOLUNU_config_dizinine_kurar(tmp_path):
+    """Panel açılırken kaydı KENDİ config dizinine bağlamalı."""
+    import short_bot.dna as dna
+    from short_bot.web import create_app
+    cfg = tmp_path / "config"
+    (cfg / "channels").mkdir(parents=True)
+    (cfg / "settings.yaml").write_text(
+        "ffmpeg_path: ffmpeg\nclaude_cli_path: claude\nplaywright_browser: chromium\n"
+        "web: {host: 127.0.0.1, port: 5005}\nfuzzy_dedup_threshold: 0.85\n"
+        "log_level: INFO\nclaude_models: {dna: opus, default: haiku}\n",
+        encoding="utf-8")
+    try:
+        create_app(config_dir=cfg, db_path=tmp_path / "d.sqlite", scheduler=False)
+        assert dna._REGISTRY_PATH == cfg / "archetypes.json"
+    finally:
+        dna.set_registry_path(None)

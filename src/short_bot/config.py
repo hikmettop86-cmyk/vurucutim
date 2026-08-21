@@ -43,6 +43,12 @@ class Settings:
     ai_backend: str = "claude_cli"
     openrouter_models: dict = field(default_factory=dict)
     google_studio: dict = field(default_factory=dict)
+    # ROL BAŞINA SAĞLAYICI — {rol: {"provider": ..., "model": ...}}.
+    # `ai_backend` kaba bir anahtar: "şablonu ücretsiz Google havuzunda yaz ama
+    # sohbeti Claude CLI'da tut" demenin yolu yoktu. Boşsa eski davranış aynen
+    # sürer. Ölçüldü (2026-08-21, arketip şablonu yazma): claude_cli/opus
+    # 112,7 sn; google_studio/gemini-3.5-flash-lite 7,0 sn ve ÜCRETSİZ.
+    ai_roles: dict = field(default_factory=dict)
     trends: TrendsSettings = field(default_factory=_default_trends_settings)
     whisper_quality: str = "auto"
     whisper_device: str = "auto"
@@ -466,6 +472,8 @@ def load_settings(path: Path) -> Settings:
         ai_backend=data.get("ai_backend", "claude_cli"),
         openrouter_models=dict(data.get("openrouter_models", {})),
         google_studio=dict(data.get("google_studio", {})),
+        ai_roles={k: dict(v) for k, v in (data.get("ai_roles") or {}).items()
+                  if isinstance(v, dict)},
         trends=trends,
         whisper_quality=wh_data.get("quality", "auto"),
         whisper_device=wh_data.get("device", "auto"),
@@ -838,8 +846,35 @@ class AICall:
     claude_path: str
 
 
+def _rol_secimi(settings: Settings, secrets: dict, role: str) -> "AICall | None":
+    """`settings.ai_roles[role]` varsa onu çöz; yoksa None (eski yola düş).
+
+    Bilinmeyen sağlayıcı adı YOK SAYILIR: elle düzenlenmiş bir yaml yüzünden
+    üretim durmasın, eski davranış sürsün.
+    """
+    from short_bot.ai_providers import saglayici
+    # `getattr`: testlerde ve eski yapılandırmalarda Settings yerine duck-typed
+    # sahteler geçiyor; alan yoksa eski yola düşülmeli, patlanmamalı.
+    secim = (getattr(settings, "ai_roles", None) or {}).get(role) or {}
+    s = saglayici((secim.get("provider") or "").strip())
+    if s is None:
+        return None
+    model = (secim.get("model") or "").strip() or (
+        s.ornek_modeller[0] if s.ornek_modeller else "")
+    return AICall(backend=s.ad, model=model,
+                  api_key=((secrets.get(s.gizli_anahtar) or None)
+                           if s.gizli_anahtar else None),
+                  claude_path=settings.claude_cli_path)
+
+
 def resolve_ai_call(settings: Settings, secrets: dict, role: str) -> AICall:
-    """role: 'dna' | 'default' | 'script' | 'vision'. Aktif backend'e göre model+key çözer."""
+    """role: 'dna' | 'default' | 'script' | 'vision'. Aktif backend'e göre model+key çözer.
+
+    ÖNCE rol bazlı seçim (`ai_roles`), sonra kaba `ai_backend` anahtarı.
+    """
+    rol = _rol_secimi(settings, secrets, role)
+    if rol is not None:
+        return rol
     if settings.ai_backend == "hybrid":
         # Metin → OpenRouter (ÖLÇÜLDÜ 2026-07-16: gemini-3.1-flash-lite ~4sn/$0.002 ve
         # persona-sadık; Claude CLI ~7-çağrı burst'te Max-plan rate-limit thrash'ine

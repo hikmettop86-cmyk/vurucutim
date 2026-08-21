@@ -85,6 +85,11 @@ def create_app(
     app.config["SHORTBOT_CONFIG_DIR"] = config_dir
     app.config["SHORTBOT_DB_PATH"] = db_path
     app.config["SHORTBOT_TEMPLATES_DIR"] = Path(templates_dir)
+    # ARKETİP KAYDI KULLANICININ CONFIG DİZİNİNE. Varsayılanı kaynak
+    # ağacına göre çözülüyor; paketlenmiş kurulumda orası kullanıcının
+    # config dizini değil ve tasarlanan arketip yanlış yere yazılırdı.
+    from short_bot.dna import set_registry_path as _set_arketip_kaydi
+    _set_arketip_kaydi(Path(config_dir) / "archetypes.json")
     app.config["SHORTBOT_MUSIC_ROOT"] = Path(music_root)
     app.config["SHORTBOT_CACHE_DIR"] = Path(cache_dir)
     app.config["SHORTBOT_LOCK_DIR"] = Path(lock_dir)

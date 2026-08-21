@@ -152,15 +152,17 @@ def test_google_studio_dispatch_generate_cagirir(monkeypatch):
     import short_bot.google_studio as GS
     got = {}
 
-    def gs_gen(prompt, *, model, image_path=None, timeout_s=90):
-        got.update(prompt=prompt, model=model, image_path=image_path)
+    def gs_gen(prompt, *, model, image_path=None, timeout_s=90, max_tokens=1024):
+        got.update(prompt=prompt, model=model, image_path=image_path,
+                   max_tokens=max_tokens)
         return "TARIF"
 
     monkeypatch.setattr(GS, "generate", gs_gen)
     out = CC._invoke_primary("betimle", backend="google_studio", model="gemini-3.1-flash-lite",
                              claude_path="claude", api_key=None, timeout_s=45, image_path="f.jpg")
     assert out == "TARIF"
-    assert got == {"prompt": "betimle", "model": "gemini-3.1-flash-lite", "image_path": "f.jpg"}
+    assert got == {"prompt": "betimle", "model": "gemini-3.1-flash-lite",
+                   "image_path": "f.jpg", "max_tokens": CC.TAVAN_GORSEL}
 
 
 # ── resolve_ai_call hybrid dalı ──────────────────────────────────────────────

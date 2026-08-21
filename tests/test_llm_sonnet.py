@@ -193,3 +193,75 @@ def test_SONNET_varyanti_gecirilebilir():
     sonnet_json("m", _Zorunlu, invoke=_invoke, openrouter_key="k",
                 openrouter_model="anthropic/claude-sonnet-5-20260101")
     assert cagri[1]["model"] == "anthropic/claude-sonnet-5-20260101"
+
+
+# --- SAĞLAYICI SEÇİLEBİLİR OLMALI ------------------------------------------
+#
+# `sonnet_json` birincil yolu KODA SABİTLİYORDU (claude_cli/sonnet). Sohbet ve
+# konu bankası buradan geçiyor; kullanıcı ayarlardan ücretsiz Google havuzunu
+# seçse bile çağrı yine CLI'ye gidiyordu. Ölçüldü (2026-08-21): CLI çağrısı
+# 52-112 sn, aynı iş google_studio/gemini-3.5-flash-lite ile 6-7 sn.
+
+def test_VARSAYILAN_hala_claude_cli():
+    """Geriye uyum: parametre verilmezse davranış birebir."""
+    cagri = []
+
+    def _invoke(prompt, **kw):
+        cagri.append(kw)
+        return '{"x": 1}'
+    sonnet_json("m", _Sema, invoke=_invoke)
+    assert cagri[0]["backend"] == "claude_cli" and cagri[0]["model"] == SONNET_CLI
+
+
+def test_backend_ve_model_GECIRILEBILIR():
+    cagri = []
+
+    def _invoke(prompt, **kw):
+        cagri.append(kw)
+        return '{"x": 2}'
+    sonnet_json("m", _Sema, invoke=_invoke, backend="google_studio",
+                model="gemini-3.5-flash-lite", api_key=None)
+    assert cagri[0]["backend"] == "google_studio"
+    assert cagri[0]["model"] == "gemini-3.5-flash-lite"
+
+
+def test_secilen_saglayici_patlarsa_YINE_OPENROUTERA_duser():
+    """Düşme yolu birincil neyse ona göre değil, hep Sonnet'e — kalite garantisi."""
+    from short_bot.claude_cli import ClaudeCliError
+    cagri = []
+
+    def _invoke(prompt, **kw):
+        cagri.append(kw["backend"])
+        if kw["backend"] != "openrouter":
+            raise ClaudeCliError("havuz tükendi")
+        return '{"x": 3}'
+    assert sonnet_json("m", _Sema, invoke=_invoke, backend="google_studio",
+                       model="g", openrouter_key="k").x == 3
+    assert cagri == ["google_studio", "openrouter"]
+
+
+def test_backend_verilip_MODEL_verilmezse_saglayicinin_ilki():
+    """`model=""` ile çağrılırsa boş model adı gider ve sağlayıcı 400 döner."""
+    cagri = []
+
+    def _invoke(prompt, **kw):
+        cagri.append(kw)
+        return '{"x": 9}'
+    sonnet_json("m", _Sema, invoke=_invoke, backend="deepseek")
+    assert cagri[0]["model"] == "deepseek-chat"
+
+
+def test_GOOGLE_HAVUZU_TUKENIRSE_de_dusulur():
+    """`GoogleStudioExhausted` `AIBackendError` DEĞİL — yakalanmazsa üretim
+    düşme yolunu hiç denemeden ölür (aynı tuzağa TimeoutExpired'de düşülmüştü)."""
+    from short_bot.google_studio import GoogleStudioExhausted
+    cagri = []
+
+    def _invoke(prompt, **kw):
+        cagri.append(kw["backend"])
+        if kw["backend"] == "google_studio":
+            raise GoogleStudioExhausted("havuz bitti")
+        return '{"x": 4}'
+    assert sonnet_json("m", _Sema, invoke=_invoke, backend="google_studio",
+                       model="g", openrouter_key="k").x == 4
+    assert cagri == ["google_studio", "openrouter"]

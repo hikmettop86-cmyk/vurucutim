@@ -336,10 +336,16 @@ _SEM = threading.BoundedSemaphore(MAX_CONCURRENCY)
 _SEM_LOCK = threading.Lock()
 
 
+_VARSAYILAN_POOL_DIR = _POOL_DIR
+
+
 def set_pool_dir(path):
-    """Havuz dizinini ayarla (web/pipeline başlangıcında; Electron'da data taşınır)."""
+    """Havuz dizinini ayarla (web/pipeline başlangıcında; Electron'da data taşınır).
+
+    `None` → varsayılana dön (testlerin küresel durumu geri alması için).
+    """
     global _POOL, _POOL_DIR
-    _POOL_DIR = Path(path)
+    _POOL_DIR = _VARSAYILAN_POOL_DIR if path is None else Path(path)
     _POOL = None   # sonraki _get_pool yeniden kurar
 
 
@@ -457,3 +463,45 @@ def generate(prompt: str, *, model: str, image_path=None, timeout_s: int = 90,
             break
         time.sleep(max(slot, CAPACITY_PAUSE_BASE_S))   # slot=0 olsa bile Google'ı hemen dövme
     raise GoogleStudioExhausted(reason)
+
+
+def pool_durumu(pool_dir=None) -> dict:
+    """Havuzun panelde gösterilecek özeti — anahtar/kota/ban sayıları.
+
+    Havuz 38 anahtarla çalışıyordu ama ayarlar ekranında HİÇ görünmüyordu.
+    Tükendiğinde sistem sessizce OpenRouter'a düşüyor ve kullanıcı bunu
+    faturada görüyor; sayılar görünürse önceden anlaşılır.
+
+    Hiçbir hata YÜKSELTMEZ: ayarlar sayfası bozuk bir state.json yüzünden
+    açılmamalı.
+    """
+    d = Path(pool_dir) if pool_dir is not None else _POOL_DIR
+    out = {"var": False, "anahtar": 0, "etkin": 0, "bugun": 0,
+           "gunluk_tavan": 0, "tukenen": 0, "banli": 0, "dizin": str(d),
+           "hata": ""}
+    try:
+        ham = json.loads((d / "google-keys.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        out["hata"] = f"anahtar dosyası okunamadı: {e}"
+        return out
+
+    keys = ham.get("keys", ham) if isinstance(ham, dict) else ham
+    keys = [k for k in (keys or []) if isinstance(k, dict)]
+    out["var"] = True
+    out["anahtar"] = len(keys)
+    out["etkin"] = sum(1 for k in keys if k.get("enabled") is not False)
+    out["gunluk_tavan"] = out["etkin"] * DAILY_CAP
+
+    try:
+        state = json.loads((d / "state.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return out          # state yoksa/bozuksa sayılar sıfır kalır, sayfa açılır
+
+    kullanim = state.get("usage") or {}
+    out["bugun"] = sum(int(v.get("dayCount") or 0)
+                       for v in kullanim.values() if isinstance(v, dict))
+    out["tukenen"] = sum(1 for v in kullanim.values()
+                         if isinstance(v, dict) and v.get("status") == "exhausted")
+    out["banli"] = len(state.get("banned") or {})
+    out["gun"] = state.get("ptDate", "")
+    return out

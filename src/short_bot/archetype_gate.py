@@ -63,6 +63,14 @@ _AUTO_FIT = "_auto_fit.js.j2"
 _VIEWPORT = ("1080px", "1920px")
 
 
+def _govde_clampli(html: str) -> bool:
+    """`.body-text` kuralında line-clamp var mı? (Yalnız GÖVDE — manşette
+    clamp meşru olabilir.)"""
+    import re as _re
+    m = _re.search(r"\.body-text\s*\{([^}]*)\}", html)
+    return bool(m and "line-clamp" in m.group(1))
+
+
 def yapi_kapisi(html: str) -> tuple[bool, str]:
     """Bedava kontrol: sözleşme parçaları duruyor mu.
 
@@ -96,6 +104,18 @@ def yapi_kapisi(html: str) -> tuple[bool, str]:
 
     if not all(v in html for v in _VIEWPORT):
         eksik.append("1080px × 1920px viewport (html, body boyutu)")
+
+    # GÖVDEDE line-clamp YASAK. Sabit satır sayısı `_auto_fit`i etkisiz kılar:
+    # font küçülse de N. satırdan sonrası kesilir. ÖLÇÜLDÜ (2026-08-21):
+    # `stadium` .body-text'inde `-webkit-line-clamp: 9` var; `data-fit-min`i
+    # 38'den 24'e düşürmek KARE'yi hiç değiştirmedi, clamp+maske kaldırılınca
+    # 267 karakterlik gövdenin TAMAMI taşmadan göründü. Yani clamp SIĞAN metni
+    # kesiyordu — canlıda tasarım turlarının düşme sebebi buydu.
+    # Depodaki 34 şablonun 26'sı zaten clamp kullanmıyor.
+    if _govde_clampli(html):
+        eksik.append(".body-text üzerinde line-clamp YOK (sabit satır sayısı "
+                     "auto-fit'i etkisiz kılar; metni data-fit-min/max ile "
+                     "sığdır, kesme)")
 
     if eksik:
         return False, ("Şablon sözleşmeyi karşılamıyor. Eksikler: "
