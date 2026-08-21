@@ -35,6 +35,51 @@ _HASHTAG_ORNEK: dict[str, str] = {
 }
 
 
+# DİKEYE ÖZGÜ BAŞLIK KURALLARI. Prompt TALİMATLARI Türkçe (çıktı dili ayrıca
+# söyleniyor), bu yüzden dil başına çoğaltmaya gerek yok.
+#
+# NEDEN VAR: personalara koyulan güvenlik kuralları yalnız ANLATIMI koruyordu.
+# Başlık en görünür metin ve YouTube'un indekslediği şey; anlatımı "iddia
+# ediliyor" diyen bir videonun başlığı suçu kesinleyebiliyordu.
+_VERTICAL_META_RULES: dict[str, str] = {
+    "para": (
+        "- YATIRIM TAVSİYESİ YASAK: başlık ya da açıklama 'şunu al', 'şuraya "
+        "yatır', 'şu banka daha iyi' DEMEZ. Ne olduğunu söyle, kararı izleyiciye "
+        "bırak.\n"
+        "- Rakam varsa başlığa koy ama SONUCU uydurma ('7.052 TL' evet, "
+        "'10 bine gidiyor' hayır)."),
+    "adalet": (
+        "- MASUMİYET KARİNESİ BAŞLIKTA DA GEÇERLİ: şüpheyi suç gibi KESİNLEŞTİRME. "
+        "'öldürdü' değil 'öldürmekle suçlanıyor'; dava hangi safhadaysa onu yaz "
+        "(şüphe / soruşturma / iddianame / karar).\n"
+        "- Şüpheli ve mağdur TAM ADLA anılmaz."),
+    "magazin": (
+        "- ÖZEL HAYAT SPEKÜLASYONU YASAK: doğrulanmamış ilişki, ayrılık, boşanma "
+        "ya da hastalık iddiasını başlıkta KESİN gibi yazma. Kaynak varsa "
+        "'... açıkladı' de; yoksa o iddiayı başlığa hiç alma.\n"
+        "- Kimseyi aşağılayan ya da alay eden başlık kurma."),
+    "spor": (
+        "- Skor, transfer ve sakatlık bilgisi KESİN olmalı; söylentiyi "
+        "gerçekleşmiş gibi yazma ('imzaladı' ile 'görüşüyor' aynı şey değil)."),
+    "olay": (
+        "- Can kaybı ve yaralı sayısını yalnız RESMİ kaynak verdiyse yaz.\n"
+        "- Mağdurları teşhir eden ya da felaketi şova çeviren başlık kurma."),
+    "teknoloji": (
+        "- Duyuru ile çıkış tarihini karıştırma; sızıntıyı doğrulanmış gibi "
+        "yazma ('sızdı' ile 'açıklandı' ayrı şeyler)."),
+}
+
+# CJK dilleri Latin'den ÇOK daha yoğun: '藤井風 タイ公演中止を発表 事務所が理由を説明'
+# zaten 25 karakter ve tam bir cümle. 60-100 karakter dayatmak modeli DOLGU
+# yapmaya iter — tam da kaçındığımız AI-slop.
+_CJK_DILLER = frozenset({"ja", "zh", "ko"})
+
+
+def _baslik_butcesi(language: str) -> str:
+    """Başlık karakter bütçesi. CJK'de Latin bütçesi dolgu ürettirir."""
+    return "20-40" if (language or "").split("-")[0].lower() in _CJK_DILLER else "60-100"
+
+
 def search_terms_for(eng, channel, limit: int = 12) -> list[str]:
     """Bu kanalın metadata'da kullanılacak KANITLI arama sözlüğü.
 
@@ -133,6 +178,24 @@ def build_metadata_prompt(*, channel, script: dict,
             "#mizah), #sondakika/#haber KULLANMA.\n")
     override_block = ("\n" + override + "\n") if override else ""
 
+    # Dikey kuralları + kanalın kendi yasak listesi. İkisi de yalnız VARSA girer;
+    # dikeysiz kanalın prompt'u bit bit eskisi gibi kalır.
+    _dikey = getattr(channel, "trends_vertical", None)
+    dikey_block = ""
+    if _dikey:
+        from short_bot.trends.verticals import VERTICAL_LABELS
+        kural = _VERTICAL_META_RULES.get(_dikey, "")
+        etiket = VERTICAL_LABELS.get(_dikey, _dikey)
+        dikey_block = (f"\nKANALIN DİKEYİ: {etiket}\n"
+                       f"Başlık ve açıklama bu dikeyin kurallarına UYMAK ZORUNDA:\n"
+                       f"{kural}\n")
+    _dna = getattr(channel, "dna", None)
+    _yasak = list(getattr(getattr(_dna, "tone", None), "forbidden", []) or [])
+    if _yasak:
+        dikey_block += ("\nBU KANALDA YASAK (kart kuralları başlık için de geçerli):\n"
+                        + "\n".join(f"- {y}" for y in _yasak) + "\n")
+    baslik_butcesi = _baslik_butcesi(channel.language)
+
     hook_block = ""
     if hook_patterns:
         pats = "\n".join(f"- {p}" for p in hook_patterns)
@@ -159,7 +222,16 @@ def build_metadata_prompt(*, channel, script: dict,
     body = script.get("body_paragraph", "")
     keywords = ", ".join((channel.keywords or [])[:8])
     search_block = _search_block(script, search_terms, channel.language)
-    hashtag_ornek = _HASHTAG_ORNEK.get(channel.language, _HASHTAG_ORNEK["en"])
+    # HASHTAG ÖRNEĞİ ÖNCE KANALIN KENDİ KELİMELERİNDEN. Sabit dil örneği
+    # ("#shorts #速報 #ニュース") HABER tonlu; magazin kanalına sızıyordu.
+    # Kodun kendi dersi: model ÖRNEĞİ kopyalar, kural metnini değil. Kanalın
+    # anahtar kelimeleri hem dile hem dikeye tanım gereği doğru.
+    _kw = [k.strip() for k in (channel.keywords or []) if k and k.strip()][:3]
+    if _kw:
+        hashtag_ornek = "#shorts " + " ".join(
+            "#" + k.replace(" ", "") for k in _kw)
+    else:
+        hashtag_ornek = _HASHTAG_ORNEK.get(channel.language, _HASHTAG_ORNEK["en"])
 
     return f"""Sen bir YouTube Shorts kanalı için SEO-uyumlu metadata üreticisisin.
 
@@ -178,13 +250,18 @@ KANAL:
 
 {source_block}
 {search_block}
-{hook_block}
+{hook_block}{dikey_block}
 GÖREV: Aşağıdaki kurallara göre title + description + tags üret.
 
 TITLE KURALLARI:
-- 60-100 karakter (max 100 ZORUNLU)
+- {baslik_butcesi} karakter (max 100 ZORUNLU)
 - {lang_name} dilinde
-- Anahtar kelime başta (SEO)
+- VARLIK + NİYET kalıbı: başlığa önce ÖZNEYİ yaz (kişi, kurum, kulüp,
+  ürün, eser adı), hemen ardından NE OLDUĞUNU. Ölçüldü (28 gün, YouTube
+  Analytics arama terimleri): kanalı bulan ilk 25 sorgunun hiçbiri soru
+  değildi, hepsi varlık+niyet kalıbıydı ('galatasaray transfer', 'gs
+  transfer son dakika'). Genel kategori kelimesiyle ('son dakika haber')
+  BAŞLAMA.
 - Clickbait DEĞİL — dürüst, içeriği yansıtan
 - "Shocking", "You won't believe" gibi yapay heyecan KULLANMA
 - Sayı/tarih varsa başa al ("3 dakika", "2026 öncesi" gibi)
@@ -214,7 +291,7 @@ TAGS KURALLARI:
 {override_block}
 ÇIKTI: SADECE aşağıdaki JSON formatında, başka metin yazma:
 {{
-  "title": "<60-100 char>",
+  "title": "<{baslik_butcesi} char>",
   "description": "<full description with sections>",
   "tags": ["...", "..."]
 }}
