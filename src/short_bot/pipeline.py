@@ -1069,6 +1069,17 @@ def _ticker_items_for_trends(
     return tuple(s.item.title.strip() for s in others[:limit] if s.item.title.strip())
 
 
+def _vertical_starved(items, channel) -> bool:
+    """Dikey süzgecinden yeterli aday çıkmadı mı?
+
+    Yalnız dikeyi OLAN kanalda anlamlıdır: dikeysiz kanalda eski davranış bit
+    bit korunur. True dönerse koşu boş biter — havuz GENİŞLETİLMEZ.
+    """
+    if not getattr(channel, "trends_vertical", None):
+        return False
+    return len(items) < channel.trends_min_candidates
+
+
 def _run_rss(*, channel, run_id, log, eng, settings,
              music_root, templates_dir, cache_dir,
              defer_upload: bool = False) -> RunResult:
@@ -1079,11 +1090,24 @@ def _run_rss(*, channel, run_id, log, eng, settings,
     is_trends = channel.content_source == "trends"
     if is_trends:
         region = (channel.trends_region or trend_region_for(channel.language)).upper()
-        log.info(f"[1/8] fetch_trending_now region={region}")
+        dikey = channel.trends_vertical
+        log.info(f"[1/8] fetch_trending_now region={region}"
+                 f"{f' dikey={dikey}' if dikey else ''}")
         items = fetch_trending_items(
             region, language=channel.language,
             cache_dir=Path(cache_dir) / "trends",
-            min_volume=channel.trends_min_volume, log=log)
+            min_volume=channel.trends_min_volume,
+            vertical=channel.trends_vertical, log=log)
+        if _vertical_starved(items, channel):
+            # HAVUZ GENİŞLETİLMEZ. Dikeyi düşürüp yeniden çekmek, düzeltilen
+            # sorunu geri getirir ve üstelik görünmez yapar: kanal "bugün de
+            # üretti" der ama kimliği dışında bir video yayınlamış olur.
+            log.warning(
+                f"  [dikey] '{dikey}' aç kaldı: {len(items)} aday < "
+                f"{channel.trends_min_candidates} → koşu boş bitiyor")
+            finish_run(eng, run_id, status="no_candidates", short_id=None, error=None)
+            return RunResult(run_id=run_id, status="no_candidates",
+                             short_path=None, error=None)
     else:
         log.info("[1/8] fetch_rss")
         items = fetch_rss(channel.keywords, channel.rss_locale)
