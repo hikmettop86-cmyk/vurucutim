@@ -104,4 +104,28 @@ def cron_human(expr: str) -> str:
         return f"Her ayin {day}'i, saat 00:00"
     if hour == "*" and minute.isdigit():
         return f"Her saat dakika {int(minute):02d}"
+
+    # SAAT LİSTESİ ve ARALIK+ADIM — kanalların ÇOĞU bu iki deseni kullanıyor.
+    # Ölçüldü (2026-08-21): depodaki 9 cron ifadesinden 7'si buraya düşüyordu ve
+    # panelde ham görünüyordu ("30 9,13,17,21 * * *").
+    if day == "*" and month == "*" and dow == "*" and minute.isdigit():
+        dk = int(minute)
+
+        # "9,13,17,21" → günde N kez
+        if "," in hour and all(h.isdigit() for h in hour.split(",")):
+            saatler = sorted(int(h) for h in hour.split(","))
+            if len(saatler) <= 4:
+                yazi = ", ".join(f"{h:02d}:{dk:02d}" for h in saatler)
+                return f"Günde {len(saatler)}: {yazi}"
+            # Dar sütunda sekiz saat okunmaz; tam ifade zaten tooltip'te.
+            return f"Günde {len(saatler)} kez"
+
+        # "7-22/3" → aralık içinde her N saatte bir
+        if "-" in hour and "/" in hour:
+            aralik, _, adim = hour.partition("/")
+            bas, _, son = aralik.partition("-")
+            if bas.isdigit() and son.isdigit() and adim.isdigit():
+                ek = f" (:{dk:02d})" if dk else ""
+                return f"{int(bas):02d}–{int(son):02d} arası {adim} saatte bir{ek}"
+
     return expr  # fallback
