@@ -1,9 +1,11 @@
 slug: gundem-yorum
 name: Gündem Yorum
 keywords:
-- Türkiye gündemi
-- son dakika
-- yorum
+- ekonomi
+- zam
+- faiz
+- altın
+- asgari ücret
 language: tr
 schedule_cron: 30 8-20/3 * * *
 duration_s: 6
@@ -23,9 +25,8 @@ enabled: false
 script_model: opus
 content_source: trends
 trends_region: TR
-trends_min_volume: 1000
-trends_vertical: para
 trends_intent: question
+trends_vertical: para
 youtube:
   auto_upload: false
   ai_content: false
@@ -44,13 +45,15 @@ voice:
   provider: ai33
   voice_id: cWVxITrm3nn4UZgIKhad
   speed: 1.15
-  persona: 'Sen Türkiye''nin gündemini yorumlayan, kimsenin adamı olmayan bir sokak
-    bilgesisin. Taraf tutmazsın ama görüşsüz de değilsin: olayı sade anlatır, herkesin
-    aklındaki soruyu sen sorar, kimsenin bağlamadığı bir noktayı bağlar, sonunda adil
-    ama net bir hüküm verirsin. Vatandaşın tarafındasın — kurumların değil, partilerin
-    değil. Hafif mizah olur, alay olmaz. Acı haberde saygılısın. Konuşma dili: kısa
-    cümleler, ''bakın'', ''şimdi'', ''bence''; spiker kalıpları yok (''açıklandı'',
-    ''bildirildi'', ''kaydedildi'').'
+  persona: 'Sen paranın peşine düşen bir gündem yorumcususun. Tek bir soruyu cevaplarsın:
+    bu haber vatandaşın cebine ne yapıyor? Rakamı süslemez sadeleştirirsin — ''yüzde
+    kaç'' değil, ''ayda kaç lira''. Kimsenin adamı değilsin: ne bankanın, ne şirketin,
+    ne kurumun. Olanı anlatır, ne anlama geldiğini bağlar, bilinmiyorsa bilinmediğini
+    söylersin. YATIRIM TAVSİYESİ VERMEZSİN: ''şunu al'', ''şuraya yatır'', ''şu banka
+    daha iyi'' demezsin — neyin değiştiğini ve neye bakmak gerektiğini anlatırsın,
+    kararı izleyici verir. Kimsenin kaybına gülmezsin; zam ve kayıp haberinde ağırbaşlısın.
+    Konuşma dili: kısa cümleler, ''bakın'', ''şimdi'', ''bence''; spiker kalıpları
+    yok (''açıklandı'', ''bildirildi'', ''kaydedildi'').'
   target_duration_s:
   - 25
   - 50
@@ -80,8 +83,8 @@ dna:
     size_headline_top: null
     size_headline_bottom: null
   tone:
-    voice: hızlı, net, tarafsız, güvenilir
-    style: son dakika bülteni; ilk cümlede ne olduğu, sonra kim/nerede/ne zaman
+    voice: net, hesabını bilen, sakin, güvenilir
+    style: 'cebe etkisi önce: ilk cümle ne değişti, sonra kime ne kadar'
     forbidden:
     - taraf tutan yorum
     - küfür ve hakaret
@@ -90,23 +93,25 @@ dna:
     - '"BOMBA" ve "ŞOK" gibi yıpranmış manşet klişeleri'
     - her manşeti ünlemle bitirmek
     - uzun teknik analiz
+    - yatırım tavsiyesi ('şunu al', 'şuraya yatır')
+    - kesin gelecek tahmini ('şu kadar olacak')
     sentence_max_words: 14
     paragraph_sentences:
     - 3
     - 5
     body_max_chars: 330
-    headline_style_hint: 'Üst satır TEK ÖZNE (1-2 kelime, örn. ''ADALAR''), alt satır
-      NE OLDU (2-4 kelime, örn. ''YİNE SALLANDI''); photo_overlay = KJ alt satırı:
-      rakam/kurum/yer (örn. ''KANDİLLİ: 3.1 BÜYÜKLÜĞÜNDE SARSINTI'')'
+    headline_style_hint: 'Üst satır TEK ÖZNE (1-2 kelime, örn. ''ALTIN''), alt satır
+      NE OLDU (2-4 kelime, örn. ''7 BİN TL''Yİ AŞTI''); photo_overlay = KJ satırı:
+      rakam/kurum (örn. ''GRAM ALTIN: 7.052 TL'')'
   banner_shape: flat
   highlight_style: underline
   chip_style: rounded
   categories: []
   category_icon: 📰
   search_query_template: '{header_top} {header_bottom} Türkiye haber'
-  persona_summary: Türkiye'nin o an en çok aradığı konuyu 6 saniyede, tarafsız ve
-    net anlatan gündem kanalı. Manşet ne olduğunu söyler, gövde üç cümlede bağlamı
-    verir; abartı ve yorum yok.
+  persona_summary: 'Ekonomi haberini vatandaşın cebine çeviren yorum kanalı: ne değişti,
+    kime ne kadar mal oluyor, neye bakmak gerekiyor. Taraf tutmaz, yatırım tavsiyesi
+    vermez.'
   custom_css: ''
   ui_badge: ''
   animation_style: none

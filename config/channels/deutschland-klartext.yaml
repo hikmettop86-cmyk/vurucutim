@@ -1,11 +1,13 @@
 slug: deutschland-klartext
 name: Deutschland Klartext
 keywords:
-- Nachrichten aus Deutschland
-- Einordnung
-- Kommentar
+- Justiz
+- Polizei
+- Prozess
+- Behörden
+- Ermittlungen
 language: de
-schedule_cron: 30 9-21/3 * * *
+schedule_cron: 30 9,18 * * *
 duration_s: 6
 min_score: 6.0
 max_candidates_per_run: 25
@@ -19,20 +21,19 @@ colors:
   - '#10141a'
 handle: '@deutschlandkompakt'
 output_dir: output/deutschland-klartext
-enabled: false
+enabled: true
 script_model: opus
 content_source: trends
 trends_region: DE
 trends_min_volume: 2000
-trends_vertical: adalet
 trends_intent: question
+trends_vertical: adalet
 youtube:
   auto_upload: false
   ai_content: false
   category_id: '25'
   privacy_status: public
   min_score_for_upload: 6.0
-  # Aynı YouTube kanalına üretir: kimlik, kota ve istatistik tek yerde.
   credentials_from: deutschland-kompakt
 trend_boost:
   enabled: false
@@ -48,14 +49,17 @@ voice:
   persona: 'Du kommentierst die Nachrichtenlage in Deutschland: parteilos, aber nicht
     meinungslos. Zuerst sagst du sachlich, was passiert ist. Dann ordnest du ein —
     was daran neu ist, was es konkret für die Menschen bedeutet, was offen bleibt.
-    Du wägst ab und benennst, was belegt ist und was noch offen ist; am Ende
-    steht keine Schuldzuweisung, sondern die entscheidende offene Frage.
-    Du stehst auf der Seite der Bürgerinnen und Bürger, nicht auf der einer Partei,
-    einer Behörde oder eines Konzerns. Trockener Humor ja, Häme nein; bei Opfern und
-    Trauer bist du respektvoll. Sprache: kurze Hauptsätze, Aktiv statt Passiv, ''Der
-    Reihe nach'', ''Fakt ist'', ''Bleibt die Frage''. Keine Behördenfloskeln (''teilte
-    mit'', ''wurde bekannt gegeben''), keine Anglizismen-Show. Pressekodex: Verdächtige
-    NIE mit vollem Namen — ''mutmaßlich'', ''Max M.''.'
+    Du wägst ab und benennst, was belegt ist und was noch offen ist; am Ende steht
+    keine Schuldzuweisung, sondern die entscheidende offene Frage. Du stehst auf der
+    Seite der Bürgerinnen und Bürger, nicht auf der einer Partei, einer Behörde oder
+    eines Konzerns. Trockener Humor ja, Häme nein; bei Opfern und Trauer bist du respektvoll.
+    Sprache: kurze Hauptsätze, Aktiv statt Passiv, ''Der Reihe nach'', ''Fakt ist'',
+    ''Bleibt die Frage''. Keine Behördenfloskeln (''teilte mit'', ''wurde bekannt
+    gegeben''), keine Anglizismen-Show. Pressekodex: Verdächtige NIE mit vollem Namen
+    — ''mutmaßlich'', ''Max M.''. Unschuldsvermutung gilt ausnahmslos: Ein Verdacht
+    ist kein Urteil. Du trennst sauber zwischen Verdacht, Ermittlung, Anklage und
+    Urteil und sagst in jedem Beitrag, in welchem Stadium der Fall steht. Keine Tatdetails
+    um der Wirkung willen.'
   target_duration_s:
   - 20
   - 50
@@ -86,15 +90,15 @@ dna:
     size_headline_bottom: null
   tone:
     voice: sachlich, klar, unaufgeregt, verlässlich
-    style: Nachrichtenmeldung; erster Satz sagt WAS passiert ist, dann Wer/Wo/Wann
-      und die Einordnung in einem Satz
+    style: 'Fall-Meldung: erster Satz WAS passiert ist, dann Wer/Wo/Wann und in welchem
+      Verfahrensstadium der Fall steht'
     forbidden:
     - Verdächtige oder Opfer mit vollem Namen nennen (Pressekodex — 'mutmaßlich',
       'Max M.', 'die 73-Jährige')
-    - unbestätigte Behauptung als Tatsache schreiben
+    - unbestätigte Behauptung oder bloßen Verdacht als Tatsache darstellen (Vorverurteilung)
     - Boulevard-Wörter wie 'SCHOCK', 'DRAMA', 'Wahnsinn', 'unfassbar'
     - Ausrufezeichen am Ende jeder Zeile
-    - Panikmache und Angst-Zuspitzung
+    - Panikmache, Angst-Zuspitzung und Tatdetails zur Effekthascherei
     - parteiische Wertung oder Wahlempfehlung
     - unnötige Anglizismen ('Breaking', 'Update', 'Statement')
     - lange Behördenfloskeln ('im Rahmen von', 'zeitnah', 'diesbezüglich')
@@ -116,9 +120,9 @@ dna:
   categories: []
   category_icon: 📰
   search_query_template: '{header_top} {header_bottom} Deutschland Nachrichten'
-  persona_summary: Kommentarkanal zur deutschen Nachrichtenlage — parteilos, aber
-    nicht meinungslos. Erklärt in unter einer Minute, was passiert ist, ordnet es
-    ein und endet mit der entscheidenden offenen Frage.
+  persona_summary: Kommentarkanal zu Justiz und Behörden in Deutschland — parteilos,
+    aber nicht meinungslos. Sagt, was passiert ist, in welchem Verfahrensstadium der
+    Fall steht, und endet mit der entscheidenden offenen Frage.
   custom_css: ''
   ui_badge: ''
   animation_style: none
