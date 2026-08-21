@@ -375,6 +375,23 @@ def _rss_fallback(region: str, *, timeout_s: int = 10) -> list[NewsItem]:
 
 # --- dış yüz ------------------------------------------------------------------
 
+def _apply_channel_filters(
+    items: list[NewsItem], *, min_volume: int, vertical: str | None,
+) -> list[NewsItem]:
+    """Kanal ayarlarını OKUMA anında uygula.
+
+    Önbellek dosyası bölge başınadır (``trending_now_<region>.json``), kanal
+    başına değil. Süzgeci çekim anında uygularsak, aynı bölgede koşan ikinci
+    kanal 30 dk boyunca birincinin süzülmüş listesini görür: dikeyi farklıysa
+    boş, tabanı düşükse eksik. Bu yüzden önbellek HAM dolar, süzme burada
+    yapılır.
+    """
+    from short_bot.trends.verticals import matches
+    return [i for i in items
+            if i.trend_volume >= min_volume
+            and matches(i.trend_categories, vertical)]
+
+
 def fetch_trending_items(
     region: str,
     *,
@@ -382,36 +399,51 @@ def fetch_trending_items(
     cache_dir: Path,
     max_age_minutes: float = 30.0,
     min_volume: int = 1000,
-    max_entries: int = 40,
+    vertical: str | None = None,
+    max_entries: int = 200,
     timeout_s: int = 15,
     log: logging.Logger | None = None,
 ) -> list[NewsItem]:
     """Pipeline'ın çağırdığı tek giriş. Sıra: taze önbellek → API → RSS yedeği →
     bayat önbellek → []. Hiçbir durumda hata fırlatmaz.
 
+    Önbellek HAM doldurulur (hacim tabanı ve dikey uygulanmadan); kanal
+    süzgeçleri okuma anında ``_apply_channel_filters`` ile geçilir — bkz.
+    oradaki gerekçe.
+
+    ``max_entries`` 40 değil 200: dikey dar olduğunda hacme göre kesilmiş ilk
+    40'ta o dikeyden neredeyse hiçbir şey kalmıyor (ölçüldü: TR hacminin %64'ü
+    spor). Bu sayı aynı zamanda ``fetch_trending_articles``'ın alt-çağrı
+    sayısıdır ama hepsi TEK HTTP isteğinde gider ve önbellek 30 dk tutar.
+
     Yedek (RSS) sonucu önbelleğe YAZILMAZ: bir sonraki koşu API'yi yeniden
-    denesin; aksi hâlde 30 dk boyunca 10 trendlik zayıf listeye kilitlenir.
+    denesin. Dikeyi olan kanalda RSS yedeği HİÇ kullanılmaz — RSS'te kategori
+    bilgisi yok, vermek "her şey"e geri dönmek olur.
     """
     log = log or logger
     region = region.upper()
     path = Path(cache_dir) / f"trending_now_{region.lower()}.json"
     cached = _load_cache(path)
     if cached is not None and cached[0] < max_age_minutes and cached[1]:
-        log.info(f"  [trending_now] önbellek ({cached[0]:.0f} dk) → {len(cached[1])} haber")
-        return cached[1]
+        picked = _apply_channel_filters(cached[1], min_volume=min_volume,
+                                        vertical=vertical)
+        log.info(f"  [trending_now] önbellek ({cached[0]:.0f} dk) → "
+                 f"{len(cached[1])} haber / {len(picked)} süzgeç sonrası")
+        return picked
 
     items: list[NewsItem] = []
     try:
         entries = fetch_trending_now(region, language=language, timeout_s=timeout_s)
-        picked = sorted(
-            (e for e in entries if e.volume >= min_volume and e.news_ids),
+        picked_entries = sorted(
+            (e for e in entries if e.news_ids),
             key=lambda e: e.volume, reverse=True,
         )[:max_entries]
-        arts = fetch_trending_articles(picked, language=language, region=region,
-                                       timeout_s=timeout_s) if picked else {}
-        items = trending_as_news_items(picked, arts, min_volume=min_volume)
+        arts = fetch_trending_articles(picked_entries, language=language,
+                                       region=region,
+                                       timeout_s=timeout_s) if picked_entries else {}
+        items = trending_as_news_items(picked_entries, arts, min_volume=0)
         log.info(f"  [trending_now] region={region} {len(entries)} trend / "
-                 f"{len(picked)} hacim≥{min_volume} / {len(items)} haberli")
+                 f"{len(picked_entries)} haberli / {len(items)} haber")
     except Exception as e:  # noqa: BLE001 — ağ, HTTP, biçim: hepsi yedeğe düşer
         log.warning(f"  [trending_now] API başarısız ({type(e).__name__}: "
                     f"{str(e)[:200]}) → RSS yedeği")
@@ -419,15 +451,25 @@ def fetch_trending_items(
 
     if items:
         _save_cache(path, region, items)
-        return items
+        out = _apply_channel_filters(items, min_volume=min_volume, vertical=vertical)
+        log.info(f"  [trending_now] süzgeç sonrası {len(out)} aday"
+                 f"{f' (dikey={vertical})' if vertical else ''}")
+        return out
 
-    fallback = [i for i in _rss_fallback(region) if i.trend_volume >= min_volume]
-    if fallback:
-        fallback.sort(key=lambda i: i.trend_volume, reverse=True)
-        log.info(f"  [trending_now] RSS yedeği → {len(fallback)} haber")
-        return fallback
+    if vertical:
+        log.info("  [trending_now] RSS yedeği dikeyli kanalda KULLANILMAZ "
+                 "(kategori bilgisi yok) → aday yok")
+    else:
+        fallback = [i for i in _rss_fallback(region) if i.trend_volume >= min_volume]
+        if fallback:
+            fallback.sort(key=lambda i: i.trend_volume, reverse=True)
+            log.info(f"  [trending_now] RSS yedeği → {len(fallback)} haber")
+            return fallback
     if cached is not None and cached[1]:
-        log.info(f"  [trending_now] bayat önbellek ({cached[0]:.0f} dk) → {len(cached[1])} haber")
-        return cached[1]
+        picked = _apply_channel_filters(cached[1], min_volume=min_volume,
+                                        vertical=vertical)
+        log.info(f"  [trending_now] bayat önbellek ({cached[0]:.0f} dk) → "
+                 f"{len(picked)} aday")
+        return picked
     log.info("  [trending_now] hiçbir kaynaktan veri yok")
     return []
