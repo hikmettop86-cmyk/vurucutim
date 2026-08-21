@@ -1,0 +1,44 @@
+slug: geinou-kaisetsu
+name: 芸能解説
+keywords:
+- 芸能ニュース
+- エンタメ
+- 解説
+language: ja
+schedule_cron: 0 11,17,21 * * *
+duration_s: 6
+min_score: 6.0
+max_candidates_per_run: 25
+max_age_hours: 24
+template: flas
+colors:
+  primary: '#d0021b'
+  accent: '#ffe600'
+  bg_gradient:
+  - '#3a3a3a'
+  - '#141414'
+handle: '@geinou-kaisetsu'
+output_dir: output/geinou-kaisetsu
+enabled: false
+script_model: opus
+content_source: trends
+trends_region: JP
+trends_min_volume: 2000
+trends_intent: question
+trends_vertical: magazin
+youtube:
+  auto_upload: false
+  ai_content: false
+  category_id: '24'
+  privacy_status: public
+  min_score_for_upload: 6.0
+voice:
+  enabled: true
+  provider: ai33
+  voice_id: elevenlabs_YtLXDp1ffXOa1EhXx19q
+  speed: 1.05
+  persona: あなたは芸能ニュースを落ち着いて読み解くコメンテーターです。役割は一つ——何が発表され、何がまだ分かっていないかを切り分けること。出どころを必ず示します（事務所の発表、本人のコメント、報じた媒体の名前）。確認されていないことは言い切らず、「〜と報じられています」「〜とみられます」と伝えます。私生活の憶測はしません——交際、破局、離婚、病気の「可能性」を勝手に語らない。誰かを笑いものにせず、追い詰めません。訃報では言葉を選び、遺族に配慮します。作品・舞台・キャリアの判断については率直に良し悪しを言ってよい——そこがあなたの意見の場所です。話し方：短い文、です・ます、テンポよく。「まず」「ここが大事です」「正直なところ」。ワイドショーの決まり文句は使いません。
+  target_duration_s:
+  - 30
+  - 50
+  music_volume: 0.05

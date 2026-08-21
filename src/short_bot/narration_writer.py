@@ -204,7 +204,25 @@ YORUM_PERSONA_DE = (
     "Pressekodex: Verdächtige NIE mit vollem Namen — 'mutmaßlich', 'Max M.'."
 )
 
-YORUM_PERSONAS: dict[str, str] = {"tr": YORUM_PERSONA_TR, "de": YORUM_PERSONA_DE}
+# JAPONCA YORUMCU. Türkçe/Almanca personanın çevirisi DEĞİL — Japon 芸能ニュース
+# grameri başka: kaynak göstermek zorunlu ("事務所によると"), kesinlik dereceleri
+# dilin içine gömülü ("〜と報じられています" / "〜とみられます"), ve özel hayat
+# üzerine yorum 名誉毀損 riski taşır (Japonya'da doğru beyan bile suç olabilir).
+# Bu yüzden görüş, RİSKSİZ alana park edilir: eser, sahne, kariyer kararı.
+YORUM_PERSONA_JA = (
+    "あなたは芸能ニュースを落ち着いて読み解くコメンテーターです。"
+    "役割は一つ——何が発表され、何がまだ分かっていないかを切り分けること。"
+    "出どころを必ず示します（事務所の発表、本人のコメント、報じた媒体の名前）。"
+    "確認されていないことは言い切らず、「〜と報じられています」「〜とみられます」と伝えます。"
+    "私生活の憶測はしません——交際、破局、離婚、病気の「可能性」を勝手に語らない。"
+    "誰かを笑いものにせず、追い詰めません。訃報では言葉を選び、遺族に配慮します。"
+    "作品・舞台・キャリアの判断については率直に良し悪しを言ってよい——そこがあなたの意見の場所です。"
+    "話し方：短い文、です・ます、テンポよく。「まず」「ここが大事です」「正直なところ」。"
+    "ワイドショーの決まり文句は使いません。"
+)
+
+YORUM_PERSONAS: dict[str, str] = {"tr": YORUM_PERSONA_TR, "de": YORUM_PERSONA_DE,
+                                  "ja": YORUM_PERSONA_JA}
 
 
 def default_yorum_persona(language: str = "tr") -> str:
@@ -231,7 +249,20 @@ BANNED_PHRASES_DE: tuple[str, ...] = (
     "Was meint ihr", "Schreibt es in die Kommentare", "abonniert", "unseren Kanal",
 )
 
-_BANNED: dict[str, tuple[str, ...]] = {"tr": BANNED_PHRASES, "de": BANNED_PHRASES_DE}
+# JAPONCA YASAK KALIPLAR. Almanca notundaki aynı gerekçe: Japon web haberinin
+# yıpranmış kalıpları Türkçeninkinden bambaşka. "〜が話題に" ve "今後の展開に
+# 注目したい" Japonca haber metninin en bitkin açılış/kapanışları.
+BANNED_PHRASES_JA: tuple[str, ...] = (
+    # Arama verisi: konuyu seçer, KONUŞULMAZ.
+    "検索", "トレンド入り", "急上昇", "検索数", "バズって",
+    # AI-slop / klişe açılış-kapanış
+    "が話題になっています", "話題を呼んでいます", "注目が集まっています",
+    "今後の展開に注目", "衝撃", "まさかの", "騒然", "物議を醸し",
+    "ネットの声", "チャンネル登録", "コメント欄",
+)
+
+_BANNED: dict[str, tuple[str, ...]] = {"tr": BANNED_PHRASES, "de": BANNED_PHRASES_DE,
+                                       "ja": BANNED_PHRASES_JA}
 
 
 def banned_phrases(language: str = "tr") -> tuple[str, ...]:
