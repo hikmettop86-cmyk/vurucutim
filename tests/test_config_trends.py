@@ -126,4 +126,13 @@ def test_repo_gundem_yorum_channel_loads():
     assert 20 <= alt < ust <= 60
     assert cfg.template == "flas" and cfg.schedule_cron.startswith("30 ")
     assert cfg.youtube.auto_upload is False
-    assert "kimsenin adamı olmayan" in cfg.voice.persona
+    # PERSONA LAFZI SABİTLENMİYOR. Test önce "kimsenin adamı olmayan" cümlesini
+    # birebir arıyordu ve persona dikeye göre yeniden yazılınca kırıldı — oysa
+    # yeni metin aynı şeyi söylüyor ("Kimsenin adamı değilsin"). Yukarıdaki
+    # sağlayıcı/süre notlarıyla aynı ders: tercihi değil, GEREKLİLİĞİ bağla.
+    assert cfg.voice.persona and len(cfg.voice.persona) > 200
+    # Dikeye özgü GÜVENLİK kuralı: para kanalı yatırım tavsiyesi veremez
+    # (SPK/YouTube riski), adalet kanalı masumiyet karinesini taşımalı.
+    if cfg.trends_vertical == "para":
+        assert "YATIRIM TAVSİYESİ VERMEZSİN" in cfg.voice.persona, (
+            "para dikeyinde yatırım tavsiyesi yasağı personada olmalı")
