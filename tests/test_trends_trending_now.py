@@ -231,8 +231,11 @@ def test_fetch_items_happy_path_writes_cache(trends_text, articles_text, tmp_pat
         return _Resp(trends_text if rpc == "i0OFE" else articles_text)
     monkeypatch.setattr(tn.requests, "post", _post)
 
+    # `limit` çağıranın kaç satır istediğidir; ÖNBELLEĞE yazılan havuzu
+    # küçültmez (bkz. _FETCH_MAX_ENTRIES) — masa 60 satır gösteriyor diye
+    # boru hattının havuzu daralamaz.
     items = tn.fetch_trending_items("TR", language="tr", cache_dir=tmp_path,
-                                    max_entries=25)
+                                    limit=25)
     assert calls == ["i0OFE", "w4opAf"]
     assert items and items[0].trend_volume == 100000
     assert items == sorted(items, key=lambda i: i.trend_volume, reverse=True)

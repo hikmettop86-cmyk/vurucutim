@@ -10,7 +10,7 @@
 
     {# SOL: kuyruk — 5 dakikada bir kendiliğinden tazelenir #}
     <div id="gundem-list" class="border-r border-claude-border bg-claude-surface overflow-hidden"
-         hx-get="/gundem/list?region={{ region }}{% if item %}&amp;guid={{ item.guid|urlencode }}{% endif %}"
+         hx-get="/gundem/list?region={{ region }}&amp;dikey={{ dikey|urlencode }}{% if item %}&amp;guid={{ item.guid|urlencode }}{% endif %}"
          hx-trigger="every {{ refresh_seconds }}s" hx-swap="innerHTML">
       {% include "gundem/_list.html.j2" %}
     </div>

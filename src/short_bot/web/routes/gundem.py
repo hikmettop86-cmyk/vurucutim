@@ -27,6 +27,8 @@ from short_bot.followup import previous_coverage, summarize
 from short_bot.locale import trend_region_for
 from short_bot.search_intent import intent_label
 from short_bot.trends.trending_now import fetch_trending_items
+from short_bot.trends.verticals import (CATEGORY_NAMES, VERTICAL_LABELS,
+                                        VERTICALS, matches as vertical_matches)
 from short_bot.web.runs import launch_pipeline
 
 bp = Blueprint("gundem", __name__)
@@ -36,7 +38,7 @@ REGIONS = [("TR", "Türkiye"), ("DE", "Almanya"), ("ES", "İspanya"), ("US", "AB
 REGION_LANG = {"TR": "tr", "DE": "de", "ES": "es", "US": "en", "FR": "fr", "JP": "ja",
                "GB": "en", "AT": "de"}
 DESK_MIN_VOLUME = 1000       # masa her şeyi görsün; kanalın kendi eşiği ayrı
-DESK_MAX_ENTRIES = 60
+DESK_ROWS = 60               # kuyrukta kaç satır — ÖNBELLEĞİ küçültmez (limit=)
 REFRESH_SECONDS = 300
 TZ = "Europe/Istanbul"
 
@@ -58,7 +60,7 @@ def _items(region: str, *, force: bool = False):
     return fetch_trending_items(region, language=REGION_LANG.get(region, "en"),
                                 cache_dir=_cache_dir(),
                                 max_age_minutes=0 if force else 30,
-                                min_volume=DESK_MIN_VOLUME, max_entries=DESK_MAX_ENTRIES)
+                                min_volume=DESK_MIN_VOLUME, limit=DESK_ROWS)
 
 
 def _trend_channels(region: str) -> list[dict]:
@@ -76,6 +78,38 @@ def _trend_channels(region: str) -> list[dict]:
     # Sıra sabit: önce 6 sn kart, sonra Yorum — klavye kısayolları (1/2) buna bağlı.
     out.sort(key=lambda c: (0 if c["format"] == "card" else 1, c["name"]))
     return out
+
+
+def _desk_verticals(channels) -> list[str]:
+    """Bu bölgeyi üreten kanalların dikeyleri (tekilleştirilmiş, sıralı).
+
+    Masa VARSAYILAN olarak bunu süzer: para kanalı için futbol listesine bakmak
+    operatörü yanıltır — üretebileceği şeyi görmeli. Dikeysiz kurulumda liste
+    boş döner ve masa eski davranışını (her şey) korur.
+    """
+    return sorted({(c.get("cfg") and c["cfg"].trends_vertical) or ""
+                   for c in channels} - {""})
+
+
+def _dikey() -> str:
+    """Masanın dikey süzgeci. '' = kanal dikeyleri (varsayılan), 'all' = tümü,
+    aksi halde tek bir dikey adı."""
+    d = (request.args.get("dikey") or request.form.get("dikey") or "").strip().lower()
+    if d == "all":
+        return "all"
+    return d if d in VERTICALS else ""
+
+
+def _filter_by_dikey(items, dikey: str, channel_verticals: list[str]):
+    """Masa kuyruğunu süz. ÜRETİM yolunu (produce) etkilemez: operatör süzgeç
+    dışındaki bir haberi hâlâ elle üretebilmeli."""
+    if dikey == "all":
+        return list(items)
+    hedef = [dikey] if dikey else channel_verticals
+    if not hedef:
+        return list(items)
+    return [i for i in items
+            if any(vertical_matches(i.trend_categories, v) for v in hedef)]
 
 
 def _cache_age_minutes(region: str) -> float | None:
@@ -107,6 +141,10 @@ def _rows(items, channels, eng) -> list[dict]:
                      # veren formatın (yorum) işidir; kanal seçimi bunu zaten
                      # sırada tercih eder (ChannelConfig.trends_intent).
                      "intent": intent_label(it, language=lang),
+                     # Kategori rozeti: süzgeç görünmez olmasın — operatör bir
+                     # haberin neden listede olduğunu/olmadığını okuyabilmeli.
+                     "category": CATEGORY_NAMES.get(
+                         (it.trend_categories or (0,))[0], ""),
                      "queries": list(it.trend_related)[:6]})
     return rows
 
@@ -233,14 +271,21 @@ def _cartesia_usage() -> dict:
     return {"used": used, "budget": budget, "pct": (100 * used / budget) if budget else 0}
 
 
-def _context(region: str, *, guid: str | None, force: bool = False) -> dict:
-    items = _items(region, force=force)
+def _context(region: str, *, guid: str | None, force: bool = False,
+             dikey: str = "") -> dict:
+    ham = _items(region, force=force)
     channels = _trend_channels(region)
+    kanal_dikeyleri = _desk_verticals(channels)
+    items = _filter_by_dikey(ham, dikey, kanal_dikeyleri)
     eng = _eng()
     rows = _rows(items, channels, eng)
     picked = _pick(items, rows, guid)
     return {
         "region": region, "regions": REGIONS, "rows": rows, "channels": channels,
+        "dikey": dikey,
+        "dikey_secenekleri": sorted(VERTICAL_LABELS.items()),
+        "kanal_dikeyleri": kanal_dikeyleri,
+        "elenen": len(ham) - len(items),
         "item": picked,
         "item_age_h": _age_hours(picked.pub_date) if picked else None,
         "produced": ([r for r in rows if r["guid"] == picked.guid][0]["produced"] if picked else []),
@@ -255,7 +300,8 @@ def _context(region: str, *, guid: str | None, force: bool = False) -> dict:
 
 @bp.route("/gundem")
 def desk():
-    ctx = _context(_region(), guid=(request.args.get("guid") or "").strip() or None)
+    ctx = _context(_region(), guid=(request.args.get("guid") or "").strip() or None,
+                   dikey=_dikey())
     return render_template("gundem/desk.html.j2", **ctx)
 
 
@@ -264,7 +310,7 @@ def list_partial():
     """Sol kuyruk — HTMX ile 5 dakikada bir tazelenir; seçim korunur."""
     region = _region()
     ctx = _context(region, guid=(request.args.get("guid") or "").strip() or None,
-                   force=request.args.get("force") == "1")
+                   force=request.args.get("force") == "1", dikey=_dikey())
     return render_template("gundem/_list.html.j2", **ctx)
 
 

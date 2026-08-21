@@ -4,9 +4,21 @@ from __future__ import annotations
 import pytest
 
 
-def test_para_dikeyi_is_finans_ve_alisverisi_kapsar():
+def test_para_dikeyi_yalniz_is_finans():
+    """Alışveriş(16) BİLEREK dışarıda: canlı TR kuyruğunda kattığı tek haber
+    'erkek el çantaları' modasıydı; gerçek para haberleri hep kategori 3."""
     from short_bot.trends.verticals import categories_for
-    assert categories_for("para") == frozenset({3, 16})
+    assert categories_for("para") == frozenset({3})
+
+
+def test_alisveris_hicbir_dikeyde_yok():
+    from short_bot.trends.verticals import VERTICALS
+    assert not any(16 in cats for cats in VERTICALS.values())
+
+
+def test_siyaset_hicbir_dikeyde_yok():
+    from short_bot.trends.verticals import VERTICALS
+    assert not any(14 in cats for cats in VERTICALS.values())
 
 
 def test_spor_dikeyi_tek_kategori():
@@ -47,7 +59,7 @@ def test_bilinmeyen_dikey_hata_verir():
 
 def test_buyuk_harf_ve_bosluk_tolere_edilir():
     from short_bot.trends.verticals import categories_for
-    assert categories_for("  Para  ") == frozenset({3, 16})
+    assert categories_for("  Para  ") == frozenset({3})
 
 
 def test_her_dikeyin_etiketi_var():

@@ -120,7 +120,7 @@ harita değişirse her kanal YAML'ı bozulur):
 | takma ad | kategoriler | ne kapsar |
 |---|---|---|
 | `spor` | {17} | lig, maç, transfer, milli takım |
-| `para` | {3, 16} | ekonomi, şirket, zam, faiz, alışveriş |
+| `para` | {3} | ekonomi, şirket, zam, faiz |
 | `magazin` | {4, 2} | ünlü, dizi, film, moda |
 | `adalet` | {10} | dava, gözaltı, kurum, resmi karar |
 | `olay` | {11, 20} | yerel olay, kaza, deprem, hava |
@@ -128,6 +128,13 @@ harita değişirse her kanal YAML'ı bozulur):
 
 `trends_vertical: null` (varsayılan) = bugünkü davranış, hiçbir şey değişmez.
 Mevcut kanallar bu spec dışında kırılmaz.
+
+İki kategori BİLEREK hiçbir dikeyde yok:
+- **14 Siyaset** — altı bölgede de günde 1-11 trend (eşik ~8) ve kutuplaştırıcı.
+- **16 Alışveriş** — karışık torba (Michael Kors, Ticketmaster, konser bileti,
+  PlayStation). Önce `para`ya kondu; canlı TR kuyruğunda kattığı TEK haber
+  "erkek el çantaları" modası oldu, gerçek para haberlerinin hepsi kategori 3'tü.
+  O haber zaten Güzellik&Moda (2) üzerinden `magazin`e düşüyor.
 
 Çoklu kategorili trendlerde (212'de 17 tanesi) **herhangi bir** kategori dikeyle
 kesişiyorsa trend girer. Tek kategori kuralı olsaydı `sucuk [3,5]` para
@@ -239,6 +246,23 @@ YAML'ında (`voice.persona`) duruyor, yalnız `adalet` dikeyli kanalların YAML'
 düzenlenir. `narration_writer` içindeki varsayılan persona sabitine dokunulmaz.
 
 `para` ve `magazin` dikeylerinde persona bugünkü hâliyle kalır.
+
+### 4.7 Canlı Gündem masası dikeyi uygular
+
+`/gundem` masası havuzu ham gösteriyordu (`DESK_MIN_VOLUME = 1000`, yorum:
+"masa her şeyi görsün"). Dikeyle birlikte bu operatörü yanıltır: para kanalı
+için futbol listesine bakar. Kuyruk artık **kanalın dikeyine** süzülür; seçici
+ile tek dikey ya da "Tümü" seçilebilir, her satırda kategori rozeti durur ve
+başlıkta kaç haberin elendiği yazar.
+
+ÜRETİM yolu (`/gundem/produce`) süzgeçten ETKİLENMEZ: operatör dikey dışındaki
+bir haberi hâlâ elle üretebilmeli.
+
+**Masa önbelleği boru hattını aç bırakıyordu (bu spec'in soktuğu hata):** masa
+`max_entries=60` ile çekiyor ve bu paylaşılan önbelleğe yazılıyordu; boru hattı
+200 isterken 60'lık listeyi okuyordu. Çekim kapasitesi artık çağıranın ayarı
+değil, modül sabiti (`_FETCH_MAX_ENTRIES = 200`); çağıran yalnız kaç satır
+istediğini söyler (`limit=`) ve bu süzgeçten SONRA uygulanır.
 
 ### 5.3 Panel
 

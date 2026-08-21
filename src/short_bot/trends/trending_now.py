@@ -375,6 +375,16 @@ def _rss_fallback(region: str, *, timeout_s: int = 10) -> list[NewsItem]:
 
 # --- dış yüz ------------------------------------------------------------------
 
+# Önbelleğe kaç trend yazılacağı ÇAĞIRANIN ayarı DEĞİLDİR: önbellek bölge
+# başına paylaşılır, çağıran küçültürse diğer tüketici aç kalır. Masa 60 satır
+# gösteriyor diye boru hattının havuzu 60'a inemez.
+#
+# 200: dar dikey hacme göre kesilmiş ilk 40'ta görünmüyordu (TR hacminin %64'ü
+# spor). Aynı sayı fetch_trending_articles'ın alt-çağrı sayısı ama hepsi tek
+# HTTP isteğinde gider ve önbellek 30 dk tutar.
+_FETCH_MAX_ENTRIES = 200
+
+
 def _apply_channel_filters(
     items: list[NewsItem], *, min_volume: int, vertical: str | None,
 ) -> list[NewsItem]:
@@ -400,7 +410,7 @@ def fetch_trending_items(
     max_age_minutes: float = 30.0,
     min_volume: int = 1000,
     vertical: str | None = None,
-    max_entries: int = 200,
+    limit: int | None = None,
     timeout_s: int = 15,
     log: logging.Logger | None = None,
 ) -> list[NewsItem]:
@@ -411,10 +421,9 @@ def fetch_trending_items(
     süzgeçleri okuma anında ``_apply_channel_filters`` ile geçilir — bkz.
     oradaki gerekçe.
 
-    ``max_entries`` 40 değil 200: dikey dar olduğunda hacme göre kesilmiş ilk
-    40'ta o dikeyden neredeyse hiçbir şey kalmıyor (ölçüldü: TR hacminin %64'ü
-    spor). Bu sayı aynı zamanda ``fetch_trending_articles``'ın alt-çağrı
-    sayısıdır ama hepsi TEK HTTP isteğinde gider ve önbellek 30 dk tutar.
+    ``limit`` çağıranın KAÇ SATIR istediğidir (masa 60 gösterir) ve süzgeçten
+    SONRA uygulanır; önbelleğe yazılan havuzu KÜÇÜLTMEZ — bkz.
+    ``_FETCH_MAX_ENTRIES``.
 
     Yedek (RSS) sonucu önbelleğe YAZILMAZ: bir sonraki koşu API'yi yeniden
     denesin. Dikeyi olan kanalda RSS yedeği HİÇ kullanılmaz — RSS'te kategori
@@ -429,7 +438,7 @@ def fetch_trending_items(
                                         vertical=vertical)
         log.info(f"  [trending_now] önbellek ({cached[0]:.0f} dk) → "
                  f"{len(cached[1])} haber / {len(picked)} süzgeç sonrası")
-        return picked
+        return picked[:limit] if limit else picked
 
     items: list[NewsItem] = []
     try:
@@ -437,7 +446,7 @@ def fetch_trending_items(
         picked_entries = sorted(
             (e for e in entries if e.news_ids),
             key=lambda e: e.volume, reverse=True,
-        )[:max_entries]
+        )[:_FETCH_MAX_ENTRIES]
         arts = fetch_trending_articles(picked_entries, language=language,
                                        region=region,
                                        timeout_s=timeout_s) if picked_entries else {}
@@ -454,7 +463,7 @@ def fetch_trending_items(
         out = _apply_channel_filters(items, min_volume=min_volume, vertical=vertical)
         log.info(f"  [trending_now] süzgeç sonrası {len(out)} aday"
                  f"{f' (dikey={vertical})' if vertical else ''}")
-        return out
+        return out[:limit] if limit else out
 
     if vertical:
         log.info("  [trending_now] RSS yedeği dikeyli kanalda KULLANILMAZ "
@@ -464,12 +473,12 @@ def fetch_trending_items(
         if fallback:
             fallback.sort(key=lambda i: i.trend_volume, reverse=True)
             log.info(f"  [trending_now] RSS yedeği → {len(fallback)} haber")
-            return fallback
+            return fallback[:limit] if limit else fallback
     if cached is not None and cached[1]:
         picked = _apply_channel_filters(cached[1], min_volume=min_volume,
                                         vertical=vertical)
         log.info(f"  [trending_now] bayat önbellek ({cached[0]:.0f} dk) → "
                  f"{len(picked)} aday")
-        return picked
+        return picked[:limit] if limit else picked
     log.info("  [trending_now] hiçbir kaynaktan veri yok")
     return []

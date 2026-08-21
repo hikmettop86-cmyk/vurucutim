@@ -32,11 +32,16 @@ CATEGORY_NAMES: dict[int, str] = {
     20: "Hava & Afet",
 }
 
-# Siyaset (14) BİLEREK hiçbir dikeyde yok: altı bölgede de günde 1-11 trend
-# veriyor (eşik ~8) ve kutuplaştırıcı. Dikey olarak kurulamaz.
+# İki kategori BİLEREK hiçbir dikeyde yok:
+#   14 Siyaset  — altı bölgede de günde 1-11 trend (eşik ~8) ve kutuplaştırıcı.
+#   16 Alışveriş — karışık torba: Michael Kors, Ticketmaster, konser bileti,
+#     PlayStation, el çantası. 2026-08-21'de para dikeyine konmuştu; canlı TR
+#     kuyruğunda kattığı TEK haber "erkek el çantaları" modası oldu, gerçek
+#     para haberlerinin hepsi kategori 3'tü. O haber zaten Güzellik&Moda (2)
+#     üzerinden magazin dikeyine düşüyor.
 VERTICALS: dict[str, frozenset[int]] = {
     "spor": frozenset({17}),
-    "para": frozenset({3, 16}),
+    "para": frozenset({3}),
     "magazin": frozenset({4, 2}),
     "adalet": frozenset({10}),
     "olay": frozenset({11, 20}),
