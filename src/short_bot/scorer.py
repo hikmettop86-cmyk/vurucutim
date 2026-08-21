@@ -130,6 +130,73 @@ Antworte NUR in diesem JSON-Format, kein anderer Text:
 }
 
 
+# Dikey bloğu: havuz zaten dikeye süzülmüş olarak geliyor (bkz.
+# trends/verticals.py), ama kapı bunu BİLMEZSE varsayılan "fayda araması"
+# listesini uygular ve para kanalında altın hareketini eler. Blok, o dikeyde
+# neyin hikâye sayıldığını söyler.
+#
+# Diller mevcut şablonlarla aynı: tr/en/de; başka dil en'e düşer.
+_VERTICAL_GATE: dict[str, dict[str, str]] = {
+    "tr": {
+        "_bas": """
+
+BU KANALIN DİKEYİ: {label}
+Havuz zaten bu dikeye süzüldü; sen yalnız olay var mı ona bak.
+""",
+        "para": "Bu dikeyde fiyat/kur/faiz HAREKETİNİN NEDENİ bir olaydır (rekor, karar, zam, iflas, satın alma) — 7-10 ver. Yalnız 'kaç TL / ne kadar' sorgusu olay DEĞİLDİR — 0-3 ver.",
+        "spor": "Bu dikeyde skor, transfer, sakatlık, ayrılık, ceza ve resmi açıklama olaydır. 'Maç hangi kanalda / saat kaçta' olay değildir.",
+        "magazin": "Bu dikeyde ayrılık, evlilik, dava, itiraf, kadro/yayın kararı ve vefat olaydır. 'Kimdir / kaç yaşında / nereli' olay değildir.",
+        "adalet": "Bu dikeyde gözaltı, iddianame, duruşma kararı, ceza, tahliye ve resmi kurum kararı olaydır. Dava dosyası özeti ya da 'X kimdir' olay değildir.",
+        "olay": "Bu dikeyde kaza, yangın, deprem, sel, kurtarma ve resmi uyarı olaydır. Hava durumu tahmini sorgusu olay değildir.",
+        "teknoloji": "Bu dikeyde duyuru, çıkış, kapanma, ihlal, satın alma ve rekor olaydır. 'Fiyatı ne kadar / nasıl indirilir' olay değildir.",
+    },
+    "en": {
+        "_bas": """
+
+THIS CHANNEL'S VERTICAL: {label}
+The pool is already filtered to this vertical; you only judge whether there is an event.
+""",
+        "para": "Here, the REASON behind a price/rate move is an event (record, decision, hike, bankruptcy, acquisition) — score 7-10. A bare 'how much is it' lookup is NOT an event — score 0-3.",
+        "spor": "Here, scores, transfers, injuries, exits, bans and official statements are events. 'What channel / what time is the match' is not.",
+        "magazin": "Here, splits, marriages, lawsuits, confessions, casting/airing decisions and deaths are events. 'Who is X / how old' is not.",
+        "adalet": "Here, arrests, indictments, rulings, sentences, releases and official decisions are events. A case summary or 'who is X' is not.",
+        "olay": "Here, crashes, fires, earthquakes, floods, rescues and official warnings are events. A weather forecast lookup is not.",
+        "teknoloji": "Here, announcements, launches, shutdowns, breaches, acquisitions and records are events. 'How much does it cost / how to download' is not.",
+    },
+    "de": {
+        "_bas": """
+
+DIE VERTIKALE DIESES KANALS: {label}
+Der Pool ist bereits auf diese Vertikale gefiltert; du beurteilst nur, ob ein Ereignis vorliegt.
+""",
+        "para": "Hier ist der GRUND einer Preis-/Kurs-/Zinsbewegung ein Ereignis (Rekord, Beschluss, Erhöhung, Insolvenz, Übernahme) — 7-10. Eine reine 'Wie viel kostet' Abfrage ist KEIN Ereignis — 0-3.",
+        "spor": "Hier sind Ergebnisse, Transfers, Verletzungen, Abgänge, Sperren und offizielle Erklärungen Ereignisse. 'Welcher Sender / wann' nicht.",
+        "magazin": "Hier sind Trennungen, Hochzeiten, Klagen, Geständnisse, Besetzungs-/Sendeentscheidungen und Todesfälle Ereignisse. 'Wer ist X / wie alt' nicht.",
+        "adalet": "Hier sind Festnahmen, Anklagen, Urteile, Strafen, Freilassungen und Behördenentscheidungen Ereignisse. Eine Fallzusammenfassung nicht.",
+        "olay": "Hier sind Unfälle, Brände, Erdbeben, Überschwemmungen, Rettungen und amtliche Warnungen Ereignisse. Eine Wettervorhersage nicht.",
+        "teknoloji": "Hier sind Ankündigungen, Starts, Abschaltungen, Datenlecks, Übernahmen und Rekorde Ereignisse. 'Wie teuer / wie herunterladen' nicht.",
+    },
+}
+
+
+def _vertical_gate_block(vertical: str | None, language: str) -> str:
+    """Kapı prompt'una eklenecek dikey bloğu. Dikey yoksa boş dize."""
+    if not vertical:
+        return ""
+    from short_bot.trends.verticals import VERTICAL_LABELS
+    lang = (language or "tr").split("-")[0].lower()
+    table = _VERTICAL_GATE.get(lang) or _VERTICAL_GATE["en"]
+    label = VERTICAL_LABELS.get(vertical, vertical)
+    parts = [table["_bas"].format(label=label).strip()]
+    note = table.get(vertical)
+    if note:
+        parts.append(note)
+    # Sonda BOŞ SATIR şart: blok, şablonda "{vertical_block}Başlıklar:" olarak
+    # gömülü — ayırmazsak not satırı başlık listesine yapışır.
+    return "\n".join(parts) + "\n\n"
+
+
+
 # Trend kanalı (content_source="trends"): kanalın ÖZNESİ yok, her konu uygun.
 # Merkez kuralı uygulanmaz. Kapı tek şeyi eler: arkasında anlatılacak OLAY
 # olmayan "fayda araması" (hava durumu, hisse fiyatı, maç hangi kanalda, TV
@@ -157,7 +224,7 @@ Başlık ilgi çekici olsa bile OLAY yoksa 0-3 ver; izleyici 6 saniyede "ne oldu
 sorusunun cevabını almalı. Arama hacmi yüksek diye puanı YÜKSELTME — hacmi
 sistem ayrıca kullanıyor, sen yalnız olay var mı yok mu ona bak.
 
-Başlıklar:
+{vertical_block}Başlıklar:
 {listing}
 
 SADECE şu JSON formatında yanıtla, başka metin yazma:
@@ -185,7 +252,7 @@ must get "what happened?" answered in 6 seconds. Do NOT raise the score for
 high search volume — the system uses volume separately; you only judge
 whether there is an event.
 
-Headlines:
+{vertical_block}Headlines:
 {listing}
 
 Reply ONLY in this JSON format, no other text:
@@ -215,7 +282,7 @@ Sekunden "was ist passiert?" beantwortet bekommen. Erhöhe die Bewertung NICHT
 wegen hohen Suchvolumens — das System nutzt das Volumen separat; du beurteilst
 nur, ob ein Ereignis vorliegt.
 
-Schlagzeilen:
+{vertical_block}Schlagzeilen:
 {listing}
 
 Antworte NUR in diesem JSON-Format, kein anderer Text:
@@ -259,6 +326,11 @@ def build_scoring_prompt(
         channel_name=channel.name,
         keywords=keywords_str,
         listing=listing,
+        # Dikey bloğu başlık listesinin ÖNÜNE girer: prompt'un SON talimatı
+        # çıktı biçimi (JSON) olmalı, sonrasına metin eklenmemeli.
+        vertical_block=(_vertical_gate_block(channel.trends_vertical,
+                                             channel.language)
+                        if is_trends else ""),
     )
     # Canonical kategori: kanal liste tanımladıysa her başlık için konu iste.
     # Konu bilgisi seçim anında gerekiyor (kota tavanı buna dayanıyor) —
