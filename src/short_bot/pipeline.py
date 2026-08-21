@@ -7,6 +7,7 @@ import shutil
 import tempfile
 import threading
 import time
+import hashlib
 import unicodedata
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
@@ -442,10 +443,21 @@ class RunResult:
 
 
 def _slugify(text: str, max_len: int = 60) -> str:
-    text = unicodedata.normalize("NFKD", text)
-    text = "".join(c for c in text if not unicodedata.combining(c))
-    text = re.sub(r"[^a-zA-Z0-9]+", "-", text).strip("-").lower()
-    return text[:max_len] or "haber"
+    ham = text or ""
+    t = unicodedata.normalize("NFKD", ham)
+    t = "".join(c for c in t if not unicodedata.combining(c))
+    t = re.sub(r"[^a-zA-Z0-9]+", "-", t).strip("-").lower()
+    if t:
+        return t[:max_len]
+    # ASCII'YE İNDİRGENEMEYEN BAŞLIK (CJK, Kiril…): eskiden HEPSİ "haber"e
+    # düşüyordu ve klasör haber.mp4 / haber-2.mp4 diye doluyordu — hangi
+    # videonun hangisi olduğu okunamaz, üstelik "haber" Japonca kanalda
+    # Türkçe bir kelime (2026-08-22, ilk gerçek Japonca koşuda ölçüldü).
+    # Başlıktan türeyen özet AYIRT EDİCİ ve denemeler arasında KARARLI —
+    # yol üretim başında bir kez seçilip yeniden denemelerce paylaşılıyor.
+    if ham.strip():
+        return "video-" + hashlib.sha1(ham.encode("utf-8")).hexdigest()[:10]
+    return "haber"
 
 
 # Aynı gün + aynı başlık = AYNI DOSYA ADI. İkinci üretim birincinin üzerine YAZAR.

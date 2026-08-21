@@ -84,6 +84,41 @@ def _fold(s: str) -> str:
 # tests/test_german_channel.py::test_olgu_kapisi_almanca_BILINEN_BOSLUK_tek_sozcuklu_ad
 _NOUN_CAPITALIZING: frozenset[str] = frozenset({"de"})
 
+# CJK'DE ÖZEL İSİM BÜYÜK HARFTEN TANINAMAZ — büyük harf yok. Ölçüldü
+# (2026-08-22, Japonca kanalın ilk koşusu): _proper_nouns ve _SAYI japonca
+# metinde HİÇBİR ŞEY bulmuyor, dolayısıyla kapı her uydurmaya "temiz" diyordu
+# ("ソニーが五百億円で買収しました" bile geçti) — sessiz değil, YANILTICI bir güvence.
+#
+# KAPSAM BİLEREK DAR:
+#   * kanji rakam dizileri (五百億, 十二) — uydurma istatistiğin ana taşıyıcısı
+#   * Latin diziler (NHK, TBS, GTA)
+# Katakana DIŞARIDA: Japoncada katakana yalnız özel isim değil HER ödünç
+# sözcüktür (プラットフォーム, メディア); aday saymak kapıyı yanlış pozitife boğar
+# ve kodun kendi dersi bunun üretimi durdurduğunu söylüyor (Burhan vakası).
+# Kanji-only Japon isimleri (布施博) morfolojik çözümleyici olmadan güvenilir
+# çıkarılamaz; bu kapı onları GÖRMEZ ve görüyormuş gibi yapmaz.
+_CJK_DILLER: frozenset[str] = frozenset({"ja", "zh", "ko"})
+_KANJI_SAYI = re.compile(r"[〇一二三四五六七八九十百千万億兆]{2,}")
+
+# REKOR/ÜSTÜNLÜK İDDİALARI KAYNAKTA OLMALI.
+#
+# CANLI VAKA (2026-08-22, Japonca kanalın ilk videosu): anlatım
+# 「倒産は過去最多を記録しています」 ("iflaslar REKOR seviyede") dedi; kaynakta
+# yalnız 「経営破綻が相次ぐ中」 ("art arda iflaslar") vardı. Sayı da Latin de
+# olmadığı için desen kapısı göremiyordu.
+#
+# Bu sınıf yakalanabilir: rekor/ilk/en-çok iddiaları KAPALI bir kelime kümesi
+# ve her zaman olgusaldır. Kaynakta yoksa uydurmadır. Dar tutuldu — yanlış
+# pozitif üretimi durdurur (Burhan vakası).
+_USTUNLUK: dict[str, tuple[str, ...]] = {
+    "ja": ("過去最多", "過去最高", "過去最大", "史上初", "初めて", "記録的", "最多", "最大規模"),
+    "tr": ("rekor", "ilk kez", "en yüksek", "en büyük", "tarihi zirve", "zirve yaptı"),
+    "de": ("rekord", "erstmals", "zum ersten mal", "höchststand", "so viele wie nie"),
+    "en": ("record high", "record number", "for the first time", "all-time high"),
+    "es": ("récord", "record", "por primera vez", "máximo histórico"),
+}
+_LATIN_DIZI = re.compile(r"[A-Za-z][A-Za-z0-9]+")
+
 # Almanca işlev sözcükleri: belirteçler, edatlar, bağlaçlar, yardımcı fiiller.
 # KAPALI bir sınıf olduğu için liste sürdürülebilir — modül başındaki "sözlükle
 # kovalamak sürdürülemez" uyarısı İÇERİK adları içindi, işlev sözcükleri için
@@ -207,6 +242,23 @@ def unverified_claims(narration_text: str, source_text: str, *,
         gorulen.add(anahtar)
         if not _gecer_mi(aday, kaynak_fold, kaynak_kelimeler):
             eksik.append(aday)
+
+    if (language or "").split("-")[0].lower() in _CJK_DILLER:
+        for aday in (_KANJI_SAYI.findall(narration_text)
+                     + _LATIN_DIZI.findall(narration_text)):
+            anahtar = _fold(aday)
+            if anahtar in gorulen:
+                continue
+            gorulen.add(anahtar)
+            if anahtar not in kaynak_fold:
+                eksik.append(aday)
+
+    for kalip in _USTUNLUK.get((language or "").split("-")[0].lower(), ()):
+        if kalip in gorulen:
+            continue
+        if _fold(kalip) in _fold(narration_text) and _fold(kalip) not in kaynak_fold:
+            gorulen.add(kalip)
+            eksik.append(kalip)
 
     for sayi in _SAYI.findall(narration_text):
         if sayi in gorulen:

@@ -141,7 +141,12 @@ def produce_voiced_video(
         narration = d.write_narration(item, body, channel=channel,
                                        claude_path=llm_claude_path, model=llm_model,
                                        backend=llm_backend, api_key=llm_api_key)
-    log.info(f"  narration: {narration.word_count()} kelime, "
+    # BİRİM DİLE GÖRE: CJK'de .split() 1 döner ve log "5 kelime" diye
+    # YANILTICI bir sayı yazardı (Japonca ilk koşuda ölçüldü).
+    from short_bot.narration_writer import narration_length as _nl
+    from short_bot.reel_narration import budget_unit as _bu
+    _birim = "karakter" if _bu(channel.language) == "characters" else "kelime"
+    log.info(f"  narration: {_nl(narration.full_text(), channel.language)} {_birim}, "
              f"{len(narration.beats)} beat")
 
     # Anlatımın kendisi + Türkçesi script'e yazılır; pipeline script'i JSON olarak
