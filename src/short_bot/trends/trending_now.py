@@ -237,6 +237,7 @@ def trending_as_news_items(
             trend_growth_pct=e.growth_pct,
             trend_related=tuple(e.breakdown[:6]),
             trend_articles=tuple((a.source or "", a.title) for a in arts[1:3] if a.title),
+            trend_categories=tuple(e.category_ids),
         )
         prev = best.get(item.guid)
         if prev is None or item.trend_volume > prev.trend_volume:
@@ -256,6 +257,7 @@ def _item_to_dict(i: NewsItem) -> dict:
         "trend_growth_pct": i.trend_growth_pct,
         "trend_related": list(i.trend_related),
         "trend_articles": [list(x) for x in i.trend_articles],
+        "trend_categories": list(i.trend_categories),
     }
 
 
@@ -270,6 +272,7 @@ def _item_from_dict(d: dict) -> NewsItem:
         trend_growth_pct=int(d.get("trend_growth_pct") or 0),
         trend_related=tuple(d.get("trend_related") or ()),
         trend_articles=tuple(tuple(x) for x in (d.get("trend_articles") or ())),
+        trend_categories=tuple(int(x) for x in (d.get("trend_categories") or ())),
     )
 
 

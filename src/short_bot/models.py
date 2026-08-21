@@ -33,6 +33,10 @@ class NewsItem:
     trend_growth_pct: int = 0                          # 1000 = %1.000 artış
     trend_related: tuple[str, ...] = ()                # ilişkili aramalar
     trend_articles: tuple[tuple[str, str], ...] = ()   # diğer kaynaklar: (yayıncı, başlık)
+    # trend_categories: Google Trends'in KENDİ sınıflandırması (17=Spor,
+    # 3=İş&Finans, 4=Eğlence…). Dikey kapısı buna dayanır, ek AI maliyeti yok
+    # (bkz. trends/verticals.py). RSS/feed/curated kaynaklarında boş kalır.
+    trend_categories: tuple[int, ...] = ()
     # followup_of: bu haberi DAHA ÖNCE anlatan videonun özeti (bkz. followup.py).
     # Doluysa yazarlar "güncelleme" modunda çalışır: yalnız YENİ olanı anlatır.
     # Yalnız Gündem masasındaki "takip üret" düğmesi doldurur — otomatik üretim
