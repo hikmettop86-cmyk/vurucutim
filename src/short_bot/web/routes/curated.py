@@ -502,9 +502,20 @@ def edit_curated(slug):
                if yt_root and yt_connected else None)
     yt_secrets_path = (yt_root / slug / "client_secrets.json") if yt_root else None
     yt_has_secrets = bool(yt_secrets_path and yt_secrets_path.is_file())
+    # Bağlantı paylaşımı listesi — bu sayfada HİÇ YOKTU. Kürate kanalı başka bir
+    # kanalın YouTube bağlantısını kullanamıyordu.
+    from short_bot.config import list_channels
+    from short_bot.web.core_fields import linkable_channels
+    _digerleri = list_channels(current_app.config["SHORTBOT_CONFIG_DIR"] / "channels",
+                               enabled_only=False)
+    linkable = linkable_channels(
+        ch, others=_digerleri,
+        has_credentials=(lambda s: bool(yt_root) and _yt_auth.has_credentials(yt_root, s)),
+        channel_info=(lambda s: _yt_auth.load_channel_info(yt_root, s) if yt_root else None))
     return render_template("channels/edit_curated.html.j2", ch=ch,
                            personas=personas, categories=list(CATEGORIES),
                            yt_connected=yt_connected, yt_info=yt_info,
+                           creds_slug=_cslug, linkable=linkable,
                            yt_has_secrets=yt_has_secrets,
                            yt_secrets_abs=(str((yt_root / slug).resolve())
                                            if yt_root else ""))
@@ -574,12 +585,14 @@ def edit_curated_save(slug):
         arrow_frequency=(request.form.get("arrow_frequency") or ch.reel.arrow_frequency).strip(),
         sfx_volume=_float("sfx_volume", ch.reel.sfx_volume),
     ))
-    yt = (ch.youtube or YoutubeChannelConfig()).model_copy(
-        update=dict(auto_upload=(request.form.get("auto_upload") == "on")))
-    ch = dataclasses.replace(
-        ch, name=(request.form.get("name") or ch.name).strip(),
-        schedule_cron=(request.form.get("schedule_cron") or ch.schedule_cron).strip(),
-        enabled=(request.form.get("enabled") == "on"), reel=reel, youtube=yt)
+    # Ortak alanlar tek okuyucudan (bkz. web/core_fields.py). Bu sayfada YouTube
+    # adına yalnız `auto_upload` vardı: gizlilik, kategori, yükleme puan eşiği,
+    # AI etiketi ve bağlantı paylaşımı UI'de HİÇ YOKTU — kürate kanalın videoları
+    # panelden "liste dışı" yapılamıyordu.
+    from short_bot.web.core_fields import core_updates
+    guncel = dict(reel=reel)
+    guncel.update(core_updates(request.form, ch))
+    ch = dataclasses.replace(ch, **guncel)
     save_channel(path, ch)
     flash(f"'{ch.name}' kürate kanalı güncellendi.", "success")
     return redirect(url_for("curated.edit_curated", slug=slug))

@@ -38,8 +38,12 @@ KANALLAR = {
               + "voice: {enabled: true, voice_id: v1}\n"),
     "yorumk": ("slug: yorumk\nname: Yorum\nhandle: '@yorumk'\n" + _ORTAK
                + "content_source: trends\nvoice: {enabled: true, voice_id: v1}\n"),
+    # Kürate kanalı `reel:` bloğunu TAŞIR — montaj ayarları orada durur
+    # (dayidiyorki böyle). content_source=curated olduğu için format yine
+    # "curated"dır; reel bir kanal formatı değil, kürate'nin montaj bloğudur.
     "kurate": ("slug: kurate\nname: Kürate\nhandle: '@kurate'\n" + _ORTAK
-               + "content_source: curated\n"),
+               + "content_source: curated\n"
+               + "reel: {enabled: true, voice_id: v1, highlight_color: '#38bdf8'}\n"),
 }
 
 
