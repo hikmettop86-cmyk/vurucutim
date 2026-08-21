@@ -41,10 +41,18 @@
           </select>
         </label>
         <label class="block">
+          <span class="text-xs text-claude-muted uppercase tracking-wide">Dikey (kanalın kimliği)</span>
+          <select name="trends_vertical" class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+            <option value="">— dikey yok (tüm havuz) —</option>
+            {% for code, label in verticals %}<option value="{{ code }}">{{ label }}</option>{% endfor %}
+          </select>
+          <span class="text-[11px] text-claude-subtle">Dikeysiz kanalı Shorts algoritması tek kitleyle eşleştiremez (TR havuzunun %64'ü spor).</span>
+        </label>
+        <label class="block">
           <span class="text-xs text-claude-muted uppercase tracking-wide">En düşük arama hacmi</span>
-          <input type="number" name="trends_min_volume" value="5000" min="100" step="100"
+          <input type="number" name="trends_min_volume" value="2000" min="100" step="100"
                  class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
-          <span class="text-[11px] text-claude-subtle">5.000 = günde ~25 gerçek gündem (TR ölçümü)</span>
+          <span class="text-[11px] text-claude-subtle">Dikey seçtiysen kaliteyi hacim değil dikey belirler — 1.000-2.000 yeter.</span>
         </label>
         <label class="block">
           <span class="text-xs text-claude-muted uppercase tracking-wide">Günde kaç video</span>

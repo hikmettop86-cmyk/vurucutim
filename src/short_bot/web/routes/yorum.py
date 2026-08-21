@@ -18,6 +18,7 @@ from short_bot.config import (ChannelConfig, VoiceConfig, YoutubeChannelConfig, 
                               load_channel, save_channel)
 from short_bot.formats import channel_format
 from short_bot.narration_writer import YORUM_PERSONAS, default_yorum_persona
+from short_bot.trends.verticals import VERTICAL_LABELS
 
 bp = Blueprint("yorum", __name__)
 
@@ -33,6 +34,9 @@ RUNS_PER_DAY_CRON: dict[int, str] = {
 }
 REGIONS = [("TR", "Türkiye"), ("DE", "Almanya"), ("ES", "İspanya"), ("US", "ABD"),
            ("FR", "Fransa"), ("JP", "Japonya"), ("GB", "Birleşik Krallık"), ("AT", "Avusturya")]
+
+# Dikey listesi: kanalın kimliği. Boş seçim = eski davranış (tüm havuz).
+VERTICALS = sorted(VERTICAL_LABELS.items())
 
 _DEFAULT_COLORS = {"primary": "#d0021b", "accent": "#ffe600", "bg_gradient": ["#3a3a3a", "#141414"]}
 
@@ -112,6 +116,14 @@ def _region_from_form(default: str | None) -> str | None:
     return raw
 
 
+def _dikey_from_form(default: str | None) -> str | None:
+    """Formdan dikey. Alan formda YOKSA eski değer korunur — başka bir kartın
+    POST'u dikeyi sessizce silmesin (panel DNA palet tuzağının aynısı)."""
+    if "trends_vertical" not in request.form:
+        return default
+    return (request.form.get("trends_vertical") or "").strip().lower() or None
+
+
 def _cron_from_form(default: str) -> str:
     n = request.form.get("runs_per_day")
     if n and n.isdigit() and int(n) in RUNS_PER_DAY_CRON:
@@ -122,6 +134,7 @@ def _cron_from_form(default: str) -> str:
 @bp.route("/channels/new-yorum")
 def new_form():
     return render_template("channels/new_yorum.html.j2", regions=REGIONS,
+                           verticals=VERTICALS,
                            runs=sorted(RUNS_PER_DAY_CRON),
                            default_persona=default_yorum_persona("tr"),
                            personas=dict(YORUM_PERSONAS))
@@ -159,6 +172,7 @@ def new_create():
         # Yorum formatı CEVAP verir: soru sorulan konu onun işi. Kart kanalı
         # "breaking" alır → iki format aynı olayı iki kez anlatmaz.
         trends_intent=(request.form.get("trends_intent") or "question"),
+        trends_vertical=_dikey_from_form(None),
         youtube=YoutubeChannelConfig(auto_upload=False, ai_content=False, category_id="25",
                                      privacy_status="public", min_score_for_upload=6.0),
         voice=voice,
@@ -239,6 +253,7 @@ def edit(slug):
         yt_clash = [o for o in _yt_auth.same_youtube_channel(yt_root, cslug, all_slugs)
                     if o not in declared]
     return render_template("channels/edit_yorum.html.j2", c=c, regions=REGIONS,
+                           verticals=VERTICALS,
                            runs=sorted(RUNS_PER_DAY_CRON), runs_now=runs_now,
                            recent=_recent(slug), yt_connected=yt_connected,
                            yt_info=yt_info, creds_slug=cslug, linkable=linkable,
@@ -274,6 +289,7 @@ def edit_save(slug):
         trends_region=region,
         trends_min_volume=_form_int("trends_min_volume", c.trends_min_volume),
         trends_intent=(request.form.get("trends_intent") or c.trends_intent),
+        trends_vertical=_dikey_from_form(c.trends_vertical),
         script_model=(request.form.get("script_model") or c.script_model or "").strip() or None,
         voice=voice,
     )

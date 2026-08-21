@@ -53,6 +53,16 @@
             <span class="block text-[11px] text-claude-subtle mt-1">Kart kanalıyla aynı olayı iki kez anlatmamak için: kart "son dakika", yorum "soru" alır.</span>
           </label>
           <label class="block">
+            <span class="text-xs text-claude-muted uppercase tracking-wide">Dikey (kanalın kimliği)</span>
+            <select name="trends_vertical" class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+              <option value="">— dikey yok (tüm havuz) —</option>
+              {% for code, label in verticals %}
+              <option value="{{ code }}" {% if c.trends_vertical == code %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            <span class="block text-[11px] text-claude-subtle mt-1">Havuz bu dikeye süzülür; aday sayısı eşiğin altına düşerse koşu boş biter.</span>
+          </label>
+          <label class="block">
             <span class="text-xs text-claude-muted uppercase tracking-wide">Günde kaç video</span>
             <select name="runs_per_day" class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
               <option value="">(özel cron: {{ c.schedule_cron }})</option>

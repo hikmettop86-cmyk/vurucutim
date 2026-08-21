@@ -10,6 +10,7 @@ from short_bot.formats import channel_format as _channel_format
 from short_bot.dna_smoke import smoke_render_dna
 from short_bot.pexels import load_secrets
 from short_bot.tts.ai33_client import list_voices, resolve_ai33_api_key
+from short_bot.trends.verticals import VERTICAL_LABELS
 
 bp = Blueprint("channel_edit", __name__)
 
@@ -95,6 +96,7 @@ def edit(slug):
     from short_bot.db import list_feeds
     all_feeds = list_feeds(eng)
     return render_template("channels/edit.html.j2", c=cfg,
+                           verticals=sorted(VERTICAL_LABELS.items()),
                            archetypes=ARCHETYPES,
                            cron_human=describe_cron(cfg.schedule_cron),
                            runs=runs,
@@ -188,6 +190,14 @@ def music_open(slug):
     except Exception as e:
         flash(f"Klasör açılamadı: {e} ({abs_path})", "err")
     return redirect(url_for("channel_edit.edit", slug=slug) + "#music")
+
+
+def _dikey_from_form(default: str | None) -> str | None:
+    """Formdan dikey. Alan formda YOKSA eski değer korunur — başka bir kartın
+    POST'u dikeyi sessizce silmesin (panel DNA palet tuzağının aynısı)."""
+    if "trends_vertical" not in request.form:
+        return default
+    return (request.form.get("trends_vertical") or "").strip().lower() or None
 
 
 def _form_get_int(key: str, default):
@@ -541,6 +551,8 @@ def save(slug):
         trends_min_volume=_form_get_int("trends_min_volume", cfg.trends_min_volume),
         trends_intent=(request.form.get("trends_intent", cfg.trends_intent)
                        if "trends_intent" in request.form else cfg.trends_intent),
+        trends_vertical=(_dikey_from_form(cfg.trends_vertical)
+                         if new_content_source == "trends" else None),
         auto_feed_ids=auto_feed_ids,
         generator=new_generator,
         bg_video=new_bg_video,
