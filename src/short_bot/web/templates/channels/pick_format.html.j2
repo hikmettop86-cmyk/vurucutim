@@ -53,5 +53,25 @@
       <span class="text-[11px] text-claude-subtle">Sonradan değiştirilemez — DNA, ses ve konu bankası buna göre kurulur.</span>
     </label>
   </form>
+
+  {# NİŞ BULUCU AYRI BİR İŞ, sohbetin yerine geçmediği için burada duruyor:
+     sohbet ne istediğini bilen kullanıcıyı hızlandırır, ajan ise YouTube
+     outlier verisiyle nişi DOĞRULAR. Bu sayfa açılana kadar ajan menüden
+     hiç erişilemiyordu. #}
+  <div class="mt-4 bg-claude-surface border border-claude-border rounded-xl px-4 py-3.5
+              flex items-center justify-between gap-4 flex-wrap">
+    <div class="min-w-0">
+      <div class="text-sm font-semibold">Ne kuracağını bilmiyor musun?</div>
+      <div class="text-xs text-claude-muted mt-0.5">
+        Niş bulucu, adayları YouTube verisiyle doğrular — kanıtsız öneri vermez.
+        Plan hazırlamak birkaç dakika sürer.
+      </div>
+    </div>
+    <a href="/channels/agent"
+       class="bg-white border border-claude-border-strong hover:border-claude-accent
+              hover:text-claude-accent px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">
+      Niş bulucu →
+    </a>
+  </div>
 </div>
 {% endblock %}
