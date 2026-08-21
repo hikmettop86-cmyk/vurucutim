@@ -275,7 +275,8 @@ def test_new_curated_form_renders(tmp_path):
 def test_old_reel_wizard_redirects_to_curated(tmp_path):
     c, cfg_dir = _client(tmp_path)
     r = c.get("/channels/new-reel")
-    assert r.status_code == 302 and "/channels/new-curated" in r.headers["Location"]
+    # 301 (kalıcı): reel sihirbazı geri gelmeyecek, kürate kurulumu onun yerini aldı.
+    assert r.status_code == 301 and "/channels/new-curated" in r.headers["Location"]
 
 
 def test_new_curated_creates_channel(tmp_path, monkeypatch):

@@ -1,6 +1,6 @@
-{% if c.reel and c.reel.enabled %}
-{% include "_partials/channel_card_reel.html.j2" %}
-{% else %}
+{# Reel formatı kalktı: eskiden `reel.enabled` olan kanallar AYRI bir karta
+   (channel_card_reel.html.j2) düşüyordu. O kartta bulunup burada olmayan Seri
+   ve Otomasyon bağlantıları aşağıya taşındı — tek kart, kayıp yok. #}
 <div class="bg-white border border-claude-border rounded-xl shadow-soft p-5 hover:shadow-card transition-shadow"
      id="channel-card-{{ c.slug }}"
      x-show="!search || '{{ c.slug }}'.toLowerCase().includes(search.toLowerCase()) || '{{ c.name|e }}'.toLowerCase().includes(search.toLowerCase())">
@@ -76,6 +76,25 @@
     {% if c.content_source == 'generator' %}
     <a href="/channels/{{ c.slug }}/topic-bank" class="px-2 py-1 text-claude-text hover:bg-claude-surface-alt rounded text-xs" title="Kanıtlanmış konu bankası">🎯 Konu</a>
     {% endif %}
+
+    {# Seri ve Otomasyon bağlantıları REEL KARTINDA duruyordu; reel formatı
+       kalkınca kaybolmasınlar diye buraya taşındı — ikisi de kürate ve kart
+       kanalları için de anlamlı.
+
+       İkisi de KAPALIYKEN DE görünür. Yalnız açıkken göstermek kısır döngü
+       kuruyordu: açmak için sayfaya gitmen gerekiyor, sayfaya gitmek için
+       açık olması. Kapalı hâllerini sayfanın kendisi anlatıyor. #}
+    {% if c.reel %}
+    <a href="/channels/{{ c.slug }}/series"
+       class="px-2 py-1 rounded text-xs
+              {% if c.reel.series_enabled %}text-claude-accent hover:bg-claude-accent-soft{% else %}text-claude-muted hover:text-claude-text hover:bg-claude-surface-alt{% endif %}"
+       title="{% if c.reel.series_enabled %}Seri: bölümler + sıradaki konu{% else %}Seri modu kapalı — açmak için tıkla{% endif %}">📚 Seri</a>
+    {% endif %}
+    {# Otomasyon açıkken kanalın cron'u KAPANIYOR — kullanıcının "neden
+       üretmiyor?" diye sorabileceği tek yer burası. #}
+    <a href="/channels/{{ c.slug }}/autopilot"
+       class="px-2 py-1 rounded text-xs
+              {% if c.autopilot and c.autopilot.enabled %}text-claude-accent hover:bg-claude-accent-soft{% else %}text-claude-muted hover:text-claude-text hover:bg-claude-surface-alt{% endif %}"
+       title="{% if c.autopilot and c.autopilot.enabled %}Otomasyon açık — bugünün slotları{% else %}Otomasyon kapalı — açmak için tıkla{% endif %}">⚙️ Otomasyon</a>
   </div>
 </div>
-{% endif %}

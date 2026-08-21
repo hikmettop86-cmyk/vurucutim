@@ -83,9 +83,9 @@ FORMAT_LABELS: dict[str, str] = {k: v.label for k, v in FORMATS.items()}
 def channel_format(cfg) -> str:
     if getattr(cfg, "content_source", "rss") == "curated":
         return "curated"
-    reel = getattr(cfg, "reel", None)
-    if reel is not None and getattr(reel, "enabled", False):
-        return "reel"
+    # `reel.enabled` FORMAT BELİRLEMEZ. Reel bir kanal formatı olmaktan çıktı
+    # (canlıda 0 kanal); o blok artık yalnız kürate'nin montaj ayarlarını taşır
+    # ve kürate kararı yukarıda content_source ile zaten verildi.
     voice = getattr(cfg, "voice", None)
     if voice is not None and getattr(voice, "enabled", False):
         if getattr(cfg, "content_source", "rss") == "trends":

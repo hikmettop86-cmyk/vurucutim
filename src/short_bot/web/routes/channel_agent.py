@@ -6,7 +6,7 @@ yanlış ses seçtiyse ya da niş kaydıysa, kanal KURULMADAN görülür.
 Plan hazırlamak ~6-8 DAKİKA sürüyor (ölçüldü): beş ayrı LLM çağrısı var ve Claude CLI
 her çağrıda yeni bir süreç açıyor. Daemon thread + HTMX poll, ve panel HANGİ ADIMDA
 olduğunu gösterir — "hazırlanıyor…" deyip susan bir panel, kullanıcıya takılıp
-takılmadığını söylemez. Desen niche_finder'ın iş kuyruğundan alındı (reel_new.py).
+takılmadığını söylemez. Desen niche_finder'ın iş kuyruğundan alındı.
 """
 from __future__ import annotations
 
@@ -219,8 +219,7 @@ def apply(job_id):
         _JOBS.pop(job_id, None)
     flash(f"'{p.name}' kuruldu. Konu bankası tohumlandı. Otomasyon KAPALI — açmak "
           f"istersen Otomasyon sayfasından.", "success")
-    # KANALIN KENDİ SAYFASI: /channels/<slug> diye bir rota YOK (kanallar /channels'da
-    # listeleniyor, düzenleme /channels/<slug>/edit-reel'de). Oraya yönlendirmek 404
-    # veriyordu — kanal kuruluyordu ama kullanıcı hata sayfası görüyordu. Sihirbaz
-    # (reel_new) da buraya gidiyor.
-    return redirect(url_for("reel_edit.edit_reel", slug=slug))
+    # TEK DÜZENLEME ROTASI: sayfayı format seçer. Eskiden burası reel_edit'e
+    # gidiyordu — ajan reel kanalı kuruyordu ve reel canlıda kullanılmayan tek
+    # formattı. Reel yüzeyi kalkınca ajan gerçek formatlara kuruyor.
+    return redirect(url_for("channel_edit.edit", slug=slug))

@@ -58,19 +58,24 @@ def app(tmp_path):
 
 # ------------------------------------------------------------------ dil açılırları
 
-def test_reel_edit_offers_every_supported_language(app):
-    body = app.test_client().get("/channels/jareel/edit-reel").data.decode("utf-8")
-    for lang in SUPPORTED_LANGUAGES:
-        assert f'value="{lang}"' in body, f"'{lang}' dil açılırında yok"
+def test_duzenleme_sayfasinda_dil_KILITLI(app):
+    """Dil düzenleme sayfasında salt okunur — bilinçli.
+
+    Eskiden burada bir açılır vardı ve seçili işareti yoksa tarayıcı İLK
+    seçeneği alıyordu: o sayfadan yapılan HERHANGİ bir kaydetme kanalın dilini
+    sessizce Türkçeye çeviriyordu (Japonca kanal kurulurken yakalandı).
+
+    Dil kurulumda belirlenir; sonradan değiştirmek DNA'yı, dil paketini, ses
+    seçimini ve konu bankasını tutarsız bırakır."""
+    body = app.test_client().get("/channels/jareel/edit").data.decode("utf-8")
+    assert 'name="language"' not in body, "dil hâlâ gönderilebilir bir alan"
+    assert "kilitli" in body
 
 
-def test_reel_edit_preselects_the_channel_language(app):
-    """Seçili işareti yoksa tarayıcı İLK seçeneği alır → kaydet = dili değiştir."""
-    import re
-    body = app.test_client().get("/channels/jareel/edit-reel").data.decode("utf-8")
-    m = re.search(r'<option value="ja"[^>]*>', body)
-    assert m, "'ja' seçeneği yok"
-    assert "selected" in m.group(0), m.group(0)
+def test_duzenleme_sayfasi_kanalin_dilini_GOSTERIR(app):
+    """Kilitli olması gizli olması demek değil — operatör hangi dil olduğunu görmeli."""
+    body = app.test_client().get("/channels/jareel/edit").data.decode("utf-8")
+    assert "Japonca" in body
 
 
 def test_new_channel_form_offers_every_supported_language(app):

@@ -392,6 +392,15 @@ def _unique_slug(base: str, channels_dir: Path) -> str:
     return slug
 
 
+@bp.route("/channels/new-reel")
+def new_reel_eski():
+    """Reel kurulum sihirbazı kalktı (canlıda 0 kanal, menüde de yoktu).
+
+    Kürate kurulumuna 301 — reel montaj ayarları oraya taşındı, kullanıcının
+    kayıtlı bağlantısı kırılmasın."""
+    return redirect(url_for("curated.new_form"), code=301)
+
+
 @bp.route("/channels/new-curated")
 def new_form():
     from short_bot.lang_pack import load_pack

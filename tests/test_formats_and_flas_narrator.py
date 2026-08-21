@@ -30,7 +30,11 @@ def test_channel_format_table():
     assert channel_format(_cfg(voice=v)) == "voiced"
     assert channel_format(_cfg(content_source="trends", voice=v)) == "yorum"
     assert channel_format(_cfg(content_source="curated")) == "curated"
-    assert channel_format(_cfg(reel=ReelConfig(enabled=True, voice_id="v"))) == "reel"
+    # `reel.enabled` FORMAT BELİRLEMEZ: reel kanal formatı olmaktan çıktı
+    # (canlıda 0 kanal). O blok artık yalnız kürate montaj ayarı taşır.
+    assert channel_format(_cfg(reel=ReelConfig(enabled=True, voice_id="v"))) == "card"
+    assert channel_format(_cfg(reel=ReelConfig(enabled=True, voice_id="v"),
+                               content_source="curated")) == "curated"
     # Düzenleme yolu artık formata bakmıyor: dört format da /channels/<slug>/edit
     # rotasından çiziliyor, `edit_path`/`FORMAT_EDIT_SUFFIX` kalktı.
 
