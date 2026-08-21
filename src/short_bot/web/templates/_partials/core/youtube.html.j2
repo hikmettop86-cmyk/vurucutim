@@ -140,14 +140,54 @@
     </div>
 
     {% if proxy_url is defined %}
-    <label class="block pt-3 border-t border-claude-border/60">
+    <div class="pt-3 border-t border-claude-border/60" data-proxy-box data-slug="{{ c.slug }}">
       <span class="text-xs text-claude-muted">Yükleme proxy URL'i
         <span class="text-claude-subtle text-[10px]">(opsiyonel — aynı IP riski için)</span></span>
-      <input type="text" name="yt_proxy_url" value="{{ proxy_url|e }}"
-             placeholder="http://user:pass@host:8080  ·  socks5://host:1080"
-             class="bg-claude-surface border border-claude-border px-2 py-1 rounded w-full text-xs mt-1 font-mono">
+      <div class="flex gap-2 mt-1">
+        <input type="text" name="yt_proxy_url" value="{{ proxy_url|e }}" data-proxy-input
+               placeholder="http://user:pass@host:8080  ·  socks5://host:1080"
+               class="flex-1 bg-claude-surface border border-claude-border px-2 py-1 rounded text-xs font-mono">
+        <button type="button" data-proxy-test
+                class="px-3 py-1 text-xs bg-claude-surface border border-claude-border rounded hover:bg-claude-surface-alt">
+          Test et
+        </button>
+      </div>
+      <span data-proxy-result class="text-[10px] block mt-1"></span>
       <span class="text-[10px] text-claude-subtle block mt-1">secrets.yaml'da saklanır, kanal yaml'ına yazılmaz.</span>
-    </label>
+    </div>
     {% endif %}
   </div>
 </div>
+
+{# Proxy testi DELEGASYONLU: partial birden fazla kez çizilse bile tek dinleyici
+   kalır ve id çakışması olmaz (eski sürüm id="btn-test-proxy" kullanıyordu). #}
+<script>
+(function () {
+  if (window.__proxyTestBound) return;
+  window.__proxyTestBound = true;
+  document.addEventListener('click', async function (ev) {
+    const btn = ev.target.closest('[data-proxy-test]');
+    if (!btn) return;
+    const box = btn.closest('[data-proxy-box]');
+    const input = box.querySelector('[data-proxy-input]');
+    const out = box.querySelector('[data-proxy-result]');
+    const url = (input.value || '').trim();
+    out.className = 'text-[10px] block mt-1 text-claude-muted';
+    out.textContent = 'Test ediliyor…';
+    try {
+      const r = await fetch(`/channels/${box.dataset.slug}/test-proxy`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ proxy_url: url }),
+      });
+      const j = await r.json();
+      out.className = 'text-[10px] block mt-1 ' + (j.ok ? 'text-claude-success' : 'text-claude-error');
+      out.textContent = j.ok
+        ? `Çalışıyor · IP ${j.ip}${j.country ? ' · ' + j.country : ''}`
+        : `Başarısız: ${j.error || 'bilinmeyen hata'}`;
+    } catch (e) {
+      out.className = 'text-[10px] block mt-1 text-claude-error';
+      out.textContent = 'İstek gönderilemedi: ' + e;
+    }
+  });
+})();
+</script>

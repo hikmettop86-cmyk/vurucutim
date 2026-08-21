@@ -184,72 +184,6 @@
           </span>
         </label>
 
-        <label class="block"
-               x-data='{
-                  preset: "{{ current_cron_preset }}",
-                  cron: "{{ c.schedule_cron }}",
-                  dailyHour: 9,
-                  weeklyDay: 1,
-                  weeklyHour: 9,
-                  recompute() {
-                    if (this.preset === "hourly") this.cron = "0 * * * *";
-                    else if (this.preset === "every_2h") this.cron = "0 */2 * * *";
-                    else if (this.preset === "every_4h") this.cron = "0 */4 * * *";
-                    else if (this.preset === "every_10min") this.cron = "*/10 * * * *";
-                    else if (this.preset === "every_30min") this.cron = "*/30 * * * *";
-                    else if (this.preset === "daily_picker") this.cron = `0 ${this.dailyHour} * * *`;
-                    else if (this.preset === "weekly_picker") this.cron = `0 ${this.weeklyHour} * * ${this.weeklyDay}`;
-                  }
-                }'
-               x-init="if (preset.startsWith(`daily_`)) { dailyHour = parseInt(preset.split(`_`)[1] || 9); preset = `daily_picker`; }
-                       if (preset.startsWith(`weekly_`)) { let p = preset.split(`_`); weeklyDay = parseInt(p[1] || 1); weeklyHour = parseInt(p[2] || 9); preset = `weekly_picker`; }">
-          <span class="text-xs text-claude-muted uppercase">Cron preset</span>
-          <select x-model="preset" @change="recompute()"
-                  class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
-            <option value="every_10min">10 dakikada bir</option>
-            <option value="every_30min">30 dakikada bir</option>
-            <option value="hourly">Saat başı (60 dk)</option>
-            <option value="every_2h">2 saatte bir (120 dk)</option>
-            <option value="every_4h">4 saatte bir (240 dk)</option>
-            <option value="daily_picker">Günde bir (saat seç)</option>
-            <option value="weekly_picker">Haftada bir (gün + saat seç)</option>
-            <option value="custom">Özel cron</option>
-          </select>
-          <div class="text-[10px] text-claude-subtle mt-1">
-            Skor takibi tüm presetlerde geçerli — alttaki "Otomatik yükle" + "Min skor" ayarlarına bağlı.
-            Sıkı tarama için 10dk / 30dk seç.
-          </div>
-          <div x-show="preset === 'daily_picker'" class="mt-2 flex gap-2 items-center">
-            <span class="text-xs text-claude-muted">Saat:</span>
-            <input type="number" min="0" max="23" x-model.number="dailyHour" @change="recompute()"
-                   class="bg-claude-surface border border-claude-border px-2 py-1 rounded w-20 text-sm">
-            <span class="text-xs text-claude-muted">:00</span>
-          </div>
-          <div x-show="preset === 'weekly_picker'" class="mt-2 flex gap-2 items-center flex-wrap">
-            <span class="text-xs text-claude-muted">Gün:</span>
-            <select x-model.number="weeklyDay" @change="recompute()"
-                    class="bg-claude-surface border border-claude-border px-2 py-1 rounded text-sm">
-              <option value="1">Pazartesi</option><option value="2">Salı</option>
-              <option value="3">Çarşamba</option><option value="4">Perşembe</option>
-              <option value="5">Cuma</option><option value="6">Cumartesi</option>
-              <option value="0">Pazar</option>
-            </select>
-            <span class="text-xs text-claude-muted">Saat:</span>
-            <input type="number" min="0" max="23" x-model.number="weeklyHour" @change="recompute()"
-                   class="bg-claude-surface border border-claude-border px-2 py-1 rounded w-20 text-sm">
-            <span class="text-xs text-claude-muted">:00</span>
-          </div>
-          <div x-show="preset === 'custom'" class="mt-2">
-            <input type="text" name="schedule_cron" x-model="cron"
-                   class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full font-mono text-sm">
-          </div>
-          <input type="hidden" name="schedule_cron" x-model="cron" x-show="preset !== 'custom'">
-          <input type="hidden" name="yt_cron_preset" x-bind:value="
-                preset === 'daily_picker' ? `daily_${String(dailyHour).padStart(2,'0')}`
-                : preset === 'weekly_picker' ? `weekly_${weeklyDay}_${String(weeklyHour).padStart(2,'0')}`
-                : preset">
-          <span class="text-xs text-claude-muted block mt-1">→ {{ cron_human }}</span>
-        </label>
 
         <div class="grid grid-cols-3 gap-3">
           <label class="block">
@@ -294,16 +228,6 @@
           </span>
         </label>
 
-        <label class="block">
-          <span class="text-xs text-claude-muted uppercase">Handle</span>
-          <input type="text" name="handle" value="{{ c.handle }}"
-                 class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
-        </label>
-
-        <label class="flex items-center gap-2">
-          <input type="checkbox" name="enabled" value="1" {% if c.enabled %}checked{% endif %}>
-          <span>Aktif (cron'a göre otomatik üretilir)</span>
-        </label>
 
       </div>
     </div>
@@ -444,183 +368,16 @@
       </div>
     </div>
 
-    {# ── Card: YouTube bağlantısı (open by default) ───────────────────── #}
-    <div x-data="{ open: true }" class="bg-white border border-claude-border rounded-xl shadow-soft mb-4">
-      <button type="button" @click="open = !open"
-              class="w-full flex items-center justify-between px-5 py-3 hover:bg-claude-surface/40 transition-colors text-left">
-        <h2 class="font-serif text-base font-semibold flex items-center gap-2">
-          <span class="text-lg opacity-70">▶</span> YouTube bağlantısı
-        </h2>
-        <span x-text="open ? '−' : '+'" class="text-claude-muted text-xl leading-none w-5 text-center"></span>
-      </button>
-      <div x-show="open" class="px-5 pb-5 pt-3 space-y-3 border-t border-claude-border/40">
-        {% if yt_connected and yt_info %}
-          <div class="flex items-center gap-3">
-            <span class="text-xl">▶</span>
-            <div class="flex-1 text-sm">
-              <div class="font-semibold">{{ yt_info.snippet.title }}</div>
-              <div class="text-xs text-claude-muted">
-                {{ yt_info.statistics.subscriberCount }} abone ·
-                {{ yt_info.statistics.videoCount }} video ·
-                <span class="text-claude-success">Bağlı</span>
-              </div>
-            </div>
-            <div class="flex gap-2">
-              <button form="yt-disconnect-form"
-                      formmethod="POST"
-                      formaction="/channels/{{ c.slug }}/youtube/disconnect"
-                      onclick="return confirm('YouTube bağlantısı kaldırılsın mı? (token silinecek, kanal_info kalır)');"
-                      class="text-xs px-3 py-1.5 rounded-lg bg-claude-error/10 ring-1 ring-claude-error/30 text-claude-error">
-                Bağlantıyı kes
-              </button>
-              <button form="yt-reset-form"
-                      formmethod="POST"
-                      formaction="/channels/{{ c.slug }}/youtube/reset"
-                      onclick="return confirm('TÜM YouTube dosyalarını sil? (token, kanal_info, client_secrets — geri alınamaz)');"
-                      class="text-xs px-3 py-1.5 rounded-lg bg-claude-error/15 ring-1 ring-claude-error/40 text-claude-error hover:bg-claude-error/25">
-                🗑 Tümünü sıfırla
-              </button>
-            </div>
-          </div>
-        {% else %}
-          {% if yt_has_secrets %}
-            <button form="yt-connect-form" formmethod="POST"
-                    formaction="/channels/{{ c.slug }}/youtube/connect"
-                    class="bg-claude-accent hover:bg-claude-accent-hover text-white px-4 py-2 rounded-lg text-sm">
-              ▶ YouTube Bağla
-            </button>
-            <div class="text-[10px] text-claude-subtle">
-              Tarayıcı Google'a yönlendirecek, izin verince bu kanal YouTube hesabınla eşleşir.
-            </div>
-            <button form="yt-reset-form"
-                    formmethod="POST"
-                    formaction="/channels/{{ c.slug }}/youtube/reset"
-                    onclick="return confirm('client_secrets.json silinsin? (yeniden yüklemen gerekir)');"
-                    class="text-xs px-3 py-1.5 rounded-lg bg-claude-error/15 ring-1 ring-claude-error/40 text-claude-error hover:bg-claude-error/25 mt-2">
-              🗑 client_secrets.json sil
-            </button>
-          {% else %}
-            <div class="text-xs text-claude-muted space-y-2">
-              <div>
-                <strong>Adım 1:</strong>
-                <a href="https://console.cloud.google.com/" target="_blank" class="text-claude-accent underline">Google Cloud Console</a>
-                → yeni proje → APIs: YouTube Data API v3 + YouTube Analytics API → OAuth Consent (External) →
-                OAuth Client (Web type, redirect: <code>http://127.0.0.1:5005/oauth/callback</code>) → JSON indir.
-              </div>
-              <div>
-                <strong>Adım 2:</strong> İndirdiğin <code>client_secrets.json</code>'u aşağıdaki kutuya sürükle veya seç:
-              </div>
-              <div class="flex items-center gap-2 mt-2">
-                <input type="file" name="client_secrets" accept="application/json,.json" required
-                       form="yt-upload-secrets-form"
-                       class="text-xs flex-1 file:bg-claude-surface-alt file:border-0 file:px-3 file:py-1.5 file:rounded file:text-claude-text file:cursor-pointer file:mr-2">
-                <button form="yt-upload-secrets-form" type="submit"
-                        class="bg-claude-accent hover:bg-claude-accent-hover text-white px-3 py-1.5 rounded-lg text-xs">
-                  ↑ Yükle
-                </button>
-              </div>
-              <div class="text-[10px] text-claude-subtle">
-                Dosya şuraya kaydedilecek:
-                <code class="break-all">{{ yt_secrets_abs }}\client_secrets.json</code>
-              </div>
-            </div>
-          {% endif %}
-        {% endif %}
+    {# ORTAK ÇEKİRDEK — kimlik ve zamanlama. Dört formatın hepsinde AYNI parça.
+       Kanal ADI bu sayfada HİÇ YOKTU: kart kanalının adını UI'den değiştirmek
+       mümkün değildi. `archived` (pasife al) de yoktu. #}
+    <div class="mb-4">{% include "_partials/core/identity.html.j2" %}</div>
+    <div class="mb-4">{% include "_partials/core/schedule.html.j2" %}</div>
 
-        <div class="grid grid-cols-2 gap-3 pt-3 border-t border-claude-border/40">
-          <label class="flex items-center gap-2 text-xs">
-            <input type="checkbox" name="yt_auto_upload" value="1"
-                   {% if c.youtube and c.youtube.auto_upload %}checked{% endif %}>
-            Otomatik yükle (render bitince)
-          </label>
-          <label class="flex items-center gap-2 text-xs">
-            <input type="checkbox" name="yt_ai_content" value="1"
-                   {% if (c.youtube.ai_content if c.youtube else True) %}checked{% endif %}>
-            AI içerik etiketi (önerilen)
-          </label>
-          <label class="block">
-            <span class="text-xs text-claude-muted">Privacy</span>
-            <select name="yt_privacy_status"
-                    class="bg-claude-surface border border-claude-border px-2 py-1 rounded w-full text-xs mt-1">
-              {% set p = (c.youtube.privacy_status if c.youtube else 'public') %}
-              <option value="public"   {% if p == 'public'   %}selected{% endif %}>public</option>
-              <option value="unlisted" {% if p == 'unlisted' %}selected{% endif %}>unlisted</option>
-              <option value="private"  {% if p == 'private'  %}selected{% endif %}>private</option>
-            </select>
-          </label>
-          <label class="block">
-            <span class="text-xs text-claude-muted">Min skor (auto-upload)</span>
-            <input type="number" step="0.5" min="0" max="10" name="yt_min_score_for_upload"
-                   value="{{ (c.youtube.min_score_for_upload if c.youtube else 8.0) }}"
-                   class="bg-claude-surface border border-claude-border px-2 py-1 rounded w-full text-xs mt-1">
-            <span class="text-[10px] text-claude-subtle">RSS-mode: skor ≥ bu değer ise auto-upload. Generator-mode: yok sayılır. 0 = filtre yok.</span>
-          </label>
-          <label class="block">
-            <span class="text-xs text-claude-muted">Category ID</span>
-            <input type="text" name="yt_category_id"
-                   value="{{ (c.youtube.category_id if c.youtube else '24') }}"
-                   class="bg-claude-surface border border-claude-border px-2 py-1 rounded w-full text-xs mt-1">
-            <span class="text-[10px] text-claude-subtle">24=Entertainment, 28=Tech, 17=Sport, 22=People</span>
-          </label>
-        </div>
-
-        <!-- Proxy URL — same-IP riskine karşı opsiyonel, secrets.yaml'a yazılır -->
-        <div class="pt-3 border-t border-claude-border/40">
-          <label class="block">
-            <span class="text-xs text-claude-muted">
-              YouTube Upload Proxy URL
-              <span class="text-claude-subtle text-[10px]">(opsiyonel — same-IP riski için)</span>
-            </span>
-            <div class="flex gap-2 mt-1">
-              <input type="text" name="yt_proxy_url" id="yt_proxy_url"
-                     value="{{ proxy_url|e }}"
-                     placeholder="http://user:pass@host:8080  veya  socks5://host:1080"
-                     class="flex-1 bg-claude-surface border border-claude-border px-2 py-1 rounded text-xs">
-              <button type="button" id="btn-test-proxy"
-                      class="px-3 py-1 text-xs bg-claude-surface border border-claude-border rounded hover:bg-claude-border/40">
-                Test Et
-              </button>
-            </div>
-            <span id="proxy-test-result" class="text-[10px] block mt-1"></span>
-            <span class="text-[10px] text-claude-subtle block mt-1">
-              secrets.yaml dosyasında saklanır, kanal yaml'a yazılmaz.
-            </span>
-          </label>
-        </div>
-
-        <script>
-        (function() {
-          const btn = document.getElementById('btn-test-proxy');
-          if (!btn) return;
-          btn.addEventListener('click', async () => {
-            const input = document.getElementById('yt_proxy_url');
-            const url = (input.value || '').trim();
-            const slug = '{{ c.slug }}';
-            const el = document.getElementById('proxy-test-result');
-            el.textContent = 'Test ediliyor…';
-            el.className = 'text-[10px] block mt-1 text-claude-muted';
-            try {
-              const r = await fetch(`/channels/${slug}/test-proxy`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ proxy_url: url }),
-              });
-              const j = await r.json();
-              if (j.ok) {
-                el.textContent = `✓ Çalışıyor — IP: ${j.ip}` + (j.country ? ` (${j.country})` : '');
-                el.className = 'text-[10px] block mt-1 text-claude-success font-semibold';
-              } else {
-                el.textContent = `✗ ${j.error}`;
-                el.className = 'text-[10px] block mt-1 text-claude-error';
-              }
-            } catch (e) {
-              el.textContent = `✗ ${e.message}`;
-              el.className = 'text-[10px] block mt-1 text-claude-error';
-            }
-          });
-        })();
-        </script>
-      </div>
+    {# ORTAK ÇEKİRDEK — YouTube. Dört formatın hepsi AYNI parçadan çizilir;
+       eskiden bu blok her sayfada ayrı yazılmıştı ve dördü de eksikti. #}
+    <div class="mb-4">
+      {% include "_partials/core/youtube.html.j2" %}
     </div>
 
     {# ── Card: YouTube İstatistikleri (closed by default) ────────────── #}

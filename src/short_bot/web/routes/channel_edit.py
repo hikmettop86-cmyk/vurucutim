@@ -45,6 +45,23 @@ def edit(slug):
     yt_info = _yt_auth.load_channel_info(yt_root, _cslug) if yt_root and yt_connected else None
     yt_secrets_path = (yt_root / slug / "client_secrets.json") if yt_root else None
     yt_has_secrets = bool(yt_secrets_path and yt_secrets_path.is_file())
+    # Bağlantı paylaşımı: aynı YouTube kanalına üreten iki format tek bağlantıyı,
+    # tek kotayı, tek istatistik geçmişini paylaşır. Bu liste kart sayfasında HİÇ
+    # YOKTU — `gundem` ile `gundem-yorum` aynı kanala üretiyor ama seçenek yalnız
+    # yorum ekranında vardı.
+    from short_bot.config import list_channels
+    from short_bot.web.core_fields import linkable_channels
+    _digerleri = list_channels(current_app.config["SHORTBOT_CONFIG_DIR"] / "channels",
+                               enabled_only=False)
+    linkable = linkable_channels(
+        cfg, others=_digerleri,
+        has_credentials=(lambda s: bool(yt_root) and _yt_auth.has_credentials(yt_root, s)),
+        channel_info=(lambda s: _yt_auth.load_channel_info(yt_root, s) if yt_root else None))
+    yt_clash = []
+    if yt_root:
+        _beyan = {(cfg.youtube.credentials_from if cfg.youtube else None), _cslug, slug}
+        yt_clash = [o for o in _yt_auth.same_youtube_channel(
+            yt_root, _cslug, [o.slug for o in _digerleri]) if o not in _beyan]
     from short_bot.web.cron_preset import cron_to_preset
     current_cron_preset = (cfg.youtube.cron_preset
                             if (cfg.youtube and cfg.youtube.cron_preset)
@@ -74,6 +91,7 @@ def edit(slug):
                            runs=runs,
                            music_info=music_info,
                            yt_connected=yt_connected, yt_info=yt_info,
+                           creds_slug=_cslug, linkable=linkable, yt_clash=yt_clash,
                            yt_has_secrets=yt_has_secrets,
                            yt_secrets_abs=str((yt_root / slug).resolve()) if yt_root else "",
                            current_cron_preset=current_cron_preset,
@@ -273,25 +291,13 @@ def save(slug):
             max_retries=max_retries, fuzzy_threshold=fuzzy_threshold,
         )
 
-    from short_bot.config import YoutubeChannelConfig
-    new_youtube = cfg.youtube
-    yt_present = any(k in request.form for k in
-                      ("yt_auto_upload", "yt_ai_content", "yt_category_id",
-                       "yt_privacy_status", "yt_min_score_for_upload",
-                       "yt_cron_preset"))
-    if yt_present:
-        try:
-            yt_min = float(request.form.get("yt_min_score_for_upload", "8.0"))
-        except (TypeError, ValueError):
-            yt_min = 8.0
-        new_youtube = YoutubeChannelConfig(
-            auto_upload=(request.form.get("yt_auto_upload") == "1"),
-            ai_content=(request.form.get("yt_ai_content") == "1"),
-            category_id=request.form.get("yt_category_id", "24"),
-            privacy_status=request.form.get("yt_privacy_status", "public"),
-            min_score_for_upload=yt_min,
-            cron_preset=(request.form.get("yt_cron_preset") or None),
-        )
+    # ORTAK ÇEKİRDEK (ad, handle, cron, enabled, archived, YouTube bloğu) TEK
+    # okuyucudan gelir — bkz. web/core_fields.py. Buradaki eski YouTube kurucusu
+    # `YoutubeChannelConfig(...)` ile bloğu sıfırdan kuruyordu ve
+    # `credentials_from` her kaydette düşüyordu (kart sayfasında o alan zaten
+    # hiç yoktu, dolayısıyla sessiz bir veri kaybıydı).
+    from short_bot.web.core_fields import core_updates
+    ortak = core_updates(request.form, cfg)
 
     # Proxy URL — secrets.yaml'a yazilir (kanal yaml'a degil — credentials guvenligi)
     yt_proxy_url = (request.form.get("yt_proxy_url") or "").strip() or None
@@ -490,12 +496,16 @@ def save(slug):
     else:
         new_trends_region = None
 
-    new_cfg = ChannelConfig(
-        slug=cfg.slug,
-        name=cfg.name,
+    # `dataclasses.replace` — ESKİDEN `ChannelConfig(...)` idi ve kanalı SIFIRDAN
+    # kuruyordu. Burada sayılmayan her alan varsayılana düşüyordu: ölçüldü,
+    # tek bir "Kaydet" tıklaması saga sınırını (1.5 → 0.0), saga penceresini,
+    # `categories`, `category_quota_per_day`, `reference_channels` ve `archived`
+    # değerlerini siliyordu — formda o alanlar HİÇ olmadığı hâlde.
+    # trends_min_volume aynı sebeple 5000'den 1000'e iniyordu ve tek tek
+    # yamanmıştı; `replace` bu hata sınıfının tamamını kapatır.
+    import dataclasses
+    guncel = dict(
         keywords=keywords,
-        rss_locale=cfg.rss_locale,
-        schedule_cron=request.form.get("schedule_cron", cfg.schedule_cron),
         duration_s=_form_get_int("duration_s", cfg.duration_s),
         min_score=_form_get_float("min_score", cfg.min_score),
         max_candidates_per_run=_form_get_int("max_candidates_per_run", cfg.max_candidates_per_run),
@@ -510,30 +520,21 @@ def save(slug):
             "bg_gradient": (list(new_dna.palette.bg_gradient) if new_dna
                             else cfg.colors["bg_gradient"]),
         },
-        handle=request.form.get("handle", cfg.handle),
-        output_dir=cfg.output_dir,
-        enabled=request.form.get("enabled") == "1",
-        language=cfg.language,
         dna=new_dna,
-        script_model=cfg.script_model,
         content_source=new_content_source,
         trends_region=new_trends_region,
-        # TAŞINMASI ŞART: bu POST kanalı SIFIRDAN kuruyor — burada sayılmayan
-        # her alan varsayılana düşer. trends_min_volume zaten böyle sessizce
-        # 5000'den 1000'e iniyordu (kanal panelden bir kez kaydedilince gündem
-        # havuzu hava durumu/hisse aramalarıyla doluyordu). Aynı aile:
-        # saga sınırı ve DNA paleti tuzakları.
         trends_min_volume=_form_get_int("trends_min_volume", cfg.trends_min_volume),
         trends_intent=(request.form.get("trends_intent", cfg.trends_intent)
                        if "trends_intent" in request.form else cfg.trends_intent),
         auto_feed_ids=auto_feed_ids,
         generator=new_generator,
-        youtube=new_youtube,
         bg_video=new_bg_video,
         trend_boost=new_trend_boost,
         voice=new_voice,
         reel=new_reel,
     )
+    guncel.update(ortak)          # ad, handle, cron, enabled, archived, youtube
+    new_cfg = dataclasses.replace(cfg, **guncel)
     save_channel(path, new_cfg)
     flash("Kanal güncellendi.", "success")
     return redirect(url_for("channel_edit.edit", slug=slug))
