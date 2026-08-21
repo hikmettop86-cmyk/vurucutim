@@ -71,7 +71,7 @@
             hx-vals='{"slug": "{{ c.slug }}"}'
             hx-on::after-request="if (event.detail.successful) window.location.href='/activity?channel={{ c.slug }}'"
             class="text-claude-accent hover:underline mr-2" title="Şimdi üret">▶</button>
-    <a href="{{ edit_path(c) }}" class="text-claude-accent hover:underline mr-2">Düzenle</a>
+    <a href="/channels/{{ c.slug }}/edit" class="text-claude-accent hover:underline mr-2">Düzenle</a>
     <button hx-post="/channels/{{ c.slug }}/clone"
             hx-confirm="Kanalı klonlamak istiyor musunuz?"
             class="text-claude-muted hover:text-claude-text mr-2" title="Klonla">⎘</button>

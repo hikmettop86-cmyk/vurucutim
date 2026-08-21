@@ -305,9 +305,10 @@ def test_curated_channel_uses_clean_edit(tmp_path, monkeypatch):
     c, cfg_dir = _client(tmp_path)
     c.post("/channels/new-curated", data={
         "name": "Kedi Nis", "voice_id": "V1", "category": "Hayvanlar"})
-    r = c.get("/channels/kedi-nis/edit-reel")
-    assert r.status_code == 302 and "/edit-curated" in r.headers["Location"]
-    body = c.get("/channels/kedi-nis/edit-curated").data.decode("utf-8")
+    # Eski kürate yolu tek rotaya 301 ile döner (kayıtlı sekmeler kırılmasın).
+    r = c.get("/channels/kedi-nis/edit-curated")
+    assert r.status_code == 301 and r.headers["Location"].endswith("/channels/kedi-nis/edit")
+    body = c.get("/channels/kedi-nis/edit").data.decode("utf-8")
     assert "Kürate kanal" in body and 'name="voice_id"' in body
     assert "Niş Bulucu" not in body                # eski niş-bulucu baggage YOK
     assert 'name="generator_topic"' not in body    # eski konu baggage YOK
@@ -321,7 +322,7 @@ def test_edit_curated_save_updates(tmp_path, monkeypatch):
     c.post("/channels/new-curated", data={
         "name": "Kedi Nis", "voice_id": "V1", "category": "Hayvanlar"})
     from short_bot.config import load_channel
-    r = c.post("/channels/kedi-nis/edit-curated", data={
+    r = c.post("/channels/kedi-nis/edit", data={
         "name": "Kedi Nis 2", "voice_id": "V2", "persona": "vahsi_mizah",
         "subreddits": "likeus, funnycats", "curated_time": "month",
         "curated_min_ups": "800", "enabled": "on"})

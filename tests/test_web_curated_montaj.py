@@ -56,12 +56,12 @@ def app(tmp_path):
 
 @pytest.mark.parametrize("alan", ANA + GELISMIS)
 def test_montaj_alani_cizilir(app, alan):
-    html = app.test_client().get("/channels/kur/edit-curated").get_data(as_text=True)
+    html = app.test_client().get("/channels/kur/edit").get_data(as_text=True)
     assert f'name="{alan}"' in html, f"kürate sayfasında {alan} yok"
 
 
 def test_sure_araligi_kaydedilir(app):
-    app.test_client().post("/channels/kur/edit-curated", data={
+    app.test_client().post("/channels/kur/edit", data={
         "name": "Kür", "target_min": "30", "target_max": "40",
     }, follow_redirects=True)
     cfg = load_channel(app.config["SHORTBOT_CONFIG_DIR"] / "channels" / "kur.yaml")
@@ -69,7 +69,7 @@ def test_sure_araligi_kaydedilir(app):
 
 
 def test_tempo_ve_muzik_kaydedilir(app):
-    app.test_client().post("/channels/kur/edit-curated", data={
+    app.test_client().post("/channels/kur/edit", data={
         "name": "Kür", "cut_pacing": "fast", "music_volume": "0.25",
     }, follow_redirects=True)
     cfg = load_channel(app.config["SHORTBOT_CONFIG_DIR"] / "channels" / "kur.yaml")
@@ -78,7 +78,7 @@ def test_tempo_ve_muzik_kaydedilir(app):
 
 
 def test_seri_kaydedilir(app):
-    app.test_client().post("/channels/kur/edit-curated", data={
+    app.test_client().post("/channels/kur/edit", data={
         "name": "Kür", "series_enabled": "on", "series_title": "Mahalle Efsaneleri",
     }, follow_redirects=True)
     cfg = load_channel(app.config["SHORTBOT_CONFIG_DIR"] / "channels" / "kur.yaml")
@@ -89,7 +89,7 @@ def test_seri_kaydedilir(app):
 def test_montaj_alani_formda_yoksa_KORUNUR(app):
     """Sekmeli formda kullanıcı bir sekmeyi hiç açmayabilir; kaydetmek o
     sekmenin ayarlarını sıfırlamamalı."""
-    app.test_client().post("/channels/kur/edit-curated",
+    app.test_client().post("/channels/kur/edit",
                            data={"name": "Kür"}, follow_redirects=True)
     cfg = load_channel(app.config["SHORTBOT_CONFIG_DIR"] / "channels" / "kur.yaml")
     assert cfg.reel.target_duration_s == (45, 60)

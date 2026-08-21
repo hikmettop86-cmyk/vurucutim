@@ -477,11 +477,16 @@ def new_create():
         language=language, dna=None, content_source="curated", reel=reel)
     save_channel(channels_dir / f"{slug}.yaml", cfg)
     flash(f"'{name}' kürate kanalı oluşturuldu. Cevher'den klip seçip üret.", "success")
-    return redirect(url_for("curated.edit_curated", slug=slug))
+    return redirect(url_for("channel_edit.edit", slug=slug))
 
 
 # ── Kürate kanal DÜZENLEME (temiz — eski konu/seri/niş/footage baggage YOK) ───
 @bp.route("/channels/<slug>/edit-curated")
+def edit_curated_eski(slug):
+    """Eski yol — tek rotaya kalıcı yönlendirme (bkz. yorum.edit_eski)."""
+    return redirect(url_for("channel_edit.edit", slug=slug), code=301)
+
+
 def edit_curated(slug):
     from short_bot.lang_pack import load_pack
     path = current_app.config["SHORTBOT_CONFIG_DIR"] / "channels" / f"{slug}.yaml"
@@ -622,4 +627,4 @@ def edit_curated_save(slug):
     ch = dataclasses.replace(ch, **guncel)
     save_channel(path, ch)
     flash(f"'{ch.name}' kürate kanalı güncellendi.", "success")
-    return redirect(url_for("curated.edit_curated", slug=slug))
+    return redirect(url_for("channel_edit.edit", slug=slug))

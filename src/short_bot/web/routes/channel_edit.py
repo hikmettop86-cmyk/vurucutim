@@ -6,6 +6,7 @@ from flask import (Blueprint, abort, current_app, flash, jsonify, redirect,
 
 from short_bot.config import ChannelConfig, load_channel, save_channel
 from short_bot.dna import build_css_override, generate_dna
+from short_bot.formats import channel_format as _channel_format
 from short_bot.dna_smoke import smoke_render_dna
 from short_bot.pexels import load_secrets
 from short_bot.tts.ai33_client import list_voices, resolve_ai33_api_key
@@ -23,8 +24,16 @@ def edit(slug):
     if not path.exists():
         abort(404)
     cfg = load_channel(path)
-    if cfg.reel and cfg.reel.enabled:
-        return redirect(url_for("reel_edit.edit_reel", slug=slug))
+    # TEK DÜZENLEME ROTASI. Eskiden dört yol vardı (edit, edit-yorum,
+    # edit-curated, edit-reel) ve her biri kendi eksik YouTube bloğunu
+    # çiziyordu. Artık yol tek; hangi sayfanın çizileceğine format karar verir.
+    _fmt = _channel_format(cfg)
+    if _fmt == "yorum":
+        from short_bot.web.routes.yorum import edit as _yorum_edit
+        return _yorum_edit(slug)
+    if _fmt == "curated":
+        from short_bot.web.routes.curated import edit_curated as _kurate_edit
+        return _kurate_edit(slug)
     from short_bot.dna import ARCHETYPES
     from short_bot.web.cron_describe import describe_cron
     from short_bot.web.models import Run
@@ -205,10 +214,16 @@ def save(slug):
     if not path.exists():
         abort(404)
     cfg = load_channel(path)
-    # Reel kanalları reel-özel (reel-güvenli) save'i kullanır. Bayat sekmeden
-    # gelen bir POST'un DNA'yı bozmasını engelle (savunma derinliği).
-    if cfg.reel and cfg.reel.enabled:
-        return redirect(url_for("reel_edit.edit_reel", slug=slug))
+    # Tek rota, formata göre kaydedici. Kart/sesli kaydedicisi DNA'yı ve içerik
+    # kaynağını yeniden kuruyor; yorum ve kürate formlarından gelen bir POST'u
+    # ona vermek o kanalların ayarlarını bozardı (savunma derinliği).
+    _fmt = _channel_format(cfg)
+    if _fmt == "yorum":
+        from short_bot.web.routes.yorum import edit_save as _yorum_save
+        return _yorum_save(slug)
+    if _fmt == "curated":
+        from short_bot.web.routes.curated import edit_curated_save as _kurate_save
+        return _kurate_save(slug)
 
     keywords = _form_get_list("keywords") or list(cfg.keywords)
 

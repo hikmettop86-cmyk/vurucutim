@@ -23,7 +23,7 @@ def _cfg(**kw):
 
 def test_channel_format_table():
     from short_bot.config import ReelConfig, VoiceConfig
-    from short_bot.formats import channel_format, edit_path
+    from short_bot.formats import channel_format
     assert channel_format(_cfg()) == "card"
     assert channel_format(_cfg(content_source="trends")) == "card"
     v = VoiceConfig(enabled=True, voice_id="v")
@@ -31,8 +31,8 @@ def test_channel_format_table():
     assert channel_format(_cfg(content_source="trends", voice=v)) == "yorum"
     assert channel_format(_cfg(content_source="curated")) == "curated"
     assert channel_format(_cfg(reel=ReelConfig(enabled=True, voice_id="v"))) == "reel"
-    assert edit_path(_cfg(content_source="trends", voice=v)) == "/channels/x/edit-yorum"
-    assert edit_path(_cfg()) == "/channels/x/edit"
+    # Düzenleme yolu artık formata bakmıyor: dört format da /channels/<slug>/edit
+    # rotasından çiziliyor, `edit_path`/`FORMAT_EDIT_SUFFIX` kalktı.
 
 
 def test_format_spec_her_format_icin_var():

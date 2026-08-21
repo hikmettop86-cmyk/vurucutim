@@ -165,7 +165,7 @@ def new_create():
     )
     save_channel(channels_dir / f"{slug}.yaml", cfg)
     flash(f"'{name}' Gündem Yorum kanalı oluşturuldu. İlk videoyu 'Şimdi üret' ile dene.", "success")
-    return redirect(url_for("yorum.edit", slug=slug))
+    return redirect(url_for("channel_edit.edit", slug=slug))
 
 
 def _recent(slug: str, limit: int = 10):
@@ -189,6 +189,14 @@ def _recent(slug: str, limit: int = 10):
 
 
 @bp.route("/channels/<slug>/edit-yorum")
+def edit_eski(slug):
+    """Eski yol — tek rotaya kalıcı yönlendirme.
+
+    Kullanıcının kayıtlı sekmeleri ve tarayıcı geçmişi kırılmasın diye 301.
+    Sayfayı artık channel_edit.edit çiziyor (formata göre `edit`i çağırarak)."""
+    return redirect(url_for("channel_edit.edit", slug=slug), code=301)
+
+
 def edit(slug):
     path = _channels_dir() / f"{slug}.yaml"
     if not path.exists():
@@ -252,7 +260,7 @@ def edit_save(slug):
     except (ValidationError, ValueError) as e:
         first = e.errors()[0].get("msg", str(e)) if isinstance(e, ValidationError) and e.errors() else str(e)
         flash(f"Ayar geçersiz: {first}", "error")
-        return redirect(url_for("yorum.edit", slug=slug))
+        return redirect(url_for("channel_edit.edit", slug=slug))
     # Ortak alanlar (ad, handle, enabled, archived, YouTube bloğunun TAMAMI) tek
     # okuyucudan gelir. Bu sayfada eskiden yalnız `auto_upload` ve
     # `credentials_from` vardı; gizlilik, kategori, yükleme eşiği ve AI etiketi
@@ -273,7 +281,7 @@ def edit_save(slug):
     new_cfg = dataclasses.replace(c, **guncel)
     save_channel(path, new_cfg)
     flash("Gündem Yorum ayarları kaydedildi.", "success")
-    return redirect(url_for("yorum.edit", slug=slug))
+    return redirect(url_for("channel_edit.edit", slug=slug))
 
 
 @bp.route("/channels/<slug>/compile-day", methods=["POST"])
@@ -297,18 +305,18 @@ def compile_day(slug):
         total = total_seconds(clips)
         if not clips:
             flash("Bugün derlenecek klip yok.", "error")
-            return redirect(url_for("yorum.edit", slug=slug))
+            return redirect(url_for("channel_edit.edit", slug=slug))
         if total < MIN_TOTAL_S and not force:
             flash(f"Bugünkü {len(clips)} klip toplam {total:.0f} sn — 3 dk 10 sn altı YouTube'da Shorts "
                   f"sayılır. Daha fazla klip biriksin ya da 'yine de üret' için force=1 gönder.", "error")
-            return redirect(url_for("yorum.edit", slug=slug))
+            return redirect(url_for("channel_edit.edit", slug=slug))
         sid = produce_daily_compilation(
             c, eng=eng, day=day, templates_dir=current_app.config["SHORTBOT_TEMPLATES_DIR"],
             output_root=current_app.config["SHORTBOT_OUTPUT_ROOT"], ffmpeg=settings.ffmpeg_path,
             browser=settings.playwright_browser, force=force)
     except Exception as e:  # noqa: BLE001 — panel düğmesi; hata kullanıcıya
         flash(f"Derleme başarısız: {e}", "error")
-        return redirect(url_for("yorum.edit", slug=slug))
+        return redirect(url_for("channel_edit.edit", slug=slug))
     flash(f"Günün derlemesi üretildi (short #{sid}, {total:.0f} sn). Yükleme elle.", "success")
     return redirect(url_for("shorts.detail", short_id=sid) if "shorts.detail" in current_app.view_functions
                     else url_for("yorum.edit", slug=slug))

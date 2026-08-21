@@ -17,7 +17,6 @@ from __future__ import annotations
 import pytest
 
 from short_bot.config import load_channel
-from short_bot.formats import edit_path
 from short_bot.web import create_app
 
 _SETTINGS = (
@@ -62,9 +61,8 @@ def app(tmp_path):
 
 
 def _url(app, slug):
-    with app.app_context():
-        cfg = load_channel(app.config["SHORTBOT_CONFIG_DIR"] / "channels" / f"{slug}.yaml")
-    return edit_path(cfg)
+    """Tek düzenleme rotası — dört format da buradan çizilir."""
+    return f"/channels/{slug}/edit"
 
 
 ORTAK_ALANLAR = ("yt_privacy_status", "yt_min_score_for_upload",

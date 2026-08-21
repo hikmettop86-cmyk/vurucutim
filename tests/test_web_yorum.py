@@ -80,7 +80,7 @@ def test_list_has_button_badge_and_format_links(app):
     body = app.test_client().get("/channels").data.decode("utf-8")
     assert 'href="/channels/new-yorum"' in body
     assert "YORUM" in body
-    assert 'href="/channels/yorum/edit-yorum"' in body
+    assert 'href="/channels/yorum/edit"' in body
     assert 'href="/channels/kart/edit"' in body
 
 
@@ -99,7 +99,7 @@ def test_new_create_writes_channel_yaml(app, tmp_path):
             "voice_target_min": "35", "voice_target_max": "50", "voice_music_volume": "0.05",
             "script_model": "opus", "handle": "@gundem"}
     r = app.test_client().post("/channels/new-yorum", data=form)
-    assert r.status_code == 302 and r.headers["Location"].endswith("/channels/gundem-yorum/edit-yorum")
+    assert r.status_code == 302 and r.headers["Location"].endswith("/channels/gundem-yorum/edit")
     raw = _yaml(tmp_path, "gundem-yorum")
     assert raw["content_source"] == "trends" and raw["trends_region"] == "TR"
     assert raw["trends_min_volume"] == 5000 and raw["schedule_cron"] == "30 8-20/3 * * *"
@@ -117,16 +117,22 @@ def test_new_create_requires_voice(app, tmp_path):
 
 
 def test_edit_page_shows_format_fields_only(app):
-    body = app.test_client().get("/channels/yorum/edit-yorum").data.decode("utf-8")
+    body = app.test_client().get("/channels/yorum/edit").data.decode("utf-8")
     for needle in ('name="trends_region"', 'name="runs_per_day"', 'name="voice_persona"',
                    'name="voice_id"', "Şimdi üret", "compile-day", "Son üretimler"):
         assert needle in body, needle
     assert 'name="dna_bg_grad_1"' not in body and "Overflow" not in body
 
 
-def test_edit_redirects_non_yorum_channel(app):
-    r = app.test_client().get("/channels/kart/edit-yorum")
-    assert r.status_code == 302 and r.headers["Location"].endswith("/channels/kart/edit")
+def test_yorum_olmayan_kanal_kart_sayfasini_gorur(app):
+    """Tek rota, formata göre sayfa. Kart kanalı yorum şablonunu ASLA görmemeli.
+
+    Eskiden bu bir yönlendirme testiydi (edit -> edit-yorum). Yollar tek rotada
+    birleşince yönlendirme kalktı; korunması gereken davranış aynı: yanlış
+    formatın sayfası çizilmesin."""
+    html = app.test_client().get("/channels/kart/edit").get_data(as_text=True)
+    assert "Gündem Yorum" not in html
+    assert 'name="trends_intent"' not in html or 'name="keywords"' in html
 
 
 def test_edit_post_updates_fields(app, tmp_path):
@@ -139,7 +145,7 @@ def test_edit_post_updates_fields(app, tmp_path):
             "voice_target_min": "30", "voice_target_max": "45", "voice_music_volume": "0.08",
             "voice_model": "sonic-preview", "voice_volume": "1.2", "voice_emotion": "[sakin]",
             "script_model": "sonnet"}
-    r = app.test_client().post("/channels/yorum/edit-yorum", data=form)
+    r = app.test_client().post("/channels/yorum/edit", data=form)
     assert r.status_code == 302
     raw = _yaml(tmp_path, "yorum")
     assert raw["name"] == "Yorum 2" and raw["handle"] == "@y2"
@@ -152,7 +158,7 @@ def test_edit_post_updates_fields(app, tmp_path):
 
 
 def test_edit_post_invalid_speed_is_rejected(app, tmp_path):
-    r = app.test_client().post("/channels/yorum/edit-yorum",
+    r = app.test_client().post("/channels/yorum/edit",
                                data={"voice_speed": "0.5", "voice_id": "c1cf"}, follow_redirects=True)
     assert r.status_code == 200
     assert _yaml(tmp_path, "yorum")["voice"]["speed"] == 1.05
@@ -193,7 +199,7 @@ def test_edit_post_bagli_olmayan_odunc_kimligi_silmez(app, tmp_path):
                  encoding="utf-8")
 
     # 1) Sayfa, bağlı OLMAYAN kanalı da seçenek olarak sunmalı ve seçili tutmalı.
-    body = app.test_client().get("/channels/yorum/edit-yorum").data.decode("utf-8")
+    body = app.test_client().get("/channels/yorum/edit").data.decode("utf-8")
     assert 'value="kart"' in body and "selected" in body
     assert "henüz bağlı değil" in body
 
@@ -204,5 +210,5 @@ def test_edit_post_bagli_olmayan_odunc_kimligi_silmez(app, tmp_path):
             "voice_speed": "1.1", "voice_persona": "p", "voice_target_min": "35",
             "voice_target_max": "50", "voice_music_volume": "0.05",
             "credentials_from": "kart"}
-    assert app.test_client().post("/channels/yorum/edit-yorum", data=form).status_code == 302
+    assert app.test_client().post("/channels/yorum/edit", data=form).status_code == 302
     assert _yaml(tmp_path, "yorum")["youtube"]["credentials_from"] == "kart"

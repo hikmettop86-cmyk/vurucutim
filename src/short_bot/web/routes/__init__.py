@@ -18,8 +18,8 @@ def register_blueprints(app: Flask) -> None:
     )
     # Kanal formatı TEK yerden: liste parçaları düzenle bağlantısını ve rozeti
     # buradan alır (formats.channel_format) — if-zinciri kopyalanmasın.
-    from short_bot.formats import FORMAT_LABELS, channel_format, edit_path
-    app.jinja_env.globals.update(channel_format=channel_format, edit_path=edit_path,
+    from short_bot.formats import FORMAT_LABELS, channel_format
+    app.jinja_env.globals.update(channel_format=channel_format,
                                  FORMAT_LABELS=FORMAT_LABELS)
     app.register_blueprint(dashboard.bp)
     app.register_blueprint(shorts.bp)

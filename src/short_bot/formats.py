@@ -79,15 +79,6 @@ FORMATS: dict[str, FormatSpec] = {
 # unutulduğu klasik tuzağı doğurur.
 FORMAT_LABELS: dict[str, str] = {k: v.label for k, v in FORMATS.items()}
 
-# Kanal listesindeki "Düzenle" bağlantısının yolu (slug'dan sonraki parça).
-FORMAT_EDIT_SUFFIX: dict[str, str] = {
-    "card": "edit",
-    "voiced": "edit",
-    "yorum": "edit-yorum",
-    "reel": "edit-reel",
-    "curated": "edit-curated",
-}
-
 
 def channel_format(cfg) -> str:
     if getattr(cfg, "content_source", "rss") == "curated":
@@ -106,7 +97,3 @@ def channel_format(cfg) -> str:
 def format_spec(cfg) -> FormatSpec:
     """Kanalın FormatSpec'i. Bilinmeyen/eski format kart sayılır — panel çökmez."""
     return FORMATS.get(channel_format(cfg), FORMATS["card"])
-
-
-def edit_path(cfg) -> str:
-    return f"/channels/{cfg.slug}/{FORMAT_EDIT_SUFFIX[channel_format(cfg)]}"

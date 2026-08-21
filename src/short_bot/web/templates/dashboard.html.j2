@@ -428,7 +428,7 @@
           </td>
 
           <td class="px-3 py-2.5">
-            <a href="{{ edit_path(r.cfg) }}" class="block group">
+            <a href="/channels/{{ r.cfg.slug }}/edit" class="block group">
               <div class="text-[13.5px] font-semibold group-hover:text-claude-accent transition-colors">{{ r.name|e }}</div>
               <div class="font-mono text-[11px] text-claude-subtle">{{ r.slug|e }}</div>
             </a>
@@ -522,7 +522,7 @@
                       hx-on::after-request="if (event.detail.successful) window.location.href='/activity?channel={{ r.slug }}'"
                       class="px-2 py-1 rounded-md text-xs text-claude-muted hover:bg-claude-accent-soft hover:text-claude-accent transition-colors"
                       title="Şimdi üret">▶</button>
-              <a href="{{ edit_path(r.cfg) }}"
+              <a href="/channels/{{ r.cfg.slug }}/edit"
                  class="px-2 py-1 rounded-md text-xs text-claude-muted hover:bg-claude-surface-alt hover:text-claude-text transition-colors"
                  title="Düzenle">✎</a>
             </div>
