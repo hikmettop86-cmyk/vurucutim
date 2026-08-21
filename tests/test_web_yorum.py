@@ -78,7 +78,9 @@ def _yaml(tmp_path, slug):
 
 def test_list_has_button_badge_and_format_links(app):
     body = app.test_client().get("/channels").data.decode("utf-8")
-    assert 'href="/channels/new-yorum"' in body
+    # ÜÇ kurulum düğmesi tek girişe indi: format ekranda seçiliyor.
+    assert 'href="/channels/new"' in body
+    assert 'href="/channels/new-yorum"' not in body
     assert "YORUM" in body
     assert 'href="/channels/yorum/edit"' in body
     assert 'href="/channels/kart/edit"' in body

@@ -1,0 +1,82 @@
+{# Tek sohbet turu: kullanıcının cümlesi + Claude'un KARARLARI.
+   Gereken context: oid, girdi, cevap (SohbetCevabi), farklar, elenen
+
+   ÜSLUP: Claude soru sormaz, karar verir ve GEREKÇE yazar. Kullanıcı yalnız
+   beğenmediği satıra dokunur; hiçbir şey yazmadan da devam edebilir. #}
+<div class="flex gap-2.5 items-start">
+  <span class="w-6 h-6 rounded-lg bg-claude-surface-alt text-claude-muted grid place-items-center
+               text-[11px] font-semibold flex-none mt-0.5">S</span>
+  <p class="text-sm leading-relaxed pt-0.5">{{ girdi|e }}</p>
+</div>
+
+<div class="flex gap-2.5 items-start">
+  <span class="w-6 h-6 rounded-lg bg-claude-accent text-white grid place-items-center
+               font-serif text-[13px] flex-none mt-0.5">V</span>
+  <div class="min-w-0 flex-1">
+    <p class="text-sm leading-relaxed text-claude-muted">{{ cevap.mesaj|e }}</p>
+
+    {% if cevap.kararlar %}
+    <form method="post" action="/channels/sohbet/{{ oid }}/uygula" class="mt-2">
+      <div class="border border-claude-border rounded-xl overflow-hidden">
+        <div class="px-3 py-2 bg-claude-surface border-b border-claude-border
+                    text-[11px] uppercase tracking-wider text-claude-subtle font-semibold">
+          Kararlar — beğenmediğinin işaretini kaldır
+        </div>
+        {% for k in cevap.kararlar %}
+        <label class="flex items-start gap-3 px-3 py-2.5 bg-white border-b border-claude-border
+                      last:border-b-0 cursor-pointer
+                      {% if k.dikkat %}bg-claude-wait-soft border-l-[3px] border-l-claude-wait{% endif %}">
+          <input type="checkbox" name="alan" value="{{ k.alan }}" checked class="mt-1 flex-none">
+          <span class="min-w-0 flex-1">
+            <span class="block text-sm {% if k.dikkat %}font-semibold{% endif %}">{{ k.ozet|e }}</span>
+            <span class="block text-xs text-claude-subtle leading-relaxed mt-0.5">{{ k.gerekce|e }}</span>
+          </span>
+        </label>
+        {% endfor %}
+      </div>
+
+      {# FARK: özet "neyin yanlış olduğunu" insan diliyle söyler, bu kutu
+         "hangi alanın neye döneceğini" gösterir. İkisi olmadan sohbet ya
+         anlaşılmaz ya güvenilmez olur. #}
+      {% if farklar %}
+      <div class="mt-2 border border-claude-border rounded-lg overflow-hidden bg-claude-bg">
+        {% for alan, eski, yeni in farklar %}
+        <div class="flex items-baseline gap-2.5 px-3 py-1.5 font-mono text-xs
+                    border-b border-claude-border last:border-b-0 flex-wrap">
+          <span class="text-claude-subtle">{{ alan }}</span>
+          <span class="text-claude-error line-through">{{ eski if eski is not none else '—' }}</span>
+          <span class="text-claude-success font-semibold">{{ yeni }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <div class="flex gap-2 mt-2.5 flex-wrap">
+        <button type="submit"
+                class="bg-claude-accent hover:bg-claude-accent-hover text-white px-4 py-1.5
+                       rounded-lg text-sm font-semibold">İşaretlileri uygula</button>
+      </div>
+    </form>
+    {% endif %}
+
+    {% if elenen %}
+    <div class="mt-2 text-[11px] bg-claude-error-soft text-claude-error rounded-lg px-3 py-2">
+      Şu öneriler uygulanamadı (değiştirilemeyen alan): {{ elenen|join('; ')|e }}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% if cevap.oneriler %}
+{# Öneri çipleri: boş kutuya bakıp donmanın ("ne diyeceğimi bilemem") çaresi. #}
+<div id="oneriler" hx-swap-oob="innerHTML">
+  <span class="block text-[11px] text-claude-subtle mb-1.5">Ne diyeceğini bilemezsen:</span>
+  <div class="flex flex-wrap gap-1.5">
+    {% for o in cevap.oneriler %}
+    <button type="button" onclick="document.getElementById('girdi').value = this.textContent.trim(); document.getElementById('girdi').focus();"
+            class="text-xs px-3 py-1 rounded-full border border-claude-border-strong bg-white
+                   text-claude-muted hover:border-claude-accent hover:text-claude-accent">{{ o|e }}</button>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}

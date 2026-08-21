@@ -175,11 +175,18 @@ Türkçe yaz."""
 
 
 def prompt_kur(*, cfg, gecmis: Sequence[tuple[str, str]], girdi: str,
-               bulgular: Sequence[Any] = ()) -> str:
-    """Sohbet prompt'u. Geçmiş buraya GÖMÜLÜR (CLI oturumu kullanılmaz)."""
-    from short_bot.formats import channel_format
+               bulgular: Sequence[Any] = (), fmt: str | None = None) -> str:
+    """Sohbet prompt'u. Geçmiş buraya GÖMÜLÜR (CLI oturumu kullanılmaz).
 
-    satirlar = [_USLUP, "", f"KANAL: {cfg.slug} ({channel_format(cfg)} formatı)",
+    `fmt`: KURULUM sırasında şart. Taslakta ses/montaj bloğu kapalı olduğu
+    için `channel_format(cfg)` "card" der; kullanıcının seçtiği format
+    çağırandan gelir.
+    """
+    from short_bot.formats import FORMATS, channel_format
+
+    fmt = fmt or channel_format(cfg)
+    ad = FORMATS[fmt].label if fmt in FORMATS else fmt
+    satirlar = [_USLUP, "", f"KANAL: {cfg.slug} ({ad} formatı)",
                 "MEVCUT AYARLAR:"]
     for alan in sorted(YAZILABILIR):
         deger = oku(cfg, alan)
@@ -202,13 +209,59 @@ def prompt_kur(*, cfg, gecmis: Sequence[tuple[str, str]], girdi: str,
     return "\n".join(satirlar)
 
 
+def taslak(fmt: str, *, language: str = "tr", slug: str = "yeni-kanal"):
+    """Kurma sohbetinin üzerinde çalışacağı BOŞ kanal.
+
+    Kurma ve düzenleme aynı motoru kullansın diye kurulum da bir
+    ChannelConfig üstünde yürür: sohbet kararları `uygula` ile bu taslağa
+    işlenir, kullanıcı farkı görür, "Kur"a basınca YAML yazılır.
+
+    SLUG BURADA GEÇİCİDİR ve `YAZILABILIR` listesinde değildir: kaydederken
+    kanalın adından türetilir. LLM'in slug yazmasına izin vermek dosya
+    yollarını (output_dir, css, kimlik klasörü) tutarsız bırakırdı.
+    """
+    from short_bot.config import ChannelConfig, ReelConfig, VoiceConfig
+    from short_bot.locale import RSS_LOCALES
+
+    ortak = dict(
+        slug=slug, name="", keywords=[], rss_locale=RSS_LOCALES.get(language, ""),
+        schedule_cron="0 9,15,20 * * *", duration_s=6, min_score=6.0,
+        max_candidates_per_run=10, template="flas",
+        colors={"primary": "#d0021b", "accent": "#ffe600",
+                "bg_gradient": ["#3a3a3a", "#141414"]},
+        handle=f"@{slug}", output_dir=f"output/{slug}",
+        # YENİ KANAL CRON'U KAPALI KURULUR. Kullanıcı önce birkaç video
+        # üretip sonucu görsün; açık kurmak, ayarları oturmamış bir kanalı
+        # doğrudan üretime sokmak demek.
+        enabled=False, language=language,
+    )
+    # SES/MONTAJ BLOĞU KAPALI KURULUR. `VoiceConfig(enabled=True)` ve
+    # `ReelConfig(enabled=True)` `voice_id` zorunlu kılıyor ve taslakta henüz
+    # ses seçilmedi. Yer tutucu bir voice_id koymak daha kötü olurdu: kurulum
+    # yarıda kalırsa diskte çalışmayan bir kanal kalırdı.
+    #
+    # Bu yüzden taslağın FORMATI `channel_format(cfg)`den okunamaz — formatı
+    # çağıran taşır (rota parametresi) ve `prompt_kur(fmt=...)` ile verilir.
+    if fmt == "voiced":
+        return ChannelConfig(**ortak, voice=VoiceConfig(enabled=False))
+    if fmt == "yorum":
+        return ChannelConfig(**ortak, content_source="trends",
+                             trends_intent="question", trends_min_volume=5000,
+                             voice=VoiceConfig(enabled=False, provider="cartesia",
+                                               target_duration_s=(35, 50)))
+    if fmt == "curated":
+        return ChannelConfig(**ortak, content_source="curated",
+                             reel=ReelConfig(enabled=False))
+    return ChannelConfig(**ortak)          # card
+
+
 def konus(*, cfg, gecmis: Sequence[tuple[str, str]], girdi: str,
           llm: Callable[..., SohbetCevabi],
-          bulgular: Sequence[Any] = ()) -> SohbetCevabi:
+          bulgular: Sequence[Any] = (), fmt: str | None = None) -> SohbetCevabi:
     """Tek sohbet turu. `llm` imzası `sonnet_json(prompt, schema, **kw)`.
 
     Şema doğrulaması çağrı katmanında yapılır (sonnet_json Pydantic ile
     doğrular ve uymazsa modele tekrar sorar) — burada ayrıca ayrıştırma yok.
     """
-    return llm(prompt_kur(cfg=cfg, gecmis=gecmis, girdi=girdi, bulgular=bulgular),
-               SohbetCevabi)
+    return llm(prompt_kur(cfg=cfg, gecmis=gecmis, girdi=girdi,
+                          bulgular=bulgular, fmt=fmt), SohbetCevabi)

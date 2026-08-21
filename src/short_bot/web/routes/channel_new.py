@@ -21,18 +21,10 @@ def _slug_from_name(name: str) -> str:
     return name or "channel"
 
 
-@bp.route("/channels/new")
-def form():
-    import yaml as _yaml
-    secrets_path = current_app.config.get("SHORTBOT_SECRETS_PATH")
-    pexels_key_set = False
-    if secrets_path and Path(secrets_path).exists():
-        try:
-            secrets = _yaml.safe_load(Path(secrets_path).read_text(encoding="utf-8")) or {}
-            pexels_key_set = bool(secrets.get("pexels_api_key"))
-        except Exception:
-            pexels_key_set = False
-    return render_template("channels/new.html.j2", pexels_key_set=pexels_key_set)
+# ESKİ DNA SİHİRBAZI GİRİŞİ KALDIRILDI. /channels/new artık format seçimi
+# ekranı (channel_chat.format_sec); kurulum sohbetle yürüyor. generate/save
+# uçları DNA üretimi için duruyor — düzenleme sayfasındaki "DNA yeniden üret"
+# onları kullanıyor.
 
 
 @bp.route("/channels/new/generate", methods=["POST"])
@@ -114,7 +106,7 @@ def save():
     )
     if not ok:
         flash(f"DNA render testi başarısız: {reason}. Tekrar üretmeyi dene.", "error")
-        return redirect(url_for("channel_new.form"))
+        return redirect(url_for("channel_chat.format_sec"))
 
     css_path.parent.mkdir(parents=True, exist_ok=True)
     css_path.write_text(build_css_override(dna), encoding="utf-8")
@@ -124,7 +116,7 @@ def save():
         from short_bot.config import GeneratorConfig
         if len(generator_topic_in) < 10:
             flash("generator.topic en az 10 karakter olmalı.", "error")
-            return redirect(url_for("channel_new.form"))
+            return redirect(url_for("channel_chat.format_sec"))
         generator = GeneratorConfig(topic=generator_topic_in)
 
     # Build BgVideoConfig from session (if user enabled bg_video in step 1)

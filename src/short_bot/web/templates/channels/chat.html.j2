@@ -1,0 +1,182 @@
+{% extends "base.html.j2" %}
+{% block title %}Vurucu TİM — {{ cfg.name or spec.label }}{% endblock %}
+{% block content %}
+{# Solda sohbet, sağda kanalın kendisi. Kurulumda taslak, kurulu kanalda özet.
+   Sayfa açılırken LLM ÇAĞRILMAZ: teşhis düz SQL'den gelir (channel_diag). #}
+<div class="max-w-6xl mx-auto">
+
+  <div class="flex items-start justify-between gap-4 mb-5 flex-wrap">
+    <div>
+      <a href="/channels" class="text-claude-muted hover:text-claude-text text-sm">← Kanallar</a>
+      <h1 class="font-serif font-bold mt-1 flex items-center gap-2.5">
+        {{ cfg.name or ('Yeni ' ~ spec.label ~ ' kanalı') }}
+        <span class="text-[11px] font-sans font-semibold uppercase tracking-wider
+                     bg-claude-accent-soft text-claude-accent px-2.5 py-1 rounded-full">
+          {{ spec.glyph }} {{ spec.label }}</span>
+      </h1>
+      {% if not kurulum %}
+      <p class="text-claude-muted text-sm mt-1 font-mono">{{ cfg.slug }}</p>
+      {% endif %}
+    </div>
+    {% if not kurulum %}
+    <div class="flex gap-2">
+      <a href="/channels/{{ cfg.slug }}/edit"
+         class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border
+                px-3 py-2 rounded-lg text-sm">Ayarları elle düzenle</a>
+      <button hx-post="/shorts/run-now" hx-vals='{"slug": "{{ cfg.slug }}"}' hx-swap="none"
+              class="bg-claude-surface hover:bg-claude-surface-alt border border-claude-border
+                     px-3 py-2 rounded-lg text-sm">▶ Şimdi üret</button>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] gap-4 items-start">
+
+    {# ── SOL: sohbet ─────────────────────────────────────────────────── #}
+    <div class="bg-white border border-claude-border rounded-xl shadow-soft overflow-hidden">
+      <header class="px-4 py-2.5 border-b border-claude-border bg-claude-surface
+                     flex items-center justify-between gap-3">
+        <h2 class="font-semibold text-[13px] tracking-wide m-0">
+          {{ 'Kurma sohbeti' if kurulum else 'Sohbet' }}</h2>
+        <span class="text-[11px] text-claude-subtle">Claude CLI · Sonnet 5</span>
+      </header>
+
+      <div id="thread" class="p-4 flex flex-col gap-3.5 max-h-[60vh] overflow-y-auto">
+        {% if bulgular %}
+        {# Açılış: Claude ilk sözü söyler. Bu METİN LLM'DEN GELMEZ — hepsi ölçüm
+           (kaç gündür yayın yok, kaç koşu boş bitti). Her sayfa açılışında model
+           çağırmak hem yavaş hem gereksiz masraf olurdu. #}
+        <div class="flex gap-2.5 items-start">
+          <span class="w-6 h-6 rounded-lg bg-claude-accent text-white grid place-items-center
+                       font-serif text-[13px] flex-none mt-0.5">V</span>
+          <div class="min-w-0 flex-1">
+            <p class="text-sm text-claude-muted">Kanalı okudum. {{ bulgular|length }} şey dikkatimi çekti.</p>
+            <div class="mt-2 border border-claude-border rounded-xl overflow-hidden">
+              {% for b in bulgular %}
+              <div class="flex items-start gap-3 px-3 py-2.5 bg-white border-b border-claude-border
+                          last:border-b-0 {% if not b.duzeltme %}bg-claude-wait-soft border-l-[3px] border-l-claude-wait{% endif %}">
+                <span class="min-w-0 flex-1">
+                  <span class="block text-sm {% if not b.duzeltme %}font-semibold{% endif %}">{{ b.ozet|e }}</span>
+                  <span class="block text-xs text-claude-subtle leading-relaxed mt-0.5">{{ b.gerekce|e }}</span>
+                </span>
+                {% if b.duzeltme %}
+                <form method="post" action="/channels/{{ cfg.slug }}/bulgu/{{ b.kod }}" class="flex-none">
+                  <button class="bg-claude-accent hover:bg-claude-accent-hover text-white
+                                 px-3 py-1 rounded-lg text-xs font-semibold">düzelt</button>
+                </form>
+                {% else %}
+                {# Çözümü olmayan bulgu BİLDİRİLİR, düzeltilmez: "11 gündür yayın
+                   yok" bir ayar hatası değil, operatör kararı. #}
+                <span class="text-[11px] text-claude-wait whitespace-nowrap flex-none pt-1">senin kararın</span>
+                {% endif %}
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+        {% elif not kurulum %}
+        <p class="text-sm text-claude-subtle">Kanalı okudum — düzeltilmesi gereken bir şey görünmüyor.</p>
+        {% else %}
+        <div class="flex gap-2.5 items-start">
+          <span class="w-6 h-6 rounded-lg bg-claude-accent text-white grid place-items-center
+                       font-serif text-[13px] flex-none mt-0.5">V</span>
+          <p class="text-sm text-claude-muted pt-0.5">
+            Ne tür bir <b>{{ spec.label }}</b> kanalı istediğini tek cümleyle yaz —
+            gerisini ben kurarım, beğenmediğin kararı değiştirirsin.
+          </p>
+        </div>
+        {% endif %}
+      </div>
+
+      <div id="oneriler" class="px-4 pt-3 border-t border-dashed border-claude-border">
+        <span class="block text-[11px] text-claude-subtle mb-1.5">Örnek:</span>
+        <div class="flex flex-wrap gap-1.5">
+          {% set ornekler = ({
+            'card':    ['Beşiktaş için 6 saniyelik kart kanalı', 'günde 3 video olsun'],
+            'voiced':  ['taraftar yorumu, 40 saniye', 'sesi latidoblanco gibi olsun'],
+            'yorum':   ['Almanca ama Avusturya gündemi', 'tarafsız ama görüşlü bir ton'],
+            'curated': ['hayvan klipleri, mahalle ağzı anlatım', 'günde 2 video'],
+          }).get(fmt, []) %}
+          {% for o in ornekler %}
+          <button type="button"
+                  onclick="document.getElementById('girdi').value = this.textContent.trim(); document.getElementById('girdi').focus();"
+                  class="text-xs px-3 py-1 rounded-full border border-claude-border-strong bg-white
+                         text-claude-muted hover:border-claude-accent hover:text-claude-accent">{{ o }}</button>
+          {% endfor %}
+        </div>
+      </div>
+
+      <form class="flex gap-2 p-3.5 border-t border-claude-border bg-claude-surface mt-3"
+            hx-post="/channels/sohbet/{{ oid }}"
+            hx-target="#thread" hx-swap="beforeend"
+            hx-on::after-request="this.reset(); document.getElementById('thread').scrollTop = 99999">
+        <input type="text" name="girdi" id="girdi" autocomplete="off"
+               placeholder="…ya da kendi cümlenle yaz"
+               class="flex-1 bg-white border border-claude-border-strong rounded-lg px-3 py-2 text-sm">
+        <button type="submit"
+                class="bg-claude-accent hover:bg-claude-accent-hover text-white px-4 py-2
+                       rounded-lg text-sm font-semibold whitespace-nowrap">Gönder</button>
+      </form>
+    </div>
+
+    {# ── SAĞ: kanalın kendisi ────────────────────────────────────────── #}
+    <div class="bg-white border border-claude-border rounded-xl shadow-soft overflow-hidden">
+      <header class="px-4 py-2.5 border-b border-claude-border bg-claude-surface
+                     flex items-center justify-between gap-3">
+        <h2 class="font-semibold text-[13px] tracking-wide m-0">
+          {{ 'Kanal taslağı' if kurulum else 'Kanal' }}</h2>
+        {% if kurulum %}<span class="text-[11px] text-claude-subtle">henüz yazılmadı</span>{% endif %}
+      </header>
+
+      <div class="px-4 py-3">
+        {% macro satir(ad, deger, ipucu='') %}
+        <div class="grid grid-cols-[86px_minmax(0,1fr)] gap-2.5 items-baseline py-1.5
+                    border-b border-claude-border last:border-b-0">
+          <span class="text-[11px] text-claude-subtle">{{ ad }}</span>
+          <span class="text-[13.5px] break-words">
+            {% if deger %}{{ deger }}{% else %}<span class="text-claude-subtle italic">belirlenmedi</span>{% endif %}
+            {% if ipucu %}<span class="text-[11px] text-claude-subtle"> · {{ ipucu }}</span>{% endif %}
+          </span>
+        </div>
+        {% endmacro %}
+
+        {{ satir('Format', spec.label) }}
+        {{ satir('Ad', cfg.name) }}
+        {{ satir('Dil', LANGUAGES | selectattr('0', 'eq', cfg.language) | map(attribute=1) | first | default(cfg.language)) }}
+        {% if cfg.content_source == 'trends' %}
+        {{ satir('Trends', (cfg.trends_region or 'dilden') ~ ' · hacim ≥ ' ~ '{:,}'.format(cfg.trends_min_volume).replace(',', '.')) }}
+        {% endif %}
+        {% if cfg.voice %}
+        {{ satir('Ses', (cfg.voice.voice_id or '—') ~ ' · ' ~ cfg.voice.provider,
+                 (cfg.voice.target_duration_s[0]|string) ~ '-' ~ (cfg.voice.target_duration_s[1]|string) ~ ' sn') }}
+        {% endif %}
+        {{ satir('Zamanlama', cfg.schedule_cron|cron_human) }}
+        {{ satir('Cron', 'açık' if cfg.enabled else 'kapalı',
+                 '' if cfg.enabled else 'elle çalıştır') }}
+        {{ satir('YouTube', '@' ~ cfg.handle.lstrip('@') if cfg.handle else '',
+                 'otomatik yükleme açık' if (cfg.youtube and cfg.youtube.auto_upload) else 'elle yükleme') }}
+      </div>
+
+      <div class="px-4 py-3.5 border-t border-claude-border bg-claude-surface flex flex-col gap-2">
+        {% if kurulum %}
+        <p class="text-[11.5px] text-claude-subtle leading-relaxed m-0">
+          Hiçbir şey yazılmadı. "Kanalı kur"a basana kadar ne YAML var, ne CSS.
+        </p>
+        <form method="post" action="/channels/sohbet/{{ oid }}/kur" class="flex gap-2">
+          <button type="submit"
+                  class="flex-1 bg-claude-accent hover:bg-claude-accent-hover text-white
+                         py-2 rounded-lg text-sm font-semibold">Kanalı kur</button>
+          <a href="/channels" class="px-3 py-2 rounded-lg text-sm text-claude-muted
+                                     border border-claude-border-strong bg-white">Vazgeç</a>
+        </form>
+        {% else %}
+        <p class="text-[11.5px] text-claude-subtle leading-relaxed m-0">
+          Değişiklikler <code class="font-mono">config/channels/{{ cfg.slug }}.yaml</code>
+          dosyasına yazılır.
+        </p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

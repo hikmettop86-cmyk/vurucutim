@@ -14,7 +14,7 @@ def register_blueprints(app: Flask) -> None:
         generator_test, system, youtube, youtube_stats, youtube_overview,
         activity, community, feeds,
         topic_bank, series, autopilot, lang_packs,
-        curated, cartesia_api, yorum, gundem,
+        curated, cartesia_api, yorum, gundem, channel_chat,
     )
     # Kanal formatı TEK yerden: liste parçaları düzenle bağlantısını ve rozeti
     # buradan alır (formats.channel_format) — if-zinciri kopyalanmasın.
@@ -25,6 +25,9 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(shorts.bp)
     app.register_blueprint(feeds.bp)
     app.register_blueprint(channels.bp)
+    # Sohbet blueprint'i channel_new'DEN ÖNCE: /channels/new artık format
+    # seçimi ekranı (eski DNA sihirbazı değil).
+    app.register_blueprint(channel_chat.bp)
     app.register_blueprint(channel_new.bp)
     app.register_blueprint(channel_edit.bp)
     app.register_blueprint(preview.bp)

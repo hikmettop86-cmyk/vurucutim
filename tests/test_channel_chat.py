@@ -161,3 +161,45 @@ def test_konus_llm_cagirir_ve_semayi_dogrular():
     assert c.oneriler == ["günde 3 olsun"]
     assert cagri["schema"] is SohbetCevabi
     assert "kanal kur" in cagri["prompt"]
+
+
+# --- taslak ----------------------------------------------------------------
+
+def test_taslak_format_isaretlerini_tasir():
+    """Ses/montaj bloğu KAPALI kurulur (voice_id henüz seçilmedi ve Pydantic
+    enabled=True iken onu zorunlu kılıyor). Bu yüzden taslağın formatı
+    channel_format'tan OKUNAMAZ — çağıran taşır ve prompt_kur(fmt=...) alır."""
+    from short_bot.channel_chat import taslak
+    assert taslak("voiced").voice is not None and taslak("voiced").voice.enabled is False
+    assert taslak("yorum").content_source == "trends"
+    assert taslak("yorum").voice.provider == "cartesia"
+    assert taslak("curated").content_source == "curated"
+    assert taslak("curated").reel is not None
+    assert taslak("card").voice is None
+
+
+def test_prompt_formati_disaridan_alir():
+    from short_bot.channel_chat import prompt_kur, taslak
+    p = prompt_kur(cfg=taslak("voiced"), gecmis=[], girdi="x", fmt="voiced")
+    assert "Sesli" in p
+
+
+def test_taslak_CRON_KAPALI_kurulur():
+    """Ayarları oturmamış kanalı doğrudan üretime sokmak yanlış."""
+    from short_bot.channel_chat import taslak
+    assert taslak("card").enabled is False
+
+
+def test_taslak_uzerinde_sohbet_kararlari_uygulanir():
+    """Kurma ve düzenleme AYNI motoru kullanır — kurulum da bir cfg üstünde yürür."""
+    from short_bot.channel_chat import Karar, taslak, uygula
+    t = taslak("yorum")
+    yeni = uygula([Karar(alan="trends_region", deger="AT", ozet="", gerekce=""),
+                   Karar(alan="name", deger="Wien Klartext", ozet="", gerekce="")], t)
+    assert yeni.trends_region == "AT"
+    assert yeni.name == "Wien Klartext"
+
+
+def test_taslak_dili_locale_ye_yansir():
+    from short_bot.channel_chat import taslak
+    assert "gl=DE" in taslak("card", language="de").rss_locale

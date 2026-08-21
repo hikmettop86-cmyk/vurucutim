@@ -23,14 +23,11 @@
       <input type="text" x-model="search"
              placeholder="Kanal ara..."
              class="bg-claude-surface border border-claude-border px-3 py-1.5 rounded-lg text-sm w-48">
-      <a href="/channels/new" class="bg-claude-accent hover:bg-claude-accent-hover text-white px-4 py-2 rounded-lg font-semibold text-sm">
+      {# ÜÇ ayrı kurulum düğmesi (+Yeni Kanal, +Kürate, +Gündem Yorum) tek
+         girişe indi: format ekranda seçiliyor, kurulum sohbetle yürüyor. #}
+      <a href="/channels/new"
+         class="bg-claude-accent hover:bg-claude-accent-hover text-white px-4 py-2 rounded-lg font-semibold text-sm">
         + Yeni Kanal
-      </a>
-      <a href="/channels/new-curated" class="bg-claude-surface border border-claude-accent text-claude-accent hover:bg-claude-accent-soft px-4 py-2 rounded-lg font-semibold text-sm">
-        💎 + Kürate Kanal
-      </a>
-      <a href="/channels/new-yorum" class="bg-claude-surface border border-claude-error text-claude-error hover:bg-claude-error-soft px-4 py-2 rounded-lg font-semibold text-sm">
-        🎙️ + Gündem Yorum
       </a>
     </div>
   </div>
