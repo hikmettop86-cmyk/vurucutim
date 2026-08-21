@@ -201,9 +201,22 @@ görünmez yapar.
 | FR | yeni | `spor` | 34 | Mevcut FR kanalı yok; en temiz kimlik |
 | JP | yeni | `magazin` | 32 | Japon trend havuzu talent/TV ağırlıklı |
 
-Bu spec YALNIZCA mevcut üç kanalın (`gundem-yorum`, `deutschland-klartext`,
-`weltgeschehen-aktuell`) dikeyini ayarlar. ES/US/FR/JP satırları kayıt içindir;
-o kanallar ayrı iştir — mekanizma hazır olduğunda Kanal Atölyesi'nden kurulur.
+Bu spec mevcut kanalların dikeyini ayarlar. ES/US/FR/JP satırları kayıt
+içindir; o kanallar ayrı iştir — mekanizma hazır olduğunda Kanal Atölyesi'nden
+kurulur.
+
+**Uygulama notu (2026-08-21):** `weltgeschehen-aktuell.yaml` uygulama sırasında
+diskten kayboldu (`aslangundem-plus` ve `real-madrid-en-espanol` ile birlikte;
+üçü de gitignore'da olduğu için geri getirilemedi). Kullanıcı silmiş olabilir —
+oturum başındaki `git status` zaten üç kanal YAML'ının silindiğini gösteriyordu
+(`deutschland-kompakt`, `gundem`, `mahalle-vahsisi`), yani bir temizlik sürüyor
+gibi. Bu yüzden magazin dikeyi UYGULANMADI; kanal yeniden kurulursa
+`trends_vertical: magazin` + `trends_min_volume: 2000` verilmeli.
+
+**Canlı arz doğrulaması (2026-08-21, gerçek API):** TR/para **11** aday,
+DE/adalet **27**, DE/magazin **23** — üçü de `trends_min_candidates` eşiğinin
+(4) çok üstünde. TR/para listesi içerik olarak da tutarlı çıktı: altın rekoru,
+sucukta tağşiş, şirket satın alma, iflas, mevduat getirisi.
 
 ### 5.1 Hacim tabanı düzeltmeleri
 
