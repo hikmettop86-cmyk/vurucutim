@@ -22,7 +22,8 @@ from pathlib import Path
 from flask import (Blueprint, abort, current_app, flash, redirect,
                    render_template, request, url_for)
 
-from short_bot.archetype_design import gercek_render, gercek_vision, tasarla
+from short_bot.archetype_design import (aday_kaydet, adaylar_uret,
+                                        gercek_render, gercek_vision)
 from short_bot.channel_chat import (Karar, SohbetCevabi, YasakAlan, fark,
                                     konus, taslak, uygula)
 from short_bot.config import list_channels, load_channel, save_channel
@@ -41,6 +42,11 @@ _KILIT = threading.Lock()
 # vision kapısı, en fazla 3 tur). İstek içinde koşarsa tarayıcı zaman aşımına
 # uğrar; `curated._jobs` deseniyle arka planda koşuyor.
 _ISLER: dict[str, dict] = {}
+
+# Kaç aday üretilsin. Ücretsiz havuzda bir aday ~7 sn (ölçüldü), yani üç
+# aday ucuz; asıl kazanç ÇEŞİTLİLİK — tek adayda model hep aynı kalıba
+# yaklaşıyordu ("şablonlar birbirine benzemesin").
+ADAY_SAYISI = 3
 
 
 def _is_yaz(jid: str, **alanlar) -> None:
@@ -165,9 +171,11 @@ def sohbet_turu(oid):
     if not girdi:
         return "", 204
 
+    kurulum = bool(o.get("kurulum"))
     try:
         cevap = konus(cfg=o["cfg"], gecmis=o["gecmis"], girdi=girdi,
-                      llm=_llm(), fmt=o["fmt"], bulgular=o.get("bulgular", ()))
+                      llm=_llm(), fmt=o["fmt"], bulgular=o.get("bulgular", ()),
+                      kurulum=kurulum)
     except Exception as e:   # noqa: BLE001 — kullanıcıya SEBEBİ söyle
         cevap = SohbetCevabi(
             mesaj=f"Modele ulaşamadım: {e}. Ayarları elle düzenleyebilirsin.")
@@ -183,7 +191,7 @@ def sohbet_turu(oid):
     gecerli, elenen = [], []
     for k in cevap.kararlar:
         try:
-            uygula([k], o["cfg"])
+            uygula([k], o["cfg"], kurulum)
             gecerli.append(k)
         except Exception as e:   # noqa: BLE001 — tur çökmesin, karar elensin
             elenen.append(f"{k.alan}: {e}")
@@ -195,7 +203,7 @@ def sohbet_turu(oid):
         o["bekleyen"] = gecerli
     return render_template("_partials/chat_turn.html.j2", oid=oid,
                            girdi=girdi, cevap=cevap, elenen=elenen,
-                           farklar=fark(gecerli, o["cfg"]))
+                           farklar=fark(gecerli, o["cfg"], kurulum))
 
 
 @bp.post("/channels/sohbet/<oid>/uygula")
@@ -209,7 +217,7 @@ def kararlari_uygula(oid):
     if not kararlar:
         return redirect(_geri(o, oid))
     try:
-        yeni = uygula(kararlar, o["cfg"])
+        yeni = uygula(kararlar, o["cfg"], bool(o.get("kurulum")))
     except YasakAlan as e:
         flash(str(e), "error")
         return redirect(_geri(o, oid))
@@ -440,59 +448,6 @@ def _tasarim_llm(settings, secrets):
     return _f
 
 
-def _arketip_isi(jid: str, *, niyet: str, ad: str, slug: str, channels_dir,
-                 templates_dir, settings, secrets: dict) -> None:
-    """Arka plan işi: yeni şablon tasarla, geçerse kanalı ona geçir.
-
-    `current_app` KULLANMAZ — thread'in uygulama bağlamı yok, gereken her şey
-    parametreyle gelir (`curated._run_fetch_job` deseni).
-
-    GEÇEMEZSE KANALA DOKUNULMAZ: `tasarla` üç turda kapılardan geçemeyen
-    şablonu zaten diske yazmıyor; kanalı var olmayan bir şablona geçirmek
-    onu tamamen kırardı.
-    """
-    _is_yaz(jid, durum="calisiyor", slug=slug, niyet=niyet)
-    try:
-        sonuc = tasarla(niyet, ad=ad, templates_dir=Path(templates_dir),
-                        settings=settings,
-                        metin_llm=_tasarim_llm(settings, secrets),
-                        vision_call=gercek_vision(settings=settings,
-                                                  secrets=secrets),
-                        render_fn=gercek_render(settings=settings))
-    except Exception as e:   # noqa: BLE001 — iş çökmesin, sebebi göster
-        log.warning(f"[arketip] {slug}: {e}")
-        _is_yaz(jid, durum="hata", sebep=str(e))
-        return
-
-    if not sonuc.ok:
-        _is_yaz(jid, durum="hata", sebep=sonuc.sebep)
-        return
-
-    try:
-        yol = Path(channels_dir) / f"{slug}.yaml"
-        cfg = load_channel(yol)
-        yeni_dna = (cfg.dna.model_copy(update={"archetype": sonuc.slug})
-                    if cfg.dna is not None else None)
-        yeni_cfg = dataclasses.replace(cfg, template=sonuc.slug, dna=yeni_dna)
-        # KANALI BOZMAKTANSA TASARIMI BIRAK. Canlıda şablon üretildi, kanal ona
-        # geçirildi ve kanal OKUNAMAZ oldu ("unknown archetype: bayern-m-nih"):
-        # `DnaSpec.archetype` kaydı yalnız import anında okuyordu. Kayıt
-        # düzeltildi ama kapı burada da dursun — şablon geçici, kanal kalıcı.
-        eksik = _okunamayan_kanal(yeni_cfg, yol)
-        if eksik:
-            _is_yaz(jid, durum="hata", sablon=sonuc.slug,
-                    sebep=(f"Şablon üretildi ({sonuc.slug}) ama kanala "
-                           f"bağlanamadı: {eksik} Kanal olduğu gibi bırakıldı."))
-            return
-        save_channel(yol, yeni_cfg)
-    except Exception as e:   # noqa: BLE001 — şablon VAR, yalnız kanal geçemedi
-        _is_yaz(jid, durum="hata", sablon=sonuc.slug,
-                sebep=f"Şablon üretildi ({sonuc.slug}) ama kanala bağlanamadı: {e}")
-        return
-
-    _is_yaz(jid, durum="bitti", sablon=sonuc.slug, tur=sonuc.tur)
-
-
 def slug_isi(slug: str) -> dict | None:
     """Bu kanalın EN SON arketip tasarım işi. Kanal sayfası bunu gösterir."""
     with _KILIT:
@@ -525,24 +480,147 @@ def tasarim_niyeti(cfg) -> str:
 
 
 def arketip_baslat(cfg) -> str:
-    """Arka planda yeni şablon tasarımı başlatır, iş kimliğini döndürür.
+    """Arka planda ÜÇ aday tasarımı başlatır, iş kimliğini döndürür.
 
-    KANAL BEKLETİLMEZ: kurulum DNA ile hemen biter (ölçüldü ~70 sn), şablon
-    tasarımı arkadan gelir (ölçüldü 376 sn, 2. turda geçti). Geçmezse kanal
-    DNA'nın seçtiği arketiple kalır ve sebep panelde yazılı durur.
+    KANAL BEKLETİLMEZ: kurulum DNA ile hemen biter (ölçüldü ~70 sn), adaylar
+    arkadan gelir. Hiçbiri kanala uygulanmaz — kullanıcı seçer.
     """
     jid = uuid.uuid4().hex[:12]
     niyet = tasarim_niyeti(cfg)
-    _is_yaz(jid, durum="calisiyor", slug=cfg.slug, niyet=niyet)
+    _is_yaz(jid, durum="calisiyor", slug=cfg.slug, niyet=niyet, adaylar=[])
     threading.Thread(
         target=_arketip_isi, args=(jid,),
         kwargs=dict(niyet=niyet, ad=cfg.name or cfg.slug, slug=cfg.slug,
                     channels_dir=_channels_dir(),
                     templates_dir=current_app.config["SHORTBOT_TEMPLATES_DIR"],
                     settings=current_app.config["SHORTBOT_SETTINGS"],
-                    secrets=_secrets()),
+                    secrets=_secrets(), kanit_dir=_kanit_dir(jid)),
         daemon=True).start()
     return jid
+
+
+def _arketip_isi(jid: str, *, niyet: str, ad: str, slug: str, channels_dir,
+                 templates_dir, settings, secrets: dict, kanit_dir=None) -> None:
+    """Arka plan işi: ÜÇ aday tasarla, kullanıcıya seçtir.
+
+    `current_app` KULLANMAZ — thread'in uygulama bağlamı yok, gereken her şey
+    parametreyle gelir (`curated._run_fetch_job` deseni).
+
+    KANALA DOKUNULMAZ: adaylar diske yazılmaz, kanal seçim yapılana kadar
+    olduğu gibi kalır. Kullanıcı kararı (2026-08-21): "3 aday üret, ben
+    seçeyim" — her adaya farklı tasarım dili verilir ki şablonlar birbirine
+    benzemesin.
+    """
+    _is_yaz(jid, durum="calisiyor", slug=slug, niyet=niyet, adaylar=[])
+    try:
+        # ÖNİZLEME = GERÇEK ÇIKTI: adaylar kanalın KENDİ paletiyle, kendi
+        # handle'ı ve diliyle render edilir. Eskiden sabit kırmızı/sarı
+        # jenerik paletle çiziliyordu; gösterilen kare üretilecek kare DEĞİLDİ.
+        cfg = load_channel(Path(channels_dir) / f"{slug}.yaml")
+        dna_css = build_css_override(cfg.dna) if cfg.dna is not None else ""
+        sonuclar = adaylar_uret(
+            niyet, ad=cfg.name or slug, templates_dir=Path(templates_dir),
+            settings=settings, metin_llm=_tasarim_llm(settings, secrets),
+            vision_call=gercek_vision(settings=settings, secrets=secrets),
+            render_fn=gercek_render(
+                settings=settings, language=cfg.language, dna_css=dna_css,
+                colors=dict(cfg.colors), handle=cfg.handle,
+                duration_s=cfg.duration_s),
+            sayi=ADAY_SAYISI, tohum=slug, kanit_dir=kanit_dir)
+    except Exception as e:   # noqa: BLE001 — iş çökmesin, sebebi göster
+        log.warning(f"[arketip] {slug}: {e}")
+        _is_yaz(jid, durum="hata", sebep=str(e))
+        return
+
+    adaylar = [{"i": i, "ok": s.ok, "yon": s.yon, "sebep": s.sebep,
+                "tur": s.tur, "kare": len(s.kareler)}
+               for i, s in enumerate(sonuclar)]
+    with _KILIT:
+        _ISLER.setdefault(jid, {})["_ham"] = sonuclar
+    if not any(s.ok for s in sonuclar):
+        _is_yaz(jid, durum="hata", adaylar=adaylar,
+                sebep=("Üç adayın hiçbiri kapılardan geçemedi. "
+                       "Kanal olduğu gibi duruyor."))
+        return
+    _is_yaz(jid, durum="secim", adaylar=adaylar)
+
+
+def _kanit_dir(jid: str) -> Path:
+    """Aday karelerinin durduğu dizin. Kullanıcı onlara bakacak, o yüzden
+    temp DEĞİL — önbellek kökü altında iş kimliğine göre."""
+    return Path(current_app.config["SHORTBOT_CACHE_DIR"]) / "arketip" / jid
+
+
+@bp.get("/channels/arketip-kare/<jid>/<int:aday>/<int:kare>")
+def arketip_kare(jid, aday, kare):
+    """Bir adayın stres karesini gösterir.
+
+    İNDEKSLE ERİŞİM, YOL DEĞİL: dosya adı kullanıcıdan gelseydi dizin dışına
+    çıkma riski olurdu.
+    """
+    with _KILIT:
+        ham = (_ISLER.get(jid) or {}).get("_ham") or []
+    if aday >= len(ham):
+        abort(404)
+    kareler = ham[aday].kareler
+    if kare >= len(kareler):
+        abort(404)
+    yol = Path(kareler[kare])
+    if not yol.exists():
+        abort(404)
+    from flask import send_file
+    return send_file(yol, mimetype="image/png")
+
+
+@bp.post("/channels/arketip-sec/<jid>/<int:aday>")
+def arketip_sec(jid, aday):
+    """Kullanıcının seçtiği adayı diske yaz ve kanalı ona geçir."""
+    i = _is_oku(jid)
+    with _KILIT:
+        ham = (_ISLER.get(jid) or {}).get("_ham") or []
+    if i is None or aday >= len(ham):
+        abort(404)
+    sonuc = ham[aday]
+    slug = i.get("slug", "")
+    if not sonuc.ok:
+        flash("Bu aday kapılardan geçemedi, seçilemez: " + sonuc.sebep[:200],
+              "error")
+        return redirect(url_for("channel_chat.kanal_sayfasi", slug=slug))
+
+    yol = _channels_dir() / f"{slug}.yaml"
+    if not yol.exists():
+        abort(404)
+    cfg = load_channel(yol)
+    try:
+        import short_bot.archetype_design as _ad
+        # ARKETİBİN GÖRSEL HAVUZU: boş bırakılırsa kanal jenerik yedeğe düşer
+        # ("abstract motion background") — konusuyla ilgisi olmayan arka
+        # planlar. Kayıttaki 31 arketibin hepsinde dolu.
+        sorgular = _ad.pexels_sorgulari(
+            cfg.name or slug, keywords=list(cfg.keywords),
+            persona=(cfg.dna.persona_summary if cfg.dna is not None else ""),
+            metin_llm=_tasarim_llm(current_app.config["SHORTBOT_SETTINGS"],
+                                   _secrets()))
+        yeni_slug = _ad.aday_kaydet(
+            sonuc, ad=cfg.name or slug,
+            templates_dir=current_app.config["SHORTBOT_TEMPLATES_DIR"],
+            sorgular=sorgular)
+    except Exception as e:   # noqa: BLE001
+        flash(f"Şablon kaydedilemedi: {e}", "error")
+        return redirect(url_for("channel_chat.kanal_sayfasi", slug=slug))
+
+    yeni_dna = (cfg.dna.model_copy(update={"archetype": yeni_slug})
+                if cfg.dna is not None else None)
+    yeni_cfg = dataclasses.replace(cfg, template=yeni_slug, dna=yeni_dna)
+    eksik = _okunamayan_kanal(yeni_cfg, yol)
+    if eksik:
+        flash(f"Şablon üretildi ({yeni_slug}) ama kanala bağlanamadı: {eksik}",
+              "error")
+        return redirect(url_for("channel_chat.kanal_sayfasi", slug=slug))
+    save_channel(yol, yeni_cfg)
+    _is_yaz(jid, durum="secildi", secilen=aday, sablon=yeni_slug)
+    flash(f"'{yeni_slug}' şablonu kanala uygulandı.", "success")
+    return redirect(url_for("channel_chat.kanal_sayfasi", slug=slug))
 
 
 @bp.post("/channels/<slug>/arketip")
@@ -565,7 +643,7 @@ def arketip_tasarla(slug):
                     channels_dir=_channels_dir(),
                     templates_dir=current_app.config["SHORTBOT_TEMPLATES_DIR"],
                     settings=current_app.config["SHORTBOT_SETTINGS"],
-                    secrets=_secrets()),
+                    secrets=_secrets(), kanit_dir=_kanit_dir(jid)),
         daemon=True).start()
     return render_template("_partials/arketip_durum.html.j2",
                            jid=jid, is_=_is_oku(jid), slug=slug)

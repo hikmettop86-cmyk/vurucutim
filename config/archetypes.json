@@ -901,5 +901,29 @@
       "wild animal nature",
       "documentary animal"
     ]
+  },
+  {
+    "slug": "bursaspor-kart",
+    "label": "Bursaspor Kart",
+    "subtitle": "Claude tarafından tasarlandı",
+    "pexels_queries": [
+      "bursa stadium night",
+      "green white football fans",
+      "turkish football crowd",
+      "soccer pitch floodlights"
+    ],
+    "defaults": {}
+  },
+  {
+    "slug": "amerika-gundemi",
+    "label": "Amerika Gündemi",
+    "subtitle": "Claude tarafından tasarlandı",
+    "pexels_queries": [
+      "washington capitol building",
+      "new york city street",
+      "american flag wind",
+      "us news studio"
+    ],
+    "defaults": {}
   }
 ]

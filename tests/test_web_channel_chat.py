@@ -60,9 +60,9 @@ def _kimlik_sahte(monkeypatch):
     # yamanmazsa her `/kur` testi gerçek Opus'a gider (canlıda ölçüldü: tur
     # başına ~2 dk, üç tur).
     from short_bot.archetype_design import TasarimSonucu
-    monkeypatch.setattr("short_bot.web.routes.channel_chat.tasarla",
-                        lambda niyet, **kw: TasarimSonucu(False, sebep="test",
-                                                          tur=1))
+    monkeypatch.setattr(
+        "short_bot.web.routes.channel_chat.adaylar_uret",
+        lambda niyet, **kw: [TasarimSonucu(False, sebep="test", tur=1)])
     monkeypatch.setattr("short_bot.web.routes.channel_chat.gercek_render",
                         lambda **kw: (lambda *a: []))
     monkeypatch.setattr("short_bot.web.routes.channel_chat.gercek_vision",
@@ -386,9 +386,10 @@ def _sahte_tasarim(monkeypatch, ok=True, slug="kartal", sebep="geçemedi"):
 
     def _t(niyet, **kw):
         cagri.append((niyet, kw.get("ad")))
-        return TasarimSonucu(ok, slug=slug if ok else "", sebep="" if ok else sebep,
-                             tur=1)
-    monkeypatch.setattr("short_bot.web.routes.channel_chat.tasarla", _t)
+        return [TasarimSonucu(ok, slug=slug if ok else "",
+                              sebep="" if ok else sebep, tur=1,
+                              html="<!DOCTYPE html><html></html>" if ok else "")]
+    monkeypatch.setattr("short_bot.web.routes.channel_chat.adaylar_uret", _t)
     monkeypatch.setattr("short_bot.web.routes.channel_chat.gercek_render",
                         lambda **kw: (lambda *a: []))
     monkeypatch.setattr("short_bot.web.routes.channel_chat.gercek_vision",
@@ -405,7 +406,13 @@ def test_arketip_tasarimi_ARKA_PLANDA_baslar(app, monkeypatch):
     assert "arketip-durum/" in govde, "durum yoklaması bağlanmamış"
 
 
-def test_arketip_BASARILI_olunca_kanal_yeni_sablona_gecer(app, monkeypatch):
+def test_arketip_isi_NIYETI_tasarima_gecirir(app, monkeypatch):
+    """Bu test eskiden "başarılı olunca kanal o şablona geçer" diyordu.
+
+    Artık iş KANALA DOKUNMUYOR: üç aday üretip kullanıcıya seçtiriyor
+    (kullanıcı kararı 2026-08-21). Uygulama `arketip-sec` rotasında —
+    `test_SECIM_kanali_o_sablona_gecirir` orayı sınıyor.
+    """
     from short_bot.web.routes.channel_chat import _arketip_isi
     cagri = _sahte_tasarim(monkeypatch, slug="kartal")
     with app.app_context():
@@ -414,13 +421,13 @@ def test_arketip_BASARILI_olunca_kanal_yeni_sablona_gecer(app, monkeypatch):
                      templates_dir=app.config["SHORTBOT_TEMPLATES_DIR"],
                      settings=app.config["SHORTBOT_SETTINGS"], secrets={})
     assert cagri and cagri[0][0] == "siyah beyaz"
-    assert load_channel(app.config["_CH_DIR"] / "kart.yaml").template == "kartal"
+    assert load_channel(app.config["_CH_DIR"] / "kart.yaml").template == "newscast"
 
 
-def test_arketip_GECEMEZSE_kanal_DEGISMEZ(app, monkeypatch):
-    """Üç turda kapılardan geçemeyen şablon kaydedilmiyor; kanal da
-    bozuk bir şablona geçirilmemeli."""
-    from short_bot.web.routes.channel_chat import _arketip_isi
+def test_HICBIR_ADAY_gecemezse_kanal_DEGISMEZ(app, monkeypatch):
+    """Kapılardan geçemeyen şablon kaydedilmiyor; kanal da bozuk bir şablona
+    geçirilmemeli ve sebep panelde kalmalı."""
+    from short_bot.web.routes.channel_chat import _arketip_isi, _is_oku
     _sahte_tasarim(monkeypatch, ok=False, sebep="manşet kesilmiş")
     with app.app_context():
         _arketip_isi("j2", niyet="x", ad="Kart", slug="kart",
@@ -428,8 +435,9 @@ def test_arketip_GECEMEZSE_kanal_DEGISMEZ(app, monkeypatch):
                      templates_dir=app.config["SHORTBOT_TEMPLATES_DIR"],
                      settings=app.config["SHORTBOT_SETTINGS"], secrets={})
     assert load_channel(app.config["_CH_DIR"] / "kart.yaml").template == "newscast"
-    from short_bot.web.routes.channel_chat import _is_oku
-    assert "manşet kesilmiş" in _is_oku("j2")["sebep"]
+    i = _is_oku("j2")
+    assert i["durum"] == "hata"
+    assert "manşet kesilmiş" in i["adaylar"][0]["sebep"]
 
 
 def test_kanal_sayfasi_GORSEL_KIMLIGI_gosterir(app):
@@ -498,51 +506,198 @@ def test_kanal_sayfasi_KOSAN_TASARIMI_gosterir(app, monkeypatch):
     from short_bot.archetype_design import TasarimSonucu
     bekle = _th.Event()
     monkeypatch.setattr(
-        "short_bot.web.routes.channel_chat.tasarla",
-        lambda niyet, **kw: (bekle.wait(10), TasarimSonucu(False, sebep="x"))[1])
+        "short_bot.web.routes.channel_chat.adaylar_uret",
+        lambda niyet, **kw: (bekle.wait(10),
+                             [TasarimSonucu(False, sebep="x")])[1])
     try:
         _kur(app, monkeypatch)
         html = app.test_client().get(
             "/channels/besiktas-gundem").get_data(as_text=True)
         assert "arketip-durum/" in html, "koşan tasarım sayfada görünmüyor"
-        assert "Claude şablonu yazıyor" in html
+        assert "üç ayrı tasarım dilinde" in html
     finally:
         bekle.set()
 
 
 def test_tasarim_GECEMEZSE_sebep_kanal_sayfasinda_YAZILI_kalir(app, monkeypatch):
     """Sessizce eski arketiple kalmak kullanıcının şikâyetini geri getirirdi."""
-    _kur(app, monkeypatch)          # autouse sahte tasarım "test" sebebiyle düşer
+    from short_bot.web.routes.channel_chat import slug_isi
+    _kur(app, monkeypatch)          # autouse sahte aday "test" sebebiyle düşer
     for _ in range(50):
-        from short_bot.web.routes.channel_chat import slug_isi
         if (slug_isi("besiktas-gundem") or {}).get("durum") == "hata":
             break
         time.sleep(0.05)
     html = app.test_client().get("/channels/besiktas-gundem").get_data(as_text=True)
-    assert "Tasarım kaydedilmedi" in html and "test" in html
+    assert "kaydedilmedi" in html or "geçemedi" in html
+    assert "test" in html
 
 
-def test_tasarim_KANALI_OKUNAMAZ_hale_getiremez(app, monkeypatch):
-    """Tasarlanan şablon `DnaSpec.archetype` doğrulamasından geçmezse kanal
+def test_SECIM_KANALI_OKUNAMAZ_hale_getiremez(app, monkeypatch):
+    """Seçilen şablon `DnaSpec.archetype` doğrulamasından geçmezse kanal
     YAML'ı okunamaz olur — canlıda tam bu oldu ("unknown archetype:
-    'bayern-m-nih'"). Kayıt düzeltildi ama kapı da olmalı: kanalı bozmaktansa
-    tasarımı bırakmak yeğdir."""
+    'bayern-m-nih'"). Kayıt düzeltildi ama kapı da olmalı: şablon geçici,
+    kanal kalıcı."""
     from short_bot.archetype_design import TasarimSonucu
-    from short_bot.web.routes.channel_chat import _arketip_isi, _is_oku
+    from short_bot.web.routes.channel_chat import _arketip_isi
     import short_bot.dna as dna
-    monkeypatch.setattr(dna, "register_designed_archetype", lambda *a, **k: None)
-    # DNA'sı OLAN bir kanal gerek: geçersiz arketipi reddeden `DnaSpec`.
     _kur(app, monkeypatch)
-    monkeypatch.setattr("short_bot.web.routes.channel_chat.tasarla",
-                        lambda niyet, **kw: TasarimSonucu(True, slug="kayitsiz",
-                                                          tur=1))
+    monkeypatch.setattr(
+        "short_bot.web.routes.channel_chat.adaylar_uret",
+        lambda niyet, **kw: [TasarimSonucu(True, slug="kayitsiz", tur=1,
+                                           html="<!DOCTYPE html><html></html>")])
     with app.app_context():
-        _arketip_isi("jx", niyet="x", ad="Beşiktaş Gündem",
+        _arketip_isi("jz", niyet="x", ad="Beşiktaş Gündem",
                      slug="besiktas-gundem",
                      channels_dir=app.config["_CH_DIR"],
                      templates_dir=app.config["SHORTBOT_TEMPLATES_DIR"],
                      settings=app.config["SHORTBOT_SETTINGS"], secrets={})
+    # Kayıt YAPILMIYOR gibi davran → arketip geçersiz kalır.
+    monkeypatch.setattr(dna, "register_designed_archetype", lambda *a, **k: None)
+    app.test_client().post("/channels/arketip-sec/jz/0", follow_redirects=True)
     cfg = load_channel(app.config["_CH_DIR"] / "besiktas-gundem.yaml")
     assert cfg.template == "stat-hero" and cfg.dna.archetype == "stat-hero"
-    assert _is_oku("jx")["durum"] == "hata"
-    assert "kayitsiz" in _is_oku("jx")["sebep"]
+
+
+# --- ÜÇ ADAY, KULLANICI SEÇER (panel) --------------------------------------
+#
+# KULLANICI KARARI (2026-08-21): "3 aday üret, ben seçeyim" + "kullanıcı ne
+# oluşturduğunu görmeli".
+
+def _sahte_adaylar(monkeypatch, kareli=True):
+    from short_bot.archetype_design import TasarimSonucu
+
+    def _uret(niyet, *, ad, templates_dir, kanit_dir=None, **kw):
+        out = []
+        for i, yon in enumerate(("wired", "nike", "spacex")):
+            kareler = ()
+            if kareli and kanit_dir is not None:
+                from pathlib import Path
+                d = Path(kanit_dir) / f"aday{i}"
+                d.mkdir(parents=True, exist_ok=True)
+                (d / "kare0.png").write_bytes(b"\x89PNG-sahte")
+                kareler = (d / "kare0.png",)
+            out.append(TasarimSonucu(
+                ok=(i != 2), slug=f"aday{i}", html="<!DOCTYPE html><html></html>",
+                kareler=kareler, yon=yon, tur=1,
+                sebep="" if i != 2 else "manşet kesilmiş"))
+        return out
+    monkeypatch.setattr("short_bot.web.routes.channel_chat.adaylar_uret", _uret)
+    monkeypatch.setattr("short_bot.web.routes.channel_chat.gercek_render",
+                        lambda **kw: (lambda *a: []))
+    monkeypatch.setattr("short_bot.web.routes.channel_chat.gercek_vision",
+                        lambda **kw: None)
+    monkeypatch.setattr("short_bot.web.routes.channel_chat._tasarim_llm",
+                        lambda a, b: (lambda p: ""))
+
+
+def _isi_kosur(app, monkeypatch, slug="kart"):
+    from short_bot.web.routes.channel_chat import _arketip_isi, _is_oku
+    with app.app_context():
+        _arketip_isi("ja", niyet="x", ad="Kart", slug=slug,
+                     channels_dir=app.config["_CH_DIR"],
+                     templates_dir=app.config["SHORTBOT_TEMPLATES_DIR"],
+                     settings=app.config["SHORTBOT_SETTINGS"], secrets={},
+                     kanit_dir=app.config["SHORTBOT_CACHE_DIR"] / "arketip" / "ja")
+    return _is_oku("ja")
+
+
+def test_is_UC_ADAY_dondurur(app, monkeypatch):
+    _sahte_adaylar(monkeypatch)
+    i = _isi_kosur(app, monkeypatch)
+    assert i["durum"] == "secim"
+    assert len(i["adaylar"]) == 3
+    assert [a["yon"] for a in i["adaylar"]] == ["wired", "nike", "spacex"]
+
+
+def test_adaylar_SECILENE_KADAR_kanala_dokunmaz(app, monkeypatch):
+    _sahte_adaylar(monkeypatch)
+    _isi_kosur(app, monkeypatch)
+    assert load_channel(app.config["_CH_DIR"] / "kart.yaml").template == "newscast"
+
+
+def test_DUSEN_aday_da_SEBEBIYLE_gosterilir(app, monkeypatch):
+    _sahte_adaylar(monkeypatch)
+    i = _isi_kosur(app, monkeypatch)
+    dusen = [a for a in i["adaylar"] if not a["ok"]]
+    assert len(dusen) == 1 and "manşet kesilmiş" in dusen[0]["sebep"]
+
+
+def test_kare_ROTASI_png_dondurur(app, monkeypatch):
+    _sahte_adaylar(monkeypatch)
+    _isi_kosur(app, monkeypatch)
+    r = app.test_client().get("/channels/arketip-kare/ja/0/0")
+    assert r.status_code == 200 and r.data.startswith(b"\x89PNG")
+
+
+def test_kare_ROTASI_dizin_disina_cikamaz(app, monkeypatch):
+    """Yol gezinme: kare indeksleri sayı olmalı, dosya yolu kullanıcıdan gelmemeli."""
+    _sahte_adaylar(monkeypatch)
+    _isi_kosur(app, monkeypatch)
+    c = app.test_client()
+    assert c.get("/channels/arketip-kare/ja/0/99").status_code == 404
+    assert c.get("/channels/arketip-kare/ja/99/0").status_code == 404
+    assert c.get("/channels/arketip-kare/yokis/0/0").status_code == 404
+
+
+def test_SECIM_kanali_o_sablona_gecirir(app, monkeypatch):
+    _sahte_adaylar(monkeypatch)
+    _isi_kosur(app, monkeypatch)
+    import short_bot.archetype_design as AD
+    monkeypatch.setattr(AD, "aday_kaydet",
+                        lambda s, *, ad, templates_dir, sorgular=(): "secilen")
+    monkeypatch.setattr(AD, "pexels_sorgulari",
+                        lambda ad, **kw: ["a shot", "b shot", "c shot"])
+    import short_bot.dna as dna
+    dna.register_designed_archetype("secilen", "Seçilen")
+    r = app.test_client().post("/channels/arketip-sec/ja/1", follow_redirects=True)
+    assert r.status_code == 200
+    assert load_channel(app.config["_CH_DIR"] / "kart.yaml").template == "secilen"
+
+
+def test_GECMEYEN_aday_secilemez(app, monkeypatch):
+    _sahte_adaylar(monkeypatch)
+    _isi_kosur(app, monkeypatch)
+    r = app.test_client().post("/channels/arketip-sec/ja/2", follow_redirects=True)
+    assert load_channel(app.config["_CH_DIR"] / "kart.yaml").template == "newscast"
+    assert "geçemedi" in r.get_data(as_text=True) or "seçilemez" in r.get_data(as_text=True)
+
+
+def test_kurulumda_DIL_KARARI_uygulanir(app, monkeypatch):
+    """KULLANICI BİLDİRİMİ: "İngilizce yap diyorum, kanalı Türkçe yapıyor"."""
+    from short_bot.channel_chat import Karar, SohbetCevabi
+    c = app.test_client()
+    oid = re.search(r'hx-post="/channels/sohbet/([0-9a-f]+)"',
+                    c.get("/channels/new/card").get_data(as_text=True)).group(1)
+    _sahte_llm(monkeypatch, SohbetCevabi(mesaj="ok", kararlar=[
+        Karar(alan="name", deger="US Breaking News", ozet="ad", gerekce="g"),
+        Karar(alan="language", deger="en", ozet="dil", gerekce="g"),
+        Karar(alan="keywords", deger=["breaking news"], ozet="k", gerekce="g")]))
+    tur = c.post(f"/channels/sohbet/{oid}", data={"girdi": "US breaking news"})
+    assert 'value="language"' in tur.get_data(as_text=True), "dil kararı elendi"
+    c.post(f"/channels/sohbet/{oid}/uygula")
+    c.post(f"/channels/sohbet/{oid}/kur", follow_redirects=True)
+    cfg = load_channel(app.config["_CH_DIR"] / "us-breaking-news.yaml")
+    assert cfg.language == "en"
+    assert "TR" not in cfg.rss_locale
+
+
+def test_KURULMUS_kanalda_dil_karari_ELENIR(app, monkeypatch):
+    from short_bot.channel_chat import Karar, SohbetCevabi
+    c = app.test_client()
+    oid = re.search(r'hx-post="/channels/sohbet/([0-9a-f]+)"',
+                    c.get("/channels/kart").get_data(as_text=True)).group(1)
+    _sahte_llm(monkeypatch, SohbetCevabi(mesaj="ok", kararlar=[
+        Karar(alan="language", deger="en", ozet="dil", gerekce="g")]))
+    tur = c.post(f"/channels/sohbet/{oid}", data={"girdi": "ingilizce yap"})
+    govde = tur.get_data(as_text=True)
+    assert 'value="language"' not in govde
+    assert "language" in govde, "elenen karar kullanıcıya söylenmedi"
+
+
+def test_prompt_KULLANICININ_DILINI_algilamasini_soyler():
+    from short_bot.channel_chat import prompt_kur, taslak
+    p = prompt_kur(cfg=taslak("card"), gecmis=[], girdi="US breaking news",
+                   fmt="card", kurulum=True)
+    assert "dil" in p.lower()
+    i = p.lower().find("language")
+    assert i > 0

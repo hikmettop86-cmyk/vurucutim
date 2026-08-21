@@ -59,6 +59,11 @@ ZORUNLU_DEGISKENLER: tuple[str, ...] = (
     "handle", "dna_css", "duration_s",
 )
 
+# Şablonun MUTLAKA kullanması gereken DNA değişkenleri — kanalın paleti ve
+# fontu bunlarla geliyor (`dna.build_css_override`).
+ZORUNLU_DNA_DEGISKENLERI: tuple[str, ...] = (
+    "--primary", "--accent", "--text-main", "--font-headline", "--font-body")
+
 _AUTO_FIT = "_auto_fit.js.j2"
 _VIEWPORT = ("1080px", "1920px")
 
@@ -112,6 +117,19 @@ def yapi_kapisi(html: str) -> tuple[bool, str]:
     # 267 karakterlik gövdenin TAMAMI taşmadan göründü. Yani clamp SIĞAN metni
     # kesiyordu — canlıda tasarım turlarının düşme sebebi buydu.
     # Depodaki 34 şablonun 26'sı zaten clamp kullanmıyor.
+    # ŞABLON KANALIN PALETİNE CEVAP VERMELİ. `{{ dna_css }}` yazmak yetmiyor;
+    # CSS o değişkenleri KULLANMALI. Ölçüldü (2026-08-21): AI'ın ürettiği
+    # `amerika-gundemi` beş değişkenden dördünü, `bursaspor-kart` `--primary`yi
+    # kullanmıyor → kanalın paleti ekrana yansımıyor, Spotify dilinde üretilen
+    # aday Trabzonspor kanalında da Spotify yeşili kalıyor. 42 şablonun 33-38'i
+    # bunları zaten kullanıyor.
+    _kullanilan = set(_re.findall(r"var\((--[a-z0-9-]+)", html))
+    _eksik_dna = [d for d in ZORUNLU_DNA_DEGISKENLERI if d not in _kullanilan]
+    if _eksik_dna:
+        eksik.append("DNA paletini kullan: " + ", ".join(
+            f"var({d})" for d in _eksik_dna)
+            + " (yoksa kanalın rengi/fontu ekrana yansımaz)")
+
     if _govde_clampli(html):
         eksik.append(".body-text üzerinde line-clamp YOK (sabit satır sayısı "
                      "auto-fit'i etkisiz kılar; metni data-fit-min/max ile "
@@ -170,7 +188,75 @@ UC_HAM: tuple[dict, ...] = (
          category="Test", mood="neutral"),
 )
 
-UC_METINLER: tuple[Script, ...] = tuple(Script(**h) for h in UC_HAM)
+UC_HAM: tuple[dict, ...] = (
+    dict(header_top="KISA", header_bottom="Tek satır",
+         photo_overlay="ÖZET", body_paragraph="Kısa bir gövde metni.",
+         category="Test", mood="neutral"),
+    dict(header_top="DEV TRANSFERDE SON PERDE",
+         header_bottom="Yönetim kararı bu akşam açıklanacak",
+         photo_overlay="ALLIANZ ARENA'DA TARİHİ GECE YAŞANDI",
+         body_paragraph=(
+             "Kulüp yönetimi dün akşam toplandı ve transfer dosyasını yeniden "
+             "masaya yatırdı. Görüşmelerin ardından tarafların anlaşmaya çok "
+             "yaklaştığı, imzaların hafta içinde atılabileceği öğrenildi. "
+             "Teknik heyet oyuncuyu ilk on birde düşünüyor; sakatlık riski "
+             "nedeniyle temkinli davranılacak."),
+         category="Test", mood="breaking"),
+    dict(header_top="ORTA UZUNLUK", header_bottom="Bir alt satır",
+         photo_overlay="ORTA",
+         body_paragraph=("Çok satırlı bir gövde. Cümle bir. Cümle iki. "
+                         "Cümle üç. Cümle dört. Cümle beş. Cümle altı. "
+                         "Cümle yedi."),
+         category="Test", mood="neutral"),
+    dict(header_top="ŞOK",
+         header_bottom="Tek kelime",
+         photo_overlay="TEK",
+         body_paragraph="Çok kısa bir gövde metni.",
+         category="Test", mood="breaking"),
+    dict(header_top="世界のやさしさ",
+         header_bottom="心が温まる小さな物語をお届け",
+         photo_overlay="感動の瞬間がここにありました",
+         body_paragraph=(
+             "駅のホームで倒れた男性を、通りかかった高校生が助けました。"
+             "周囲の人も次々に手を貸し、救急車が到着するまで声をかけ続けた"
+             "そうです。彼らの名前は誰も知りません。"),
+         category="やさしさ", mood="neutral", dil="ja"),
+    dict(header_top="EILMELDUNG AUS BERLIN",
+         header_bottom="Größte Änderung seit Jahren",
+         photo_overlay="BUNDESTAG BESCHLIESST NEUE REGELUNG",
+         body_paragraph=(
+             "Die Abgeordneten haben am späten Abend über den Vorschlag "
+             "abgestimmt. Kritiker bemängeln, dass die Übergangsfrist zu "
+             "kurz sei; Befürworter verweisen auf die Dringlichkeit der "
+             "Lage und die lange Vorbereitungszeit des Entwurfs."),
+         category="Politik", mood="breaking", dil="de"),
+    dict(header_top="EL CLÁSICO",
+         header_bottom="La noche más larga del Bernabéu",
+         photo_overlay="AFICIÓN EN PIE HASTA EL ÚLTIMO MINUTO",
+         body_paragraph=(
+             "El equipo salió decidido desde el primer minuto y encontró "
+             "el gol tras una jugada ensayada. El técnico celebró con "
+             "moderación; sabe que quedan muchas jornadas por delante."),
+         category="Deportes", mood="upbeat", dil="es"),
+)
+
+def _kur(ham: dict) -> Script:
+    """Uç metni KENDİ DİLİNİN bağlamında kur.
+
+    `Script` alanları `strip_foreign_diacritics`ten geçiyor ve o HEDEF DİLE
+    göre çalışıyor (Almancada 'ä' yabancı değil, alfabenin harfi). Bağlam
+    kurulmazsa varsayılan "tr" olur ve Almanca/İspanyolca uç metinler daha
+    fixture aşamasında bozulur: 'Größte' → 'Grosste', 'Clásico' → 'Clasico'.
+    Kapı o zaman şablonu, üretimde ASLA görmeyeceği bir metinle sınar.
+    """
+    from short_bot.text_normalize import language
+    h = dict(ham)
+    dil = h.pop("dil", "tr")
+    with language(dil):
+        return Script(**h)
+
+
+UC_METINLER: tuple[Script, ...] = tuple(_kur(h) for h in UC_HAM)
 
 
 # --- vision kapısı ---------------------------------------------------------

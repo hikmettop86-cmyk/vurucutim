@@ -22,6 +22,10 @@ GECERLI = """<!DOCTYPE html>
 <head><meta charset="utf-8"><style>
 {{ dna_css|safe }}
 html, body { width: 1080px; height: 1920px; }
+/* Kanalın DNA paletine cevap ver — yoksa rengi/fontu ekrana yansımaz. */
+.top { color: var(--primary); font-family: var(--font-headline); }
+.bot { color: var(--accent); }
+.body-text { color: var(--text-main); font-family: var(--font-body); }
 .progress::after { animation: fill {{ duration_s }}s linear forwards; }
 </style></head>
 <body>
@@ -100,7 +104,11 @@ def test_calisan_sablonlar_KAPIDAN_GECER():
     from pathlib import Path
 
     from short_bot.archetype_gate import yapi_kapisi
-    for ad in ("comic", "brutalist", "editorial", "minimal", "tabloid"):
+    # NOT: `comic` bu listeden ÇIKARILDI — `var(--font-headline)` kullanmıyor,
+    # yani kanalın manşet fontu ona yansımıyor (ölçüldü 2026-08-21). Kapının
+    # hatası değil, comic'in eksiği; ama kalibrasyon listesi tam bar'ı geçen
+    # şablonlardan oluşmalı.
+    for ad in ("brutalist", "editorial", "minimal", "tabloid", "galatasaray"):
         p = Path(f"templates/{ad}.html.j2")
         if not p.exists():
             continue
@@ -234,6 +242,8 @@ def test_UC_METINLER_model_tarafindan_KIRPILMIYOR():
     assert len(UC_HAM) == len(UC_METINLER)
     for ham, s in zip(UC_HAM, UC_METINLER):
         for alan, deger in ham.items():
+            if alan == "dil":          # fixture meta, Script alanı değil
+                continue
             assert getattr(s, alan) == deger, (
                 f"{alan} kırpıldı: {deger!r} -> {getattr(s, alan)!r} — "
                 f"uç metin modelin sınırını aşıyor, kapı hiçbir şablonu geçirmez")
@@ -273,7 +283,9 @@ def test_UC_METINLER_URETIMIN_UST_SINIRLARINI_zorlar():
 
 _GOVDE_CLAMPLI = """<!DOCTYPE html><html><head><style>
 html,body{width:1080px;height:1920px}
-.body-text{display:-webkit-box;-webkit-line-clamp:9;-webkit-box-orient:vertical;overflow:hidden}
+.body-text{display:-webkit-box;-webkit-line-clamp:9;-webkit-box-orient:vertical;overflow:hidden;color:var(--text-main);font-family:var(--font-body)}
+.top{color:var(--primary);font-family:var(--font-headline)}
+.bot{color:var(--accent)}
 </style></head><body>
 <div class="top">{{ script.header_top }}</div>
 <div class="bot">{{ script.header_bottom }}</div>
@@ -307,3 +319,109 @@ def test_BASKA_yerdeki_clamp_serbest():
         ".top{-webkit-line-clamp:2}\n.body-text{display:-webkit-box;")
     ok, sebep = yapi_kapisi(s)
     assert ok, sebep
+
+
+# --- STRES MATRİSİ ---------------------------------------------------------
+#
+# KULLANICI KURALI (2026-08-21): "her yönü ile stres testleri yapmalı".
+# Üç metin yetmiyordu: fotoğrafsız kare, tek kelimelik manşet, uzun handle,
+# CJK ve aksanlı diller HİÇ sınanmıyordu. Bunların hepsi canlıda var
+# (japonca kanal, almanca kanal, ispanyolca kanal).
+
+def test_matris_YETERINCE_genis():
+    from short_bot.archetype_gate import UC_METINLER
+    assert len(UC_METINLER) >= 7, f"yalnız {len(UC_METINLER)} durum"
+
+
+def test_matris_UC_UZUNLUKLARI_kapsar():
+    from short_bot.archetype_gate import UC_METINLER
+    ht = [len(s.header_top) for s in UC_METINLER]
+    gv = [len(s.body_paragraph) for s in UC_METINLER]
+    assert min(ht) <= 6, "tek kelimelik manşet sınanmıyor"
+    assert max(ht) >= 24, "en uzun manşet sınanmıyor"
+    assert min(gv) <= 30 and max(gv) >= 250
+
+
+def test_matris_CJK_ve_AKSANLI_dilleri_kapsar():
+    """CJK fontu olmayan şablon TOFU basar; aksanlı harfler düşen font
+    yedeklerinde kayboluyor (ölçüldü: 'MANŞET' → 'MANSET')."""
+    from short_bot.archetype_gate import UC_METINLER
+    hepsi = " ".join(s.header_top + s.header_bottom + s.body_paragraph
+                     for s in UC_METINLER)
+    assert any("\u3040" <= c <= "\u9fff" for c in hepsi), "CJK yok"
+    assert any(c in hepsi for c in "ÇĞİÖŞÜ"), "Türkçe aksan yok"
+    assert any(c in hepsi for c in "äöüßáéíóñ"), "Avrupa aksanı yok"
+
+
+def test_matris_TUM_MODLARI_kapsar():
+    from short_bot.archetype_gate import UC_METINLER
+    assert {s.mood for s in UC_METINLER} >= {"breaking", "neutral"}
+
+
+def test_matris_HEPSI_modelden_kirpilmadan_gecer():
+    from short_bot.archetype_gate import UC_HAM, UC_METINLER
+    for ham, s in zip(UC_HAM, UC_METINLER):
+        for alan, deger in ham.items():
+            if alan == "dil":
+                continue
+            assert getattr(s, alan) == deger, f"{alan} kırpıldı: {deger!r}"
+
+
+# --- ŞABLON KANALIN PALETİNE CEVAP VERMELİ ---------------------------------
+#
+# ÖLÇÜLDÜ (2026-08-21): AI'ın ürettiği `amerika-gundemi` beş DNA değişkeninden
+# DÖRDÜNÜ, `bursaspor-kart` `--primary`yi kullanmıyor. Sonuç: kanalın paleti
+# ekrana YANSIMIYOR — Spotify dilinde üretilen aday Trabzonspor kanalında da
+# Spotify yeşili kalıyor.
+#
+# İki kullanıcı kuralını birden çiğniyor: "önizleme = gerçek çıktı" (kanalın
+# paletiyle çizilen kare ile şablonun kendi rengi tutmuyor) ve "şablonlar
+# birbirine benzemesin" (aynı arketipi kullanan iki kanal aynı görünür).
+#
+# 42 şablonun 33-38'i bu değişkenleri zaten kullanıyor; kural ev üslubu.
+
+_PALETSIZ = """<!DOCTYPE html><html><head><style>
+html,body{width:1080px;height:1920px}
+.top{color:#fff;font-family:Arial}
+.body-text{font-size:40px}
+</style></head><body>
+<div class="top">{{ script.header_top }}</div>
+<div class="bot">{{ script.header_bottom }}</div>
+<div class="bg-img"></div>
+<div class="body"><div class="body-text" data-fit-min="26" data-fit-max="42"
+  data-fit-pad="20">{{ body_html }}</div></div>
+<div class="progress"></div><div class="handle">{{ handle }}</div>
+<style>{{ dna_css }}</style><span>{{ duration_s }}</span>
+{% include "_auto_fit.js.j2" %}</body></html>"""
+
+
+def test_DNA_DEGISKENLERINI_kullanmayan_reddedilir():
+    from short_bot.archetype_gate import yapi_kapisi
+    ok, sebep = yapi_kapisi(_PALETSIZ)
+    assert not ok
+    assert "--primary" in sebep or "palet" in sebep.lower()
+
+
+def test_DNA_degiskenlerini_kullanan_gecer():
+    from short_bot.archetype_gate import yapi_kapisi
+    s = _PALETSIZ.replace(
+        ".top{color:#fff;font-family:Arial}",
+        ".top{color:var(--primary);font-family:var(--font-headline)}\n"
+        ".bot{color:var(--accent);font-family:var(--font-body)}\n"
+        ".body-text{color:var(--text-main)}")
+    ok, sebep = yapi_kapisi(s)
+    assert ok, sebep
+
+
+def test_KULLANICININ_URETTIGI_sablonlar_bu_kurala_takiliyor():
+    """Bulguyu sabitle: bu iki şablon canlıda üretildi ve paleti yok sayıyor.
+    Kural olmasa aynı hata her yeni kanalda tekrarlanırdı."""
+    from pathlib import Path
+    from short_bot.archetype_gate import yapi_kapisi
+    for ad in ("amerika-gundemi", "bursaspor-kart"):
+        p = Path(f"templates/{ad}.html.j2")
+        if not p.exists():
+            continue
+        ok, sebep = yapi_kapisi(p.read_text(encoding="utf-8"))
+        assert not ok and ("--primary" in sebep or "palet" in sebep.lower()), \
+            f"{ad}: {sebep}"

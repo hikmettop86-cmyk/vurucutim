@@ -58,6 +58,15 @@ YAZILABILIR: frozenset[str] = frozenset({
 })
 
 
+# YALNIZ KURULUMDA yazılabilen alanlar. Kurulmuş kanalda `language` değişirse
+# dil paketi, DNA, konu bankası ve RSS locale sessizce tutarsız kalır — o
+# yüzden orada YASAK. Kurulumda ise henüz hiçbir şey yazılmamıştır (ne YAML,
+# ne CSS, ne banka) ve kullanıcı "US breaking news" dediğinde kanalın İngilizce
+# olması ŞART (kullanıcı bildirimi 2026-08-21: "İngilizce yap diyorum, kanalı
+# Türkçe yapıyor").
+KURULUM_ALANLARI: frozenset[str] = frozenset({"language"})
+
+
 class YasakAlan(ValueError):
     """LLM beyaz listede olmayan bir alanı yazmaya çalıştı."""
 
@@ -93,7 +102,9 @@ class SohbetCevabi(BaseModel):
 
 # --- alan okuma / yazma ----------------------------------------------------
 
-def _dogrula(alan: str) -> None:
+def _dogrula(alan: str, kurulum: bool = False) -> None:
+    if kurulum and alan in KURULUM_ALANLARI:
+        return
     if alan not in YAZILABILIR:
         raise YasakAlan(
             f"'{alan}' değiştirilemez. Yazılabilir alanlar sabit bir listede "
@@ -110,16 +121,18 @@ def oku(cfg, alan: str):
     return None if blok is None else getattr(blok, ic, None)
 
 
-def uygula(kararlar: Sequence[Karar], cfg):
+def uygula(kararlar: Sequence[Karar], cfg, kurulum: bool = False):
     """Kararları uygulanmış YENİ bir ChannelConfig döndürür — diske YAZMAZ.
 
     Fark gösterilip onaylanmadan hiçbir şey kalıcı olmamalı.
+
+    `kurulum=True` iken `KURULUM_ALANLARI` da yazılabilir (bkz. `language`).
     """
     duz: dict[str, Any] = {}
     bloklar: dict[str, dict[str, Any]] = {}
 
     for k in kararlar:
-        _dogrula(k.alan)
+        _dogrula(k.alan, kurulum)
         if "." in k.alan:
             blok_adi, ic = k.alan.split(".", 1)
             bloklar.setdefault(blok_adi, {})[ic] = k.deger
@@ -134,10 +147,22 @@ def uygula(kararlar: Sequence[Karar], cfg):
                 f"bloğa yazamaz (format değiştirmek ayrı bir iş).")
         duz[blok_adi] = mevcut.model_copy(update=degisiklik)
 
+    # DİL DEĞİŞİRSE RSS LOCALE DE DEĞİŞMELİ. Yoksa İngilizce kanal Türkçe
+    # beslemelerden haber çeker — sessiz bozulma.
+    if "language" in duz:
+        from short_bot.locale import RSS_LOCALES, SUPPORTED_LANGUAGES
+        yeni_dil = duz["language"]
+        if yeni_dil not in SUPPORTED_LANGUAGES:
+            raise YasakAlan(
+                f"'{yeni_dil}' desteklenen bir dil değil "
+                f"({', '.join(SUPPORTED_LANGUAGES)}).")
+        duz["rss_locale"] = RSS_LOCALES.get(yeni_dil, "")
+
     return dataclasses.replace(cfg, **duz)
 
 
-def fark(kararlar: Sequence[Karar], cfg) -> list[tuple[str, Any, Any]]:
+def fark(kararlar: Sequence[Karar], cfg,
+         kurulum: bool = False) -> list[tuple[str, Any, Any]]:
     """Panelde gösterilecek (alan, eski, yeni) listesi.
 
     Değişmeyen alan LİSTELENMEZ: "22 → 22" satırı kullanıcıya bir şey
@@ -145,7 +170,7 @@ def fark(kararlar: Sequence[Karar], cfg) -> list[tuple[str, Any, Any]]:
     """
     out: list[tuple[str, Any, Any]] = []
     for k in kararlar:
-        _dogrula(k.alan)
+        _dogrula(k.alan, kurulum)
         eski = oku(cfg, k.alan)
         if eski != k.deger:
             out.append((k.alan, eski, k.deger))
@@ -171,6 +196,13 @@ KAPALI KALIR. Kullanıcı önce birkaç video üretip sonucu görsün; ayarları
 oturmamış bir kanalı doğrudan zamanlanmış üretime ya da yayına sokmak
 geri alınması pahalı tek karardır. Bunları açmayı ÖNER (`oneriler`), açma.
 
+YENİ KANAL KURULUYORSA DİLİ KULLANICININ CÜMLESİNDEN ALGILA. Menü varsayılanı
+Türkçe; kullanıcı "US breaking news", "Almanca gündem", "canal en español"
+diyorsa `language` kararını da VER (en, de, es...). Dil YALNIZ kurulumda
+değiştirilebilir — kurulduktan sonra dil paketi, DNA ve konu bankası ona
+bağlandığı için kilitlenir. Kullanıcı bildirdi: "İngilizce yap diyorum, kanalı
+Türkçe yapıyor".
+
 `mesaj`: kullanıcıya söylediğin bir-iki cümle — ne yaptığını ve sırada ne
 olduğunu anlat ("Beşiktaş kart kanalını kurdum, günde 3 video çıkar. İstersen
 tonu sertleştiririz."). ASLA BOŞ BIRAKMA: karar üretmediğin turda bile yaz,
@@ -190,7 +222,7 @@ olacak; "ne diyeceğimi bilemem" durumunun çaresi.
 Türkçe yaz."""
 
 
-def yazilabilir_alanlar(cfg) -> list[str]:
+def yazilabilir_alanlar(cfg, kurulum: bool = False) -> list[str]:
     """Bu kanalda GERÇEKTEN yazılabilecek alanlar.
 
     Olmayan bloğun alanını listelemek modele imkânsız karar verdiriyor ve
@@ -203,13 +235,15 @@ def yazilabilir_alanlar(cfg) -> list[str]:
     Kart formatında ses/montaj bloğu YOK (format tanımı gereği), DNA da
     kurulumda henüz üretilmedi.
     """
-    return [alan for alan in sorted(YAZILABILIR)
+    hepsi = set(YAZILABILIR) | (KURULUM_ALANLARI if kurulum else set())
+    return [alan for alan in sorted(hepsi)
             if "." not in alan
             or getattr(cfg, alan.split(".", 1)[0], None) is not None]
 
 
 def prompt_kur(*, cfg, gecmis: Sequence[tuple[str, str]], girdi: str,
-               bulgular: Sequence[Any] = (), fmt: str | None = None) -> str:
+               bulgular: Sequence[Any] = (), fmt: str | None = None,
+               kurulum: bool = False) -> str:
     """Sohbet prompt'u. Geçmiş buraya GÖMÜLÜR (CLI oturumu kullanılmaz).
 
     `fmt`: KURULUM sırasında şart. Taslakta ses/montaj bloğu kapalı olduğu
@@ -220,7 +254,7 @@ def prompt_kur(*, cfg, gecmis: Sequence[tuple[str, str]], girdi: str,
 
     fmt = fmt or channel_format(cfg)
     ad = FORMATS[fmt].label if fmt in FORMATS else fmt
-    alanlar = yazilabilir_alanlar(cfg)
+    alanlar = yazilabilir_alanlar(cfg, kurulum)
     satirlar = [_USLUP, "", f"KANAL: {cfg.slug} ({ad} formatı)",
                 "MEVCUT AYARLAR:"]
     for alan in alanlar:
@@ -298,11 +332,13 @@ def taslak(fmt: str, *, language: str = "tr", slug: str = "yeni-kanal"):
 
 def konus(*, cfg, gecmis: Sequence[tuple[str, str]], girdi: str,
           llm: Callable[..., SohbetCevabi],
-          bulgular: Sequence[Any] = (), fmt: str | None = None) -> SohbetCevabi:
+          bulgular: Sequence[Any] = (), fmt: str | None = None,
+          kurulum: bool = False) -> SohbetCevabi:
     """Tek sohbet turu. `llm` imzası `sonnet_json(prompt, schema, **kw)`.
 
     Şema doğrulaması çağrı katmanında yapılır (sonnet_json Pydantic ile
     doğrular ve uymazsa modele tekrar sorar) — burada ayrıca ayrıştırma yok.
     """
     return llm(prompt_kur(cfg=cfg, gecmis=gecmis, girdi=girdi,
-                          bulgular=bulgular, fmt=fmt), SohbetCevabi)
+                          bulgular=bulgular, fmt=fmt, kurulum=kurulum),
+               SohbetCevabi)

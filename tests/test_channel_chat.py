@@ -293,3 +293,62 @@ def test_taslak_YOUTUBE_blogu_TASIR():
         assert cfg.youtube.auto_upload is False, fmt
     assert "youtube.category_id" in prompt_kur(
         cfg=taslak("card"), gecmis=[], girdi="x", fmt="card")
+
+
+# --- KURULUMDA DİL DEĞİŞTİRİLEBİLİR ----------------------------------------
+#
+# KULLANICI BİLDİRİMİ (2026-08-21): "kanal oluşturma ajanında İngilizce yap
+# diyorum, kanalı Türkçe yapıyor". Doğru: `language` YAZILABILIR listesinde
+# DEĞİL — ve KURULMUŞ kanal için bu doğru (dil paketi, DNA, konu bankası, RSS
+# locale hepsi ona bağlı; sonradan değişirse kanal sessizce tutarsız kalır).
+#
+# Ama KURULUMDA henüz hiçbir şey yazılmamıştır: ne YAML, ne CSS, ne banka.
+# Orada dili değiştirmek zararsız ve ŞART — kullanıcı cümlesinde "US breaking
+# news" yazıyorsa kanal İngilizce olmalı.
+
+def test_kurulumda_DIL_yazilabilir():
+    from short_bot.channel_chat import Karar, taslak, uygula
+    c = taslak("card", language="tr")
+    y = uygula([Karar(alan="language", deger="en", ozet="", gerekce="")], c,
+               kurulum=True)
+    assert y.language == "en"
+
+
+def test_KURULMUS_kanalda_dil_YASAK():
+    from short_bot.channel_chat import Karar, YasakAlan, uygula
+    c = _cfg()
+    with pytest.raises(YasakAlan):
+        uygula([Karar(alan="language", deger="en", ozet="", gerekce="")], c)
+
+
+def test_dil_degisince_RSS_LOCALE_de_degisir():
+    """Yoksa İngilizce kanal Türkçe beslemelerden haber çeker — sessiz bozulma."""
+    from short_bot.channel_chat import Karar, taslak, uygula
+    c = taslak("card", language="tr")
+    assert "TR" in c.rss_locale
+    y = uygula([Karar(alan="language", deger="en", ozet="", gerekce="")], c,
+               kurulum=True)
+    assert "TR" not in y.rss_locale and y.rss_locale
+
+
+def test_DESTEKLENMEYEN_dil_reddedilir():
+    from short_bot.channel_chat import Karar, YasakAlan, taslak, uygula
+    with pytest.raises((YasakAlan, ValueError)):
+        uygula([Karar(alan="language", deger="klingon", ozet="", gerekce="")],
+               taslak("card"), kurulum=True)
+
+
+def test_prompt_kurulumda_DILI_yazilabilir_gosterir():
+    from short_bot.channel_chat import prompt_kur, taslak
+    p = prompt_kur(cfg=taslak("card"), gecmis=[], girdi="US breaking news",
+                   fmt="card", kurulum=True)
+    assert "language" in p
+    i = p.find("YAZILABİLİR ALANLAR")
+    assert "language" in p[i:i + 900]
+
+
+def test_prompt_KURULMUS_kanalda_dili_GOSTERMEZ():
+    from short_bot.channel_chat import prompt_kur
+    p = prompt_kur(cfg=_cfg(), gecmis=[], girdi="x", fmt="card")
+    i = p.find("YAZILABİLİR ALANLAR")
+    assert "language" not in p[i:i + 900]

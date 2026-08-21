@@ -103,7 +103,8 @@ def set_registry_path(path) -> None:
 
 
 def register_designed_archetype(slug: str, label: str = "",
-                                defaults: dict | None = None) -> None:
+                                defaults: dict | None = None,
+                                pexels_queries: list | None = None) -> None:
     """Yeni tasarlanan arketipi ANINDA geçerli kıl ve kayda yaz.
 
     ÜÇ AYRI KIRIK BURADA BULUŞUYORDU (canlıda ölçüldü, 2026-08-21 —
@@ -129,9 +130,14 @@ def register_designed_archetype(slug: str, label: str = "",
     slug = (slug or "").strip()
     if not slug or slug in ARCHETYPES:
         return
+    # GÖRSEL HAVUZU BOŞ KALMASIN: kayıttaki 31 arketibin hepsinde dolu, yalnız
+    # AI'ın ürettiği ikisi boştu ve o kanallar jenerik yedeğe düşüyordu.
     kayit = {"slug": slug, "label": label or slug,
              "subtitle": "Claude tarafından tasarlandı",
-             "pexels_queries": [], "defaults": defaults or {}}
+             "pexels_queries": list(pexels_queries or [])
+                               or ["abstract motion background",
+                                   "dark gradient loop", "soft light bokeh"],
+             "defaults": defaults or {}}
     _DESIGNED_ARCHETYPES.append(kayit)
     ARCHETYPES.append(slug)
     ARCHETYPE_LABELS[slug] = kayit["label"]

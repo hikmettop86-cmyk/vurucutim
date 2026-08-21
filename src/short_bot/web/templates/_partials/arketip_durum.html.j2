@@ -2,9 +2,9 @@
    include edildiğinde `arketip_isi` üzerinden. #}
 {% set is_ = is_ | default(arketip_isi, true) %}
 {% set jid = jid | default(is_.jid if is_ else "", true) %}
-{# Yeni arketip tasarımının durumu. Tasarım DAKİKALAR sürüyor (LLM şablon
-   yazar → 3 uç metinle render → vision kapısı, en fazla 3 tur), o yüzden
-   kendi kendini yokluyor — `curated/_results.html.j2` deseni. #}
+{# Üç aday üretilir, kullanıcı seçer (kullanıcı kararı 2026-08-21). Tasarım
+   DAKİKALAR sürüyor, o yüzden kendi kendini yokluyor — `curated/_results`
+   deseni. Adaylar SEÇİLENE KADAR diske yazılmaz. #}
 {% if is_ is none %}
 <div class="text-xs text-claude-error bg-claude-error-soft rounded-lg px-3 py-2">
   Tasarım işi bulunamadı.
@@ -18,16 +18,67 @@
   <span class="w-3.5 h-3.5 mt-0.5 rounded-full border-2 border-claude-accent
                border-t-transparent animate-spin flex-none"></span>
   <span>
-    Claude şablonu yazıyor, sonra üç uç metinle render edip kareye bakacak.
-    Birkaç dakika sürer — sayfayı açık bırak.
+    Claude üç ayrı tasarım dilinde şablon yazıyor; her birini yedi uç metinle
+    render edip karelerine bakacak. Birkaç dakika sürer — sayfayı açık bırak.
     <span class="block text-claude-subtle mt-0.5">“{{ is_.niyet|e }}”</span>
   </span>
 </div>
 
-{% elif is_.durum == "bitti" %}
+{% elif is_.durum == "secim" %}
+{# KULLANICI NE ÜRETİLDİĞİNİ GÖRÜR: kareler gerçek üretim hattından, kanalın
+   KENDİ paletiyle çizildi — panelde görülen kare yayınlanacak kareyle aynı. #}
+<div class="border border-claude-border rounded-lg overflow-hidden">
+  <div class="px-3 py-2 bg-claude-surface border-b border-claude-border
+              text-[11px] uppercase tracking-wider text-claude-subtle font-semibold">
+    {{ is_.adaylar|selectattr('ok')|list|length }} aday hazır — birini seç
+  </div>
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 p-2">
+    {% for a in is_.adaylar %}
+    <div class="border rounded-lg overflow-hidden flex flex-col
+                {% if a.ok %}border-claude-border bg-white
+                {% else %}border-claude-error bg-claude-error-soft{% endif %}">
+      <div class="px-2 py-1.5 flex items-center justify-between gap-1
+                  border-b border-claude-border">
+        <span class="text-[11px] font-mono text-claude-muted">{{ a.yon or '—' }}</span>
+        <span class="text-[10px] text-claude-subtle">{{ a.tur }}. tur</span>
+      </div>
+      {% if a.kare %}
+      {# Yedi stres karesinin hepsi: kısa/uzun manşet, uzun gövde, CJK,
+         Almanca, İspanyolca. Kullanıcı hepsini görsün. #}
+      <div class="flex gap-1 overflow-x-auto p-1.5 bg-claude-surface-alt">
+        {% for k in range(a.kare) %}
+        <a href="/channels/arketip-kare/{{ jid }}/{{ a.i }}/{{ k }}" target="_blank"
+           class="flex-none">
+          <img src="/channels/arketip-kare/{{ jid }}/{{ a.i }}/{{ k }}"
+               alt="stres karesi {{ k + 1 }}" loading="lazy"
+               class="h-40 w-auto rounded border border-claude-border bg-black">
+        </a>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% if a.ok %}
+      <form method="post" action="/channels/arketip-sec/{{ jid }}/{{ a.i }}"
+            class="p-1.5 mt-auto">
+        <button type="submit"
+                class="w-full bg-claude-accent hover:bg-claude-accent-hover
+                       text-white py-1.5 rounded-lg text-xs font-semibold">
+          bunu seç</button>
+      </form>
+      {% else %}
+      {# DÜŞEN ADAYIN KARESİ DE GÖSTERİLİR: sebebi okumak yetmiyor, göze
+         bakmak gerekiyor (canlıda üç aday düştü, hiçbirinin karesi yoktu). #}
+      <p class="text-[11px] text-claude-error leading-relaxed p-2 mt-auto">
+        Kapılardan geçemedi: {{ a.sebep|e }}
+      </p>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+{% elif is_.durum == "secildi" %}
 <div class="text-xs bg-claude-success-soft text-claude-success rounded-lg px-3 py-2.5">
-  <b>{{ is_.sablon|e }}</b> şablonu {{ is_.tur }}. turda kapılardan geçti ve
-  kanal ona geçirildi.
+  <b>{{ is_.sablon|e }}</b> şablonu kanala uygulandı.
   <a href="/channels/{{ is_.slug }}" class="underline">Sayfayı yenile</a>
 </div>
 
@@ -35,7 +86,11 @@
 {# GEÇEMEZSE HİÇBİR ŞEY YAZILMAZ — ne şablon, ne kanal değişikliği. #}
 <div class="text-xs bg-claude-error-soft text-claude-error rounded-lg px-3 py-2.5">
   Tasarım kaydedilmedi: {{ is_.sebep|e }}
-  <span class="block text-claude-subtle mt-0.5">
+  {% for a in is_.adaylar or [] %}
+  <span class="block mt-1 text-claude-subtle">
+    {{ a.yon or 'aday' }} — {{ a.sebep|e }}</span>
+  {% endfor %}
+  <span class="block text-claude-subtle mt-1">
     Kanal olduğu gibi duruyor. Daha somut bir tarifle tekrar dene.
   </span>
 </div>
