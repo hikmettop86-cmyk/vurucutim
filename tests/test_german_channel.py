@@ -217,8 +217,13 @@ def test_metadata_hashtag_ornegi_dile_ozgu():
 
     p = build_metadata_prompt(channel=_De(), script={"body_paragraph": "x"},
                               rss_source="Spiegel", rss_link="https://spiegel.de/1")
-    assert "#eilmeldung" in p and "#nachrichten" in p
-    assert "#sondakika" not in p
+    # NİYET: örnek KANALIN DİLİNDE olmalı, Türkçe sızmamalı. Büyük/küçük harf
+    # sabitlenmez — örnek artık kanalın KENDİ anahtar kelimelerinden de besleniyor
+    # ve "#Nachrichten" (Almanca ad, büyük harfle doğru) ile dil varsayılanındaki
+    # "#nachrichten" tekilleştirmede birleşiyor.
+    dusuk = p.lower()
+    assert "#eilmeldung" in dusuk and "#nachrichten" in dusuk
+    assert "#sondakika" not in dusuk
 
     class _Tr(_De):
         language = "tr"; handle = "@gundem"

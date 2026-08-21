@@ -37,19 +37,47 @@ def words_per_second(language: str | None = None) -> float:
 
 def word_budget(target_duration_s: tuple[int, int],
                 language: str | None = None) -> tuple[int, int]:
-    """Hedef süre aralığından kelime bütçesi (min, max).
+    """Hedef süre aralığından uzunluk bütçesi (min, max), DİLİN BİRİMİNDE.
+
+    CJK'DE BİRİM KARAKTERDİR. Japoncada boşluk yok: 65 karakterlik bir cümle
+    `.split()` ile 1 parça sayılıyordu, yani "66-110 kelime" bütçesi kurulup
+    sayım 1 dönüyor, kontrol hep başarısız oluyor ve metin bütçeden BAĞIMSIZ
+    kabul ediliyordu — bütçe Japoncada hiç çalışmıyordu (2026-08-22).
+
+    Mekanizma kürate yolu için zaten çözülmüştü (`reel_narration`); burada
+    yeniden yazmak yerine ORASI kullanılıyor, iki yerde ayrışmasın.
 
     `language` verilmezse Türkçe hızı kullanılır (mevcut çağıranların davranışı
     değişmesin diye).
     """
+    from short_bot.reel_narration import CJK_LANGUAGES, reel_word_budget
+    if (language or "") in CJK_LANGUAGES:
+        return reel_word_budget(target_duration_s, language)
     wps = words_per_second(language)
     lo, hi = target_duration_s
     return int(lo * wps), int(hi * wps)
 
 
+def narration_length(text: str, language: str | None = None) -> int:
+    """Anlatım uzunluğu, DİLİN BİRİMİNDE (CJK'de karakter, ötekinde kelime).
+
+    `Narration.word_count()` her dilde `.split()` sayar; CJK'de bu 1 döner.
+    Bütçe kontrolü bu fonksiyondan geçmeli.
+    """
+    from short_bot.reel_narration import budget_unit
+    t = text or ""
+    if budget_unit(language or "") == "characters":
+        return len("".join(t.split()))      # boşluk saymadan karakter
+    return len(t.split())
+
+
 def build_narration_prompt(item, body: str, channel) -> str:
     voice = channel.voice
     lo_w, hi_w = word_budget(voice.target_duration_s, channel.language)
+    # Bütçenin BİRİMİ dile göre: CJK'de karakter (boşluk yok, kelime
+    # sayısı anlamsız), ötekinde kelime.
+    from short_bot.reel_narration import budget_unit as _bu
+    birim = "characters" if _bu(channel.language) == "characters" else "words"
     lo_s, hi_s = voice.target_duration_s
     lang_name = LANGUAGE_NAMES.get(channel.language, "Turkish")
 
@@ -78,7 +106,7 @@ OUTPUT a JSON object with exactly these fields:
 - "mood": one of "breaking" | "neutral" | "upbeat"
 
 HARD RULES:
-- TOTAL spoken words across hook + all beats + loop_close: between {lo_w} and {hi_w}.
+- TOTAL spoken {birim} across hook + all beats + loop_close: between {lo_w} and {hi_w}.
 - Plain spoken language. No markdown, no emoji, no stage directions, no brackets.
 - Every claim must come from the article body. Invent nothing.
 - Numbers should be written as they are spoken.
@@ -86,12 +114,17 @@ HARD RULES:
 Return ONLY the JSON object."""
 
 
-def _budget_feedback(actual: int, lo_w: int, hi_w: int) -> str:
+def _budget_feedback(actual: int, lo_w: int, hi_w: int,
+                     language: str | None = None) -> str:
+    """Bütçe dışı denemeye geri bildirim. BİRİM DİLE GÖRE — Japoncaya
+    "had 1 spoken words" demek anlamsız bir talimattır."""
+    from short_bot.reel_narration import budget_unit
+    birim = "characters" if budget_unit(language or "") == "characters" else "words"
     if actual > hi_w:
-        return (f"\n\nKISALT: previous attempt had {actual} spoken words, "
-                f"the limit is {hi_w}. Rewrite shorter, keep the same structure.\n")
-    return (f"\n\nUZAT: previous attempt had only {actual} spoken words, "
-            f"the minimum is {lo_w}. Add detail from the article body.\n")
+        return (f"\n\nKISALT: previous attempt had {actual} spoken {birim}, "
+                f"budget is {lo_w}-{hi_w}. Cut to fit.")
+    return (f"\n\nUZAT: previous attempt had only {actual} spoken {birim}, "
+            f"budget is {lo_w}-{hi_w}. Add detail to fit.")
 
 
 def _fact_feedback(eksik: list[str]) -> str:
@@ -126,6 +159,10 @@ def write_narration(
         raise ValueError("write_narration: channel.voice tanımlı değil")
 
     lo_w, hi_w = word_budget(voice.target_duration_s, channel.language)
+    # Bütçenin BİRİMİ dile göre: CJK'de karakter (boşluk yok, kelime
+    # sayısı anlamsız), ötekinde kelime.
+    from short_bot.reel_narration import budget_unit as _bu
+    birim = "characters" if _bu(channel.language) == "characters" else "words"
     prompt = build_narration_prompt(item, body, channel)
 
     def _uret(p: str) -> Narration:
@@ -133,11 +170,12 @@ def write_narration(
                         backend=backend, api_key=api_key, retries=3)
 
     narration = _uret(prompt)
-    actual = narration.word_count()
+    actual = narration_length(narration.full_text(), channel.language)
     if not (lo_w <= actual <= hi_w):
         # Tek düzeltme turu. İkincisi de bütçe dışıysa kabul edilir —
         # süre zaten sesten okunur, bütçe sadece bir hedeftir.
-        narration = _uret(prompt + _budget_feedback(actual, lo_w, hi_w))
+        narration = _uret(prompt + _budget_feedback(actual, lo_w, hi_w,
+                                            channel.language))
 
     eksik = unverified_claims(narration.full_text(), body,
                               language=channel.language)
@@ -282,6 +320,10 @@ def build_yorum_prompt(item, body: str, channel, *, extra_sources: list[tuple[st
     """
     voice = channel.voice
     lo_w, hi_w = word_budget(voice.target_duration_s, channel.language)
+    # Bütçenin BİRİMİ dile göre: CJK'de karakter (boşluk yok, kelime
+    # sayısı anlamsız), ötekinde kelime.
+    from short_bot.reel_narration import budget_unit as _bu
+    birim = "characters" if _bu(channel.language) == "characters" else "words"
     lo_s, hi_s = voice.target_duration_s
     lang_name = LANGUAGE_NAMES.get(channel.language, "Turkish")
     primary_src = getattr(item, "source", None) or "unknown"
@@ -339,7 +381,7 @@ OUTPUT a JSON object with exactly these fields:
 - "mood": "breaking" | "neutral" | "upbeat"
 
 HARD RULES:
-- TOTAL spoken words across hook + beats + loop_close: between {lo_w} and {hi_w}.
+- TOTAL spoken {birim} across hook + beats + loop_close: between {lo_w} and {hi_w}.
 {source_rule}
 - HAVE A VIEW: somewhere in the narration take a clear, fair position on what this means —
   but do not stamp it with the same phrase every time, and do not moralise.
@@ -382,6 +424,10 @@ def write_yorum_narration(
         raise ValueError("write_yorum_narration: channel.voice tanımlı değil")
     extra_sources = list(extra_sources or [])
     lo_w, hi_w = word_budget(voice.target_duration_s, channel.language)
+    # Bütçenin BİRİMİ dile göre: CJK'de karakter (boşluk yok, kelime
+    # sayısı anlamsız), ötekinde kelime.
+    from short_bot.reel_narration import budget_unit as _bu
+    birim = "characters" if _bu(channel.language) == "characters" else "words"
     prompt = build_yorum_prompt(item, body, channel, extra_sources=extra_sources,
                                 variation=variation)
     reference = "\n".join([body] + [t for _, t in extra_sources]
@@ -392,9 +438,10 @@ def write_yorum_narration(
                         backend=backend, api_key=api_key, retries=3)
 
     narration = _uret(prompt)
-    actual = narration.word_count()
+    actual = narration_length(narration.full_text(), channel.language)
     if not (lo_w <= actual <= hi_w):
-        narration = _uret(prompt + _budget_feedback(actual, lo_w, hi_w))
+        narration = _uret(prompt + _budget_feedback(actual, lo_w, hi_w,
+                                            channel.language))
 
     eksik = unverified_claims(narration.full_text(), reference, language=channel.language)
     if eksik:

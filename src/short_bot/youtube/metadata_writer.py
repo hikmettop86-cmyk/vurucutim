@@ -227,11 +227,19 @@ def build_metadata_prompt(*, channel, script: dict,
     # Kodun kendi dersi: model ÖRNEĞİ kopyalar, kural metnini değil. Kanalın
     # anahtar kelimeleri hem dile hem dikeye tanım gereği doğru.
     _kw = [k.strip() for k in (channel.keywords or []) if k and k.strip()][:3]
+    _dil_ornek = _HASHTAG_ORNEK.get(channel.language, _HASHTAG_ORNEK["en"])
     if _kw:
-        hashtag_ornek = "#shorts " + " ".join(
-            "#" + k.replace(" ", "") for k in _kw)
+        _etiketler = ["#shorts"] + ["#" + k.replace(" ", "") for k in _kw]
+        # DİL VARSAYILANI HABER TONLU (#eilmeldung, #速報). Dikeysiz kanal zaten
+        # haber kanalı — varsayılan onu zenginleştirir, eski davranış korunur.
+        # Dikey VARSA eklenmez: magazin kanalına "#速報" tam da kaçındığımız sızıntı.
+        if not getattr(channel, "trends_vertical", None):
+            for t in _dil_ornek.split():
+                if t.lower() not in {x.lower() for x in _etiketler}:
+                    _etiketler.append(t)
+        hashtag_ornek = " ".join(_etiketler)
     else:
-        hashtag_ornek = _HASHTAG_ORNEK.get(channel.language, _HASHTAG_ORNEK["en"])
+        hashtag_ornek = _dil_ornek
 
     return f"""Sen bir YouTube Shorts kanalı için SEO-uyumlu metadata üreticisisin.
 
