@@ -187,6 +187,27 @@ kaç TL olduğu değildir."
 
 Dikey `null` iken prompt bugünkü hâliyle kalır.
 
+### 4.5b Kategori kapısı KESİN DEĞİL — iki kademeli süzgeç
+
+Ölçüldü (2026-08-22, DE/adalet 27 aday): Google'ın kategori 10 ("Hukuk &
+Devlet") etiketi geniş bir torba ve yanılıyor — içine **Prinz Harry ve Meghan**
+(magazin) ile **fırın tedarikçisi iflası** (para) da girdi. Elle tasnif: 15 net
+adalet, 7 sınırda (itfaiye/kamu duyurusu — aslında `olay`), 5 açıkça alakasız.
+
+`para` (TR, 5 aday) ve `magazin` (DE, 23 aday) aynı gün TEMİZ çıktı; sorun
+kategori 10'a özgü.
+
+Bu yüzden tasarım iki kademelidir: **kategori = ucuz ön süzgeç** (TR'de 52
+konudan 47'sini kesiyor, AI maliyeti sıfır), **AI kapısı = hassas süzgeç**.
+Prompt'un dikey bloğu modele filtreye GÜVENMESİNİ söylememeli — ilk yazımda
+"havuz zaten süzüldü, sen yalnız olay var mı ona bak" diyordu ve bu gürültüyü
+videoya taşırdı. Blok artık şunu der: *sınıflandırma yanılır, dikeye ait
+olmayana 0-3 ver.*
+
+Gerçek kapı bu 27 adaya koşuldu (gemini-3.5-flash-lite): **15/27 geçti** ve
+elenenler elle yapılan tasnifle BİREBİR aynı çıktı — Harry & Meghan 1.0
+("völlig außerhalb der Vertikale"), iflas 5.0, Baerbock 3.0, Rus tankeri 2.0.
+
 ### 4.6 Arz tabanı alarmı — sessiz genişleme YOK
 
 Dikey filtresinden sonra aday sayısı `ChannelConfig.trends_min_candidates`

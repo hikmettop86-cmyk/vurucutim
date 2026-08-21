@@ -141,7 +141,8 @@ _VERTICAL_GATE: dict[str, dict[str, str]] = {
         "_bas": """
 
 BU KANALIN DİKEYİ: {label}
-Havuz zaten bu dikeye süzüldü; sen yalnız olay var mı ona bak.
+Havuz Google'ın KENDİ sınıflandırmasıyla süzüldü ve o sınıflandırma YANILIR.
+Başlık bu dikeye AİT DEĞİLSE 0-3 ver — anlatılabilir bir olay olsa bile.
 """,
         "para": "Bu dikeyde fiyat/kur/faiz HAREKETİNİN NEDENİ bir olaydır (rekor, karar, zam, iflas, satın alma) — 7-10 ver. Yalnız 'kaç TL / ne kadar' sorgusu olay DEĞİLDİR — 0-3 ver.",
         "spor": "Bu dikeyde skor, transfer, sakatlık, ayrılık, ceza ve resmi açıklama olaydır. 'Maç hangi kanalda / saat kaçta' olay değildir.",
@@ -154,7 +155,8 @@ Havuz zaten bu dikeye süzüldü; sen yalnız olay var mı ona bak.
         "_bas": """
 
 THIS CHANNEL'S VERTICAL: {label}
-The pool is already filtered to this vertical; you only judge whether there is an event.
+The pool was filtered by Google's OWN classification, which is often wrong.
+If a headline does not belong to this vertical, score 0-3 — even if it is a real event.
 """,
         "para": "Here, the REASON behind a price/rate move is an event (record, decision, hike, bankruptcy, acquisition) — score 7-10. A bare 'how much is it' lookup is NOT an event — score 0-3.",
         "spor": "Here, scores, transfers, injuries, exits, bans and official statements are events. 'What channel / what time is the match' is not.",
@@ -167,7 +169,8 @@ The pool is already filtered to this vertical; you only judge whether there is a
         "_bas": """
 
 DIE VERTIKALE DIESES KANALS: {label}
-Der Pool ist bereits auf diese Vertikale gefiltert; du beurteilst nur, ob ein Ereignis vorliegt.
+Der Pool wurde nach Googles EIGENER Klassifikation gefiltert, und die irrt oft.
+Gehört eine Schlagzeile nicht in diese Vertikale, gib 0-3 — auch bei echtem Ereignis.
 """,
         "para": "Hier ist der GRUND einer Preis-/Kurs-/Zinsbewegung ein Ereignis (Rekord, Beschluss, Erhöhung, Insolvenz, Übernahme) — 7-10. Eine reine 'Wie viel kostet' Abfrage ist KEIN Ereignis — 0-3.",
         "spor": "Hier sind Ergebnisse, Transfers, Verletzungen, Abgänge, Sperren und offizielle Erklärungen Ereignisse. 'Welcher Sender / wann' nicht.",

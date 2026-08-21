@@ -79,3 +79,23 @@ def test_json_talimati_prompt_un_sonunda_kalir():
     from short_bot.scorer import build_scoring_prompt
     p = build_scoring_prompt(_items(), channel=_kanal(trends_vertical="para"))
     assert p.index("BU KANALIN DİKEYİ") < p.index("SADECE şu JSON")
+
+
+def test_kapi_dikeye_ait_olmayani_reddeder():
+    """ÖLÇÜLDÜ (2026-08-22, DE/adalet 27 aday): Google'ın kategori 10 etiketine
+    'Prinz Harry ve Meghan' ile 'fırın tedarikçisi iflası' da girdi. Prompt
+    modele filtreye GÜVENMESİNİ söylerse bu gürültü videoya döner."""
+    from short_bot.scorer import build_scoring_prompt
+    p = build_scoring_prompt(_items(), channel=_kanal(trends_vertical="adalet"))
+    # DİKKAT: Türkçe büyük İ'de .lower() birleşik noktalı 'i̇' üretir, bu yüzden
+    # metnin YAZILDIĞI biçim üzerinden bakılır (bkz. text_normalize.locale_fold).
+    assert "YANILIR" in p, "sınıflandırmanın yanılabildiği söylenmiyor"
+    assert "AİT DEĞİLSE 0-3 ver" in p
+    assert "Havuz zaten bu dikeye süzüldü" not in p, "model filtreye güvenmemeli"
+
+
+def test_ingilizce_kapida_da_reddetme_talimati_var():
+    from short_bot.scorer import build_scoring_prompt
+    p = build_scoring_prompt(_items(),
+                             channel=_kanal(language="en", trends_vertical="adalet"))
+    assert "does not belong" in p.lower()
