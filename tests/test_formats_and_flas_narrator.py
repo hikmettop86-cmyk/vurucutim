@@ -35,6 +35,40 @@ def test_channel_format_table():
     assert edit_path(_cfg()) == "/channels/x/edit"
 
 
+def test_format_spec_her_format_icin_var():
+    """Dört canlı format kayıtlı; reel formatı yok (canlıda 0 kanal, kaldırıldı)."""
+    from short_bot.formats import FORMATS, FormatSpec
+    assert set(FORMATS) == {"card", "voiced", "yorum", "curated"}
+    for spec in FORMATS.values():
+        assert isinstance(spec, FormatSpec)
+
+
+def test_format_spec_alanlari():
+    from short_bot.formats import FORMATS
+    yorum = FORMATS["yorum"]
+    assert yorum.key == "yorum"
+    assert yorum.label == "Gündem Yorum"
+    assert yorum.glyph == "❝"
+    assert yorum.body_template == "channels/_body_yorum.html.j2"
+
+
+def test_ortak_cekirdek_her_formatta_ayni():
+    """Ayrımın bütün noktası bu: kimlik/zamanlama/youtube/otomasyon TEK kümedir.
+
+    Bugün böyle değildi ve ölçüldü: kürate kanalda gizlilik ve yükleme eşiği,
+    kart kanalında credentials_from UI'de HİÇ yoktu."""
+    from short_bot.formats import CORE_PARTIALS, FORMATS
+    for spec in FORMATS.values():
+        assert spec.core == CORE_PARTIALS
+    assert "core/youtube" in CORE_PARTIALS
+
+
+def test_format_labels_spec_ten_turetilir():
+    """İki liste elle senkron tutulursa biri unutulur; FORMAT_LABELS türetilmiş olmalı."""
+    from short_bot.formats import FORMAT_LABELS, FORMATS
+    assert FORMAT_LABELS == {k: v.label for k, v in FORMATS.items()}
+
+
 def _timeline():
     words = [TimedWord("a", 0.0, 0.4, 0), TimedWord("b", 0.5, 0.9, 0)]
     beats = [TimedBeat("36 SARSINTI", 2.0, 12.0), TimedBeat("BENCE HAZIRLIK", 12.0, 30.0)]
