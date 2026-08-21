@@ -154,6 +154,118 @@
                class="bg-claude-surface border border-claude-border rounded-xl p-5 space-y-4">
         <h2 class="font-semibold text-claude-accent">Efekt &amp; Varyasyon <span class="text-xs font-normal text-claude-muted">— her video benzersiz görünsün</span></h2>
 
+        {# ── MONTAJ ─────────────────────────────────────────────────────────
+           Bu alanlar reel formatının `edit_reel.html.j2` sayfasından TAŞINDI.
+           Reel canlıda tek kanalı olmayan bir formattı ama montaj ayarlarının
+           tek arayüzü orasıydı; kürate videosunun temposunu ve biçimini bunlar
+           belirliyor. Ölçüldü: hepsi 2–10 modülde okunuyor, hiçbiri ölü değil.
+
+           Alan adları ÖNEKSİZ (`cut_pacing`, `target_min`) — kürate POST'u zaten
+           öneksiz okuyor; reel sayfasındaki `reel_` öneki formatla birlikte gitti. #}
+        {# Nöbetçi alan: onay kutuları işaretsizken POST'ta hiç görünmez;
+           bu alan "montaj sekmesi gönderildi" demenin tek yolu. #}
+        <input type="hidden" name="montaj_present" value="1">
+        <div class="grid grid-cols-2 gap-4 pt-2 border-t border-claude-border">
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase tracking-wide">Süre (sn)</span>
+            <div class="grid grid-cols-2 gap-2 mt-1">
+              <input type="number" name="target_min" min="10" max="180"
+                     value="{{ ch.reel.target_duration_s[0] }}"
+                     class="w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+              <input type="number" name="target_max" min="10" max="180"
+                     value="{{ ch.reel.target_duration_s[1] }}"
+                     class="w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+            </div>
+          </label>
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase tracking-wide">Kesme temposu</span>
+            <select name="cut_pacing" class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+              {% for v, ad in [('auto','Otomatik'),('slow','Yavaş'),('medium','Orta'),('fast','Hızlı')] %}
+              <option value="{{ v }}" {% if ch.reel.cut_pacing == v %}selected{% endif %}>{{ ad }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase tracking-wide">Yerleşim</span>
+            <select name="layout" class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+              {% for v, ad in [('auto','Otomatik'),('classic','Klasik'),('lower_left','Sol alt'),('top_heavy','Üst ağırlıklı')] %}
+              <option value="{{ v }}" {% if ch.reel.layout == v %}selected{% endif %}>{{ ad }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase tracking-wide">Altyazı fontu</span>
+            <select name="font" class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+              {% for v in ['Montserrat','Anton','Bebas Neue','Oswald','Poppins','Inter','Archivo Black','Noto Sans JP'] %}
+              <option value="{{ v }}" {% if ch.reel.font == v %}selected{% endif %}>{{ v }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase tracking-wide">Müzik seviyesi</span>
+            <input type="number" name="music_volume" step="0.01" min="0" max="1"
+                   value="{{ ch.reel.music_volume }}"
+                   class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+          </label>
+          <label class="block">
+            <span class="text-xs text-claude-muted uppercase tracking-wide">Konuşma hızı</span>
+            <input type="number" name="speed" step="0.05" min="0.6" max="1.5"
+                   value="{{ ch.reel.speed }}"
+                   class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+          </label>
+        </div>
+
+        <div class="flex flex-wrap gap-x-6 gap-y-2 text-sm pt-2">
+          <label class="flex items-center gap-2">
+            <input type="checkbox" name="verify_footage" {% if ch.reel.verify_footage %}checked{% endif %}>
+            Görüntüyü doğrula (vision)
+          </label>
+          <label class="flex items-center gap-2">
+            <input type="checkbox" name="series_enabled" {% if ch.reel.series_enabled %}checked{% endif %}>
+            Seri modu
+          </label>
+          <label class="flex items-center gap-2 flex-1 min-w-[220px]">
+            <span class="text-xs text-claude-muted whitespace-nowrap">Seri başlığı</span>
+            <input type="text" name="series_title" value="{{ ch.reel.series_title|e }}"
+                   class="flex-1 bg-white border border-claude-border rounded-lg px-3 py-1.5 text-sm">
+          </label>
+          <label class="flex items-center gap-2">
+            <span class="text-xs text-claude-muted whitespace-nowrap">Seri uzunluğu</span>
+            <input type="number" name="series_arc_length" min="2" max="12"
+                   value="{{ ch.reel.series_arc_length }}"
+                   class="w-20 bg-white border border-claude-border rounded-lg px-2 py-1.5 text-sm">
+          </label>
+        </div>
+
+        {# İkincil montaj anahtarları — varsayılanları iyi çalışıyor, nadiren
+           dokunuluyor; sayfayı şişirmesin diye katlanır. #}
+        <details class="pt-2 border-t border-claude-border">
+          <summary class="text-xs text-claude-accent cursor-pointer select-none">Gelişmiş montaj</summary>
+          <div class="grid grid-cols-2 gap-4 mt-3">
+            <label class="block">
+              <span class="text-xs text-claude-muted uppercase tracking-wide">Hikâye kurgusu</span>
+              <select name="arc_mode" class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+                <option value="planned" {% if ch.reel.arc_mode == 'planned' %}selected{% endif %}>Planlı</option>
+                <option value="chain" {% if ch.reel.arc_mode == 'chain' %}selected{% endif %}>Zincir</option>
+              </select>
+            </label>
+          </div>
+          <div class="flex flex-wrap gap-x-6 gap-y-2 text-sm mt-3">
+            {% for alan, etiket in [
+                 ('color_grade','Renk derecelendirme'), ('comment_question','Yorum sorusu'),
+                 ('identity_lock','Kimlik kilidi'), ('interrupts','Kesintiler'),
+                 ('subject_framing','Özne çerçeveleme'), ('tempo_zones','Tempo bölgeleri'),
+                 ('music_duck','Müziği kıs (konuşurken)'), ('visual_loop','Görsel döngü'),
+                 ('sting_enabled','Vurgu sesi'), ('number_pop','Sayı vurgusu')] %}
+            <label class="flex items-center gap-2">
+              <input type="checkbox" name="{{ alan }}" {% if ch.reel[alan] %}checked{% endif %}>
+              {{ etiket }}
+            </label>
+            {% endfor %}
+          </div>
+        </details>
+
+
         <div>
           <span class="text-xs text-claude-muted uppercase tracking-wide">Kurgu efektleri</span>
           <div class="flex flex-wrap gap-x-5 gap-y-2 text-sm mt-2">

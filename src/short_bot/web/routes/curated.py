@@ -585,6 +585,33 @@ def edit_curated_save(slug):
         arrow_frequency=(request.form.get("arrow_frequency") or ch.reel.arrow_frequency).strip(),
         sfx_volume=_float("sfx_volume", ch.reel.sfx_volume),
     ))
+    # MONTAJ — reel formatının edit sayfasından taşındı. Reel canlıda tek kanalı
+    # olmayan bir formattı ama montaj ayarlarının tek arayüzü orasıydı.
+    #
+    # "Formda yoksa dokunma" kuralı burada ŞART: form sekmeli ve kullanıcı bir
+    # sekmeyi hiç açmadan kaydedebilir. Onay kutuları da işaretsizken POST'ta
+    # hiç görünmez — bu yüzden her kutu için "bu sekme gönderildi mi" tek bir
+    # nöbetçi alandan (`montaj_present`) anlaşılır.
+    montaj: dict = {}
+    if "target_min" in request.form or "target_max" in request.form:
+        montaj["target_duration_s"] = (
+            _int("target_min", ch.reel.target_duration_s[0]),
+            _int("target_max", ch.reel.target_duration_s[1]))
+    for alan in ("cut_pacing", "layout", "font", "arc_mode", "series_title"):
+        if request.form.get(alan):
+            montaj[alan] = request.form.get(alan).strip()
+    for alan in ("music_volume", "speed"):
+        if alan in request.form:
+            montaj[alan] = _float(alan, getattr(ch.reel, alan))
+    if "series_arc_length" in request.form:
+        montaj["series_arc_length"] = _int("series_arc_length", ch.reel.series_arc_length)
+    for alan in ("verify_footage", "series_enabled", "color_grade", "comment_question",
+                 "identity_lock", "interrupts", "subject_framing", "tempo_zones",
+                 "music_duck", "visual_loop", "sting_enabled", "number_pop"):
+        if "montaj_present" in request.form or alan in request.form:
+            montaj[alan] = request.form.get(alan) == "on"
+    if montaj:
+        reel = reel.model_copy(update=montaj)
     # Ortak alanlar tek okuyucudan (bkz. web/core_fields.py). Bu sayfada YouTube
     # adına yalnız `auto_upload` vardı: gizlilik, kategori, yükleme puan eşiği,
     # AI etiketi ve bağlantı paylaşımı UI'de HİÇ YOKTU — kürate kanalın videoları
