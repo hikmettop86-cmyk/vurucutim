@@ -43,7 +43,10 @@
                      flex items-center justify-between gap-3">
         <h2 class="font-semibold text-[13px] tracking-wide m-0">
           {{ 'Kurma sohbeti' if kurulum else 'Sohbet' }}</h2>
-        <span class="text-[11px] text-claude-subtle">Claude CLI · Sonnet 5</span>
+        {# HANGİ AI KOŞUYOR: sabit metin değil, ayarlardan ÇÖZÜLEN sağlayıcı.
+           Sabit "Claude CLI · Sonnet 5" yazarken kullanıcı ayarı değiştirip
+           "hangi ai çalışıyor" diye sormak zorunda kaldı. #}
+        <span class="text-[11px] text-claude-subtle" title="Ayarlar → AI Sağlayıcıları">{{ motor or "—" }}</span>
       </header>
 
       <div id="thread" class="p-4 flex flex-col gap-3.5 max-h-[60vh] overflow-y-auto">

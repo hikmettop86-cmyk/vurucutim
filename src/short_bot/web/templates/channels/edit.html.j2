@@ -96,6 +96,7 @@
         categoryIcon: "{{ (c.dna.category_icon if c.dna else "") }}",
         archetype: "{{ (c.dna.archetype if c.dna else c.template) }}",
         rssSourceDemo: "",
+        stresDurumu: "",   // "" = en uzun (en kötü hâl)
         currentTab: window.location.hash.replace("#", "") || "genel"
       }'>
 
@@ -113,14 +114,34 @@
         <div class="p-5">
           <div class="relative bg-black rounded-lg overflow-hidden mx-auto"
                style="width: 100%; max-width: 360px; aspect-ratio: 9/16;">
-            <iframe x-bind:src="`/preview/{{ c.slug }}?archetype=${encodeURIComponent(archetype)}&primary=${encodeURIComponent(primary)}&accent=${encodeURIComponent(accent)}&font_headline=${encodeURIComponent(fontHeadline)}&font_body=${encodeURIComponent(fontBody)}&banner_shape=${encodeURIComponent(bannerShape)}&highlight_style=${encodeURIComponent(highlightStyle)}&chip_style=${encodeURIComponent(chipStyle)}&category_icon=${encodeURIComponent(categoryIcon)}&bg_grad_1=${encodeURIComponent(bgGrad1)}&bg_grad_2=${encodeURIComponent(bgGrad2)}&body_bg_1=${encodeURIComponent(bodyBg1)}&body_bg_2=${encodeURIComponent(bodyBg2)}&text_main=${encodeURIComponent(textMain)}&text_muted=${encodeURIComponent(textMuted)}&header_top_color=${encodeURIComponent(headerTopColor)}&header_bottom_color=${encodeURIComponent(headerBottomColor)}&rss_source=${encodeURIComponent(rssSourceDemo)}&size_headline_top=${encodeURIComponent(sizeHeadlineTop)}&size_headline_bot=${encodeURIComponent(sizeHeadlineBot)}`"
+            <iframe x-bind:src="`/preview/{{ c.slug }}?archetype=${encodeURIComponent(archetype)}&primary=${encodeURIComponent(primary)}&accent=${encodeURIComponent(accent)}&font_headline=${encodeURIComponent(fontHeadline)}&font_body=${encodeURIComponent(fontBody)}&banner_shape=${encodeURIComponent(bannerShape)}&highlight_style=${encodeURIComponent(highlightStyle)}&chip_style=${encodeURIComponent(chipStyle)}&category_icon=${encodeURIComponent(categoryIcon)}&bg_grad_1=${encodeURIComponent(bgGrad1)}&bg_grad_2=${encodeURIComponent(bgGrad2)}&body_bg_1=${encodeURIComponent(bodyBg1)}&body_bg_2=${encodeURIComponent(bodyBg2)}&text_main=${encodeURIComponent(textMain)}&text_muted=${encodeURIComponent(textMuted)}&header_top_color=${encodeURIComponent(headerTopColor)}&header_bottom_color=${encodeURIComponent(headerBottomColor)}&rss_source=${encodeURIComponent(rssSourceDemo)}&size_headline_top=${encodeURIComponent(sizeHeadlineTop)}&size_headline_bot=${encodeURIComponent(sizeHeadlineBot)}&stres=${encodeURIComponent(stresDurumu)}`"
                     src="/preview/{{ c.slug }}"
                     scrolling="no"
                     class="absolute top-0 left-0 border-0"
                     style="width: 1080px; height: 1920px; transform: scale(0.333); transform-origin: top left;"></iframe>
           </div>
+          {# HANGİ METİN GÖSTERİLİYOR. Eskiden hep kısa örnek senaryo
+             (tr: 7/9/138 karakter) çiziliyordu; üretimin maksimumu 25/35/302
+             olduğu için önizleme taşmayı ASLA gösteremiyordu. Varsayılan artık
+             EN KÖTÜ HÂL — arketip kapısının uç metinleri. #}
+          <label class="flex items-center gap-2 mt-3 text-xs text-claude-muted">
+            <span class="whitespace-nowrap">Önizleme metni</span>
+            <select x-model="stresDurumu"
+                    class="bg-claude-surface border border-claude-border rounded-lg
+                           px-2 py-1 text-xs flex-1 min-w-0">
+              <option value="">En uzun metin (en kötü hâl)</option>
+              <option value="0">Kısa manşet + kısa gövde</option>
+              <option value="3">Tek kelimelik manşet</option>
+              <option value="2">Orta uzunluk</option>
+              <option value="4">Japonca (CJK fontu)</option>
+              <option value="5">Almanca (ä ö ü ß)</option>
+              <option value="6">İspanyolca (á í ó ñ)</option>
+              <option value="ornek">Kısa örnek haber</option>
+            </select>
+          </label>
           <p class="text-xs text-claude-muted mt-2 text-center">
-            Gerçek 1080×1920 short, ölçekli HTML önizleme.
+            Gerçek 1080×1920 short, ölçekli HTML önizleme —
+            <b>arka plan fotoğrafı yok</b> (üretimde Pexels'ten gelir).
           </p>
         </div>
       </div>

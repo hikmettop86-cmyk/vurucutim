@@ -102,9 +102,21 @@ def set_registry_path(path) -> None:
                       else Path(path))
 
 
+def kullanilan_tasarim_dilleri() -> list[str]:
+    """Şu ana kadar hangi tasarım dilleri kullanıldı.
+
+    İki araba kanalının ikisine de Ferrari verilmesin diye seçim bunların
+    DIŞINDAN yapılır (kullanıcı itirazı 2026-08-21). Dilsiz eski kayıtlar
+    yok sayılır.
+    """
+    return [d for d in (a.get("design_language") for a in _DESIGNED_ARCHETYPES)
+            if d]
+
+
 def register_designed_archetype(slug: str, label: str = "",
                                 defaults: dict | None = None,
-                                pexels_queries: list | None = None) -> None:
+                                pexels_queries: list | None = None,
+                                yon: str = "") -> None:
     """Yeni tasarlanan arketipi ANINDA geçerli kıl ve kayda yaz.
 
     ÜÇ AYRI KIRIK BURADA BULUŞUYORDU (canlıda ölçüldü, 2026-08-21 —
@@ -137,6 +149,9 @@ def register_designed_archetype(slug: str, label: str = "",
              "pexels_queries": list(pexels_queries or [])
                                or ["abstract motion background",
                                    "dark gradient loop", "soft light bokeh"],
+             # Hangi tasarım dilinden üretildi — bir sonraki kanala AYNI dil
+             # verilmesin diye (bkz. design_directions.sec(kullanilan=...)).
+             "design_language": yon,
              "defaults": defaults or {}}
     _DESIGNED_ARCHETYPES.append(kayit)
     ARCHETYPES.append(slug)

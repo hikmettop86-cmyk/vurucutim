@@ -207,6 +207,16 @@
             {% endfor %}{% endfor %}
           </datalist>
         </label>
+        {# ŞU AN GEÇERLİ: model kutusu boşken hangi modele düşüldüğü ekranda
+           hiç yazmıyordu ve kullanıcı ne koştuğunu bilemiyordu. #}
+        {% set g = (gecerli_cagrilar or {}).get(rol) %}
+        {% if g %}
+        <span class="sm:col-span-2 text-[11px] text-claude-subtle"
+              data-gecerli="{{ rol }}">şu an geçerli: {{ g.etiket }} ·
+          <span class="font-mono">{{ g.model }}</span>
+          {% if g.uyari %}<b class="text-claude-error">— {{ g.uyari }}</b>{% endif %}
+        </span>
+        {% endif %}
       </div>
       {% endfor %}
 

@@ -149,19 +149,62 @@ def yukle(design_dir, ad: str) -> "Yon | None":
                metin=govde + _capa_notu(govde))
 
 
-def sec(design_dir, n: int, *, tohum: str) -> list[str]:
+# Katalogda dil başına gösterilecek özet uzunluğu. Ölçüldü: 74 dilin ortalama
+# özeti 376 karakter; 160'a kırpınca katalog ~9 KB kalıyor ve tek çağrıya rahat
+# sığıyor. Tam dosyalar 2,2 MB — onlar prompt'a GİRMEZ, yalnız seçilen dilin
+# tam metni girer.
+OZET_KIRPMA = 160
+
+
+def katalog(design_dir, adaylar=None) -> str:
+    """Dillerin adı + kısa özeti — modelin SEÇEBİLMESİ için.
+
+    `adaylar` verilirse yalnız onlar listelenir (başka kanalların kullandığı
+    diller dışlanmış olarak gelir).
+    """
+    hepsi = yonler(design_dir)
+    if adaylar is not None:
+        istenen = set(adaylar)
+        hepsi = [a for a in hepsi if a in istenen]
+    satir = []
+    for ad in hepsi:
+        y = yukle(design_dir, ad)
+        if y is None:
+            continue
+        ozet = " ".join((y.ozet or y.etiket).split())[:OZET_KIRPMA]
+        satir.append(f"- {ad}: {ozet}")
+    return "\n".join(satir)
+
+
+def sec(design_dir, n: int, *, tohum: str, kullanilan=()) -> list[str]:
     """`n` FARKLI dil seç — aynı tohum aynı sonucu verir.
 
     Tohum kanal slug'ı: her kanal farklı bir üçlü alsın, ama aynı kanal için
     "yeniden üret" dediğinde sonuç tekrarlanabilir olsun.
+
+    `kullanilan`: BAŞKA kanalların şablonlarında kullanılmış diller — önce
+    bunların DIŞINDAN seçilir.
+
+    NEDEN: konuya göre seçmek çakışmayı rastgeleden KONUSALA taşır sadece —
+    iki araba kanalı da Ferrari alır (kullanıcı itirazı 2026-08-21). 74 dil,
+    kanal başına 3 → hiç çakışma olmadan ~24 kanal. Havuz tükenirse yeniden
+    kullanıma izin verilir; üretim durmamalı, ama bu ANCAK son çare.
     """
     hepsi = yonler(design_dir)
     if not hepsi:
         return []
-    # Deterministik karıştırma: her dil için tohumla karma, ona göre sırala.
+
     def _anahtar(ad: str) -> str:
         return hashlib.sha256(f"{tohum}:{ad}".encode("utf-8")).hexdigest()
-    return sorted(hepsi, key=_anahtar)[:max(0, n)]
+
+    yasak = set(kullanilan or ())
+    serbest = sorted([a for a in hepsi if a not in yasak], key=_anahtar)
+    out = serbest[:max(0, n)]
+    if len(out) < n:
+        # Havuz tükendi: kalanı yasaklılardan tamamla (deterministik sırayla).
+        kalan = sorted([a for a in hepsi if a in yasak], key=_anahtar)
+        out += kalan[:n - len(out)]
+    return out
 
 
 def prompt_blogu(design_dir, ad: str, niyet: str) -> str:

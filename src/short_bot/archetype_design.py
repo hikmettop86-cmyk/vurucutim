@@ -343,10 +343,61 @@ def _extract_dizi(ham: str) -> str:
     return m.group(0) if m else ham.strip()
 
 
+def dilleri_sec(ad: str, *, keywords, persona: str, aday_diller,
+                design_dir, sayi: int, metin_llm) -> list[str]:
+    """Kanalın KONUSUNA uyan tasarım dillerini SEÇTİR.
+
+    Eskiden diller `sha256(slug)` ile seçiliyordu — konuyla hiçbir bağı yoktu;
+    araba kanalına Starbucks, yemek kanalına PlayStation gelebiliyordu.
+    Kullanıcı kuralı (2026-08-21): "bugün araba yaparım yarın yemek ... bunu
+    ai kendisi bilip tasarlamalı".
+
+    `aday_diller` ZATEN dışlanmış gelir (başka kanalların kullandıkları
+    çıkarılmış), böylece iki araba kanalı da Ferrari almaz.
+
+    HATA ÜRETİMİ DURDURMAZ: model yoksa/bozuk cevap verirse aday sırası
+    (hash) korunur.
+    """
+    from short_bot.design_directions import katalog
+    aday = list(aday_diller)
+    if not aday:
+        return []
+    istem = "\n".join([
+        "Bir YouTube Shorts kanalı için görsel tasarım dili seç.",
+        "",
+        f"Kanal: {ad}",
+        f"Anahtar kelimeler: {', '.join(list(keywords)[:8]) or '-'}",
+        f"Kimlik: {(persona or '-')[:200]}",
+        "",
+        f"Aşağıdaki listeden KANALIN KONUSUNA en uygun {sayi} dili seç.",
+        "Farklı olsunlar: aynı ailenin üç varyantını değil, birbirinden",
+        "belirgin biçimde ayrı üç yaklaşım seç.",
+        "",
+        katalog(design_dir, adaylar=aday),
+        "",
+        # Örnekte GERÇEK dil adı kullanma: model onu seçime meyleder ve
+        # örnek ad listede yoksa boşuna eleme yapılır.
+        "Yalnız JSON dizisi döndür, ör: [\"<ad1>\", \"<ad2>\"]"])
+    try:
+        veri = json.loads(_extract_dizi(metin_llm(istem)))
+        secim = [str(x).strip() for x in veri if str(x).strip() in aday]
+    except Exception as e:   # noqa: BLE001 — seçim ikincil, üretim durmasın
+        log.warning(f"[arketip] dil seçimi yapılamadı ({e}) → hash sırası")
+        secim = []
+    # Eksik kalanı aday sırasından tamamla (model az/bozuk seçmiş olabilir).
+    for a in aday:
+        if len(secim) >= sayi:
+            break
+        if a not in secim:
+            secim.append(a)
+    return secim[:sayi]
+
+
 def adaylar_uret(niyet: str, *, ad: str, templates_dir: Path, settings,
                  metin_llm, vision_call=None, render_fn=None,
                  sayi: int = 3, tohum: str = "", tur: int = TUR,
-                 kanit_dir=None) -> list[TasarimSonucu]:
+                 kanit_dir=None, keywords=(), persona: str = "",
+                 dil_secici=None) -> list[TasarimSonucu]:
     """`sayi` kadar aday üret — her birine FARKLI bir tasarım dili vererek.
 
     Kullanıcı kararı (2026-08-21): "3 aday üret, ben seçeyim". Ücretsiz
@@ -358,7 +409,36 @@ def adaylar_uret(niyet: str, *, ad: str, templates_dir: Path, settings,
     yazılır.
     """
     from short_bot.design_directions import sec
-    diller = sec(templates_dir / "design", sayi, tohum=tohum or ad)
+    from short_bot.dna import kullanilan_tasarim_dilleri
+    # BAŞKA KANALLARIN DİLLERİ DIŞLANIR: konuya göre seçmek çakışmayı
+    # rastgeleden konusala taşır sadece — iki araba kanalı da Ferrari alır
+    # (kullanıcı itirazı 2026-08-21). 74 dil, kanal başına 3 → ~24 kanal
+    # çakışmasız.
+    try:
+        kullanilan = kullanilan_tasarim_dilleri()
+    except Exception:   # noqa: BLE001 — kayıt okunamazsa üretim durmasın
+        kullanilan = []
+    # KULLANILMAYANLARIN HEPSİ adaya girer. Hash'le 18'e daraltmak, konuya EN
+    # uygun dili listeden düşürebiliyordu (ölçüldü: "Motor Dünyası" lamborghini
+    # buldu ama ferrari/tesla/bmw o 18'de olmayabilirdi). Katalog 9 KB — tek
+    # çağrıya rahat sığıyor, daraltmaya gerek yok.
+    from short_bot.design_directions import yonler as _yonler
+    _yasak = set(kullanilan)
+    aday_diller = [a for a in _yonler(templates_dir / "design")
+                   if a not in _yasak]
+    if not aday_diller:      # havuz tükendi → son çare, tekrar kullan
+        aday_diller = sec(templates_dir / "design", sayi, tohum=tohum or ad)
+    # DİLİ KONUYA GÖRE AI SEÇER. `sec` yalnız adayları daraltır (kullanılanları
+    # dışlar); hangisinin araba, hangisinin yemek kanalına uyduğunu model bilir.
+    _sec = dil_secici or dilleri_sec
+    try:
+        diller = _sec(ad, keywords=keywords, persona=persona,
+                      aday_diller=aday_diller,
+                      design_dir=templates_dir / "design", sayi=sayi,
+                      metin_llm=metin_llm)
+    except Exception as e:   # noqa: BLE001
+        log.warning(f"[arketip] dil seçimi patladı ({e}) → hash sırası")
+        diller = aday_diller[:sayi]
     # Dil kütüphanesi eksikse yine `sayi` kadar aday üret (dilsiz).
     while len(diller) < sayi:
         diller.append("")
@@ -380,7 +460,7 @@ def aday_kaydet(sonuc: TasarimSonucu, *, ad: str, templates_dir: Path,
     slug = _slugify(ad)
     (Path(templates_dir) / f"{slug}.html.j2").write_text(
         sonuc.html, encoding="utf-8")
-    _kayit_ekle(slug, ad, sorgular=sorgular)
+    _kayit_ekle(slug, ad, sorgular=sorgular, yon=sonuc.yon)
     return slug
 
 
@@ -451,7 +531,7 @@ def gercek_vision(*, settings, secrets):
     return _f
 
 
-def _kayit_ekle(slug: str, ad: str, sorgular=()) -> None:
+def _kayit_ekle(slug: str, ad: str, sorgular=(), yon: str = "") -> None:
     """`config/archetypes.json`'a giriş ekler — VE arketipi anında geçerli kılar.
 
     Eskiden burası dosyayı CWD'ye göre kendisi yazıyordu; `dna.py` ise onu
@@ -462,6 +542,7 @@ def _kayit_ekle(slug: str, ad: str, sorgular=()) -> None:
     """
     from short_bot.dna import register_designed_archetype
     try:
-        register_designed_archetype(slug, ad, pexels_queries=list(sorgular))
+        register_designed_archetype(slug, ad,
+                                    pexels_queries=list(sorgular), yon=yon)
     except Exception as e:   # noqa: BLE001 — şablon VAR, kayıt ikincil
         log.warning(f"[arketip] arketip kaydı eklenemedi ({slug}): {e}")

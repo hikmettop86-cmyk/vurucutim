@@ -36,6 +36,35 @@ def _save_secrets(data: dict) -> None:
                  encoding="utf-8")
 
 
+def _gecerli_cagrilar(data: dict, secrets: dict) -> dict:
+    """Rol başına GERÇEKTEN koşacak sağlayıcı/model — ve anahtar eksikse uyarı.
+
+    Kullanıcı dört rolde de sağlayıcı seçmiş ama MODEL KUTUSUNU BOŞ bırakmıştı;
+    boşken sağlayıcının ilk örnek modeline düşülüyor ve bu ekranda hiç
+    yazmıyordu — "hangi ai ler çalışıyor" diye sormak zorunda kaldı
+    (2026-08-21).
+    """
+    from short_bot.ai_providers import ROLLER, saglayici
+    from short_bot.config import load_settings, resolve_ai_call
+    try:
+        ayar = load_settings(_settings_path())
+    except Exception:   # noqa: BLE001 — ayar sayfası açılmalı
+        return {}
+    out = {}
+    for rol, _e in ROLLER:
+        try:
+            c = resolve_ai_call(ayar, secrets, rol)
+        except Exception:   # noqa: BLE001
+            continue
+        sg = saglayici(c.backend)
+        uyari = ""
+        if sg is not None and sg.gizli_anahtar and not c.api_key:
+            uyari = f"anahtar girilmemiş ({sg.gizli_anahtar})"
+        out[rol] = {"etiket": (sg.etiket if sg else c.backend),
+                    "model": c.model or "—", "uyari": uyari}
+    return out
+
+
 def _havuz_durumu() -> dict:
     """Ücretsiz Google havuzunun özeti — ayarlar sayfası bunu gösterir.
 
@@ -160,6 +189,7 @@ def view():
                                 ad: _mask_key(secrets.get(sg.gizli_anahtar, "") or "")
                                 for ad, sg in SAGLAYICILAR.items() if sg.gizli_anahtar},
                             google_havuz=_havuz_durumu(),
+                            gecerli_cagrilar=_gecerli_cagrilar(data, secrets),
                             asset_library=_library_inventory(),
                             library_building=_LIB_BUILD.get("running", False),
                             library_status=_LIB_BUILD.get("status", ""))

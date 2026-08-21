@@ -558,3 +558,154 @@ def test_prompt_TURKCE_ALT_UZANTI_kuralini_tasir(sablonlar, monkeypatch, tmp_pat
     p = gorulen[0]
     assert "line-height" in p
     assert "Ş" in p and "Ğ" in p
+
+
+def test_adaylar_KULLANILAN_dilleri_dislar(sablonlar, monkeypatch, tmp_path):
+    """İki araba kanalı da Ferrari almasın (kullanıcı itirazı 2026-08-21)."""
+    import short_bot.dna as dna
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "TEMPLATE-SPEC.md").write_text("spec", encoding="utf-8")
+    d = sablonlar / "design"
+    d.mkdir()
+    for ad in ("bir", "iki", "uc", "dort", "bes", "alti"):
+        (d / f"{ad}.md").write_text(
+            f"---\nname: {ad}\ndescription: {ad}\n---\n## Colors\nx\n",
+            encoding="utf-8")
+    monkeypatch.setattr(dna, "kullanilan_tasarim_dilleri",
+                        lambda: ["bir", "iki", "uc"])
+    from short_bot.archetype_design import adaylar_uret
+    a = adaylar_uret("x", ad="Kanal", templates_dir=sablonlar, settings=None,
+                     metin_llm=lambda p: GECERLI,
+                     vision_call=lambda y: {"sorun": False},
+                     render_fn=_render_ok, sayi=3, tohum="kanal")
+    diller = {x.yon for x in a}
+    assert not (diller & {"bir", "iki", "uc"}), diller
+
+
+def test_aday_kaydet_DILI_de_kayda_yazar(sablonlar, monkeypatch, tmp_path):
+    import json
+    import short_bot.dna as dna
+    monkeypatch.chdir(tmp_path)
+    yol = tmp_path / "archetypes.json"
+    yol.write_text("[]", encoding="utf-8")
+    monkeypatch.setattr(dna, "_REGISTRY_PATH", yol)
+    for ad in ("ARCHETYPES", "ARCHETYPE_LABELS", "ARCHETYPE_DEFAULTS",
+               "_DESIGNED_ARCHETYPES"):
+        monkeypatch.setattr(dna, ad, type(getattr(dna, ad))(getattr(dna, ad)))
+    from short_bot.archetype_design import TasarimSonucu, aday_kaydet
+    s = TasarimSonucu(True, slug="x", html="<!DOCTYPE html><html></html>",
+                      yon="ferrari")
+    aday_kaydet(s, ad="Araba", templates_dir=sablonlar)
+    assert json.loads(yol.read_text(encoding="utf-8"))[0]["design_language"] == "ferrari"
+
+
+# --- DİLİ AI SEÇER, HASH DEĞİL ---------------------------------------------
+#
+# KULLANICI KURALI (2026-08-21): "bugün araba yaparım yarın yemek, her kanalın
+# şablonu benzersiz olmalı, bunu ai kendisi bilip tasarlamalı".
+#
+# Dil `sha256(slug)` ile seçiliyordu — konuyla HİÇBİR bağı yoktu; araba
+# kanalına Starbucks, yemek kanalına PlayStation gelebiliyordu.
+
+def _katalog_dizini(sablonlar, adlar):
+    d = sablonlar / "design"
+    d.mkdir(exist_ok=True)
+    for ad in adlar:
+        (d / f"{ad}.md").write_text(
+            f"---\nname: {ad}\ndescription: {ad} dili\n---\n## Colors\nx\n",
+            encoding="utf-8")
+    return d
+
+
+def test_dil_secimi_KONUYU_ve_KATALOGU_modele_verir(sablonlar):
+    _katalog_dizini(sablonlar, ["ferrari", "starbucks", "wired"])
+    from short_bot.archetype_design import dilleri_sec
+    gorulen = {}
+    dilleri_sec("Araba Kanalı", keywords=["otomobil", "motor"],
+                persona="hız tutkunu", aday_diller=["ferrari", "starbucks"],
+                design_dir=sablonlar / "design", sayi=2,
+                metin_llm=lambda p: (gorulen.setdefault("p", p),
+                                     '["ferrari", "starbucks"]')[1])
+    p = gorulen["p"]
+    assert "Araba Kanalı" in p and "otomobil" in p
+    assert "ferrari" in p and "starbucks" in p
+    assert "wired" not in p, "kullanılan dil adaylara sızmış"
+
+
+def test_dil_secimi_MODELIN_secimini_dondurur(sablonlar):
+    _katalog_dizini(sablonlar, ["ferrari", "starbucks", "nike"])
+    from short_bot.archetype_design import dilleri_sec
+    out = dilleri_sec("Araba", keywords=[], persona="",
+                      aday_diller=["ferrari", "starbucks", "nike"],
+                      design_dir=sablonlar / "design", sayi=2,
+                      metin_llm=lambda p: '["nike", "ferrari"]')
+    assert out == ["nike", "ferrari"]
+
+
+def test_dil_secimi_ADAY_DISI_secimi_ELER(sablonlar):
+    """Model listede olmayan bir ad uydurursa o atılır."""
+    _katalog_dizini(sablonlar, ["ferrari", "starbucks"])
+    from short_bot.archetype_design import dilleri_sec
+    out = dilleri_sec("x", keywords=[], persona="",
+                      aday_diller=["ferrari", "starbucks"],
+                      design_dir=sablonlar / "design", sayi=2,
+                      metin_llm=lambda p: '["uydurma", "ferrari"]')
+    assert "uydurma" not in out and "ferrari" in out
+    assert len(out) == 2, "eksik kalan yerine aday konulmamış"
+
+
+def test_dil_secimi_LLM_PATLARSA_hash_sirasina_duser(sablonlar):
+    _katalog_dizini(sablonlar, ["ferrari", "starbucks", "nike"])
+    from short_bot.archetype_design import dilleri_sec
+
+    def _patla(p):
+        raise RuntimeError("model yok")
+    out = dilleri_sec("x", keywords=[], persona="",
+                      aday_diller=["ferrari", "starbucks", "nike"],
+                      design_dir=sablonlar / "design", sayi=2,
+                      metin_llm=_patla)
+    assert len(out) == 2 and set(out) <= {"ferrari", "starbucks", "nike"}
+
+
+def test_adaylar_uret_DIL_SECIMINI_kullanir(sablonlar, monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "TEMPLATE-SPEC.md").write_text("spec", encoding="utf-8")
+    _katalog_dizini(sablonlar, ["ferrari", "starbucks", "nike", "wired"])
+    from short_bot.archetype_design import adaylar_uret
+    a = adaylar_uret("Araba kanalı", ad="Araba", templates_dir=sablonlar,
+                     settings=None, metin_llm=lambda p: GECERLI,
+                     vision_call=lambda y: {"sorun": False},
+                     render_fn=_render_ok, sayi=2, tohum="araba",
+                     keywords=["otomobil"], persona="hız",
+                     # `ad` POZİSYONEL geçiyor — sahte de öyle almalı,
+                     # yoksa TypeError yutulup hash sırasına düşülüyor.
+                     dil_secici=lambda ad, **kw: ["ferrari", "nike"])
+    assert [x.yon for x in a] == ["ferrari", "nike"]
+
+
+def test_dil_secimine_KULLANILMAYAN_HEPSI_gider(sablonlar, monkeypatch, tmp_path):
+    """Aday havuzu hash'le 18'e daraltılıyordu; konuya EN UYGUN dil o 18'in
+    dışında kalabilir. Ölçüldü (2026-08-21): "Motor Dünyası" lamborghini'yi
+    buldu ama ferrari/tesla/bmw listeye hiç girmemiş olabilirdi. Katalog 9 KB —
+    daraltmaya gerek yok."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "TEMPLATE-SPEC.md").write_text("spec", encoding="utf-8")
+    adlar = [f"dil{i:02d}" for i in range(40)]
+    _katalog_dizini(sablonlar, adlar)
+    import short_bot.dna as dna
+    monkeypatch.setattr(dna, "kullanilan_tasarim_dilleri", lambda: ["dil00"])
+    gorulen = {}
+
+    def _secici(ad, *, aday_diller, **kw):
+        gorulen["aday"] = list(aday_diller)
+        return list(aday_diller)[:2]
+
+    from short_bot.archetype_design import adaylar_uret
+    adaylar_uret("x", ad="K", templates_dir=sablonlar, settings=None,
+                 metin_llm=lambda p: GECERLI,
+                 vision_call=lambda y: {"sorun": False},
+                 render_fn=_render_ok, sayi=2, tohum="k",
+                 dil_secici=_secici)
+    aday = gorulen["aday"]
+    assert len(aday) == 39, f"havuz daraltılmış: {len(aday)}"
+    assert "dil00" not in aday, "kullanılan dil adaylara sızmış"

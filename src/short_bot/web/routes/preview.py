@@ -54,6 +54,28 @@ def _load_sample_script(language: str) -> Script:
         return Script(**data)
 
 
+def _onizleme_senaryosu(language: str, stres: str | None) -> Script:
+    """Önizlemede gösterilecek metin.
+
+    VARSAYILAN EN KÖTÜ HÂL. Eskiden hep `sample_script_<dil>.json` kullanılıyordu
+    ve o metin ÇOK KISA: ölçüldü (tr) `header_top=7`, `header_bottom=9`,
+    `body=138` karakter — üretimin gerçek maksimumu ise 25/35/302 (1159
+    senaryo). Yani önizleme taşmayı ASLA gösteremiyordu; kullanıcı panelde
+    temiz kart görüp yayında kesik metin alıyordu ("bu önizleme ne kadar doğru
+    gösteriyor", 2026-08-21).
+
+    `stres="ornek"` → eski kısa örnek (gerçekçi ama iyimser).
+    `stres="<n>"`   → arketip kapısının n. uç metni.
+    """
+    from short_bot.archetype_gate import UC_METINLER
+    s = (stres or "").strip()
+    if s == "ornek":
+        return _load_sample_script(language)
+    if s.isdigit() and int(s) < len(UC_METINLER):
+        return UC_METINLER[int(s)]
+    return max(UC_METINLER, key=lambda x: len(x.body_paragraph))
+
+
 def _default_dna_for(template: str, channel) -> DnaSpec:
     """Stub DnaSpec when channel has no DNA — uses channel.colors."""
     from short_bot.dna import ARCHETYPES
@@ -158,7 +180,7 @@ def preview(slug):
     # RSS source preview (so user sees "Kaynak: NTV" overlay positioning before saving)
     rss_source = request.args.get("rss_source", "").strip() or None
 
-    script = _load_sample_script(cfg.language)
+    script = _onizleme_senaryosu(cfg.language, request.args.get("stres"))
     job = RenderJob(
         script=script, bg_image_path=None,
         music_path=Path("dummy.mp3"),
@@ -176,9 +198,12 @@ def preview(slug):
     original_palette = cfg.dna.palette if cfg.dna else dna.palette
     dna_css = build_css_override(dna, sanitize_palette=original_palette)
     template_path = current_app.config["SHORTBOT_TEMPLATES_DIR"] / f"{template_name}.html.j2"
+    # ÜRETİMLE AYNI ÇAĞRI: `render_frames` de `animation_style` geçiriyor;
+    # önizleme geçirmediği için hareketli öğeler farklı yerde duruyordu.
     html = build_html(job, template_path,
                       ui_labels=ui_labels_for(cfg.language),
-                      dna_css=dna_css)
+                      dna_css=dna_css,
+                      animation_style=(dna.animation_style or "none"))
     return Response(html, mimetype="text/html")
 
 

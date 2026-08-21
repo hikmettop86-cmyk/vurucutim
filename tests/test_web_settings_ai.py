@@ -170,3 +170,53 @@ def test_havuz_YOKSA_sayfa_acilir(app):
         assert app.test_client().get("/settings").status_code == 200
     finally:
         google_studio.set_pool_dir(None)
+
+
+# --- HANGİ MODEL GERÇEKTEN KOŞACAK -----------------------------------------
+#
+# KULLANICI SORUSU (2026-08-21): "hangi ai ler çalışıyor, hepsini gemini flash
+# lite 3.5 yapmıştım". Ayarında dört rolde de sağlayıcı seçiliydi ama MODEL
+# KUTUSU BOŞTU; boşken sağlayıcının ilk örnek modeline düşülüyor. Ekranda bu
+# hiç yazmıyordu, kullanıcı ne koştuğunu bilemiyordu.
+
+def _gecerli_satir(app, rol):
+    """Rolün "şu an geçerli" satırı — sayfanın başka yerindeki metne
+    yakalanmasın diye işaretli bir bloktan okunur."""
+    import re
+    body = app.test_client().get("/settings").data.decode("utf-8")
+    # İç içe <span> olduğu için ilk `</` ile durmuyoruz; blok sonuna kadar al.
+    m = re.search(rf'data-gecerli="{rol}">(.*?)</span>\s*</span>', body, re.S)
+    if not m:
+        m = re.search(rf'data-gecerli="{rol}">(.{{0,400}})', body, re.S)
+    return " ".join(m.group(1).split()) if m else ""
+
+
+def test_MODEL_BOSKEN_gecerli_secim_ekranda_yazar(app):
+    _yaz(app, rol_provider_dna="google_studio", rol_model_dna="")
+    assert "gemini-3.5-flash-lite" in _gecerli_satir(app, "dna")
+
+
+def test_MODEL_YAZILIRSA_o_yazar(app):
+    _yaz(app, rol_provider_dna="google_studio",
+         rol_model_dna="gemini-3.1-flash-lite")
+    assert "gemini-3.1-flash-lite" in _gecerli_satir(app, "dna")
+
+
+def test_ROL_SECILMEMISSE_hangi_yola_dustugu_yazar(app):
+    """Boş rol `AI Kaynağı`na düşer; hangisi olduğu görünmeli."""
+    satir = _gecerli_satir(app, "script")
+    assert satir and ("Claude CLI" in satir or "claude_cli" in satir)
+
+
+def test_ANAHTARSIZ_saglayici_secilirse_UYARIR(app):
+    """DeepSeek seçilip anahtar girilmezse çağrı 'anahtar yok' diye patlar;
+    kullanıcı bunu ÇAĞRI ANINDA değil AYAR anında görmeli."""
+    _yaz(app, rol_provider_script="deepseek", rol_model_script="deepseek-chat")
+    satir = _gecerli_satir(app, "script")
+    assert "anahtar" in satir.lower(), satir
+
+
+def test_ANAHTAR_VARSA_uyarmaz(app):
+    _yaz(app, rol_provider_script="deepseek", rol_model_script="deepseek-chat",
+         key_deepseek="sk-var")
+    assert "anahtar" not in _gecerli_satir(app, "script").lower()

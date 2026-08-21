@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 import time
+from pathlib import Path
 
 import pytest
 
@@ -701,3 +702,69 @@ def test_prompt_KULLANICININ_DILINI_algilamasini_soyler():
     assert "dil" in p.lower()
     i = p.lower().find("language")
     assert i > 0
+
+
+# --- PANEL HANGİ AI'IN KOŞTUĞUNU DOĞRU SÖYLEMELİ ---------------------------
+#
+# KULLANICI SORUSU (2026-08-21): "burda hangi ai ler çalışıyor, ben hepsini
+# gemini flash lite 3.5 yapmıştım". Sormak zorunda kalmasının sebebi: sohbet
+# başlığında SABİT "Claude CLI · Sonnet 5" yazıyordu ve ayara hiç bakmıyordu.
+
+def test_sohbet_basligi_GERCEK_saglayiciyi_yazar(app):
+    yol = app.config["_CFG"] if "_CFG" in app.config else None
+    import yaml
+    p = app.config["SHORTBOT_CONFIG_DIR"] / "settings.yaml"
+    d = yaml.safe_load(p.read_text(encoding="utf-8"))
+    d["ai_roles"] = {"script": {"provider": "google_studio",
+                                "model": "gemini-3.5-flash-lite"}}
+    p.write_text(yaml.safe_dump(d, allow_unicode=True), encoding="utf-8")
+    from short_bot.config import load_settings
+    app.config["SHORTBOT_SETTINGS"] = load_settings(p)
+
+    html = app.test_client().get("/channels/kart").get_data(as_text=True)
+    assert "gemini-3.5-flash-lite" in html
+    assert "Claude CLI · Sonnet 5" not in html
+
+
+def test_sohbet_basligi_AYAR_YOKSA_claude_cli_der(app):
+    html = app.test_client().get("/channels/kart").get_data(as_text=True)
+    assert "claude_cli" in html or "Claude CLI" in html
+
+
+# --- KARE YOLU MUTLAK OLMALI -----------------------------------------------
+#
+# CANLI ARIZA (2026-08-21): panelde üç aday geldi ama karelerin hepsi KIRIK
+# görsel çıktı. Rota 404 değil 500 veriyordu:
+#
+#   FileNotFoundError: 'D:\short\src\short_bot\web\data\cache\arketip\...'
+#
+# `cache_dir` varsayılanı GÖRELİ ("data/cache"). `Path.exists()` CWD'ye göre
+# doğru cevap veriyor ama Flask'ın `send_file`ı göreli yolu APP ROOT'a
+# (`src/short_bot/web`) göre çözüyor. Testler `tmp_path` (mutlak) kullandığı
+# için bunu HİÇ yakalamıyordu.
+
+def test_kanit_dizini_MUTLAK(app):
+    from short_bot.web.routes.channel_chat import _kanit_dir
+    app.config["SHORTBOT_CACHE_DIR"] = Path("data/cache")   # göreli, üretimdeki gibi
+    with app.app_context():
+        d = _kanit_dir("abc")
+    assert d.is_absolute(), d
+
+
+def test_GORELI_cache_dizininde_de_kare_servis_edilir(app, monkeypatch, tmp_path):
+    """Üretimdeki asıl vaka: göreli cache dizini."""
+    import os
+    from short_bot.archetype_design import TasarimSonucu
+    from short_bot.web.routes.channel_chat import _ISLER, _is_yaz
+    monkeypatch.chdir(tmp_path)
+    app.config["SHORTBOT_CACHE_DIR"] = Path("data/cache")
+    with app.app_context():
+        from short_bot.web.routes.channel_chat import _kanit_dir
+        d = _kanit_dir("jg") / "aday"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "kare0.png").write_bytes(b"\x89PNG-x")
+    _is_yaz("jg", durum="secim", slug="kart", adaylar=[])
+    _ISLER["jg"]["_ham"] = [TasarimSonucu(True, kareler=(d / "kare0.png",))]
+    r = app.test_client().get("/channels/arketip-kare/jg/0/0")
+    assert r.status_code == 200, r.status_code
+    assert r.data.startswith(b"\x89PNG")

@@ -115,6 +115,24 @@ def _llm():
     return _f
 
 
+def _sohbet_motoru() -> str:
+    """Sohbetin GERÇEKTEN kullandığı sağlayıcı/model — panelde yazılır.
+
+    Başlıkta SABİT "Claude CLI · Sonnet 5" yazıyordu ve ayara hiç bakmıyordu;
+    kullanıcı ayarlardan hepsini Gemini yaptıktan sonra "hangi AI çalışıyor"
+    diye sormak zorunda kaldı (2026-08-21).
+    """
+    from short_bot.ai_providers import saglayici
+    from short_bot.config import resolve_ai_call
+    try:
+        c = resolve_ai_call(current_app.config["SHORTBOT_SETTINGS"],
+                            _secrets(), "script")
+    except Exception:   # noqa: BLE001 — etiket üretim akışını düşürmesin
+        return ""
+    s = saglayici(c.backend)
+    return f"{s.etiket if s else c.backend} · {c.model}"
+
+
 def _oturum(oid: str) -> dict | None:
     with _KILIT:
         return _OTURUMLAR.get(oid)
@@ -153,7 +171,7 @@ def kurma_sohbeti(fmt):
     return render_template("channels/chat.html.j2", oid=oid, fmt=fmt,
                            spec=FORMATS[fmt], cfg=_OTURUMLAR[oid]["cfg"],
                            turlar=[], kurulum=True, bulgular=[],
-                           diller=_diller())
+                           diller=_diller(), motor=_sohbet_motoru())
 
 
 def _diller():
@@ -246,7 +264,8 @@ def kurma_sohbeti_devam(oid):
     return render_template("channels/chat.html.j2", oid=oid, fmt=o["fmt"],
                            spec=FORMATS[o["fmt"]], cfg=o["cfg"],
                            turlar=o["gecmis"], kurulum=o.get("kurulum", False),
-                           bulgular=o.get("bulgular", []), diller=_diller())
+                           bulgular=o.get("bulgular", []), diller=_diller(),
+                           motor=_sohbet_motoru())
 
 
 class _KimlikYok(RuntimeError):
@@ -396,7 +415,8 @@ def kanal_sayfasi(slug):
                            fmt=channel_format(cfg),
                            spec=FORMATS[channel_format(cfg)], cfg=cfg,
                            turlar=[], kurulum=False, bulgular=bulgular,
-                           diller=_diller(), arketip_isi=slug_isi(slug))
+                           diller=_diller(), arketip_isi=slug_isi(slug),
+                           motor=_sohbet_motoru())
 
 
 @bp.post("/channels/<slug>/bulgu/<kod>")
@@ -526,7 +546,11 @@ def _arketip_isi(jid: str, *, niyet: str, ad: str, slug: str, channels_dir,
                 settings=settings, language=cfg.language, dna_css=dna_css,
                 colors=dict(cfg.colors), handle=cfg.handle,
                 duration_s=cfg.duration_s),
-            sayi=ADAY_SAYISI, tohum=slug, kanit_dir=kanit_dir)
+            sayi=ADAY_SAYISI, tohum=slug, kanit_dir=kanit_dir,
+            # DİLİ KONUYA GÖRE AI SEÇSİN: "bugün araba yaparım yarın yemek"
+            # (kullanıcı kuralı 2026-08-21). Kanalın konusu buradan gidiyor.
+            keywords=list(cfg.keywords),
+            persona=(cfg.dna.persona_summary if cfg.dna is not None else ""))
     except Exception as e:   # noqa: BLE001 — iş çökmesin, sebebi göster
         log.warning(f"[arketip] {slug}: {e}")
         _is_yaz(jid, durum="hata", sebep=str(e))
@@ -547,8 +571,17 @@ def _arketip_isi(jid: str, *, niyet: str, ad: str, slug: str, channels_dir,
 
 def _kanit_dir(jid: str) -> Path:
     """Aday karelerinin durduğu dizin. Kullanıcı onlara bakacak, o yüzden
-    temp DEĞİL — önbellek kökü altında iş kimliğine göre."""
-    return Path(current_app.config["SHORTBOT_CACHE_DIR"]) / "arketip" / jid
+    temp DEĞİL — önbellek kökü altında iş kimliğine göre.
+
+    MUTLAK YOL ŞART. `cache_dir` varsayılanı göreli ("data/cache") ve Flask'ın
+    `send_file`ı göreli yolu CWD'ye değil APP ROOT'a (`src/short_bot/web`)
+    göre çözüyor. Canlıda tam bu oldu: kareler diskte vardı, `Path.exists()`
+    True diyordu, rota yine de 500 veriyordu —
+    "cannot find 'src\short_bot\web\data\cache\arketip\...'".
+    Testler `tmp_path` (mutlak) kullandığı için yakalamıyordu.
+    """
+    return (Path(current_app.config["SHORTBOT_CACHE_DIR"]).resolve()
+            / "arketip" / jid)
 
 
 @bp.get("/channels/arketip-kare/<jid>/<int:aday>/<int:kare>")

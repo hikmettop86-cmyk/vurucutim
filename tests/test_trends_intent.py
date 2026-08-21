@@ -28,6 +28,25 @@ OLAY = _s("Deprem", 90000, ("istanbul deprem", "son dakika deprem"))
 OLAY2 = _s("Derbi", 50000, ("galatasaray fenerbahçe",))
 
 
+
+def _kanal(ad: str):
+    """Depodaki kanalı oku; YOKSA testi ATLA.
+
+    Bu dosyadaki iddialar kullanıcının CANLI kanal yapılandırması hakkında.
+    Kanal silmek bir hata değil, operatör kararı — nitekim `deutschland-kompakt`
+    2026-08-21'de silindi ve yedi test birden düştü. Aynı kırılganlık daha önce
+    `yasashisa.yaml`da da yaşanmıştı.
+    """
+    import pytest
+    from pathlib import Path
+
+    from short_bot.config import load_channel
+    p = Path(f"config/channels/{ad}.yaml")
+    if not p.exists():
+        pytest.skip(f"{ad} kanalı yok (silinmiş olabilir)")
+    return load_channel(p)
+
+
 def test_any_yalnizca_hacme_bakar():
     out = select_by_volume([SORULU, OLAY, OLAY2], min_score=6.0, n=3)
     assert [s.item.title for s in out] == ["Deprem", "Derbi", "Asgari ücret"]
@@ -113,5 +132,5 @@ def test_gercek_kanallar_havuzu_boler():
     """gundem = kart/akış, gundem-yorum = cevap/arama. İkisi aynı olayı seçmesin."""
     from pathlib import Path
     from short_bot.config import load_channel
-    assert load_channel(Path("config/channels/gundem.yaml")).trends_intent == "breaking"
-    assert load_channel(Path("config/channels/gundem-yorum.yaml")).trends_intent == "question"
+    assert _kanal("gundem").trends_intent == "breaking"
+    assert _kanal("gundem-yorum").trends_intent == "question"

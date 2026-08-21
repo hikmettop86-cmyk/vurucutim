@@ -146,3 +146,41 @@ def test_create_app_KAYIT_YOLUNU_config_dizinine_kurar(tmp_path):
         assert dna._REGISTRY_PATH == cfg / "archetypes.json"
     finally:
         dna.set_registry_path(None)
+
+
+# --- KULLANILAN TASARIM DİLİ KAYITTA DURMALI -------------------------------
+#
+# KULLANICI İTİRAZI (2026-08-21): "araba Ferrari gelecekse, yine birden çok
+# araba kanalı yapan Ferrari şablonu olmaz mı". Dışlayabilmek için hangi dilin
+# hangi arketipte kullanıldığını BİLMEK gerekiyor; kayıtta tutulmuyordu.
+
+def _yalit(monkeypatch, tmp_path):
+    import short_bot.dna as dna
+    yol = tmp_path / "archetypes.json"
+    yol.write_text("[]", encoding="utf-8")
+    monkeypatch.setattr(dna, "_REGISTRY_PATH", yol)
+    for ad in ("ARCHETYPES", "ARCHETYPE_LABELS", "ARCHETYPE_DEFAULTS",
+               "_DESIGNED_ARCHETYPES"):
+        monkeypatch.setattr(dna, ad, type(getattr(dna, ad))(getattr(dna, ad)))
+    return dna, yol
+
+
+def test_kayit_TASARIM_DILINI_saklar(tmp_path, monkeypatch):
+    dna, yol = _yalit(monkeypatch, tmp_path)
+    dna.register_designed_archetype("araba-kanali", "Araba", yon="ferrari")
+    kayit = json.loads(yol.read_text(encoding="utf-8"))
+    assert kayit[0]["design_language"] == "ferrari"
+
+
+def test_kullanilan_diller_TOPLANIR(tmp_path, monkeypatch):
+    dna, _ = _yalit(monkeypatch, tmp_path)
+    dna.register_designed_archetype("a", "A", yon="ferrari")
+    dna.register_designed_archetype("b", "B", yon="starbucks")
+    dna.register_designed_archetype("c", "C")          # dilsiz eski kayıt
+    assert set(dna.kullanilan_tasarim_dilleri()) == {"ferrari", "starbucks"}
+
+
+def test_DILSIZ_eski_kayitlar_KIRMAZ(tmp_path, monkeypatch):
+    dna, _ = _yalit(monkeypatch, tmp_path)
+    dna._DESIGNED_ARCHETYPES.append({"slug": "eski", "label": "E"})
+    assert isinstance(dna.kullanilan_tasarim_dilleri(), list)
