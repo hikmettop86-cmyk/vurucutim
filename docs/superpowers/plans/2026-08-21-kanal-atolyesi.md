@@ -1,5 +1,18 @@
 # Kanal Atölyesi — Uygulama Planı
 
+> **DURUM (2026-08-21): 18 görevin tamamı uygulandı ve commit'lendi.**
+> Uygulama sırasında planı değiştiren üç bulgu — hepsi ilgili commit'te
+> gerekçesiyle yazılı:
+>
+> 1. `channel_edit` POST'u kanalı `ChannelConfig(...)` ile SIFIRDAN kuruyordu:
+>    tek Kaydet tıklaması saga sınırını, kategori kotasını, referans
+>    kanalları ve pasifliği siliyordu. `dataclasses.replace`'e çevrildi.
+> 2. `shorts` şemasında PUAN alanı yok — "elenenlerin kaçı eşiğin hemen
+>    altındaydı" bulgusu ölçülemiyor ve üretilmiyor (mockup'ta temsilîydi).
+> 3. Yapı kapısı ilk sürümde `comic` şablonunu reddediyordu; ölçüt
+>    TEMPLATE-SPEC'in örnek iskeletinden `_auto_fit.js`'in GERÇEK
+>    bağımlılıklarına indirildi.
+
 > **Ajan işçiler için:** Bu plan `superpowers:executing-plans` ile görev görev uygulanır.
 > Adımlar takip için `- [ ]` kutucuk sözdizimi kullanır.
 
@@ -63,7 +76,7 @@ render → vision kapısı zincirinden geçer.
 - Değiştir: `src/short_bot/formats.py`
 - Test: `tests/test_formats_and_flas_narrator.py`
 
-- [ ] **Adım 1: Başarısız testi yaz**
+- [x] **Adım 1: Başarısız testi yaz**
 
 ```python
 def test_format_spec_her_format_icin_var():
@@ -82,11 +95,11 @@ def test_format_spec_alanlari():
     assert FORMATS["card"].core == FORMATS["curated"].core
 ```
 
-- [ ] **Adım 2: Testi çalıştır, düşmesini doğrula**
+- [x] **Adım 2: Testi çalıştır, düşmesini doğrula**
 
 `pytest tests/test_formats_and_flas_narrator.py -k format_spec -v` → `ImportError: FORMATS`
 
-- [ ] **Adım 3: Asgari kodu yaz**
+- [x] **Adım 3: Asgari kodu yaz**
 
 ```python
 from dataclasses import dataclass, field
@@ -118,8 +131,8 @@ FORMATS: dict[str, FormatSpec] = {
 olarak türetilir. `channel_format()` içindeki reel dalı **bu görevde kaldırılmaz**
 (Task 8'de) — şimdilik `channel_format` "reel" döndürebilir, `FORMATS` içinde yoktur.
 
-- [ ] **Adım 4: Testi çalıştır, geçmesini doğrula**
-- [ ] **Adım 5: Commit** — `refactor(formats): FormatSpec kaydı — format başına partial listesi`
+- [x] **Adım 4: Testi çalıştır, geçmesini doğrula**
+- [x] **Adım 5: Commit** — `refactor(formats): FormatSpec kaydı — format başına partial listesi`
 
 ---
 
@@ -136,7 +149,7 @@ Partial'lar `cfg` (ChannelConfig) ve `yt_connected` (bool) alır. Alan adları *
 `yt_min_score_for_upload`, `yt_cron_preset`, `yt_proxy_url` — **artı yeni**
 `yt_credentials_from`.
 
-- [ ] **Adım 1: Başarısız testi yaz**
+- [x] **Adım 1: Başarısız testi yaz**
 
 ```python
 import pytest
@@ -150,11 +163,11 @@ def test_dort_ortak_alan_her_formatta_cizilir(client, slug):
         assert f'name="{alan}"' in html, f"{slug} sayfasında {alan} yok"
 ```
 
-- [ ] **Adım 2: Testi çalıştır** → üç slug için de FAIL (bugün hiçbirinde dördü birden yok)
-- [ ] **Adım 3: Partial'ları yaz** — mevcut `edit.html.j2`'deki YouTube bloğu kaynak alınır,
+- [x] **Adım 2: Testi çalıştır** → üç slug için de FAIL (bugün hiçbirinde dördü birden yok)
+- [x] **Adım 3: Partial'ları yaz** — mevcut `edit.html.j2`'deki YouTube bloğu kaynak alınır,
       `credentials_from` `edit_yorum.html.j2`'den alınır (tek yerde doğru yazılmış).
-- [ ] **Adım 4: Testi çalıştır** — Task 3–5 bitene kadar kısmi geçer; tam yeşil Task 5'te.
-- [ ] **Adım 5: Commit** — `feat(panel): ortak çekirdek partial'ları (kimlik/zamanlama/youtube/otomasyon)`
+- [x] **Adım 4: Testi çalıştır** — Task 3–5 bitene kadar kısmi geçer; tam yeşil Task 5'te.
+- [x] **Adım 5: Commit** — `feat(panel): ortak çekirdek partial'ları (kimlik/zamanlama/youtube/otomasyon)`
 
 ---
 
@@ -165,17 +178,17 @@ def test_dort_ortak_alan_her_formatta_cizilir(client, slug):
 - Oluştur: `web/templates/channels/_body_card.html.j2`, `_body_voiced.html.j2`
 - Test: mevcut `tests/test_web_channel_edit_*.py` (7 dosya) geçmeye devam etmeli
 
-- [ ] **Adım 1: Mevcut testleri çalıştır, yeşil olduklarını gör (regresyon tabanı)**
+- [x] **Adım 1: Mevcut testleri çalıştır, yeşil olduklarını gör (regresyon tabanı)**
 
 `pytest tests/test_web_channel_edit_bg.py tests/test_web_channel_edit_feed.py
 tests/test_web_channel_edit_generator.py tests/test_web_channel_edit_proxy.py
 tests/test_web_channel_edit_trend_boost.py tests/test_web_channel_edit_trends.py
 tests/test_web_channel_edit_voice.py tests/test_web_channel_edit_youtube.py -q`
 
-- [ ] **Adım 2: `edit.html.j2`'nin ortak bloklarını partial `include`'larıyla değiştir**
-- [ ] **Adım 3: `reel_*` alanlarını `edit.html.j2`'den çıkar** (card/voiced'de anlamsız)
-- [ ] **Adım 4: Aynı testleri tekrar çalıştır** — hepsi yeşil kalmalı
-- [ ] **Adım 5: Commit** — `refactor(panel): kart/sesli editörü ortak çekirdeği kullanıyor`
+- [x] **Adım 2: `edit.html.j2`'nin ortak bloklarını partial `include`'larıyla değiştir**
+- [x] **Adım 3: `reel_*` alanlarını `edit.html.j2`'den çıkar** (card/voiced'de anlamsız)
+- [x] **Adım 4: Aynı testleri tekrar çalıştır** — hepsi yeşil kalmalı
+- [x] **Adım 5: Commit** — `refactor(panel): kart/sesli editörü ortak çekirdeği kullanıyor`
 
 ---
 
@@ -186,7 +199,7 @@ tests/test_web_channel_edit_voice.py tests/test_web_channel_edit_youtube.py -q`
 - Değiştir: `web/routes/yorum.py` (POST okuyucusu ortak alanları da okur)
 - Test: `tests/test_web_yorum.py`
 
-- [ ] **Adım 1: Başarısız testi yaz**
+- [x] **Adım 1: Başarısız testi yaz**
 
 ```python
 def test_yorum_kanalinda_gizlilik_kaydedilir(client, tmp_channels):
@@ -199,11 +212,11 @@ def test_yorum_kanalinda_gizlilik_kaydedilir(client, tmp_channels):
     assert cfg.youtube.min_score_for_upload == 7.5
 ```
 
-- [ ] **Adım 2: Çalıştır** → FAIL (`yorum.py` bu alanları okumuyor)
-- [ ] **Adım 3: Ortak alan okuyucusunu `channel_edit.py`'de tek fonksiyona çıkar
+- [x] **Adım 2: Çalıştır** → FAIL (`yorum.py` bu alanları okumuyor)
+- [x] **Adım 3: Ortak alan okuyucusunu `channel_edit.py`'de tek fonksiyona çıkar
       (`_read_core(form, cfg)`) ve `yorum.py` ondan çağırsın**
-- [ ] **Adım 4: Çalıştır** → PASS
-- [ ] **Adım 5: Commit** — `fix(panel): gündem yorum kanalı gizlilik ve yükleme eşiği kazandı`
+- [x] **Adım 4: Çalıştır** → PASS
+- [x] **Adım 5: Commit** — `fix(panel): gündem yorum kanalı gizlilik ve yükleme eşiği kazandı`
 
 ---
 
@@ -212,8 +225,8 @@ def test_yorum_kanalinda_gizlilik_kaydedilir(client, tmp_channels):
 Task 4'ün birebir aynısı, `curated.py` / `edit_curated.html.j2` için.
 Test: `tests/test_web_curated.py`'a `test_kurate_kanalinda_gizlilik_kaydedilir` eklenir.
 
-- [ ] **Adım 1–5:** Task 4 ile aynı akış
-- [ ] **Commit** — `fix(panel): kürate kanalı gizlilik, kategori ve yükleme eşiği kazandı`
+- [x] **Adım 1–5:** Task 4 ile aynı akış
+- [x] **Commit** — `fix(panel): kürate kanalı gizlilik, kategori ve yükleme eşiği kazandı`
 
 ---
 
@@ -228,7 +241,7 @@ Test: `tests/test_web_curated.py`'a `test_kurate_kanalinda_gizlilik_kaydedilir` 
 
 `generator_topic` ve `topic` **taşınmaz** — kürate konusunu Reddit'ten alır.
 
-- [ ] **Adım 1: Başarısız testi yaz**
+- [x] **Adım 1: Başarısız testi yaz**
 
 ```python
 def test_kurate_sayfasi_montaj_alanlarini_tasiyor(client):
@@ -238,12 +251,12 @@ def test_kurate_sayfasi_montaj_alanlarini_tasiyor(client):
         assert f'name="{alan}"' in html
 ```
 
-- [ ] **Adım 2: Çalıştır** → FAIL
-- [ ] **Adım 3: Alanları `edit_reel.html.j2`'den `_body_curated.html.j2`'ye taşı**
+- [x] **Adım 2: Çalıştır** → FAIL
+- [x] **Adım 3: Alanları `edit_reel.html.j2`'den `_body_curated.html.j2`'ye taşı**
       (`reel_` öneki düşer; `curated.py` POST okuyucusu `cfg.reel`'e yazmaya devam eder)
-- [ ] **Adım 4: Çalıştır** → PASS
-- [ ] **Adım 5: `dayidiyorki` ile uçtan uca kaydet-oku testi**
-- [ ] **Adım 6: Commit** — `feat(panel): reel montaj ayarları kürate formatına taşındı`
+- [x] **Adım 4: Çalıştır** → PASS
+- [x] **Adım 5: `dayidiyorki` ile uçtan uca kaydet-oku testi**
+- [x] **Adım 6: Commit** — `feat(panel): reel montaj ayarları kürate formatına taşındı`
 
 ---
 
@@ -256,7 +269,7 @@ def test_kurate_sayfasi_montaj_alanlarini_tasiyor(client):
 - Değiştir: `dashboard.html.j2`, `_partials/channel_row.html.j2`, `channel_card.html.j2`
 - Test: `tests/test_web_channels.py`
 
-- [ ] **Adım 1: Başarısız testi yaz**
+- [x] **Adım 1: Başarısız testi yaz**
 
 ```python
 @pytest.mark.parametrize("slug", ["galatasaray", "gundem-yorum", "dayidiyorki"])
@@ -269,13 +282,13 @@ def test_eski_yollar_301(client):
     assert r.headers["Location"].endswith("/channels/gundem-yorum/edit")
 ```
 
-- [ ] **Adım 2: Çalıştır** → FAIL
-- [ ] **Adım 3: `channel_edit.edit()` içinde `FORMATS[channel_format(cfg)]` ile şablon seç;
+- [x] **Adım 2: Çalıştır** → FAIL
+- [x] **Adım 3: `channel_edit.edit()` içinde `FORMATS[channel_format(cfg)]` ile şablon seç;
       eski rotalar `redirect(..., code=301)` döndürsün; şablonlarda `edit_path(c)` →
       `/channels/{{ c.slug }}/edit`**
-- [ ] **Adım 4: Çalıştır** → PASS
-- [ ] **Adım 5: `grep -rn "edit_path\|FORMAT_EDIT_SUFFIX" src/` boş dönmeli**
-- [ ] **Adım 6: Commit** — `refactor(panel): dört düzenleme rotası tek /edit'e indi`
+- [x] **Adım 4: Çalıştır** → PASS
+- [x] **Adım 5: `grep -rn "edit_path\|FORMAT_EDIT_SUFFIX" src/` boş dönmeli**
+- [x] **Adım 6: Commit** — `refactor(panel): dört düzenleme rotası tek /edit'e indi`
 
 ---
 
@@ -295,7 +308,7 @@ kullanılıyor**. Silinen yalnız kanal-formatı yüzeyi.
 - Sil/taşı: `tests/test_web_reel_new.py`, `test_web_reel_edit.py`,
   `test_web_reel_subscribe.py`, `test_web_reel_variation.py` → kürate rotasına uyarla
 
-- [ ] **Adım 1: `dayidiyorki` regresyon testi yaz (silmeden ÖNCE)**
+- [x] **Adım 1: `dayidiyorki` regresyon testi yaz (silmeden ÖNCE)**
 
 ```python
 def test_dayidiyorki_kurate_olarak_yuklenir_ve_montaj_ayarlari_durur():
@@ -305,23 +318,23 @@ def test_dayidiyorki_kurate_olarak_yuklenir_ve_montaj_ayarlari_durur():
     assert cfg.reel.highlight_color                         # alan kaybı yok
 ```
 
-- [ ] **Adım 2: Çalıştır** → PASS (mevcut davranış korunmalı)
-- [ ] **Adım 3: Dosyaları sil, blueprint kayıtlarını çıkar, `channel_format`'tan reel dalını al**
-- [ ] **Adım 4: `test_web_reel_*` testlerini kürate rotasına uyarla** (yolları `/edit`'e çevir)
-- [ ] **Adım 5: `pytest tests/ -q -k "reel or curated or channel or format or web"` — tümü yeşil**
-- [ ] **Adım 6: `grep -rn "edit-reel\|new-reel\|reel_edit\|reel_new" src/ tests/` boş**
-- [ ] **Adım 7: Commit** — `refactor(panel): reel kanal formatı kaldırıldı (pipeline duruyor)`
+- [x] **Adım 2: Çalıştır** → PASS (mevcut davranış korunmalı)
+- [x] **Adım 3: Dosyaları sil, blueprint kayıtlarını çıkar, `channel_format`'tan reel dalını al**
+- [x] **Adım 4: `test_web_reel_*` testlerini kürate rotasına uyarla** (yolları `/edit`'e çevir)
+- [x] **Adım 5: `pytest tests/ -q -k "reel or curated or channel or format or web"` — tümü yeşil**
+- [x] **Adım 6: `grep -rn "edit-reel\|new-reel\|reel_edit\|reel_new" src/ tests/` boş**
+- [x] **Adım 7: Commit** — `refactor(panel): reel kanal formatı kaldırıldı (pipeline duruyor)`
 
 ---
 
 ### Task 9: Faz I bütün doğrulaması
 
-- [ ] **Adım 1:** `pytest tests/ -q` — tam koşu, düşen test yok (spec öncesi bilinen iki
+- [x] **Adım 1:** `pytest tests/ -q` — tam koşu, düşen test yok (spec öncesi bilinen iki
       düşen test hariç: `test_repo_gundem_yorum_channel_loads`,
       `test_curated_prompt_carries_the_rule_for_japanese`)
-- [ ] **Adım 2:** `verify` skill'iyle scratch panel ayağa kalksın; dört formatın
+- [x] **Adım 2:** `verify` skill'iyle scratch panel ayağa kalksın; dört formatın
       `/edit` sayfası HTTP 200 dönsün ve dördünde de `yt_privacy_status` görünsün
-- [ ] **Adım 3:** Commit — `test: faz I doğrulaması`
+- [x] **Adım 3:** Commit — `test: faz I doğrulaması`
 
 ---
 
@@ -344,13 +357,13 @@ class Bulgu:
     duzeltme: list[tuple[str, object, object]]   # (alan, eski, yeni); boş = çözümü yok
 ```
 
-- [ ] **Adım 1: Testi yaz** — üç bulgu için ayrı test; `yayin_durgun` için
+- [x] **Adım 1: Testi yaz** — üç bulgu için ayrı test; `yayin_durgun` için
       `duzeltme == []` (operatör kararı, otomatik düzeltilmez)
-- [ ] **Adım 2: Çalıştır** → FAIL
-- [ ] **Adım 3: `channel_diag.py` yaz** — `dashboard_stats.py` desenini izle (saf sorgu
+- [x] **Adım 2: Çalıştır** → FAIL
+- [x] **Adım 3: `channel_diag.py` yaz** — `dashboard_stats.py` desenini izle (saf sorgu
       katmanı, Flask'tan bağımsız)
-- [ ] **Adım 4: Çalıştır** → PASS
-- [ ] **Adım 5: Commit** — `feat(panel): kanal teşhis motoru (LLM'siz, düz SQL)`
+- [x] **Adım 4: Çalıştır** → PASS
+- [x] **Adım 5: Commit** — `feat(panel): kanal teşhis motoru (LLM'siz, düz SQL)`
 
 ---
 
@@ -379,13 +392,13 @@ class SohbetCevabi(BaseModel):
 Sistem prompt'unun taşıması gereken **üslup kuralı** (spec C):
 soru sorma, karar ver, gerekçe yaz, kullanıcı hiçbir şey yazmadan kurabilsin.
 
-- [ ] **Adım 1: Testi yaz** — sahte `llm` enjekte edilir (`sonnet_json` imzası),
+- [x] **Adım 1: Testi yaz** — sahte `llm` enjekte edilir (`sonnet_json` imzası),
       geçmişin prompt'a gömüldüğü ve kararların şemayla doğrulandığı test edilir
-- [ ] **Adım 2: Çalıştır** → FAIL
-- [ ] **Adım 3: Yaz** — geçmiş prompt'a gömülür, CLI oturumu kullanılmaz
-- [ ] **Adım 4: `uygula(kararlar, cfg)` → yeni `ChannelConfig`** (yazmaz, döndürür)
-- [ ] **Adım 5: Çalıştır** → PASS
-- [ ] **Adım 6: Commit** — `feat(panel): sohbet motoru — şemalı karar listesi`
+- [x] **Adım 2: Çalıştır** → FAIL
+- [x] **Adım 3: Yaz** — geçmiş prompt'a gömülür, CLI oturumu kullanılmaz
+- [x] **Adım 4: `uygula(kararlar, cfg)` → yeni `ChannelConfig`** (yazmaz, döndürür)
+- [x] **Adım 5: Çalıştır** → PASS
+- [x] **Adım 6: Commit** — `feat(panel): sohbet motoru — şemalı karar listesi`
 
 ---
 
@@ -396,9 +409,9 @@ soru sorma, karar ver, gerekçe yaz, kullanıcı hiçbir şey yazmadan kurabilsi
 - Değiştir: `web/routes/channel_new.py` → `/channels/new` format seçimi döndürür
 - Test: `tests/test_web_channel_new.py`
 
-- [ ] **Adım 1: Testi yaz** — dört format kartı ve o formattaki canlı kanal slug'ları
-- [ ] **Adım 2–4:** kırmızı → yeşil
-- [ ] **Adım 5: Commit** — `feat(panel): yeni kanal format seçimi ekranı`
+- [x] **Adım 1: Testi yaz** — dört format kartı ve o formattaki canlı kanal slug'ları
+- [x] **Adım 2–4:** kırmızı → yeşil
+- [x] **Adım 5: Commit** — `feat(panel): yeni kanal format seçimi ekranı`
 
 ---
 
@@ -409,11 +422,11 @@ soru sorma, karar ver, gerekçe yaz, kullanıcı hiçbir şey yazmadan kurabilsi
   `_partials/chat_turn.html.j2`
 - Test: `tests/test_web_channel_chat.py`
 
-- [ ] **Adım 1: Testi yaz** — POST `/channels/new/yorum/chat` sahte LLM ile karar listesi
+- [x] **Adım 1: Testi yaz** — POST `/channels/new/yorum/chat` sahte LLM ile karar listesi
       döndürür; **hiçbir YAML yazılmaz** (dizin sayısı değişmez)
-- [ ] **Adım 2–4:** kırmızı → yeşil
-- [ ] **Adım 5: "Kanalı kur" `apply_plan` benzeri yol — YAML + CSS + konu bankası**
-- [ ] **Adım 6: Commit** — `feat(panel): kurma sohbeti`
+- [x] **Adım 2–4:** kırmızı → yeşil
+- [x] **Adım 5: "Kanalı kur" `apply_plan` benzeri yol — YAML + CSS + konu bankası**
+- [x] **Adım 6: Commit** — `feat(panel): kurma sohbeti`
 
 ---
 
@@ -423,12 +436,12 @@ soru sorma, karar ver, gerekçe yaz, kullanıcı hiçbir şey yazmadan kurabilsi
 - Değiştir: `web/routes/channel_chat.py` (`GET /channels/<slug>`)
 - Test: `tests/test_web_channel_chat.py`
 
-- [ ] **Adım 1: Testi yaz** — sayfa açılışında **LLM çağrılmadığı** doğrulanır
+- [x] **Adım 1: Testi yaz** — sayfa açılışında **LLM çağrılmadığı** doğrulanır
       (sahte llm çağrı sayacı 0), teşhis satırları dolu gelir
-- [ ] **Adım 2–4:** kırmızı → yeşil
-- [ ] **Adım 5: Fark/onay akışı** — `POST /channels/<slug>/chat/apply` seçili kararları yazar
-- [ ] **Adım 6: `archived` + `enabled` bağlı alan uyarısı testi**
-- [ ] **Adım 7: Commit** — `feat(panel): kanal sayfası — teşhis + ayar sohbeti`
+- [x] **Adım 2–4:** kırmızı → yeşil
+- [x] **Adım 5: Fark/onay akışı** — `POST /channels/<slug>/chat/apply` seçili kararları yazar
+- [x] **Adım 6: `archived` + `enabled` bağlı alan uyarısı testi**
+- [x] **Adım 7: Commit** — `feat(panel): kanal sayfası — teşhis + ayar sohbeti`
 
 ---
 
@@ -449,9 +462,9 @@ ZORUNLU_DEGISKENLER = ("script.header_top", "script.header_bottom",
 def yapi_kapisi(html: str) -> tuple[bool, str]: ...
 ```
 
-- [ ] **Adım 1: Testi yaz** — eksik `.body-text` reddedilir; sebep metni o seçiciyi içerir
-- [ ] **Adım 2–4:** kırmızı → yeşil
-- [ ] **Adım 5: Commit** — `feat(arketip): yapı kapısı — zorunlu slot ve değişken kontrolü`
+- [x] **Adım 1: Testi yaz** — eksik `.body-text` reddedilir; sebep metni o seçiciyi içerir
+- [x] **Adım 2–4:** kırmızı → yeşil
+- [x] **Adım 5: Commit** — `feat(arketip): yapı kapısı — zorunlu slot ve değişken kontrolü`
 
 ---
 
@@ -464,9 +477,9 @@ def yapi_kapisi(html: str) -> tuple[bool, str]: ...
 Üç uç metin: en uzun manşet (kanal geçmişindeki en uzunu + %20), en çok satırlı gövde,
 en uzun kaynak adı.
 
-- [ ] **Adım 1: Testi yaz** — `render_with_script` üç farklı metin için üç ayrı PNG üretir
-- [ ] **Adım 2–4:** kırmızı → yeşil
-- [ ] **Adım 5: Commit** — `feat(arketip): uç metinlerle render — tek örnek yanıltıyordu`
+- [x] **Adım 1: Testi yaz** — `render_with_script` üç farklı metin için üç ayrı PNG üretir
+- [x] **Adım 2–4:** kırmızı → yeşil
+- [x] **Adım 5: Commit** — `feat(arketip): uç metinlerle render — tek örnek yanıltıyordu`
 
 ---
 
@@ -480,9 +493,9 @@ en uzun kaynak adı.
 vision yoksa **fail-open değil fail-closed** — arketip kaydedilmez (footage'tan farklı:
 orada üretim durmamalı, burada bozuk şablon diske yazılmamalı).
 
-- [ ] **Adım 1: Testi yaz** — sahte vision "manşet kesilmiş" derse kapı reddeder
-- [ ] **Adım 2–4:** kırmızı → yeşil
-- [ ] **Adım 5: Commit** — `feat(arketip): vision kapısı — render karesine bakan denetim`
+- [x] **Adım 1: Testi yaz** — sahte vision "manşet kesilmiş" derse kapı reddeder
+- [x] **Adım 2–4:** kırmızı → yeşil
+- [x] **Adım 5: Commit** — `feat(arketip): vision kapısı — render karesine bakan denetim`
 
 ---
 
@@ -492,17 +505,17 @@ orada üretim durmamalı, burada bozuk şablon diske yazılmamalı).
 - Oluştur: `src/short_bot/archetype_design.py`
 - Test: `tests/test_archetype_design.py`
 
-- [ ] **Adım 1: Testi yaz** — üç turda geçemezse **kaydedilmez**; dosya oluşmaz
-- [ ] **Adım 2–4:** kırmızı → yeşil
-- [ ] **Adım 5: `TEMPLATE-SPEC.md` + iki örnek şablon prompt'a girer**
-- [ ] **Adım 6: Commit** — `feat(arketip): Claude yeni şablon tasarlıyor (kapılı)`
+- [x] **Adım 1: Testi yaz** — üç turda geçemezse **kaydedilmez**; dosya oluşmaz
+- [x] **Adım 2–4:** kırmızı → yeşil
+- [x] **Adım 5: `TEMPLATE-SPEC.md` + iki örnek şablon prompt'a girer**
+- [x] **Adım 6: Commit** — `feat(arketip): Claude yeni şablon tasarlıyor (kapılı)`
 
 ---
 
 ### Task 19: Bütün doğrulama
 
-- [ ] **Adım 1:** `pytest tests/ -q` tam koşu
-- [ ] **Adım 2:** `verify` skill'iyle scratch panelde uçtan uca: format seç → sohbet →
+- [x] **Adım 1:** `pytest tests/ -q` tam koşu
+- [x] **Adım 2:** `verify` skill'iyle scratch panelde uçtan uca: format seç → sohbet →
       kanal kur → kanal sayfası → ayar değiştir
-- [ ] **Adım 3:** Negatif test: kasten taşan şablon vision kapısından geçmemeli
-- [ ] **Adım 4:** Commit — `test: kanal atölyesi bütün doğrulaması`
+- [x] **Adım 3:** Negatif test: kasten taşan şablon vision kapısından geçmemeli
+- [x] **Adım 4:** Commit — `test: kanal atölyesi bütün doğrulaması`

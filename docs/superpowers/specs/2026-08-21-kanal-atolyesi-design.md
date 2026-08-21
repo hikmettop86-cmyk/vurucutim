@@ -230,12 +230,19 @@ Sayfa açıldığında Claude'un ilk mesajı bir **ölçüm raporu**dur ve LLM �
 | Bulgu | Kaynak |
 |---|---|
 | kaç manşet kesildi | `dna.sentence_max_words` aşımı + üretilen başlık uzunlukları |
-| kaçı eşiğin altında elendi | `youtube.min_score_for_upload` ile üretim puanları |
+| kaç koşu üretmeden bitti | `runs.short_id IS NULL` oranı |
+| otomatik yükleme kapalıyken kaç video birikti | `shorts` − başarılı `youtube_uploads` |
 | kaç gündür yayın yok | `youtube_uploads` son başarılı kayıt |
 
 Bunlar `dashboard_stats.py` tarzı düz SQL ile bulunur. **LLM yalnız kullanıcı bir şey
 yazınca devreye girer.** Her kanal sayfası açılışında LLM çağırmak hem yavaş hem gereksiz
 masraf.
+
+**ÖLÇÜLEMEYEN, dolayısıyla ÜRETİLMEYEN bulgu** (uygulama sırasında ortaya çıktı,
+2026-08-21): mockup'ta "elenenlerin 4'ü yükleme eşiğinin hemen altında" diye bir öneri
+gösterilmişti. `shorts` tablosunda ve `script_json` içinde **puan alanı yok** — bu soru
+mevcut şemadan cevaplanamıyor. Uydurma sayı üretmektense bulguyu hiç üretmemek doğrudur;
+`test_esik_alti_bulgusu_URETILMEZ` bunu sabitler. Şemaya puan eklenirse bulgu eklenir.
 
 Çözümü olmayan bulgu **düzeltilmez, bildirilir**: "11 gündür yayın yok" bir ayar hatası
 değil, operatör kararıdır. Her şeye çözüm üreten bir asistan, çözümü olmayanı da
