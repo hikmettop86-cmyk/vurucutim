@@ -21,7 +21,7 @@ colors:
   - '#141414'
 handle: '@gundem'
 output_dir: output/gundem-yorum
-enabled: false
+enabled: true
 script_model: opus
 content_source: trends
 trends_region: TR

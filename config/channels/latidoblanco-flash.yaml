@@ -1,45 +1,20 @@
-# latidoblanco'nun 6sn SESSİZ kart sürümü. Marka DNA'sı (palet, font, taç
-# filigranı, custom_css, persona_summary) latidoblanco.yaml'dan config
-# katmanıyla birebir türetildi — iki kanal aynı görünür, formatları ayrışır:
-# latidoblanco = 6sn kart + 35-50sn fanatik yorum (ölçülen çıktı 39-42sn),
-# bu kanal = yalnız kart. voice bloğu YOK; pipeline sessiz akışa düşer.
 slug: latidoblanco-flash
 name: Latido Blanco Flash
 keywords:
-# ÖLÇÜLDÜ (channel_audit.keyword_health, hl=es, son 24s / ana havuzda olmayan
-# net katkı). İspanyolca arz Türkçeden çok daha bol: denenen sekiz adayın
-# HEPSİ sağlıklı çıktı, yani anahtar seçimi burada "hangisi haber getiriyor"
-# değil "ana havuz zaten neyle dolu" sorusu.
-- Real Madrid                   # 76 taze / 76 net — ana havuz
-- Real Madrid Mourinho          # 64 taze / 45 net — teknik direktör kararları
-- Real Madrid Champions         # 25 taze / 15 net — avrupa geceleri
-- Real Madrid Florentino Pérez  # 15 taze / 12 net — kulüp/başkanlık
-# "Real Madrid fichajes" (58 taze / 34 net) ÖLÇÜLDÜ ama ALINMADI: ana havuzun
-# 30 manşetlik örneğinde zaten transfer ve forma-numarası hakimdi, ikinci bir
-# transfer sorgusu pencereyi tek konuya kilitlerdi. Galatasaray analizinde
-# (442 video) gelen-transfer en zayıf kategoriydi ve üretimin %64'üydü.
-# "Real Madrid Xabi Alonso" da denendi (9 net) ve DÜŞTÜ: havuz teknik
-# direktörün Mourinho olduğunu gösterdi — anahtar varsayımla değil manşetle
-# seçildi.
+- Real Madrid
 language: es
-# Boş saat dilimi: galatasaray+fenerbahce 0/4/8/12/16/20, latidoblanco tek
-# saatler, aslangundem-plus :30. Çakışma önemsiz değil — eşzamanlı koşu daha
-# önce whisper'ı exit 127 ile öldürmüştü.
 schedule_cron: 0 2-22/4 * * *
 duration_s: 6
-# 7.0 latidoblanco'dan devralındı ve KANITLI: tek anahtarla ~53 saatte 21
-# video verdi. Dört anahtarla arz daha da genişledi, eşiği gevşetmek için
-# sebep yok.
 min_score: 7.0
 max_candidates_per_run: 10
 max_age_hours: 24
 template: stadium
 colors:
-  primary: '#00529f'
-  accent: '#febe10'
+  primary: '#a30d2d'
+  accent: '#ffb81c'
   bg_gradient:
-  - '#050505'
-  - '#0a1a3a'
+  - '#0a0a0a'
+  - '#3d0712'
 handle: '@latidoblancoflash'
 output_dir: output/latidoblanco-flash
 enabled: false
@@ -48,24 +23,6 @@ negative_keywords:
 - en vivo
 - minuto a minuto
 - así te lo contamos
-# categories: canonical konu etiketleri. Serbest metin etiket learning ve
-# aggregator'ın kovalarını bölüyordu (aynı konuya "Transfer"/"transfer"/
-# "Futbol Transfer"). Liste galatasaray'ın ölçülmüş ayrımlarını İspanyolcaya
-# taşıyor — gelen/giden transfer ayrı, çünkü orada endeksleri farklıydı.
-# GEÇİCİ: bu kanalın kendi performans verisi yok (YouTube'a bağlı değil), o
-# yüzden KOTA KONULMADI. Kota ancak kanıtlı zayıf konuya konur; galatasaray'da
-# ilk kota en çok üretilene konulmuş ve üretimi daha zayıf konulara itmişti.
-categories:
-- fichaje-llega
-- fichaje-sale
-- europa-champions
-- club-directiva
-- justicia-sancion
-- decision-plantilla
-- partido-resultado
-- palabra-jugador
-- extradeportivo
-- rival
 script_model: opus
 youtube:
   auto_upload: false
@@ -90,20 +47,20 @@ bg_image_blur: 8
 dna:
   archetype: stadium
   palette:
-    primary: '#00529f'
-    accent: '#febe10'
+    primary: '#a30d2d'
+    accent: '#ffb81c'
     bg_gradient:
-    - '#050505'
-    - '#0a1a3a'
+    - '#0a0a0a'
+    - '#3d0712'
     body_bg:
-    - '#060a18'
-    - '#0c1a38'
-    text_main: '#ffffff'
-    text_muted: '#c9d6ea'
+    - '#12060a'
+    - '#1f0810'
+    text_main: '#fff8e7'
+    text_muted: '#e8c56a'
     header_top_color: ''
     header_bottom_color: ''
   fonts:
-    headline: Anton
+    headline: Oswald
     body: Inter
     google_imports:
     - Anton

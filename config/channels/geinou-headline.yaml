@@ -1,5 +1,5 @@
-slug: geinou-kaisetsu
-name: 芸能解説
+slug: geinou-headline
+name: 芸能ヘッドライン
 keywords:
 - 芸能ニュース
 - エンタメ
@@ -17,8 +17,8 @@ colors:
   bg_gradient:
   - '#f7f3ee'
   - '#e0d6cc'
-handle: '@geinou-kaisetsu'
-output_dir: output/geinou-kaisetsu
+handle: '@geinou-headline'
+output_dir: output/geinou-headline
 enabled: false
 script_model: opus
 content_source: trends
