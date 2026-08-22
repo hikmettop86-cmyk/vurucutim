@@ -127,6 +127,12 @@
       </div>
     </form>
 
+{# YouTube aksiyon formları ana kaydet formunun DIŞINDA olmak ZORUNDA (HTML5
+   iç içe form yasak). Bu sayfada HİÇ yoktu: ortak parçadaki "Yükle" / "Bağla"
+   düğmeleri var olmayan bir form kimliğine işaret ediyor ve sessizce ölüyordu —
+   hata yok, log yok, kullanıcı tıklıyor ve hiçbir şey olmuyordu (2026-08-22). #}
+{% include "_partials/youtube_hidden_forms.html.j2" %}
+
     <aside class="space-y-3">
       <div class="bg-claude-surface border border-claude-border rounded-xl p-4">
         <div class="text-xs text-claude-muted uppercase tracking-wide mb-2">Son üretimler · anlatım metni</div>

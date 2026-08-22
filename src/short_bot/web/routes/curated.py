@@ -530,6 +530,12 @@ def edit_curated(slug):
                            personas=personas, categories=list(CATEGORIES),
                            yt_connected=yt_connected, yt_info=yt_info,
                            creds_slug=_cslug, linkable=linkable,
+                           # yt_clash ortak parçanın sözleşmesinde var; verilmezse
+                           # "aynı YouTube kanalına üreten başka kanal" uyarısı
+                           # sessizce çizilmez.
+                           yt_clash=[o for o in _yt_auth.same_youtube_channel(
+                               yt_root, _cslug, [x.slug for x in _digerleri])
+                               if o != slug] if yt_root else [],
                            yt_has_secrets=yt_has_secrets,
                            yt_secrets_abs=(str((yt_root / slug).resolve())
                                            if yt_root else ""))

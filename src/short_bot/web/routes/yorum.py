@@ -225,6 +225,13 @@ def edit(slug):
     yt_connected = bool(yt_root and _yt_auth.has_credentials(yt_root, cslug))
     yt_info = (_yt_auth.load_channel_info(yt_root, cslug)
                if yt_root and yt_connected else None)
+    # ORTAK PARÇANIN SÖZLEŞMESİ: yt_has_secrets verilmezse Jinja onu FALSY
+    # sayar ve sayfa client_secrets yüklendikten sonra bile hep 'yükle'
+    # ekranında kalır — 'Bağla' düğmesi ASLA görünmez (2026-08-22 vakası).
+    # Dosya kanalın KENDİ klasöründe aranır: yükleme oraya yazıyor.
+    _sec_path = (yt_root / slug / 'client_secrets.json') if yt_root else None
+    yt_has_secrets = bool(_sec_path and _sec_path.is_file())
+    yt_secrets_abs = str((yt_root / slug).resolve()) if yt_root else ''
     # Bağlantısı olan diğer kanallar: aynı YouTube kanalına üreten formatlar
     # (6 sn kart + yorum) tek bağlantıyı paylaşabilsin.
     linkable, yt_clash = [], []
@@ -257,7 +264,8 @@ def edit(slug):
                            runs=sorted(RUNS_PER_DAY_CRON), runs_now=runs_now,
                            recent=_recent(slug), yt_connected=yt_connected,
                            yt_info=yt_info, creds_slug=cslug, linkable=linkable,
-                           yt_clash=yt_clash,
+                           yt_clash=yt_clash, yt_has_secrets=yt_has_secrets,
+                           yt_secrets_abs=yt_secrets_abs,
                            default_persona=default_yorum_persona(c.language)
                            or default_yorum_persona("tr"))
 
