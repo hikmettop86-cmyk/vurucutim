@@ -28,6 +28,7 @@ trends_region: DE
 trends_min_volume: 2000
 trends_intent: question
 trends_vertical: adalet
+brand_safety: normal
 youtube:
   auto_upload: false
   ai_content: false

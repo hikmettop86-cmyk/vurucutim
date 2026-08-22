@@ -27,6 +27,7 @@ content_source: trends
 trends_region: TR
 trends_intent: question
 trends_vertical: para
+brand_safety: normal
 youtube:
   auto_upload: false
   ai_content: false

@@ -289,6 +289,7 @@ def edit_save(slug):
         trends_region=region,
         trends_min_volume=_form_int("trends_min_volume", c.trends_min_volume),
         trends_intent=(request.form.get("trends_intent") or c.trends_intent),
+        brand_safety=(request.form.get("brand_safety") or c.brand_safety),
         trends_vertical=_dikey_from_form(c.trends_vertical),
         script_model=(request.form.get("script_model") or c.script_model or "").strip() or None,
         voice=voice,

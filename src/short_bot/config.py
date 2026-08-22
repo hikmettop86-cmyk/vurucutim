@@ -434,6 +434,10 @@ class ChannelConfig:
     # kalırsa koşu boş biter. Havuzu SESSİZCE genişletmek yasak — tam da
     # düzeltilen sorunu geri getirir ve görünmez yapar.
     trends_min_candidates: int = 4
+    # brand_safety: YouTube'da neredeyse kesin para kazandırmayan konuları eler
+    # (bkz. brand_safety.py). "off" VARSAYILAN — mevcut kanalların davranışı
+    # sessizce değişmesin; yeni kanallar kurulumda "normal" alır.
+    brand_safety: str = "off"
     dna: DnaSpec | None = None
     script_model: str | None = None
     content_source: Literal["rss", "generator", "feed", "curated", "trends"] = "rss"
@@ -507,6 +511,20 @@ def _trends_intent(raw, slug: str) -> str:
         raise ValueError(
             f"channel {slug!r}: trends_intent {raw!r} geçersiz — "
             f"{', '.join(_TRENDS_INTENTS)} olmalı")
+    return val
+
+
+def _brand_safety(raw, slug: str) -> str:
+    """brand_safety seviyesini doğrula. Yazım hatası SESSİZCE 'off'a düşmemeli:
+    açık sanılıp kapalı çalışan bir güvenlik süzgeci en kötüsüdür."""
+    from short_bot.brand_safety import LEVELS
+    if raw in (None, ""):
+        return "off"
+    val = str(raw).strip().lower()
+    if val not in LEVELS:
+        raise ValueError(
+            f"channel {slug!r}: brand_safety {raw!r} geçersiz — "
+            f"{', '.join(LEVELS)} olmalı")
     return val
 
 
@@ -666,6 +684,7 @@ def load_channel(path: Path) -> ChannelConfig:
         trends_intent=_trends_intent(data.get("trends_intent"), slug),
         trends_vertical=_trends_vertical(data.get("trends_vertical"), slug),
         trends_min_candidates=int(data.get("trends_min_candidates") or 4),
+        brand_safety=_brand_safety(data.get("brand_safety"), slug),
         reference_channels=list(data.get("reference_channels") or []),
         template=template,
         colors=dict(data["colors"]),
@@ -736,6 +755,8 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
         data["trends_vertical"] = cfg.trends_vertical
     if cfg.trends_min_candidates != 4:
         data["trends_min_candidates"] = cfg.trends_min_candidates
+    if cfg.brand_safety != "off":
+        data["brand_safety"] = cfg.brand_safety
     if cfg.auto_feed_ids:
         data["auto_feed_ids"] = list(cfg.auto_feed_ids)
     if cfg.generator is not None:

@@ -1137,6 +1137,30 @@ def _run_rss(*, channel, run_id, log, eng, settings,
         if before != len(items):
             log.info(f"  → {len(items)} after age filter "
                       f"(<= {channel.max_age_hours}h, dropped {before - len(items)})")
+    # MARKA GÜVENLİĞİ: dikey kapısı "bizim işimiz mi", AI kapısı "olay mı" diye
+    # sorar; ikisi de "bu videoya reklam verilir mi" diye SORMAZ. Magazin
+    # dikeyinde canlı havuzdan cinsel içerikli bir moda haberi çıkıp AI kapısını
+    # 7,0 ile geçti (2026-08-22). Arz bol olduğu için elemek ucuz.
+    if getattr(channel, "brand_safety", "off") != "off":
+        from short_bot.brand_safety import risk_of
+        kalan, elenen = [], []
+        for it in items:
+            # YALNIZ BAŞLIK. Trends haberinin `description` alanı BAĞLAM
+            # satırıdır — ilişkili aramalar ve BAŞKA makalelerin başlıkları.
+            # Kardeş makalede 性的関係 geçtiği için yaşlı BAKIM haberi elendi
+            # (canlı yanlış pozitif, 2026-08-22). Gövde bu aşamada henüz
+            # çıkarılmamış (extract_article seçimden SONRA koşar), yani
+            # description'ı taramak hiçbir zaman gövdeyi taramıyordu.
+            k = risk_of(it.title or "", "",
+                        language=channel.language, level=channel.brand_safety)
+            (elenen if k else kalan).append((k, it) if k else it)
+        if elenen:
+            log.info(f"  [marka güvenliği] {len(elenen)} haber elendi "
+                     f"(seviye={channel.brand_safety})")
+            for k, it in elenen:
+                log.info(f"      [{k}] {(it.title or '')[:70]}")
+            items = kalan
+
     # NEW: negative keyword filter
     if channel.negative_keywords:
         before = len(items)

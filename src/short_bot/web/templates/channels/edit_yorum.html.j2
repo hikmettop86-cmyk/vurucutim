@@ -63,6 +63,15 @@
             <span class="block text-[11px] text-claude-subtle mt-1">Havuz bu dikeye süzülür; aday sayısı eşiğin altına düşerse koşu boş biter.</span>
           </label>
           <label class="block">
+            <span class="text-xs text-claude-muted uppercase tracking-wide">Marka güvenliği</span>
+            <select name="brand_safety" class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
+              {% for code, label in [('off','Kapalı — süzme yok'), ('normal','Normal — cinsel içerik, grafik detay, idam, uyuşturucu'), ('strict','Sıkı — beden odaklı magazin dili ve linç de elenir')] %}
+              <option value="{{ code }}" {% if (c.brand_safety or 'off') == code %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            <span class="block text-[11px] text-claude-subtle mt-1">YouTube'da para kazandırmayan konuları puanlamadan ÖNCE eler. Sıradan suç haberi elenmez.</span>
+          </label>
+          <label class="block">
             <span class="text-xs text-claude-muted uppercase tracking-wide">Günde kaç video</span>
             <select name="runs_per_day" class="mt-1 w-full bg-white border border-claude-border rounded-lg px-3 py-2 text-sm">
               <option value="">(özel cron: {{ c.schedule_cron }})</option>

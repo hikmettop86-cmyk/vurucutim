@@ -914,6 +914,16 @@
           </select>
           <span class="text-claude-subtle">Havuz bu dikeye süzülür; aday sayısı eşiğin altına düşerse koşu boş biter.</span>
         </div>
+        <div class="mt-2 flex items-center gap-2 text-sm flex-wrap">
+          <label class="text-xs text-claude-muted uppercase">Marka güvenliği</label>
+          <select name="brand_safety"
+                  class="bg-claude-surface border border-claude-border px-2 py-1 rounded-lg text-sm text-claude-text">
+            {% for code, label in [('off','Kapalı'), ('normal','Normal'), ('strict','Sıkı')] %}
+            <option value="{{ code }}" {% if (c.brand_safety or 'off') == code %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          <span class="text-claude-subtle">Para kazandırmayan konuları puanlamadan ÖNCE eler; sıradan suç haberi elenmez.</span>
+        </div>
         <div class="mt-2">
           <label class="block text-xs text-claude-muted uppercase mb-1">Otomatik beslenecek feed'ler (çoklu seçim):</label>
           <select name="auto_feed_ids" multiple size="6"

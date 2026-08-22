@@ -551,6 +551,7 @@ def save(slug):
         trends_min_volume=_form_get_int("trends_min_volume", cfg.trends_min_volume),
         trends_intent=(request.form.get("trends_intent", cfg.trends_intent)
                        if "trends_intent" in request.form else cfg.trends_intent),
+        brand_safety=(request.form.get("brand_safety") or cfg.brand_safety),
         trends_vertical=(_dikey_from_form(cfg.trends_vertical)
                          if new_content_source == "trends" else None),
         auto_feed_ids=auto_feed_ids,
