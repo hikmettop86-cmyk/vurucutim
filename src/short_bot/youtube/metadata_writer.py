@@ -195,6 +195,12 @@ def build_metadata_prompt(*, channel, script: dict,
         dikey_block += ("\nBU KANALDA YASAK (kart kuralları başlık için de geçerli):\n"
                         + "\n".join(f"- {y}" for y in _yasak) + "\n")
     baslik_butcesi = _baslik_butcesi(channel.language)
+    # KAYNAK ETİKETİ KANALIN DİLİNDE. Örnek Türkçe sabit kalınca Japonca
+    # açıklamaya "Kaynak: Yahoo!ニュース" diye sızdı (canlı ölçüm 2026-08-22) —
+    # model KURAL metnini değil ÖRNEĞİ kopyalar, hashtag örneğiyle aynı sınıf.
+    from short_bot.locale import UI_LABELS as _UI
+    kaynak_etiketi = (_UI.get(channel.language) or _UI.get("en") or {}).get(
+        "source", "Source")
 
     hook_block = ""
     if hook_patterns:
@@ -279,7 +285,7 @@ DESCRIPTION KURALLARI ({lang_name} dilinde):
 2. Boş satır
 3. 2-4 cümlelik tam özet (haberin/içeriğin ne anlattığını detaylı açıklayan)
 4. Boş satır
-5. Kaynak bloğu (varsa "Kaynak: {{outlet}} — {{link}}", yoksa AI özgün notu)
+5. Kaynak bloğu — ETİKET {lang_name} dilinde: (varsa "{kaynak_etiketi}: {{outlet}} — {{link}}", yoksa AI özgün notu)
 6. Boş satır
 7. Telif/Fair Use disclaimer ({lang_name} dilinde, 2-3 cümle):
    "Bu video haber içeriklerinin kısa özetidir. Görsel ve metin alıntıları

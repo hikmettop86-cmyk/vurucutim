@@ -7,7 +7,14 @@ from short_bot.locale import (
 
 
 def test_supported_languages_set():
-    assert SUPPORTED_LANGUAGES == ["tr", "en", "de", "es", "fr"]
+    assert SUPPORTED_LANGUAGES == ["tr", "en", "de", "es", "fr", "ja"]
+
+
+def test_every_language_has_an_alphabet_entry():
+    """Alfabe tablosu eksikse aksan sökücüsü SESSİZCE Türkçeye düşer."""
+    from short_bot.locale import ALPHABET_EXTRA
+    for lang in SUPPORTED_LANGUAGES:
+        assert lang in ALPHABET_EXTRA
 
 
 def test_rss_locales_cover_all_languages():

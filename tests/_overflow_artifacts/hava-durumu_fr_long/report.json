@@ -1,0 +1,37 @@
+{
+  "archetype": "hava-durumu",
+  "fields": {
+    "header_top": {
+      "name": "header_top",
+      "has_overflow": true,
+      "current_chars": 23,
+      "current_lines": 3,
+      "max_lines": 1,
+      "recommended_max_chars": 6
+    },
+    "header_bottom": {
+      "name": "header_bottom",
+      "has_overflow": true,
+      "current_chars": 26,
+      "current_lines": 3,
+      "max_lines": 1,
+      "recommended_max_chars": 7
+    },
+    "photo_overlay": {
+      "name": "photo_overlay",
+      "has_overflow": true,
+      "current_chars": 50,
+      "current_lines": 2,
+      "max_lines": 1,
+      "recommended_max_chars": 22
+    },
+    "body_paragraph": {
+      "name": "body_paragraph",
+      "has_overflow": false,
+      "current_chars": 400,
+      "current_lines": 8,
+      "max_lines": 99,
+      "recommended_max_chars": 400
+    }
+  }
+}

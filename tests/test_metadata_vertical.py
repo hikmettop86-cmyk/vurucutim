@@ -131,3 +131,17 @@ def test_anahtar_kelimesiz_kanalda_dil_varsayilani_kalir():
     """Kelimesi olmayan kanal eski davranışta kalmalı."""
     p = _prompt(language="ja", keywords=[])
     assert "#速報" in p
+
+
+def test_kaynak_etiketi_kanalin_dilinde():
+    """CANLI VAKA (2026-08-22, Japonca ilk metadata): açıklamada 'Kaynak:
+    Yahoo!ニュース' çıktı — 'Kaynak' Türkçe. Model KURAL metnini değil ÖRNEĞİ
+    kopyalar; örnek Türkçe sabitti. locale.UI_LABELS'ta karşılığı zaten var."""
+    p = _prompt(language="ja", trends_vertical="magazin")
+    assert "出典" in p, "Japonca kaynak etiketi prompt'ta yok"
+    assert "Kaynak: {outlet}" not in p, "Türkçe kaynak örneği hâlâ sabit"
+
+
+def test_almanca_kaynak_etiketi():
+    p = _prompt(language="de")
+    assert "Quelle" in p

@@ -44,3 +44,17 @@ def test_bos_baslik_hala_yedege_duser():
     from short_bot.pipeline import _slugify
     assert _slugify("") == "haber"
     assert _slugify("   ") == "haber"
+
+
+def test_yalnizca_rakam_kalan_baslik_yedege_duser():
+    """'藤井風 12月のタイ公演中止を発表' -> geriye sadece '12' kalıyordu; teknik
+    olarak boş değil ama dosya adı olarak işe yaramaz (2026-08-22_12.mp4)."""
+    from short_bot.pipeline import _slugify
+    s = _slugify("藤井風 12月のタイ公演中止を発表")
+    assert s != "12"
+    assert s.startswith("video-")
+
+
+def test_kisa_ama_anlamli_latin_baslik_korunur():
+    from short_bot.pipeline import _slugify
+    assert _slugify("GTA 6 duyuruldu") == "gta-6-duyuruldu"

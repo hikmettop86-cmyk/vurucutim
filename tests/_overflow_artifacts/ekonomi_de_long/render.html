@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Short Ã¢â‚¬â€ Ekonomi</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&family=JetBrains+Mono:wght@400;700&display=swap');
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --primary: #0a1f2e;
+  --accent: #00c853;
+  --secondary: #d50000;
+  --gold: #ffd700;
+  --bg-grad-1: #0f2238;
+  --bg-grad-2: #050d18;
+  --body-bg-1: #0f2238;
+  --body-bg-2: #050d18;
+  --text-main: #ffffff;
+  --text-muted: #00c853;
+  --font-headline: 'Inter', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --font-numerals: 'JetBrains Mono', monospace;
+}
+html, body {
+  width: 1080px; height: 1920px; overflow: hidden;
+  background: linear-gradient(180deg, var(--bg-grad-1), var(--bg-grad-2));
+  font-family: var(--font-body); color: var(--text-main);
+}
+.stage {
+  position: relative; width: 1080px; height: 1920px;
+  display: flex; flex-direction: column;
+}
+
+/* TICKER BAR Ã¢â‚¬â€ decorative market data strip above everything */
+.ticker {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 38px;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  font-family: var(--font-numerals);
+  font-size: 18px;
+  color: var(--accent);
+  letter-spacing: 1px;
+  z-index: 11;
+  gap: 18px;
+  border-bottom: 1px solid rgba(0,200,83,0.3);
+}
+.ticker .down { color: var(--secondary); }
+
+/* STAGE BADGE Ã¢â‚¬â€ sharp-corner, offset down to clear ticker */
+.stage-badge {
+  position: absolute;
+  top: 50px; right: 24px;
+  background: var(--accent); color: var(--primary);
+  font-size: 20px; font-weight: 700; letter-spacing: 1px;
+  padding: 5px 12px;
+  border-radius: 0;
+  z-index: 10;
+}
+
+/* HEADER */
+.header {
+  padding: 78px 60px 38px;
+  text-align: left;
+}
+.header .top {
+  display: block;
+  font-family: var(--font-numerals);
+  font-size: 60px;
+  color: var(--accent);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 14px;
+}
+.header .bot {
+  display: block;
+  font-size: 90px;
+  font-weight: 900;
+  color: var(--text-main);
+  line-height: 1.02;
+  font-family: var(--font-headline);
+}
+
+/* PHOTO */
+.photo {
+  position: relative;
+  height: 580px;
+  background: linear-gradient(135deg, var(--bg-grad-1), var(--bg-grad-2));
+  overflow: hidden;
+}
+.photo .bg-img {
+  position: absolute; inset: 0;
+  background-image: url('None');
+  background-size: cover; background-position: center;
+  display: none;
+}
+.photo .vignette {
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,.55) 100%);
+}
+
+/* Large numeric callout Ã¢â‚¬â€ bottom-center of photo */
+.photo .ticker-num {
+  position: absolute;
+  bottom: 24px; left: 0; right: 0;
+  text-align: center;
+  font-family: var(--font-numerals);
+  font-size: 88px;
+  font-weight: 700;
+  color: var(--gold);
+  background: rgba(0,0,0,0.78);
+  padding: 18px 30px;
+  line-height: 1.05;
+}
+
+/* BODY */
+.body {
+  flex: 1;
+  min-height: 0;
+  margin-bottom: 240px;
+  padding: 40px 60px 30px;
+  font-size: 42px;
+  line-height: 1.45;
+  font-family: var(--font-body);
+  font-weight: 600;
+  color: var(--text-main);
+  display: -webkit-box;
+  -webkit-line-clamp: 9;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 86%, transparent 100%);
+          mask-image: linear-gradient(180deg, #000 0%, #000 86%, transparent 100%);
+  border-bottom: 3px solid;
+  border-image: linear-gradient(90deg, var(--secondary), var(--accent)) 1;
+}
+.body .hl-r { background: var(--primary); color: #fff;
+  padding: 2px 14px; border-radius: 6px; font-weight: 700; }
+.body .hl-y { background: var(--accent); color: #000;
+  padding: 2px 14px; border-radius: 6px; font-weight: 700; }
+
+/* PROGRESS bar */
+.progress {
+  position: absolute; left: 0; right: 0; bottom: 84px; height: 8px;
+  background: rgba(255,255,255,.18);
+}
+.progress::after {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+  background: linear-gradient(90deg, var(--accent), var(--primary));
+  animation: fill 30s linear forwards;
+}
+@keyframes fill { from { width: 0; } to { width: 100%; } }
+
+/* HANDLE */
+.handle {
+  position: absolute; left: 0; right: 0; bottom: 30px;
+  text-align: center; color: var(--text-muted); opacity: .9;
+  font-size: 34px; font-weight: 600;
+}
+
+/* CTA overlay (last cta_duration_s seconds) */
+
+
+/* Persistent corner chips Ã¢â‚¬â€ visible THROUGHOUT video */
+.persistent {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 900;
+  font-size: 36px;
+  letter-spacing: 1px;
+  padding: 14px 22px;
+  border-radius: 12px;
+  color: #fff;
+  box-shadow: 0 5px 0 rgba(0,0,0,.5), 0 0 20px rgba(0,0,0,.3);
+  z-index: 35;
+  text-shadow: 0 2px 0 rgba(0,0,0,.4);
+}
+.persistent .ic { font-size: 44px; }
+
+/* BEÃ„ÂEN Ã¢â‚¬â€ bottom-left, dark chip with red accent */
+.persistent.like {
+  bottom: 112px; left: 24px;
+  background: linear-gradient(135deg, rgba(0,0,0,.88), rgba(40,0,0,.92));
+  border: 3px solid #ff3b3b;
+  animation: like-beat 1.5s ease-in-out infinite;
+}
+@keyframes like-beat {
+  0%, 100% { transform: scale(1); }
+  20% { transform: scale(1.12); }
+  40% { transform: scale(0.98); }
+  60% { transform: scale(1.08); }
+}
+
+/* ABONE OL Ã¢â‚¬â€ bottom-right, red gradient chip */
+.persistent.sub {
+  bottom: 112px; right: 24px;
+  background: linear-gradient(135deg, #ff2d2d, #c81e1e);
+  border: 3px solid #ffea3b;
+  animation: sub-glow 1.5s ease-in-out infinite;
+}
+@keyframes sub-glow {
+  0%, 100% { transform: scale(1); box-shadow: 0 5px 0 rgba(0,0,0,.5), 0 0 20px rgba(255,45,45,.4); }
+  50% { transform: scale(1.08); box-shadow: 0 5px 0 rgba(0,0,0,.5), 0 0 36px rgba(255,234,59,.7); }
+}
+
+/* Hide persistent chips during the final CTA fullscreen overlay */
+
+  /* SOURCE CREDIT */
+  .source-credit {
+    position: absolute;
+    bottom: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.6);
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    padding: 3px 10px;
+    border-radius: 3px;
+    z-index: 50;
+    white-space: nowrap;
+    font-family: inherit;
+  }
+
+  /* DNA OVERRIDE Ã¢â‚¬â€ runtime palette/font from channel DNA */
+  
+</style>
+</head>
+<body>
+<div class="stage dna-anim-none">
+  <div class="ticker">USD/TRY Ã¢â€“Â² %2.5 Ã‚Â· BIST <span class="down">Ã¢â€“Â¼ %0.8</span> Ã‚Â· EUR/TRY Ã¢â€“Â² %1.7 Ã‚Â· ALTIN Ã¢â€“Â² %0.4</div>
+  <div class="stage-badge">SON DAKİKA</div>
+  <div class="header">
+    <span class="top">Reform Warnung Inflatio</span>
+    <span class="bot">Verhandlung Warnung Zeitra</span>
+  </div>
+
+  <div class="photo">
+    <div class="bg-img"></div>
+    <div class="vignette"></div>
+    <div class="ticker-num">Zeitraum Warnung Vereinbarung Skandal Ministerium</div>
+  </div>
+
+  <div class="body" data-fit-min="32" data-fit-max="56" data-fit-pad="18">Skandal Zeitraum Bericht Inflation Haushalt Erhöhung Bericht Börse Vereinbarung Haushalt Inflation Krise Warnung Ministerium Skandal Mindestlohn Devisenkurs Reform Krise Inflation Ministerium Devisenkurs Bundesregierung Verhandlung Reform Wirtschaft Eilmeldung kritisch Reform Millionen Devisenkurs Nachrichten Schock kritisch Schock Haushalt Bericht Warnung Vereinbarung Ministerium Haushalt Warnung</div>
+
+  <div class="progress"></div>
+  <div class="handle">@test</div>
+
+  <!-- Persistent corner chips (visible throughout video, fade out only when end CTA opens) -->
+  
+
+  
+
+  
+</div>
+<script>
+/* Content-aware body font auto-fit.
+   Targets `.body-text` (stadium wrapper) or `.body` itself. Reads:
+     - data-fit-min  (default 36)  — minimum font-size px
+     - data-fit-max  (default 64)  — maximum font-size px
+     - data-fit-pad  (default 16)  — bottom padding to leave free
+   Strips line-clamp during measurement so scrollHeight reflects real text
+   height, then restores it (mask gradient still graceful-cuts at MIN if
+   overflow). Awaits document.fonts.ready so per-glyph widths are correct
+   (otherwise fallback font is used during parse, then real font replaces
+   it later and layout shifts past the chosen fontSize → overflow). */
+async function _autoFit() {
+  if (document.fonts && document.fonts.ready) {
+    try { await document.fonts.ready; } catch (_) {}
+  }
+  /* List-container mode (gundem): every .list-item .text shares one font size,
+     scales together so the list fits in container.clientHeight. */
+  var list = document.querySelector('.list-container[data-fit-min]');
+  if (list) {
+    var items = list.querySelectorAll('.list-item .text');
+    if (!items.length) return;
+    var lmin = parseFloat(list.getAttribute('data-fit-min') || '28');
+    var lmax = parseFloat(list.getAttribute('data-fit-max') || '50');
+    var lpad = parseFloat(list.getAttribute('data-fit-pad') || '14');
+    var lsize = lmax;
+    for (var i = 0; i < items.length; i++) items[i].style.fontSize = lsize + 'px';
+    void list.offsetHeight;
+    while (lsize > lmin && list.scrollHeight > list.clientHeight - lpad) {
+      lsize -= 2;
+      for (var j = 0; j < items.length; j++) items[j].style.fontSize = lsize + 'px';
+      void list.offsetHeight;
+    }
+    return;
+  }
+
+  var text = document.querySelector('.body-text') || document.querySelector('.body');
+  if (!text) return;
+  var container = text.classList.contains('body-text')
+    ? text.parentElement
+    : text;
+  if (!container) return;
+
+  var min = parseFloat(text.getAttribute('data-fit-min') || '36');
+  var max = parseFloat(text.getAttribute('data-fit-max') || '64');
+  var pad = parseFloat(text.getAttribute('data-fit-pad') || '16');
+
+  var origClamp = text.style.webkitLineClamp;
+  var origDisplay = text.style.display;
+  text.style.webkitLineClamp = 'unset';
+  text.style.display = 'block';
+
+  /* For non-wrapper templates (.body is the text), clientHeight is the
+     line-clamped/flex-allocated height. We want the flex-allocated height
+     (without clamp), which equals offsetParent constraint. Use clientHeight
+     after clamp is stripped — equals flex:1 allocation. */
+  var targetH = container.clientHeight - pad;
+  var size = max;
+  text.style.fontSize = size + 'px';
+  void text.offsetHeight;
+
+  while (size > min && text.scrollHeight > targetH) {
+    size -= 2;
+    text.style.fontSize = size + 'px';
+    void text.offsetHeight;
+  }
+
+  text.style.webkitLineClamp = origClamp;
+  text.style.display = origDisplay;
+  void text.offsetHeight;
+}
+window.__autoFitDone = _autoFit().catch(function(){});
+</script>
+</body>
+</html>

@@ -219,6 +219,56 @@ def _gecer_mi(aday: str, kaynak_fold: str, kaynak_kelimeler: list[str]) -> bool:
     return any(fuzz.ratio(a_cek, k) >= _ESIK for k in kaynak_kelimeler)
 
 
+_KANJI_RAKAM = {"〇": 0, "零": 0, "一": 1, "二": 2, "三": 3, "四": 4, "五": 5,
+                "六": 6, "七": 7, "八": 8, "九": 9}
+_KANJI_KUCUK = {"十": 10, "百": 100, "千": 1000}
+_KANJI_BUYUK = {"万": 10**4, "億": 10**8, "兆": 10**12}
+
+
+def kanji_sayi_degeri(s: str) -> int | None:
+    """'二十一' -> 21, '五百億' -> 50000000000. Sayı değilse None.
+
+    NEDEN VAR (canlı vaka 2026-08-22): anlatım TTS için sayıyı OKUNDUĞU GİBİ
+    yazar ('二十一日'), haber metni rakam kullanır ('21日'). Kapı ikisini ayrı
+    şey sanıp uydurma ilan etti ve iki denemede de düzelmeyince ÜRETİM DURDU —
+    kodun kendi uyardığı yanlış-pozitif sınıfı (Burhan vakası).
+    """
+    if not s:
+        return None
+    toplam = bolum = rakam = 0
+    for ch in s:
+        if ch in _KANJI_RAKAM:
+            rakam = _KANJI_RAKAM[ch]
+        elif ch in _KANJI_KUCUK:
+            bolum += (rakam or 1) * _KANJI_KUCUK[ch]
+            rakam = 0
+        elif ch in _KANJI_BUYUK:
+            toplam += (bolum + rakam) * _KANJI_BUYUK[ch]
+            bolum = rakam = 0
+        else:
+            return None
+    return toplam + bolum + rakam
+
+
+def _sayi_kaynakta_var(aday: str, kaynak_fold: str, kaynak: str) -> bool:
+    """Sayı adayı kaynakta geçiyor mu — YAZIMDAN BAĞIMSIZ.
+
+    Kanji yazım ile rakam yazımı aynı olguyu gösterir; ikisi de denenir.
+    """
+    if _fold(aday) in kaynak_fold:
+        return True
+    deger = kanji_sayi_degeri(aday) if not aday.isdigit() else int(aday)
+    if deger is None:
+        return False
+    if str(deger) in kaynak:
+        return True
+    # Kaynak kanji yazmış, anlatım rakam kullanmış olabilir.
+    for k in _KANJI_SAYI.findall(kaynak):
+        if kanji_sayi_degeri(k) == deger:
+            return True
+    return False
+
+
 def unverified_claims(narration_text: str, source_text: str, *,
                       language: str = "tr") -> list[str]:
     """Anlatımda geçip kaynakta bulunmayan özel isim ve sayılar (tekilleştirilmiş).
@@ -244,8 +294,14 @@ def unverified_claims(narration_text: str, source_text: str, *,
             eksik.append(aday)
 
     if (language or "").split("-")[0].lower() in _CJK_DILLER:
-        for aday in (_KANJI_SAYI.findall(narration_text)
-                     + _LATIN_DIZI.findall(narration_text)):
+        for aday in _KANJI_SAYI.findall(narration_text):
+            anahtar = _fold(aday)
+            if anahtar in gorulen:
+                continue
+            gorulen.add(anahtar)
+            if not _sayi_kaynakta_var(aday, kaynak_fold, source_text):
+                eksik.append(aday)
+        for aday in _LATIN_DIZI.findall(narration_text):
             anahtar = _fold(aday)
             if anahtar in gorulen:
                 continue
@@ -260,11 +316,14 @@ def unverified_claims(narration_text: str, source_text: str, *,
             gorulen.add(kalip)
             eksik.append(kalip)
 
+    cjk = (language or "").split("-")[0].lower() in _CJK_DILLER
     for sayi in _SAYI.findall(narration_text):
         if sayi in gorulen:
             continue
         gorulen.add(sayi)
-        if sayi not in kaynak_fold:
+        varmi = (_sayi_kaynakta_var(sayi, kaynak_fold, source_text) if cjk
+                 else sayi in kaynak_fold)
+        if not varmi:
             eksik.append(sayi)
 
     return eksik

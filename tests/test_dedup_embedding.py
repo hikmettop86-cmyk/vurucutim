@@ -127,6 +127,57 @@ def _fake_embed(text: str, *, api_key: str) -> list[float]:
     return [v / n for v in vec]
 
 
+def _acili_vektor(cosine: float) -> list[float]:
+    """[1,0] ile cosine'i TAM verilen deger olan birim vektor."""
+    import math
+    t = math.acos(cosine)
+    return [math.cos(t), math.sin(t)]
+
+
+def test_varsayilan_esik_olculmus_ayni_haber_bandini_eler(tmp_path):
+    """VARSAYILAN esik, ayni haberin farkli gazetelerdeki basliklarini elemeli.
+
+    OLCULDU (galatasaray gecmisi: 220 baslik, 24.090 cift). Ayni haber
+    0.68-0.72 bandinda kumeleniyor:
+      0.698  "Alen Smailagic Galatasaray MCT Technic'te!"
+          vs "...Ve Alen Smailagic Galatasaray'da"
+      0.691  "Okan Buruk ustunu cizdi, sozlesmesi feshedildi"
+          vs "Okan Buruk ustunu cizdi! Nelsson'a veda vakti"
+      0.699  "Leao icin ikinci teklifini goren Milan"
+          vs "Milan'dan flas Leao cevabi"
+    Eski varsayilan 0.72 idi: bu ciftlerin HEPSI dedup'tan geciyor ve ayni haber
+    tekrar tekrar video oluyordu.
+    """
+    eng = init_db(tmp_path / "state.db")
+    mark_processed(eng, "g1", "Alen Smailagic Galatasaray MCT Technic'te",
+                   "galatasaray", embedding=[1.0, 0.0])
+    aday = _item("g2", "Ve Alen Smailagic Galatasaray'da")
+
+    with patch("short_bot.dedup.embed_text",
+               side_effect=lambda t, *, api_key: _acili_vektor(0.70)):
+        sonuc = filter_new(eng, [aday], "galatasaray", fuzzy_threshold=0.85,
+                           openai_api_key="k", embeddings_out={})
+    assert sonuc == [], "0.70 cosine ayni haberdir; varsayilan esik elemeli"
+
+
+def test_varsayilan_esik_farkli_haberi_elemez(tmp_path):
+    """0.64-0.66 bandi OLCULDU ve cogunlukla FARKLI haber:
+      0.651  "Galatasaray'dan Arsenal cikarmasi"
+          vs "Galatasaray Manchester City'nin kalbini istiyor"
+    Esigi buraya kadar indirmek gercek haberleri elerdi -> kanal aday bulamaz.
+    """
+    eng = init_db(tmp_path / "state.db")
+    mark_processed(eng, "g1", "Galatasaray'dan Arsenal cikarmasi", "galatasaray",
+                   embedding=[1.0, 0.0])
+    aday = _item("g2", "Galatasaray Manchester City'nin kalbini istiyor")
+
+    with patch("short_bot.dedup.embed_text",
+               side_effect=lambda t, *, api_key: _acili_vektor(0.65)):
+        sonuc = filter_new(eng, [aday], "galatasaray", fuzzy_threshold=0.85,
+                           openai_api_key="k", embeddings_out={})
+    assert len(sonuc) == 1, "0.65 cosine farkli haberdir; elenmemeli"
+
+
 def test_filter_new_skips_topic_similar_via_embedding(tmp_path):
     """Same story, different headline — must be deduped via embedding."""
     eng = init_db(tmp_path / "state.db")

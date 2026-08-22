@@ -160,3 +160,65 @@ def test_shorts_list_shows_bulk_delete_button(app):
     body = client.get("/shorts").data.decode("utf-8")
     assert "Tümünü sil" in body
     assert '/shorts/delete-all' in body
+
+
+def test_detail_shows_back_translation_for_foreign_channel(tmp_path):
+    """Japonca kanalda operatörün videoyu okuyabilmesinin TEK yolu geri çeviri:
+    Japoncanın yanında Türkçesi görünmeli (yoksa yayın körlemesine yapılır)."""
+    import json
+
+    from short_bot.db import init_db, record_short
+    from short_bot.web import create_app
+
+    cfg_dir = tmp_path / "config"
+    (cfg_dir / "channels").mkdir(parents=True)
+    (cfg_dir / "settings.yaml").write_text(
+        "ffmpeg_path: ffmpeg\nclaude_cli_path: claude\nplaywright_browser: chromium\n"
+        "web: {host: 127.0.0.1, port: 5005}\n"
+        "fuzzy_dedup_threshold: 0.85\nlog_level: INFO\n"
+        "claude_models:\n  dna: opus\n  default: haiku\n", encoding="utf-8")
+    db_path = tmp_path / "ja.sqlite"
+    eng = init_db(db_path)
+    sid = record_short(
+        eng, channel="japon", rss_item_guid=None, title="病院で待つ少年",
+        file_path="output/japon/a.mp4", duration_s=30,
+        script_json=json.dumps({
+            "body_paragraph": "この子はずっと一人だった。",
+            "body_paragraph_tr": "Bu çocuk hep yalnızdı.",
+        }, ensure_ascii=False), render_ms=1000)
+    app = create_app(config_dir=cfg_dir, db_path=db_path, scheduler=False)
+
+    body = app.test_client().get(f"/shorts/{sid}").data.decode("utf-8")
+    # ETİKETLİ kutu şart: ham script_json dökümü de metni içerir ama operatör onu
+    # okumaz. Yargı verilebilmesi için Japonca ve Türkçe YAN YANA durmalı.
+    assert "Anlatımın Türkçesi" in body
+    assert "Bu çocuk hep yalnızdı." in body
+    assert "この子はずっと一人だった。" in body
+
+
+def test_detail_hides_translation_panel_for_turkish_channel(tmp_path):
+    """Türkçe kanalda geri çeviri kutusu GÖRÜNMEZ — gürültü olmasın."""
+    import json
+
+    from short_bot.db import init_db, record_short
+    from short_bot.web import create_app
+
+    cfg_dir = tmp_path / "config"
+    (cfg_dir / "channels").mkdir(parents=True)
+    (cfg_dir / "settings.yaml").write_text(
+        "ffmpeg_path: ffmpeg\nclaude_cli_path: claude\nplaywright_browser: chromium\n"
+        "web: {host: 127.0.0.1, port: 5005}\n"
+        "fuzzy_dedup_threshold: 0.85\nlog_level: INFO\n"
+        "claude_models:\n  dna: opus\n  default: haiku\n", encoding="utf-8")
+    db_path = tmp_path / "tr.sqlite"
+    eng = init_db(db_path)
+    sid = record_short(
+        eng, channel="dayi", rss_item_guid=None, title="Test",
+        file_path="output/dayi/a.mp4", duration_s=30,
+        script_json=json.dumps({"body_paragraph": "Bu çocuk yalnızdı.",
+                                "body_paragraph_tr": ""}, ensure_ascii=False),
+        render_ms=1000)
+    app = create_app(config_dir=cfg_dir, db_path=db_path, scheduler=False)
+
+    body = app.test_client().get(f"/shorts/{sid}").data.decode("utf-8")
+    assert "Anlatımın Türkçesi" not in body

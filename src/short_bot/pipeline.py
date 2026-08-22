@@ -447,7 +447,11 @@ def _slugify(text: str, max_len: int = 60) -> str:
     t = unicodedata.normalize("NFKD", ham)
     t = "".join(c for c in t if not unicodedata.combining(c))
     t = re.sub(r"[^a-zA-Z0-9]+", "-", t).strip("-").lower()
-    if t:
+    # ANLAMLI mı? Japonca "藤井風 12月のタイ公演中止を発表" başlığından geriye
+    # yalnız "12" kalıyordu — teknik olarak boş değil ama dosya adı olarak
+    # işe yaramaz (ölçüldü: 2026-08-22_12.mp4). Harf taşımayan ya da çok kısa
+    # kalan slug da yedeğe düşer.
+    if t and len(t.replace("-", "")) >= 3 and any(c.isalpha() for c in t):
         return t[:max_len]
     # ASCII'YE İNDİRGENEMEYEN BAŞLIK (CJK, Kiril…): eskiden HEPSİ "haber"e
     # düşüyordu ve klasör haber.mp4 / haber-2.mp4 diye doluyordu — hangi

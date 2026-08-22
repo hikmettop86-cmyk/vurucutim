@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Short Ã¢â‚¬â€ Hava Durumu</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&display=swap');
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --primary: #3a7bd5;
+  --accent: #ffc107;
+  --bg-grad-1: #3a7bd5;
+  --bg-grad-2: #00d2ff;
+  --body-bg-1: #1a3a6e;
+  --body-bg-2: #0a1f3e;
+  --text-main: #ffffff;
+  --text-muted: #f8fafc;
+  --font-headline: 'Inter', sans-serif;
+  --font-body: 'Inter', sans-serif;
+}
+html, body {
+  width: 1080px; height: 1920px; overflow: hidden;
+  background: linear-gradient(180deg, var(--bg-grad-1), var(--bg-grad-2));
+  font-family: var(--font-body); color: var(--text-main);
+}
+.stage {
+  position: relative; width: 1080px; height: 1920px;
+  display: flex; flex-direction: column;
+}
+
+/* STAGE BADGE Ã¢â‚¬â€ sun-yellow on primary blue pill */
+.stage-badge {
+  position: absolute; top: 24px; right: 24px;
+  background: var(--accent); color: var(--primary);
+  font-size: 20px; font-weight: 700; letter-spacing: 1px;
+  padding: 6px 18px; border-radius: 999px;
+  z-index: 10;
+}
+
+/* CITY KICKER Ã¢â‚¬â€ uses script.photo_overlay, above temperature */
+.city {
+  display: block;
+  text-align: center;
+  font-size: 48px;
+  font-weight: 600;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 4px;
+  margin-top: 100px;
+}
+
+/* HEADER Ã¢â‚¬â€ centered, contains massive temperature + descriptor */
+.header {
+  padding: 30px 0;
+  text-align: center;
+}
+.header .top {
+  display: block;
+  font-size: 360px;
+  line-height: 0.9;
+  font-weight: 800;
+  color: var(--text-main);
+  font-family: var(--font-headline);
+  margin-bottom: 12px;
+}
+.header .bot {
+  display: block;
+  font-size: 200px;
+  line-height: 1;
+  font-family: var(--font-headline);
+  /* works for emoji too */
+}
+
+/* BODY Ã¢â‚¬â€ short forecast summary, tighter clamp */
+.body {
+  flex: 1;
+  min-height: 0;
+  margin-bottom: 280px;
+  padding: 30px 60px;
+  font-size: 36px;
+  line-height: 1.45;
+  font-weight: 500;
+  color: var(--text-main);
+  text-align: center;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 86%, transparent 100%);
+          mask-image: linear-gradient(180deg, #000 0%, #000 86%, transparent 100%);
+}
+.body .hl-r { background: var(--accent); color: var(--primary); padding: 2px 14px; border-radius: 6px; font-weight: 700; }
+.body .hl-y { background: #fff; color: var(--primary); padding: 2px 14px; border-radius: 6px; font-weight: 700; }
+
+/* FORECAST STRIP Ã¢â‚¬â€ bottom decorative row with 4 day cards */
+.forecast-strip {
+  position: absolute;
+  left: 0; right: 0; bottom: 200px;
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  padding: 0 50px;
+}
+.forecast-strip .day {
+  background: rgba(0,0,0,0.35);
+  padding: 14px 18px;
+  border-radius: 12px;
+  text-align: center;
+  min-width: 130px;
+}
+.forecast-strip .day .name {
+  font-size: 22px;
+  color: var(--accent);
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.forecast-strip .day .ic {
+  font-size: 48px;
+  display: block;
+  margin: 6px 0;
+}
+.forecast-strip .day .temps {
+  font-size: 24px;
+  color: var(--text-main);
+  font-weight: 600;
+}
+
+/* PROGRESS bar */
+.progress {
+  position: absolute; left: 0; right: 0; bottom: 84px; height: 8px;
+  background: rgba(255,255,255,.18);
+}
+.progress::after {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+  background: linear-gradient(90deg, var(--accent), var(--primary));
+  animation: fill 30s linear forwards;
+}
+@keyframes fill { from { width: 0; } to { width: 100%; } }
+
+/* HANDLE */
+.handle {
+  position: absolute; left: 0; right: 0; bottom: 30px;
+  text-align: center; color: var(--text-muted); opacity: .9;
+  font-size: 34px; font-weight: 600;
+}
+
+/* CTA overlay (last cta_duration_s seconds) */
+
+
+/* Persistent corner chips Ã¢â‚¬â€ visible THROUGHOUT video */
+.persistent {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 900;
+  font-size: 36px;
+  letter-spacing: 1px;
+  padding: 14px 22px;
+  border-radius: 12px;
+  color: #fff;
+  box-shadow: 0 5px 0 rgba(0,0,0,.5), 0 0 20px rgba(0,0,0,.3);
+  z-index: 35;
+  text-shadow: 0 2px 0 rgba(0,0,0,.4);
+}
+.persistent .ic { font-size: 44px; }
+
+/* BEÃ„ÂEN Ã¢â‚¬â€ bottom-left, dark chip with red accent */
+.persistent.like {
+  bottom: 112px; left: 24px;
+  background: linear-gradient(135deg, rgba(0,0,0,.88), rgba(40,0,0,.92));
+  border: 3px solid #ff3b3b;
+  animation: like-beat 1.5s ease-in-out infinite;
+}
+@keyframes like-beat {
+  0%, 100% { transform: scale(1); }
+  20% { transform: scale(1.12); }
+  40% { transform: scale(0.98); }
+  60% { transform: scale(1.08); }
+}
+
+/* ABONE OL Ã¢â‚¬â€ bottom-right, red gradient chip */
+.persistent.sub {
+  bottom: 112px; right: 24px;
+  background: linear-gradient(135deg, #ff2d2d, #c81e1e);
+  border: 3px solid #ffea3b;
+  animation: sub-glow 1.5s ease-in-out infinite;
+}
+@keyframes sub-glow {
+  0%, 100% { transform: scale(1); box-shadow: 0 5px 0 rgba(0,0,0,.5), 0 0 20px rgba(255,45,45,.4); }
+  50% { transform: scale(1.08); box-shadow: 0 5px 0 rgba(0,0,0,.5), 0 0 36px rgba(255,234,59,.7); }
+}
+
+/* Hide persistent chips during final CTA overlay */
+
+  /* SOURCE CREDIT */
+  .source-credit {
+    position: absolute;
+    bottom: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.6);
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    padding: 3px 10px;
+    border-radius: 3px;
+    z-index: 50;
+    white-space: nowrap;
+    font-family: inherit;
+  }
+
+  /* DNA OVERRIDE Ã¢â‚¬â€ runtime palette/font from channel DNA */
+  
+</style>
+</head>
+<body>
+<div class="stage dna-anim-none">
+  <div class="stage-badge">SON DAKİKA</div>
+
+  <div class="city">inflacion crisis gobierno bolsa gobierno acuerdo c</div>
+
+  <div class="header">
+    <span class="top">crisis mercado gobierno</span>
+    <span class="bot">plazo acuerdo salario plaz</span>
+  </div>
+
+  <div class="body" data-fit-min="28" data-fit-max="48" data-fit-pad="14">advertencia acuerdo negociacion inflacion bolsa aumento economia noticia bolsa reforma decision peligro decision divisa advertencia decision gobierno crisis ministerio peligro mercado eleccion noticia mercado politica reforma crisis plazo reforma ministerio peligro bolsa informe presupuesto escandalo divisa divisa politica inflacion advertencia divisa noticia negociacion peligro informe inflacion</div>
+
+  <div class="forecast-strip">
+    <div class="day"><div class="name">YARIN</div><div class="ic">Ã¢Ëœâ‚¬Ã¯Â¸Â</div><div class="temps">22Ã‚Â° / 14Ã‚Â°</div></div>
+    <div class="day"><div class="name">PRÃ…Â</div><div class="ic">Ã¢â€ºâ€¦</div><div class="temps">19Ã‚Â° / 12Ã‚Â°</div></div>
+    <div class="day"><div class="name">CMA</div><div class="ic">ÄŸÅ¸Å’Â§Ã¯Â¸Â</div><div class="temps">17Ã‚Â° / 10Ã‚Â°</div></div>
+    <div class="day"><div class="name">CTS</div><div class="ic">Ã¢â€ºâ€¦</div><div class="temps">20Ã‚Â° / 13Ã‚Â°</div></div>
+  </div>
+
+  <div class="progress"></div>
+  <div class="handle">@test</div>
+
+  <!-- Persistent corner chips (visible throughout video, fade out only when end CTA opens) -->
+  
+
+  
+
+  
+</div>
+<script>
+/* Content-aware body font auto-fit.
+   Targets `.body-text` (stadium wrapper) or `.body` itself. Reads:
+     - data-fit-min  (default 36)  — minimum font-size px
+     - data-fit-max  (default 64)  — maximum font-size px
+     - data-fit-pad  (default 16)  — bottom padding to leave free
+   Strips line-clamp during measurement so scrollHeight reflects real text
+   height, then restores it (mask gradient still graceful-cuts at MIN if
+   overflow). Awaits document.fonts.ready so per-glyph widths are correct
+   (otherwise fallback font is used during parse, then real font replaces
+   it later and layout shifts past the chosen fontSize → overflow). */
+async function _autoFit() {
+  if (document.fonts && document.fonts.ready) {
+    try { await document.fonts.ready; } catch (_) {}
+  }
+  /* List-container mode (gundem): every .list-item .text shares one font size,
+     scales together so the list fits in container.clientHeight. */
+  var list = document.querySelector('.list-container[data-fit-min]');
+  if (list) {
+    var items = list.querySelectorAll('.list-item .text');
+    if (!items.length) return;
+    var lmin = parseFloat(list.getAttribute('data-fit-min') || '28');
+    var lmax = parseFloat(list.getAttribute('data-fit-max') || '50');
+    var lpad = parseFloat(list.getAttribute('data-fit-pad') || '14');
+    var lsize = lmax;
+    for (var i = 0; i < items.length; i++) items[i].style.fontSize = lsize + 'px';
+    void list.offsetHeight;
+    while (lsize > lmin && list.scrollHeight > list.clientHeight - lpad) {
+      lsize -= 2;
+      for (var j = 0; j < items.length; j++) items[j].style.fontSize = lsize + 'px';
+      void list.offsetHeight;
+    }
+    return;
+  }
+
+  var text = document.querySelector('.body-text') || document.querySelector('.body');
+  if (!text) return;
+  var container = text.classList.contains('body-text')
+    ? text.parentElement
+    : text;
+  if (!container) return;
+
+  var min = parseFloat(text.getAttribute('data-fit-min') || '36');
+  var max = parseFloat(text.getAttribute('data-fit-max') || '64');
+  var pad = parseFloat(text.getAttribute('data-fit-pad') || '16');
+
+  var origClamp = text.style.webkitLineClamp;
+  var origDisplay = text.style.display;
+  text.style.webkitLineClamp = 'unset';
+  text.style.display = 'block';
+
+  /* For non-wrapper templates (.body is the text), clientHeight is the
+     line-clamped/flex-allocated height. We want the flex-allocated height
+     (without clamp), which equals offsetParent constraint. Use clientHeight
+     after clamp is stripped — equals flex:1 allocation. */
+  var targetH = container.clientHeight - pad;
+  var size = max;
+  text.style.fontSize = size + 'px';
+  void text.offsetHeight;
+
+  while (size > min && text.scrollHeight > targetH) {
+    size -= 2;
+    text.style.fontSize = size + 'px';
+    void text.offsetHeight;
+  }
+
+  text.style.webkitLineClamp = origClamp;
+  text.style.display = origDisplay;
+  void text.offsetHeight;
+}
+window.__autoFitDone = _autoFit().catch(function(){});
+</script>
+</body>
+</html>
