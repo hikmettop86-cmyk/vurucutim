@@ -632,6 +632,17 @@ def load_channel(path: Path) -> ChannelConfig:
             f"channel {slug!r}: '{language}' dilinde '{reel.font}' fontunun CJK glifi yok "
             f"(ekranda tofu çıkar). Kullanılabilir: "
             f"{', '.join(CJK_FONTS.get(language, ()))}.")
+    # DNA FONTLARI DA DENETLENİR. Kapı önce yalnız `reel.font`'a bakıyordu ama
+    # trend/yorum kanalları reel KULLANMAZ — kartı `dna.fonts` çizer. Latin
+    # fontlu bir Japonca DNA sessizce tofu basardı, tam da bu kapının kurulma
+    # sebebi (2026-08-22, Japonca kanal kurulurken bulundu).
+    if dna is not None:
+        for alan, font in (("headline", dna.fonts.headline), ("body", dna.fonts.body)):
+            if font and not font_supports_language(font, language):
+                raise ValueError(
+                    f"channel {slug!r}: '{language}' dilinde dna.fonts.{alan} "
+                    f"'{font}' fontunun CJK glifi yok (ekranda tofu çıkar). "
+                    f"Kullanılabilir: {', '.join(CJK_FONTS.get(language, ()))}.")
 
     return ChannelConfig(
         slug=slug,

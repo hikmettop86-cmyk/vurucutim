@@ -99,3 +99,64 @@ def test_turkish_channel_with_any_font_still_loads(tmp_path):
                  encoding="utf-8")
     from short_bot.config import load_channel
     assert load_channel(p).reel.font == "Anton"
+
+
+# --- DNA fontları da denetlenmeli ---------------------------------------------
+
+def test_dna_fontu_da_cjk_kapisindan_gecer(tmp_path):
+    """BOŞLUK (2026-08-22, Japonca kanal kurulurken): kapı yalnız `reel.font`'a
+    bakıyordu. Trend/yorum kanalları reel KULLANMAZ, `dna.fonts` kullanır —
+    Latin fontlu bir Japonca DNA sessizce tofu basardı, tam da bu kapının
+    kurulma sebebi."""
+    import yaml
+    from short_bot.config import load_channel
+
+    data = {
+        "slug": "ja-test", "name": "テスト", "keywords": ["a"], "language": "ja",
+        "schedule_cron": "0 9 * * *", "duration_s": 6, "min_score": 6.0,
+        "max_candidates_per_run": 10, "max_age_hours": 24, "template": "flas",
+        "colors": {"primary": "#d0021b", "accent": "#ffe600",
+                   "bg_gradient": ["#111111", "#222222"]},
+        "handle": "@t", "output_dir": "o", "enabled": False,
+        "dna": {
+            "archetype": "flas",
+            "palette": {"primary": "#d0021b", "accent": "#ffe600",
+                        "bg_gradient": ["#111111", "#222222"],
+                        "body_bg": ["#111111", "#0e0e0e"],
+                        "text_main": "#ececec", "text_muted": "#9a9a9a"},
+            "fonts": {"headline": "Oswald", "body": "Barlow"},   # CJK glifi YOK
+            "tone": {"voice": "v", "style": "s"},
+            "persona_summary": "özet",
+        },
+    }
+    p = tmp_path / "ja-test.yaml"
+    p.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+    with pytest.raises(ValueError, match="tofu|CJK"):
+        load_channel(p)
+
+
+def test_cjk_fontlu_dna_kabul_edilir(tmp_path):
+    import yaml
+    from short_bot.config import load_channel
+
+    data = {
+        "slug": "ja-ok", "name": "テスト", "keywords": ["a"], "language": "ja",
+        "schedule_cron": "0 9 * * *", "duration_s": 6, "min_score": 6.0,
+        "max_candidates_per_run": 10, "max_age_hours": 24, "template": "flas",
+        "colors": {"primary": "#d0021b", "accent": "#ffe600",
+                   "bg_gradient": ["#111111", "#222222"]},
+        "handle": "@t", "output_dir": "o", "enabled": False,
+        "dna": {
+            "archetype": "flas",
+            "palette": {"primary": "#d0021b", "accent": "#ffe600",
+                        "bg_gradient": ["#111111", "#222222"],
+                        "body_bg": ["#111111", "#0e0e0e"],
+                        "text_main": "#ececec", "text_muted": "#9a9a9a"},
+            "fonts": {"headline": "Noto Sans JP", "body": "Noto Sans JP"},
+            "tone": {"voice": "v", "style": "s"},
+            "persona_summary": "özet",
+        },
+    }
+    p = tmp_path / "ja-ok.yaml"
+    p.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+    assert load_channel(p).dna.fonts.headline == "Noto Sans JP"
