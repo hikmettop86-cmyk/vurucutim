@@ -69,11 +69,28 @@ def categories_for(vertical: str | None) -> frozenset[int] | None:
     return VERTICALS[str(vertical).strip().lower()]
 
 
+def _dikey_of(kategori: int) -> str | None:
+    """Bu kategori hangi adlandırılmış dikeye ait? Hiçbirine ait değilse None."""
+    for ad, kumeler in VERTICALS.items():
+        if kategori in kumeler:
+            return ad
+    return None
+
+
 def matches(categories, vertical: str | None) -> bool:
     """Bu trend o dikeye giriyor mu?
 
-    ÇOKLU kategoride HERHANGİ biri yeterlidir: gerçek veride 'sucuk' [3, 5]
-    etiketli ve para dikeyinde kalmalı.
+    ÇOKLU kategoride HERHANGİ biri yeterlidir — AMA birincil kategori BAŞKA bir
+    adlandırılmış dikeye aitse girmez.
+
+    NEDEN İKİ KURAL BİRDEN (ikisi de canlı veriden):
+      * 'sucuk' [3, 5] = İş&Finans + Yeme-İçme. Birincil kategori PARA'nın
+        kendisi, ikincil hiçbir dikeyde yok -> para dikeyinde KALMALI.
+        (Yalnız-birincil kuralı olsaydı bu doğru çalışırdı ama…)
+      * MLB haberi [17, 4] = Spor + Eğlence. Herhangi-biri kuralıyla MAGAZİN
+        kuyruğuna girdi ve video üretildi (2026-08-22, short 1771). Japonca
+        havuzda 47 magazin adayının 9'u böyle çift etiketliydi.
+    Google birincil kategoriyi başa koyuyor; ölçüt bu.
 
     Kategorisi olmayan trend (RSS yedeği) dikeyi olan kanala GİREMEZ — hangi
     dikeye ait olduğu bilinmiyor, tahmin etmek "her şey"e geri dönüştür.
@@ -81,4 +98,12 @@ def matches(categories, vertical: str | None) -> bool:
     want = categories_for(vertical)
     if want is None:
         return True
-    return bool(want & set(categories or ()))
+    cats = list(categories or ())
+    if not cats:
+        return False
+    if not (want & set(cats)):
+        return False
+    birincil = _dikey_of(cats[0])
+    if birincil is not None and birincil != str(vertical).strip().lower():
+        return False
+    return True

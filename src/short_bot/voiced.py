@@ -131,6 +131,10 @@ def produce_voiced_video(
         narration = d.write_yorum_narration(
             item, body, channel=channel, extra_sources=list(extra_sources or []),
             variation=variation,
+            # KART ÇAPASI: anlatım kartın anlattığı olaydan sapmasın
+            # (short 1772: ekran sutyen modası, ses film devamı)..
+            card=(script if isinstance(script, dict)
+                  else getattr(script, 'model_dump', lambda: None)()),
             claude_path=llm_claude_path, model=llm_model,
             backend=llm_backend, api_key=llm_api_key)
         try:

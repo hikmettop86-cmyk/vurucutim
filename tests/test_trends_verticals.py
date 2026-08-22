@@ -72,3 +72,38 @@ def test_her_kategori_kimliginin_adi_var():
     for cats in VERTICALS.values():
         for c in cats:
             assert c in CATEGORY_NAMES
+
+
+# --- çift etiketli trendler ---------------------------------------------------
+
+def test_birincil_kategorisi_baska_dikeye_ait_olan_girmez():
+    """CANLI VAKA (2026-08-22): MLB beyzbol haberi (17=Spor, 4=Eğlence) magazin
+    kuyruğuna girdi ve video üretildi. Japonca havuzda 47 magazin adayının 9'u
+    böyle çift etiketliydi.
+
+    Kural: herhangi bir kategori tutuyorsa gir — AMA birincil kategori BAŞKA
+    bir adlandırılmış dikeye aitse girme. Google birincil kategoriyi başa
+    koyuyor."""
+    from short_bot.trends.verticals import matches
+    assert matches((17, 4), "magazin") is False   # birincil=Spor
+    assert matches((17, 4), "spor") is True
+
+
+def test_sucuk_vakasi_hala_korunur():
+    """(3, 5) = İş&Finans + Yeme-İçme. Birincil kategori PARA dikeyinin kendisi,
+    ikincil kategori hiçbir dikeye ait değil -> para dikeyinde KALIR."""
+    from short_bot.trends.verticals import matches
+    assert matches((3, 5), "para") is True
+
+
+def test_birincil_kategorisi_dikeysiz_olan_ikincilden_girer():
+    """(16, 2) = Alışveriş + Güzellik&Moda. 16 hiçbir dikeyde yok, 2 magazinde
+    -> magazine girer."""
+    from short_bot.trends.verticals import matches
+    assert matches((16, 2), "magazin") is True
+
+
+def test_tek_kategorili_davranis_degismedi():
+    from short_bot.trends.verticals import matches
+    assert matches((4,), "magazin") is True
+    assert matches((17,), "magazin") is False

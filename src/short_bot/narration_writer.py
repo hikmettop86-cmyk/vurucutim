@@ -309,8 +309,29 @@ def banned_phrases(language: str = "tr") -> tuple[str, ...]:
     return _BANNED.get((language or "").split("-")[0].lower(), ())
 
 
+def card_mismatch(narration_text: str, card) -> bool:
+    """Anlatım KARTIN anlattığı olaydan sapmış mı?
+
+    CANLI VAKA (short 1772): kaynak makale "görünür sutyen modası" hakkındaydı
+    ve yan cümlede bir film devamından söz ediyordu. Kart ana haberi özetledi,
+    anlatım EK KAYNAĞA kayıp 40 saniyeyi film devamına ayırdı — ekran bir şey,
+    ses başka şey söyledi.
+
+    Ölçüt DAR tutuldu (yanlış pozitif üretimi durdurur, Burhan dersi): yalnız
+    kartın ÖZNESİ (header_top) anlatımda hiç geçmiyorsa sapma sayılır. Çok
+    kısa özneler denetime girmez — "AB" gibi bir dizi her metinde bulunur.
+    """
+    if not card:
+        return False
+    ozne = (card.get("header_top") or "").strip() if hasattr(card, "get") else ""
+    if len(ozne) < 3:
+        return False
+    from short_bot.text_normalize import locale_fold
+    return locale_fold(ozne) not in locale_fold(narration_text or "")
+
+
 def build_yorum_prompt(item, body: str, channel, *, extra_sources: list[tuple[str, str]],
-                       variation=None) -> str:
+                       variation=None, card=None) -> str:
     """Yorum anlatımı promptu. Çıktı şeması ``Narration`` ile aynı (hook/beats/
     loop_close/mood) — TTS/hizalama/render zinciri değişmeden kullanılır.
 
@@ -329,12 +350,31 @@ def build_yorum_prompt(item, body: str, channel, *, extra_sources: list[tuple[st
     primary_src = getattr(item, "source", None) or "unknown"
 
     extra_block = ""
+    # KART ÇAPASI. Kart ve anlatım aynı makaleden BAĞIMSIZ yazılıyor ve
+    # hiçbir şey ikisini bağlamıyordu: canlı vakada (short 1772) kart ana
+    # haberi, anlatım ek kaynaktaki BAŞKA bir haberi anlattı — ekran bir
+    # şey, ses başka şey söyledi. Kart artık anlatımın konusunu sabitler.
+    card_block = ""
+    if card:
+        _ust = (card.get('header_top') or '').strip()
+        _alt = (card.get('header_bottom') or '').strip()
+        if _ust or _alt:
+            card_block = (
+                f"{chr(10)}MAIN STORY — the on-screen card says this, and your "
+                f"narration MUST be about THIS event:{chr(10)}"
+                f"  {_ust} / {_alt}{chr(10)}"
+                "If a source below covers a different story, IGNORE it." + chr(10))
     if extra_sources:
         parts = []
         for url, text in extra_sources:
             host = url.split("//")[-1].split("/")[0].removeprefix("www.")
             parts.append(f"--- {host} ---\n{text[:1500]}")
-        extra_block = "\nADDITIONAL SOURCES (same story, other publishers):\n" + "\n".join(parts) + "\n"
+        # "same story" VARSAYIMI KALDIRILDI: Google Trends bir trende 3 makale
+        # verir ve bunlar farklı olaylar olabilir. Canlı vakada (short 1772)
+        # anlatım ek kaynağa kayıp bambaşka bir haberi anlattı.
+        extra_block = ("\nADDITIONAL SOURCES (may cover a DIFFERENT angle or even a\n"
+                       "different story — use ONLY to corroborate the MAIN STORY below,\n"
+                       "never as the subject of the narration):\n" + "\n".join(parts) + "\n")
         source_rule = ("- SOURCING: name an outlet ONLY when it earns it — a contested claim, an "
                        "exclusive, or an official statement. At most TWO such attributions in the "
                        "whole narration; everything else is plain narration. Never recite sources "
@@ -368,7 +408,7 @@ short caption per beat changes.
 WRITE IN: {lang_name}
 COMMENTATOR PERSONA: {voice.persona}
 
-HEADLINE: {item.title}
+HEADLINE: {item.title}{card_block}
 PRIMARY SOURCE ({primary_src}):
 {body[:3000]}
 {extra_block}{followup}{shape}
@@ -404,6 +444,28 @@ HARD RULES:
 Return ONLY the JSON object."""
 
 
+def fact_reference(item, body: str, extra_sources) -> str:
+    """Olgu kapısının referans metni.
+
+    BAŞLIK VE KAYNAK ADI DA REFERANSTIR. Persona kaynağı ADIYLA söylemeyi
+    ZORUNLU kılıyor ("報じた媒体の名前" / "kaynak adıyla olgu"), ama yayın adı
+    haberin BAŞLIĞINDA ve `item.source` alanında durur — gövde metninde
+    geçmeyebilir. Referansa alınmayınca kapı onu uydurma sayıyor ve iki kural
+    birbiriyle ÇELİŞİYORDU: canlı vakada 週刊女性PRIME kaynaklı haberde anlatım
+    kaynağı söyledi, kapı "PRIME" dedi ve ÜRETİM DURDU (2026-08-22).
+    """
+    parcalar = [body]
+    parcalar += [t for _, t in (extra_sources or ())]
+    for alan in ("description", "title", "source"):
+        deger = getattr(item, alan, None)
+        if deger:
+            parcalar.append(str(deger))
+    for _, baslik in (getattr(item, "trend_articles", None) or ()):
+        if baslik:
+            parcalar.append(str(baslik))
+    return "\n".join(x for x in parcalar if x)
+
+
 def write_yorum_narration(
     item,
     body: str,
@@ -411,6 +473,7 @@ def write_yorum_narration(
     channel,
     extra_sources: list[tuple[str, str]] | None = None,
     variation=None,
+    card=None,
     claude_path: str = "claude",
     model: str = "default",
     backend: str = "claude_cli",
@@ -429,9 +492,8 @@ def write_yorum_narration(
     from short_bot.reel_narration import budget_unit as _bu
     birim = "characters" if _bu(channel.language) == "characters" else "words"
     prompt = build_yorum_prompt(item, body, channel, extra_sources=extra_sources,
-                                variation=variation)
-    reference = "\n".join([body] + [t for _, t in extra_sources]
-                          + [getattr(item, "description", None) or ""])
+                                variation=variation, card=card)
+    reference = fact_reference(item, body, extra_sources)
 
     def _uret(p: str) -> Narration:
         return run_json(p, Narration, claude_path=claude_path, model=model,
@@ -442,6 +504,20 @@ def write_yorum_narration(
     if not (lo_w <= actual <= hi_w):
         narration = _uret(prompt + _budget_feedback(actual, lo_w, hi_w,
                                             channel.language))
+
+    # KART UYUMU: anlatım kartın anlattığı olaydan saptıysa BİR düzeltme turu.
+    # Sert reddetmiyoruz — yanlış pozitif üretimi tamamen durdurur (Burhan
+    # dersi) ve yükleme zaten elle yapılıyor. Israr ederse gürültülü uyarı.
+    if card_mismatch(narration.full_text(), card):
+        _ozne = (card or {}).get('header_top', '')
+        narration = _uret(
+            prompt + f"{chr(10)}{chr(10)}DÜZELT: the narration drifted to a different "
+            f"story. It MUST be about '{_ozne}' — the subject on the card. "
+            "Rewrite it about that event only.")
+        if card_mismatch(narration.full_text(), card):
+            log.warning(
+                f"  [kart uyumu] anlatım '{_ozne}' öznesinden sapmış; iki denemede "
+                f"de düzelmedi. Video üretiliyor ama YÜKLEMEDEN ÖNCE OKUNMALI.")
 
     eksik = unverified_claims(narration.full_text(), reference, language=channel.language)
     if eksik:
