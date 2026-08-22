@@ -327,7 +327,26 @@ def card_mismatch(narration_text: str, card) -> bool:
     if len(ozne) < 3:
         return False
     from short_bot.text_normalize import locale_fold
-    return locale_fold(ozne) not in locale_fold(narration_text or "")
+    n = locale_fold(narration_text or "")
+    o = locale_fold(ozne)
+    if not n:
+        return True
+    if o in n:
+        return False
+    # PARÇALI EŞLEŞME. Kart öznesi bileşik olabilir: "M!LK塩﨑太智" = grup adı +
+    # kişi adı. Anlatım kişiyi anar, grup önekini anmaz — tam dizi arayınca
+    # "sapmış" sayılıyordu (canlı yanlış pozitif, short 1777).
+    import re
+    for parca in re.split(r"[^0-9A-Za-z\u3040-\u30ff\u4e00-\u9fff]+", o):
+        if len(parca) >= 3 and parca in n:
+            return False
+    # CJK adları 2-4 karakter; kayan pencere onları yakalar. Pencere uzun
+    # öznede 3 (yanlış "uyumlu" demesin), kısa öznede 2.
+    pencere = 3 if len(o) >= 5 else 2
+    for i in range(len(o) - pencere + 1):
+        if o[i:i + pencere] in n:
+            return False
+    return True
 
 
 def build_yorum_prompt(item, body: str, channel, *, extra_sources: list[tuple[str, str]],

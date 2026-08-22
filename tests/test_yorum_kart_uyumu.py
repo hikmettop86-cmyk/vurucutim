@@ -92,3 +92,28 @@ def test_cok_kisa_ozne_uyum_denetimine_girmez():
     """Tek karakterlik/çok kısa özne yanlış pozitif üretir."""
     from short_bot.narration_writer import card_mismatch
     assert card_mismatch("başka bir metin", {"header_top": "AB"}) is False
+
+
+# --- parçalı eşleşme (yanlış pozitif) ------------------------------------------
+
+def test_bilesik_ozne_parcayla_eslesir():
+    """CANLI YANLIŞ POZİTİF (short 1777): kart öznesi 'M!LK塩﨑太智' (grup adı +
+    kişi adı). Anlatım kişiyi anıyor ama grup önekini anmıyor; tam dizi
+    aranınca 'sapmış' sayıldı."""
+    from short_bot.narration_writer import card_mismatch
+    anlatim = "小山リーナさんとの交際報道を受け、塩﨑太智さんが二年前に行った投稿が憶測を呼んでいます。"
+    assert card_mismatch(anlatim, {"header_top": "M!LK塩﨑太智"}) is False
+
+
+def test_gercek_sapma_hala_yakalanir():
+    """short 1772: kart Sydney Sweeney, anlatım Lionsgate film devamı."""
+    from short_bot.narration_writer import card_mismatch
+    anlatim = ("ライオンズゲートによりザハウスメイドの続編製作が正式決定されました。"
+               "キルスティンダンストやブリタニスノウら新たなキャストが加わります。")
+    assert card_mismatch(anlatim, {"header_top": "シドニー・スウィーニー"}) is True
+
+
+def test_latin_ozne_kelimeyle_eslesir():
+    from short_bot.narration_writer import card_mismatch
+    assert card_mismatch("Galatasaray transferi açıkladı.",
+                         {"header_top": "GALATASARAY"}) is False
