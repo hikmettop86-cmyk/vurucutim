@@ -10,6 +10,10 @@ from short_bot.config import ChannelConfig, Settings
 from short_bot.models import NewsItem, ScoredItem, Script, Highlight, RenderJob
 from short_bot.pipeline import run_pipeline
 
+# Gerçek gövde medyanı ~1300 karakter; kırıntı metin
+# pipeline'ın gövde kapısına takılır (_MIN_BODY_CHARS).
+GOVDE = ("Tam makale gövdesi. " * 12).strip()
+
 
 def _silent_log():
     log = logging.getLogger("test.silent")
@@ -86,7 +90,7 @@ def test_pipeline_happy_path(tmp_path):
     with patch("short_bot.pipeline.fetch_rss", return_value=[item]), \
          patch("short_bot.pipeline.score_items",
                return_value=[ScoredItem(item=item, score=9.0, reasoning="ok")]), \
-         patch("short_bot.pipeline.extract_article", return_value="Tam makale gövdesi"), \
+         patch("short_bot.pipeline.extract_article", return_value=GOVDE), \
          patch("short_bot.pipeline.extract_og_image_url", return_value=None), \
          patch("short_bot.pipeline.write_script", return_value=_script()), \
          patch("short_bot.pipeline.download_and_blur_thumb", return_value=None), \
@@ -141,7 +145,7 @@ def test_pipeline_records_failure_on_render_error(tmp_path):
     with patch("short_bot.pipeline.fetch_rss", return_value=[item]), \
          patch("short_bot.pipeline.score_items",
                return_value=[ScoredItem(item=item, score=9.0, reasoning="ok")]), \
-         patch("short_bot.pipeline.extract_article", return_value="body"), \
+         patch("short_bot.pipeline.extract_article", return_value=GOVDE), \
          patch("short_bot.pipeline.extract_og_image_url", return_value=None), \
          patch("short_bot.pipeline.write_script", return_value=_script()), \
          patch("short_bot.pipeline.download_and_blur_thumb", return_value=None), \
@@ -183,7 +187,7 @@ def test_pipeline_passes_channel_aware_args(tmp_path):
     with patch("short_bot.pipeline.fetch_rss", return_value=[item]), \
          patch("short_bot.pipeline.score_items",
                return_value=[ScoredItem(item=item, score=9.0, reasoning="ok")]), \
-         patch("short_bot.pipeline.extract_article", return_value="Tam makale gövdesi"), \
+         patch("short_bot.pipeline.extract_article", return_value=GOVDE), \
          patch("short_bot.pipeline.extract_og_image_url", return_value=None), \
          patch("short_bot.pipeline.write_script", write_script_mock), \
          patch("short_bot.pipeline.download_and_blur_thumb", return_value=None), \
@@ -239,7 +243,7 @@ def test_pipeline_prefers_og_image_over_rss_thumb(tmp_path):
     with patch("short_bot.pipeline.fetch_rss", return_value=[item]), \
          patch("short_bot.pipeline.score_items",
                return_value=[ScoredItem(item=item, score=9.0, reasoning="ok")]), \
-         patch("short_bot.pipeline.extract_article", return_value="body"), \
+         patch("short_bot.pipeline.extract_article", return_value=GOVDE), \
          patch("short_bot.pipeline.extract_og_image_url",
                return_value="https://publisher.com/hero.jpg"), \
          patch("short_bot.pipeline.write_script", return_value=_script()), \
@@ -303,7 +307,7 @@ def test_pipeline_skips_rss_thumb_for_google_news_articles(tmp_path):
     with patch("short_bot.pipeline.fetch_rss", return_value=[item]), \
          patch("short_bot.pipeline.score_items",
                return_value=[ScoredItem(item=item, score=9.0, reasoning="ok")]), \
-         patch("short_bot.pipeline.extract_article", return_value="body"), \
+         patch("short_bot.pipeline.extract_article", return_value=GOVDE), \
          patch("short_bot.pipeline.write_script", return_value=_script()), \
          patch("short_bot.pipeline.download_and_blur_thumb", side_effect=fake_blur), \
          patch("short_bot.image_picker.pick_image_for_script", side_effect=fake_pick), \
@@ -361,7 +365,7 @@ def test_pipeline_falls_back_to_rss_thumb_when_no_og_image(tmp_path):
     with patch("short_bot.pipeline.fetch_rss", return_value=[item]), \
          patch("short_bot.pipeline.score_items",
                return_value=[ScoredItem(item=item, score=9.0, reasoning="ok")]), \
-         patch("short_bot.pipeline.extract_article", return_value="body"), \
+         patch("short_bot.pipeline.extract_article", return_value=GOVDE), \
          patch("short_bot.pipeline.extract_og_image_url", return_value=None), \
          patch("short_bot.pipeline.write_script", return_value=_script()), \
          patch("short_bot.pipeline.download_and_blur_thumb", side_effect=fake_blur), \

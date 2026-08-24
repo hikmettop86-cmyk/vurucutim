@@ -205,6 +205,23 @@
           </span>
         </label>
 
+        <label class="block">
+          <span class="text-xs text-claude-muted uppercase">Engelli kaynaklar (virgülle)</span>
+          <input type="text" name="blocked_sources"
+                 value="{{ c.blocked_sources|join(', ') }}"
+                 placeholder="Real Madrid CF | Web Oficial, Mundo Deportivo"
+                 class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
+          <span class="text-[10px] text-claude-subtle block mt-1">
+            Başlığa değil YAYINCIYA bakar. Kulübün kendi sitesi (kadro listesi,
+            yıldönümü, maç öncesi hazırlık) ve rakip cepheden yayın yapan medya
+            ancak böyle elenir — o başlıklar puanlayıcıdan yüksek puan alır,
+            çünkü kanala gerçekten uygundurlar.
+            Eşleşme KELİME SINIRINDA: "Mundo Deportivo" hem kendini hem
+            "mundodeportivo.com"u yakalar, ama "SPORT" yazmak
+            "Sports Illustrated"ı kesmez.
+          </span>
+        </label>
+
 
         <div class="grid grid-cols-3 gap-3">
           <label class="block">
@@ -326,7 +343,7 @@
           <tbody>
             {% for r in runs %}
             <tr class="border-t border-claude-border">
-              <td class="p-2 font-mono">{{ r.started_at.strftime('%d %b %H:%M') }}</td>
+              <td class="p-2 font-mono">{{ r.started_at | tr_tarih('gun_ay_saat') }}</td>
               <td class="p-2 text-claude-muted">{{ r.trigger }}</td>
               <td class="p-2">
                 {% if r.status == 'success' %}
@@ -335,6 +352,9 @@
                   <span class="text-claude-error">✗ {{ r.status }}</span>
                 {% elif r.status == 'cancelled' %}
                   <span class="text-claude-muted">⊘ cancelled</span>
+                {% elif r.status == 'skipped' %}
+                  {# Kilit meşgul: aynı kanalda üretim zaten sürüyordu. Arıza değil. #}
+                  <span class="text-claude-muted" title="{{ r.error or '' }}">⇢ atlandı</span>
                 {% elif r.status == 'running' or r.status is none %}
                   <span class="text-claude-wait">● running</span>
                 {% else %}
@@ -424,14 +444,22 @@
             </div>
           </div>
           <div class="text-xs text-claude-muted">
-            Son güncelleme: {{ latest.updated_at.strftime('%d %b %H:%M') if latest.updated_at else latest.snapshot_date }}
+            Son güncelleme: {{ (latest.updated_at | tr_tarih('gun_ay_saat')) if latest.updated_at else latest.snapshot_date }}
             · {{ yt_history|length }} günlük geçmiş
           </div>
         {% else %}
           <div class="text-xs text-claude-muted">Henüz stats çekilmedi.</div>
         {% endif %}
-        <div class="text-[10px] text-claude-subtle">
-          Quota bugün: {{ yt_quota_today }} unit (10000/gün limit)
+        {# Sayı artık YÜKLEMELERİ de içeriyor (videos.insert = 1600 unit).
+           Eskiden yalnız istatistik tazelemesi sayılıyordu ve ekranda «20 unit»
+           yazarken o gün aynı kanaldan 7 video yüklenmişti (gerçek ≈11.200).
+           "10000/gün" Google'ın VARSAYILAN proje kotası; bu kurulumda günde
+           20+ yükleme sorunsuz geçiyor, yani kota yükseltilmiş. Bu yüzden
+           tavan bir HÜKÜM değil, ölçek olarak yazılıyor. #}
+        <div class="text-[10px] text-claude-subtle"
+             title="videos.insert 1600, Analytics raporu 5, kanal listesi 1 unit. 10.000/gün Google'ın varsayılanıdır; proje kotası yükseltilmişse aşılabilir.">
+          Quota bugün: {{ yt_quota_today }} unit
+          <span class="opacity-70">· varsayılan proje tavanı 10.000/gün</span>
         </div>
         <button form="yt-refresh-stats-form"
                 formmethod="POST"

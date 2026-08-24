@@ -48,6 +48,16 @@ Rakip/başka bir kulüp ya da kişi merkezli haber (ör. rakip oyuncunun maç ö
 sözü, başka takımın kendi transferi) bu kanal için KONU DIŞIDIR → 0-3 ver.
 Ölçüt: haberin gövdesi kanalın öznesi çıkarılınca ayakta kalıyorsa, konu dışıdır.
 
+OLAY KAPISI (merkez kuralından ÖNCE uygulanır): Başlıkta anlatılacak bir OLAY
+yoksa 0-3 ver — kanalın öznesi haberin tam merkezinde olsa bile.
+- Olay DEĞİL: kadro/ilk onbir listesi, maç öncesi hazırlık, takımın şehre ya da
+  stada varışı, antrenman izlenimi, yıldönümü / "bugün tarihte", istatistik
+  derlemesi, puan durumu, maç sonrası oyuncu notları, kulübün KENDİ sitesinden
+  çıkan kurumsal duyuru, yayın/program bilgisi, anket, köşe yazısı, "X kimdir".
+- OLAY: gol, skor, kırmızı kart, resmi transfer, sakatlık, ayrılık, ceza, kriz,
+  ilgili kişinin AĞZINDAN çıkmış söz, kulüp ya da federasyon kararı.
+Ölçüt: "ne OLDU?" sorusunun cevabı başlıkta yoksa olay yoktur → 0-3.
+
 ETKİLEŞİM EKSENİ (eşit önemdeki iki haber arasında bunu kullan):
 - YUKARI çek: çatışma/karar taşıyanlar — teklif REDDİ, şart koşma, kriz, veto,
   taviz vermeme, kesinleşmiş karar, resmi açıklama, ilgili kişinin kendi sözü
@@ -56,7 +66,7 @@ ETKİLEŞİM EKSENİ (eşit önemdeki iki haber arasında bunu kullan):
 Ölçüm: bu kanalda çatışma/karar çerçeveli haberler ortalamanın %43 üstünde,
 belirsiz spekülasyon %12 altında performans gösterdi.
 
-Başlıklar:
+{scope_block}Başlıklar:
 {listing}
 
 SADECE şu JSON formatında yanıtla, başka metin yazma:
@@ -80,6 +90,18 @@ rival player's pre-match quote, another team's own transfer) is OFF-TOPIC here �
 score 0-3. Test: if the story still stands after removing the channel's subject,
 it is off-topic.
 
+EVENT GATE (applied BEFORE the centre rule): if the headline carries no EVENT
+to tell, score 0-3 — even when the channel's subject is dead centre.
+- NOT an event: line-ups / squad lists, pre-match build-up, the team arriving in
+  a city or at the stadium, training-session notes, anniversaries / "on this
+  day", stat round-ups, league tables, post-match player ratings, corporate
+  posts from the club's OWN website, broadcast/schedule info, polls, opinion
+  columns, "who is X" profiles.
+- An EVENT: a goal, a scoreline, a red card, a confirmed transfer, an injury, a
+  departure, a ban, a crisis, a direct quote FROM the person involved, a club or
+  federation decision.
+Test: if the headline does not answer "what HAPPENED?", there is no event → 0-3.
+
 ENGAGEMENT AXIS (use this to break ties between equally important stories):
 - Score UP: conflict or decision — offer REJECTED, demands/conditions, crisis,
   veto, refusal to budge, a settled decision, official statement, a direct quote
@@ -89,7 +111,7 @@ ENGAGEMENT AXIS (use this to break ties between equally important stories):
 Measured: on this channel, conflict/decision framing performed 43% above the
 median while vague speculation landed 12% below.
 
-Headlines:
+{scope_block}Headlines:
 {listing}
 
 Reply ONLY in this JSON format, no other text:
@@ -113,6 +135,19 @@ Erwähnung reicht nicht. Eine Meldung über einen Rivalen oder eine andere Perso
 anderen Vereins) ist hier OFF-TOPIC → gib 0-3. Prüfung: Bleibt die Meldung ohne
 das Kanal-Thema bestehen, ist sie off-topic.
 
+EREIGNIS-TOR (gilt VOR der Mittelpunkt-Regel): Trägt die Schlagzeile kein
+erzählbares EREIGNIS, gib 0-3 — auch wenn das Kanalthema genau im Mittelpunkt steht.
+- KEIN Ereignis: Aufstellungen/Kaderlisten, Spielvorbereitung, Ankunft der
+  Mannschaft in Stadt oder Stadion, Trainingsberichte, Jahrestage / "heute vor
+  Jahren", Statistik-Übersichten, Tabellen, Spielernoten nach dem Spiel,
+  PR-Meldungen von der EIGENEN Vereinsseite, Sende-/Programmhinweise, Umfragen,
+  Kommentare, "Wer ist X"-Porträts.
+- Ein EREIGNIS: Tor, Ergebnis, Rote Karte, bestätigter Transfer, Verletzung,
+  Abgang, Sperre, Krise, wörtliches Zitat der beteiligten Person, Vereins- oder
+  Verbandsentscheidung.
+Prüfung: Beantwortet die Schlagzeile nicht "was ist PASSIERT?", gibt es kein
+Ereignis → 0-3.
+
 INTERAKTIONS-ACHSE (bei gleich wichtigen Meldungen entscheidet diese):
 - HÖHER bewerten: Konflikt/Entscheidung — Angebot ABGELEHNT, Bedingungen, Krise,
   Veto, keine Zugeständnisse, feststehende Entscheidung, offizielle Erklärung,
@@ -122,11 +157,57 @@ INTERAKTIONS-ACHSE (bei gleich wichtigen Meldungen entscheidet diese):
 Gemessen: Konflikt-/Entscheidungsrahmen lag auf diesem Kanal 43% über dem
 Median, vage Spekulation 12% darunter.
 
-Schlagzeilen:
+{scope_block}Schlagzeilen:
 {listing}
 
 Antworte NUR in diesem JSON-Format, kein anderer Text:
 {{"scores": [{{"guid": "<gleich>", "score": <0-10>, "reasoning": "<≤200 char, warum>"}}, ...]}}""",
+    "es": """Eres el editor de un canal de YouTube Shorts.
+
+CANAL: {channel_name}
+TEMA/PALABRAS CLAVE: {keywords}
+
+Puntúa los siguientes titulares de 0 a 10 según su RELEVANCIA PARA ESTE CANAL y su interés:
+- 9-10: Noticia de última hora muy potente para este canal (directamente del tema, viral)
+- 7-8: Del tema, importante, merece un vídeo
+- 5-6: Sólo tangencial o sin fondo
+- 1-4: Aburrido, técnico, muy local
+- 0:   FUERA DE TEMA (sin relación con las palabras clave) — por atractivo que suene el titular, puntúa 0-3
+
+PUERTA DEL SUCESO (se aplica ANTES de la regla del centro): si el titular no
+lleva ningún SUCESO que contar, puntúa 0-3 — aunque el sujeto del canal esté
+justo en el centro.
+- NO es un suceso: alineaciones y listas de convocados, la previa del partido,
+  la llegada del equipo a la ciudad o al estadio, crónicas de entrenamiento,
+  aniversarios / "tal día como hoy", recopilaciones de estadísticas, la
+  clasificación, el uno a uno o los aprobados y suspensos tras el partido, las
+  notas corporativas de la WEB OFICIAL del club, horarios y datos de emisión,
+  encuestas, columnas de opinión, perfiles de "quién es X".
+- SÍ es un suceso: un gol, un resultado, una roja, un fichaje confirmado, una
+  lesión, una salida, una sanción, una crisis, una frase EN BOCA del propio
+  protagonista, una decisión del club o de la federación.
+Prueba: si el titular no responde a "¿qué ha PASADO?", no hay suceso → 0-3.
+
+REGLA DEL CENTRO: El sujeto del canal debe estar en el CENTRO de la noticia; que
+se le mencione de paso no basta. Una noticia centrada en un club rival o en otra
+persona (p. ej. la declaración previa de un jugador rival, el fichaje propio de
+otro equipo) está FUERA DE TEMA aquí → puntúa 0-3. Prueba: si la noticia se
+sostiene al quitar el sujeto del canal, está fuera de tema.
+
+EJE DE INTERACCIÓN (úsalo para desempatar entre noticias igual de importantes):
+- SUBE: conflicto o decisión — oferta RECHAZADA, exigencias, crisis, veto,
+  negativa a ceder, decisión ya tomada, comunicado oficial, cita directa de la
+  persona implicada
+- BAJA: especulación sin desenlace — "suena para", "en el radar", "interesa",
+  "sigue de cerca", "¿fichará?" y contactos vagos
+Medido: en este canal el encuadre de conflicto/decisión rindió un 43% por encima
+de la mediana y la especulación vaga un 12% por debajo.
+
+{scope_block}Titulares:
+{listing}
+
+Responde SÓLO en este formato JSON, sin ningún otro texto:
+{{"scores": [{{"guid": "<el mismo>", "score": <0-10>, "reasoning": "<≤200 char, por qué esta nota>"}}, ...]}}""",
 }
 
 
@@ -198,6 +279,80 @@ def _vertical_gate_block(vertical: str | None, language: str) -> str:
     # gömülü — ayırmazsak not satırı başlık listesine yapışır.
     return "\n".join(parts) + "\n\n"
 
+
+
+_FOCUS_BASLIK = {
+    "tr": ("KANALIN ODAĞI (dikeyin İÇİNDE bir tercih, yeni bir kapı DEĞİL):",
+           "Bu odağa uyan başlığa 1-2 puan FAZLA ver. Uymayan başlık kendi "
+           "değerinden puan alır — odağa uymuyor diye 4'ün altına İTME, ve "
+           "olay olmayan bir başlığı odağa uyuyor diye 3'ün üstüne ÇIKARMA."),
+    "en": ("CHANNEL FOCUS (a preference INSIDE this vertical, NOT another gate):",
+           "Score a headline that matches this focus 1-2 points HIGHER. One that "
+           "does not match still scores on its own merits — do NOT push it below 4 "
+           "for missing the focus, and NEVER lift a non-event above 3."),
+    "es": ("FOCO DEL CANAL (una preferencia DENTRO de esta vertical, NO otra puerta):",
+           "Sube 1-2 puntos el titular que encaje con este foco. El que no encaje "
+           "puntúa por sus propios méritos — NO lo bajes de 4 por no encajar, y "
+           "NUNCA subas por encima de 3 un titular sin suceso."),
+}
+
+
+def _focus_block(focus: str, language: str) -> str:
+    """Kanalın odak bloğu. Odak yoksa boş dize.
+
+    Neden AYRI bir blok: dikey kapısı "bu bizim işimiz mi" diye sorar ve
+    ELER. Odak elemez, SIRALAR — ikisini tek metne karıştırmak modelin
+    uymayan haberi elemesine yol açardı ve dar dikeyde arz çöker.
+    """
+    focus = (focus or "").strip()
+    if not focus:
+        return ""
+    lang = (language or "tr").split("-")[0].lower()
+    baslik, kural = _FOCUS_BASLIK.get(lang) or _FOCUS_BASLIK["en"]
+    return f"{baslik}\n{focus}\n{kural}\n\n"
+
+
+
+# KANALIN KAPSAMI — KAPI.
+#
+# `_focus_block` bilinçli olarak SIRALAR, elemez. Kapsam ise eler ve gerekçesi
+# ölçüldü: Real Madrid ve Galatasaray ÇOK BRANŞLI kulüpler. Puanlayıcıya
+# söylenen tek kapsam ifadesi "TOPIC/KEYWORDS: Real Madrid" ve bir BASKETBOL
+# haberi bunu gerçekten karşılıyor — merkez kuralı da geçiyor, çünkü haberin
+# merkezinde sahiden Real Madrid var. Model doğru puanlıyor; ona yanlış soru
+# soruluyordu.
+#
+# ÖLÇÜLDÜ (2026-08-22): latidoblanco-flash'ta #1826 "Real Madrid Baloncesto"
+# haberi üretildi; galatasaray'da 25 günde 7 basketbol + 1 voleybol videosu
+# çıktı (#1340, #1316, #1308, #1302, #1289, #1275, #1296). Senaryonun
+# `category` alanı zaten "basketbol" yazıyordu — sistem sporu BİLİYOR, kimse
+# ona göre elemiyordu.
+_KAPSAM_BASLIK = {
+    "tr": ("KANALIN KAPSAMI (KAPI — haberin buraya ait olup olmadığına bu karar verir):",
+           "Kapsam dışındaki başlık, haber ne kadar güçlü olursa olsun 0-2 alır. "
+           "Kararsız kalırsan kapsam DIŞI say: kanal dar kalsın, konusu kaysın istemiyoruz."),
+    "en": ("CHANNEL SCOPE (a GATE — this decides whether the story belongs here at all):",
+           "A headline outside this scope scores 0-2, no matter how strong the news is. "
+           "When in doubt, treat it as OUT of scope: a narrow channel is fine, a drifting one is not."),
+    "de": ("KANALUMFANG (TOR — hiermit wird entschieden, ob die Meldung hierher gehört):",
+           "Eine Schlagzeile außerhalb dieses Umfangs bekommt 0-2, egal wie stark die "
+           "Nachricht ist. Im Zweifel AUSSERHALB: ein enger Kanal ist in Ordnung, "
+           "ein abdriftender nicht."),
+    "es": ("ÁMBITO DEL CANAL (una PUERTA — decide si la noticia pertenece aquí):",
+           "Un titular fuera de este ámbito recibe 0-2, por fuerte que sea la noticia. "
+           "En caso de duda, dalo por FUERA: preferimos un canal estrecho a uno que se desvía."),
+}
+
+
+def _scope_block(scope: str, language: str) -> str:
+    """Kanalın kapsam kapısı. Kapsam tanımlı değilse boş dize (eski davranış)."""
+    scope = (scope or "").strip()
+    if not scope:
+        return ""
+    lang = (language or "tr").split("-")[0].lower()
+    baslik, kural = _KAPSAM_BASLIK.get(lang) or _KAPSAM_BASLIK["en"]
+    # Sonda BOŞ SATIR şart: blok şablona "{scope_block}Başlıklar:" olarak girer.
+    return f"{baslik}\n{scope}\n{kural}\n\n"
 
 
 # Trend kanalı (content_source="trends"): kanalın ÖZNESİ yok, her konu uygun.
@@ -325,14 +480,24 @@ def build_scoring_prompt(
     else:
         template = _PROMPT_TEMPLATES.get(channel.language, _PROMPT_TEMPLATES["en"])
     keywords_str = ", ".join(channel.keywords) if channel.keywords else "(no keywords)"
+    # Kapsam kapısı HER kaynak türünde geçerli: çok branşlı bir kulüp kanalı
+    # besleme de okusa trend de okusa aynı sızıntıyı yaşıyor. Besleme şablonu
+    # `{scope_block}` yer tutucusunu taşır; trend şablonunda yer tutucu yok,
+    # bu yüzden dikey zincirinin BAŞINA eklenir (str.format fazladan anahtarı
+    # yok sayar, iki kez basılmaz).
+    kapsam = _scope_block(getattr(channel, "scope", ""), channel.language)
     base = template.format(
         channel_name=channel.name,
         keywords=keywords_str,
         listing=listing,
+        scope_block=kapsam,
         # Dikey bloğu başlık listesinin ÖNÜNE girer: prompt'un SON talimatı
         # çıktı biçimi (JSON) olmalı, sonrasına metin eklenmemeli.
-        vertical_block=(_vertical_gate_block(channel.trends_vertical,
-                                             channel.language)
+        vertical_block=((kapsam
+                         + _vertical_gate_block(channel.trends_vertical,
+                                                channel.language)
+                         + _focus_block(getattr(channel, "trends_focus", ""),
+                                        channel.language))
                         if is_trends else ""),
     )
     # Canonical kategori: kanal liste tanımladıysa her başlık için konu iste.

@@ -1,0 +1,282 @@
+{#
+  REAL MADRID · BLANCO
+  ─────────────────────────────────────────────────────────────────────────
+  Kulübün kimliği BEYAZDIR. "Los Blancos" lakabı formadan gelir; Real Madrid'i
+  bir bakışta ayıran tek şey budur. Bu kanal daha önce `stadium` arketibini
+  bordo bir paletle kullanıyordu (#a30d2d) — kart Real Madrid'e değil, kırmızı
+  formalı herhangi bir kulübe benziyordu.
+
+  Kimlik üç öğeye dayanıyor, üçü de kulübün kendi dünyasından:
+    · BEYAZ zemin        — forma
+    · ALTIN #FEBE10      — armadaki taç
+    · LACİVERT #00529F   — kulüp mavisi, yalnız metin ve künye için
+
+  Yapısal motif: yeni Santiago Bernabéu'nun cephesi dikey çelik lamellerden
+  oluşuyor. Gövde panelinin arkasındaki çok düşük kontrastlı dikey şeritler
+  onu anıyor — dekorasyon değil, stadyumun kendisi.
+
+  Taç EMOJİ DEĞİL, çizilmiş SVG: 👑 emojisi her platformda başka görünüyor ve
+  kartın üzerinde ucuz duruyor.
+
+  DNA override BİLE BİLE ERKEN enjekte ediliyor (spec §7 sırası). Bu bir kulüp
+  şablonu; beyaz zemin, altın çizgi ve lacivert metin kimliğin kendisi, kanal
+  paletinin ezmesine bırakılmaz. Paletten gelen değerler yalnız ikincil
+  vurgularda kullanılır.
+#}
+<!DOCTYPE html>
+<html lang="{{ language }}">
+<head>
+<meta charset="utf-8">
+<title>Short — Real Madrid Blanco</title>
+<style>
+  /* 1. Fontlar — ağır sıkışık grotesk (kulüp grafiklerinin caps diline yakın) */
+  @import url('https://fonts.googleapis.com/css2?family=Anton&family=Oswald:wght@500;600;700&family=Inter:wght@500;600;700;800&display=swap');
+
+  /* 2. DNA override — erken; şablonun kimlik kuralları bunun ÜSTÜNE yazar */
+  {{ dna_css|safe }}
+
+  /* 3. Reset + viewport */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 1080px; height: 1920px; overflow: hidden;
+    font-family: 'Inter', -apple-system, system-ui, sans-serif;
+  }
+
+  .stage {
+    position: relative; width: 1080px; height: 1920px;
+    display: flex; flex-direction: column;
+    /* Beyaz düz değil: üstte kâğıt beyazı, altta armanın mor bandından
+       gelen çok hafif bir soğuk ton. Düz beyaz ekranda ölü durur. */
+    background: linear-gradient(178deg, #ffffff 0%, #fbfbfd 62%, #f2f1f7 100%);
+    color: #0b1a33;
+  }
+
+  /* Bernabéu lameli: dikey çelik şeritler, beyaz üstüne beyaz */
+  .stage::before {
+    content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+    background: repeating-linear-gradient(90deg,
+      rgba(11,26,51,.030) 0 2px, transparent 2px 26px);
+  }
+
+  /* ── ÜST ŞERİT: taç + kelime işareti + rozet ───────────────────────── */
+  .crest {
+    position: relative; z-index: 3;
+    display: flex; align-items: center; gap: 16px;
+    padding: 34px 44px 0;
+  }
+  .crest svg { width: 62px; height: 62px; flex: none; display: block; }
+  .crest .word {
+    font-family: 'Oswald', sans-serif; font-weight: 700;
+    font-size: 30px; letter-spacing: .30em; text-transform: uppercase;
+    color: #00529f; line-height: 1;
+  }
+  .crest .word i {
+    display: block; font-style: normal; font-size: 15px; letter-spacing: .22em;
+    color: #9aa3b5; font-weight: 500; margin-top: 5px;
+  }
+  .stage-badge {
+    margin-left: auto;
+    background: #00529f; color: #ffffff;
+    font-family: 'Oswald', sans-serif; font-weight: 700;
+    font-size: 23px; letter-spacing: .16em; text-transform: uppercase;
+    padding: 9px 20px 8px;
+    box-shadow: 0 4px 0 #febe10;
+  }
+
+  /* ── MANŞET ────────────────────────────────────────────────────────── */
+  .header {
+    position: relative; z-index: 3;
+    padding: 26px 44px 30px;
+    text-align: left;
+  }
+  .header .top {
+    display: block;
+    font-family: 'Anton', Impact, sans-serif;
+    font-size: var(--size-headline-top, 180px);
+    line-height: .88;
+    letter-spacing: -.012em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    color: #0b1a33;
+  }
+  .header .bot {
+    display: inline-block; margin-top: 18px;
+    font-family: 'Oswald', sans-serif; font-weight: 700;
+    font-size: var(--size-headline-bot, 52px);
+    line-height: 1.05;
+    letter-spacing: .045em;
+    text-transform: uppercase;
+    color: #00529f;
+    /* Altın kalem — gövdedeki vurguyla aynı teknik, kart tek dil konuşsun */
+    background: linear-gradient(transparent 64%, rgba(254,190,16,.68) 64%);
+    padding: 0 6px 3px;
+  }
+
+  /* ── FOTOĞRAF ──────────────────────────────────────────────────────── */
+  .photo {
+    position: relative; z-index: 2;
+    height: 800px; overflow: hidden;
+    background: #dfe3ec;
+    border-top: 5px solid #febe10;
+    border-bottom: 5px solid #febe10;
+  }
+  .photo .bg-img {
+    position: absolute; inset: 0;
+    background-image: url('{{ bg_image_url|default("") }}');
+    background-size: cover; background-position: center 22%;
+    {% if not bg_image_url %}display: none;{% endif %}
+  }
+  /* Fotoğrafın altı koyulaşır — altın çip üstünde okunsun */
+  .photo::after {
+    content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 46%;
+    background: linear-gradient(180deg, transparent 0%, rgba(6,14,30,.72) 100%);
+  }
+  /* FOTOĞRAFSIZ HÂL. Görsel bulunamadığında boş gri bir kutu kalıyordu ve
+     kartın en büyük alanı hiçbir şey söylemiyordu. Boşluk kulüp zeminine
+     çevriliyor: lacivert, dev altın taç, Bernabéu lameli. Kusur değil,
+     markalı bir durum. */
+  .photo.sinfoto { background: linear-gradient(160deg, #003b76 0%, #00529f 55%, #0b2a52 100%); }
+  .photo.sinfoto::after { background: linear-gradient(180deg, transparent 30%, rgba(3,12,28,.6) 100%); }
+  .photo .marca {
+    position: absolute; inset: 0; z-index: 1;
+    display: grid; place-items: center;
+    background: repeating-linear-gradient(90deg,
+      rgba(255,255,255,.05) 0 2px, transparent 2px 30px);
+  }
+  /* %30'da altın, lacivertle karışıp zeytuniye kayıyordu — altın kalsın. */
+  .photo .marca svg { width: 300px; height: 300px; opacity: .5; }
+  .photo .yellow {
+    position: absolute; left: 44px; right: 44px; bottom: 34px; z-index: 2;
+    background: #febe10; color: #0b1a33;
+    font-family: 'Oswald', sans-serif; font-weight: 700;
+    font-size: 56px; line-height: 1.06;
+    letter-spacing: .035em; text-transform: uppercase;
+    text-align: center;
+    padding: 16px 26px 14px;
+    box-shadow: 0 10px 26px rgba(6,14,30,.42);
+  }
+
+  /* ── GÖVDE ─────────────────────────────────────────────────────────── */
+  .body {
+    position: relative; z-index: 3;
+    flex: 1; min-height: 0;
+    margin-bottom: 104px;
+    padding: 34px 44px 18px;
+    display: grid; place-items: center;
+    overflow: hidden;
+  }
+  .body-text {
+    width: 100%;
+    font-size: 54px; line-height: 1.30; font-weight: 600;
+    color: #10203c;
+    /* Ne maske ne line-clamp: ikisi de auto-fit'in işini bozuyor. Metnin
+       sığması `data-fit-*` ile garanti; taşarsa `.body{overflow:hidden}` keser. */
+  }
+  /* Vurgular beyaz zeminde okunmalı: altın FON değil, altın KALEM izi.
+     Dolu altın zemin üstüne koyu metin bu punto ve satır sıklığında
+     alacalı görünüyor. */
+  .body .hl-r, .body .hl-y, .body mark {
+    background: linear-gradient(transparent 62%, rgba(254,190,16,.72) 62%);
+    color: #00529f; font-weight: 800; padding: 0 3px;
+    /* DNA `highlight_style: underline` altın kalemin ÜSTÜNE bir de çizgi
+       koyuyordu — çift vurgu. Kimlik kuralı kendini savunur. */
+    text-decoration: none; text-shadow: none;
+  }
+  /* DNA `banner_shape: slanted` başlığı skewY(-1deg) ile eğiyor. Spor yayını
+     dili; Real Madrid'in kurumsal dili DİK ve resmî. */
+  .header { transform: none; }
+
+  /* ── ALT BANT ──────────────────────────────────────────────────────── */
+  .footer-band {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 96px; z-index: 4;
+    background: #00529f;
+  }
+  .progress {
+    position: absolute; left: 0; right: 0; bottom: 96px; height: 7px; z-index: 11;
+    background: rgba(11,26,51,.12);
+  }
+  .progress::after {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+    background: #febe10;
+    animation: fill {{ duration_s }}s linear forwards;
+  }
+  @keyframes fill { from { width: 0; } to { width: 100%; } }
+
+  .handle {
+    position: absolute; left: 0; right: 0; bottom: 34px; z-index: 12;
+    text-align: center;
+    font-family: 'Oswald', sans-serif; font-weight: 600;
+    font-size: 33px; letter-spacing: .13em; text-transform: uppercase;
+    color: #ffffff;
+  }
+  .source-credit {
+    position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%);
+    z-index: 50;
+    background: rgba(255,255,255,.16); color: rgba(255,255,255,.9);
+    font-size: 14px; font-weight: 500; letter-spacing: .04em;
+    padding: 3px 10px; border-radius: 3px; white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+<div class="stage dna-anim-{{ animation_style|default('none') }}">
+
+  <div class="crest">
+    {# Armadaki taç — emoji değil, çizim. Platformdan bağımsız aynı görünür. #}
+    <svg viewBox="0 0 64 64" aria-hidden="true">
+      <g fill="#febe10">
+        <path d="M8 44h48v7a3 3 0 0 1-3 3H11a3 3 0 0 1-3-3v-7z"/>
+        <path d="M8 40 6 18l13 10L32 9l13 19 13-10-2 22H8z"/>
+      </g>
+      <g fill="#00529f">
+        <circle cx="6" cy="15" r="4"/><circle cx="32" cy="6" r="4.4"/>
+        <circle cx="58" cy="15" r="4"/>
+      </g>
+      <rect x="8" y="40" width="48" height="4" fill="#ffffff" opacity=".75"/>
+    </svg>
+    {# Kategori alt satırı YALNIZ bilgi eklediğinde yazılır. `category` serbest
+       metin ve model onu "Real Madrid" diye doldurabiliyor — 1823'te tam da bu
+       oldu ve arma altında "REAL MADRID / REAL MADRID" çıktı. #}
+    {% set kat = (script.category|default(''))|trim %}
+    {% set tekrar = kat and (kat|upper in 'REAL MADRID' or 'REAL MADRID' in kat|upper) %}
+    <div class="word">Real Madrid{% if kat and not tekrar %}<i>{{ kat }}</i>{% endif %}</div>
+    {% if ui_breaking %}<div class="stage-badge">{{ ui_breaking }}</div>{% endif %}
+  </div>
+
+  <div class="header">
+    <span class="top" data-fit-width="88" data-fit-min="74" data-fit-max="180">{{ script.header_top }}</span>
+    {% if script.header_bottom %}<span class="bot">{{ script.header_bottom }}</span>{% endif %}
+  </div>
+
+  <div class="photo{% if not bg_image_url %} sinfoto{% endif %}">
+    <div class="bg-img"></div>
+    {% if not bg_image_url %}
+    <div class="marca">
+      <svg viewBox="0 0 64 64" aria-hidden="true">
+        <g fill="#febe10">
+          <path d="M8 44h48v7a3 3 0 0 1-3 3H11a3 3 0 0 1-3-3v-7z"/>
+          <path d="M8 40 6 18l13 10L32 9l13 19 13-10-2 22H8z"/>
+        </g>
+        <g fill="#ffffff" opacity=".9">
+          <circle cx="6" cy="15" r="4"/><circle cx="32" cy="6" r="4.4"/>
+          <circle cx="58" cy="15" r="4"/>
+        </g>
+      </svg>
+    </div>
+    {% endif %}
+    {% if script.photo_overlay %}<div class="yellow">{{ script.photo_overlay }}</div>{% endif %}
+  </div>
+
+  <div class="body">
+    <div class="body-text" data-fit-min="34" data-fit-max="56"
+         data-fit-grow-max="86" data-fit-pad="18">{{ body_html|safe }}</div>
+  </div>
+
+  <div class="footer-band"></div>
+  <div class="progress"></div>
+  <div class="handle">{{ handle }}</div>
+  {% if rss_source %}<div class="source-credit">{{ ui_source }}: {{ rss_source }}</div>{% endif %}
+</div>
+{% include "_auto_fit.js.j2" %}
+</body>
+</html>

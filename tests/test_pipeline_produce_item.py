@@ -6,6 +6,10 @@ from unittest.mock import patch, MagicMock
 from short_bot.db import init_db, is_processed
 from short_bot.models import NewsItem, Script
 
+# Gerçek gövde medyanı ~1300 karakter; kırıntı metin
+# pipeline'ın gövde kapısına takılır (_MIN_BODY_CHARS).
+GOVDE = ("Tam makale gövdesi. " * 12).strip()
+
 
 def _minimal_settings():
     from short_bot.config import Settings
@@ -55,7 +59,7 @@ def test_produce_from_item_success_records_short(tmp_path, monkeypatch):
     eng = init_db(tmp_path / "x.sqlite")
     ch = _minimal_channel(tmp_path)
 
-    monkeypatch.setattr(pipeline, "extract_article", lambda url: "uzun gövde metni")
+    monkeypatch.setattr(pipeline, "extract_article", lambda url: GOVDE)
     monkeypatch.setattr(pipeline, "write_script", lambda *a, **k: _script())
     # newscast is in ARCHETYPE_OVERFLOW_FIELDS, so write_script_with_overflow_check
     # would be called and trigger Playwright. Mock it directly to avoid that.
@@ -87,7 +91,7 @@ def test_run_pipeline_with_preselected_item(tmp_path, monkeypatch):
     """preselected_item verilince fetch/score atlanir, dogrudan uretim yapilir."""
     from short_bot import pipeline
 
-    monkeypatch.setattr(pipeline, "extract_article", lambda url: "uzun govde")
+    monkeypatch.setattr(pipeline, "extract_article", lambda url: GOVDE)
     monkeypatch.setattr(pipeline, "write_script", lambda *a, **k: _script())
     monkeypatch.setattr(pipeline, "write_script_with_overflow_check",
                         lambda **k: (_script(), 0))

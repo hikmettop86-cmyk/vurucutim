@@ -577,7 +577,7 @@ def _kanit_dir(jid: str) -> Path:
     `send_file`ı göreli yolu CWD'ye değil APP ROOT'a (`src/short_bot/web`)
     göre çözüyor. Canlıda tam bu oldu: kareler diskte vardı, `Path.exists()`
     True diyordu, rota yine de 500 veriyordu —
-    "cannot find 'src\short_bot\web\data\cache\arketip\...'".
+    "cannot find 'src/short_bot/web/data/cache/arketip/...'".
     Testler `tmp_path` (mutlak) kullandığı için yakalamıyordu.
     """
     return (Path(current_app.config["SHORTBOT_CACHE_DIR"]).resolve()

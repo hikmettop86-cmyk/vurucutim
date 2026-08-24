@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="{{ language }}">
+<head>
+<meta charset="utf-8">
+<title>Stadium — seslendirmeli</title>
+<style>
+  /* stadium haber kartının BİREBİR düzeni + seslendirme. Ekranda haber yazısı
+     SABİT durur; anlatıcı onun üzerine yorum yapar. Karaoke YOK.
+     Sınıf adları stadium.html.j2 ile aynı: kanalın custom_css'i (kenarlıklar,
+     filigran, gradyanlar) hiçbir uyarlama olmadan buraya da uygulanır — yani
+     stadium arketipindeki HER kanal bu şablonu kendi kimliğiyle kullanır. */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --primary: {{ colors.primary }};
+    --accent: {{ colors.accent }};
+    --bg-grad-1: {{ colors.bg_gradient[0] }};
+    --bg-grad-2: {{ colors.bg_gradient[1] }};
+    --body-bg-1: {{ colors.bg_gradient[0] }};
+    --body-bg-2: {{ colors.bg_gradient[1] }};
+    --text-main: #ffffff;
+    --text-muted: rgba(255,255,255,.65);
+    --font-headline: '{{ dna_font_headline|default("Anton") }}', Impact, sans-serif;
+    --font-body: 'Inter', sans-serif;
+  }
+  html, body { width: 1080px; height: 1920px; overflow: hidden;
+    background: linear-gradient(180deg, var(--body-bg-1), var(--body-bg-2));
+    font-family: var(--font-body); color: var(--text-main); }
+  .stage { position: relative; width: 1080px; height: 1920px;
+    display: flex; flex-direction: column; }
+
+  .stage-badge {
+    position: absolute; top: 16px; right: 16px;
+    background: var(--accent); color: var(--primary);
+    font-family: var(--font-headline);
+    font-size: 22px; font-weight: 700; letter-spacing: 2px;
+    padding: 5px 12px;
+    z-index: 10;
+  }
+
+  /* --- Manşet bandı: video boyunca sabit --- */
+  .header {
+    background: linear-gradient(135deg, var(--primary), var(--bg-grad-2));
+    padding: 44px 40px 34px;
+    text-align: center;
+    font-family: var(--font-headline);
+    color: var(--accent);
+    border-bottom: 8px solid var(--accent);
+  }
+  .header .top {
+    display: block;
+    font-size: var(--size-headline-top, 96px);
+    line-height: .95;
+    letter-spacing: 4px;
+    white-space: nowrap;
+    text-shadow: 6px 6px 0 #000;
+    -webkit-text-stroke: 2px #000;
+  }
+  .header .bot {
+    display: block;
+    font-size: var(--size-headline-bot, 52px);
+    color: var(--text-main);
+    letter-spacing: 5px;
+    margin-top: 12px;
+  }
+
+  /* --- Foto: yavaş ken-burns; üzerindeki sarı bant BEAT'lerde değişir.
+         40 saniyelik videoda tek hareketli öğe bu ikisi. --- */
+  .photo {
+    position: relative;
+    height: 620px;
+    background: linear-gradient(180deg, var(--bg-grad-1), var(--bg-grad-2));
+    overflow: hidden;
+  }
+  .photo .bg-img {
+    position: absolute; inset: 0;
+    background-image: url('{{ bg_image_url|default("") }}');
+    background-size: cover; background-position: center;
+    animation: kenburns {{ narration.duration_s }}s linear forwards;
+  }
+  @keyframes kenburns {
+    from { transform: scale(1.04); }
+    to   { transform: scale(1.16); }
+  }
+  .photo::after {
+    content: ''; position: absolute; inset: 0;
+    background: linear-gradient(180deg, transparent 55%, rgba(0,0,0,.85));
+  }
+  .photo .yellow {
+    position: absolute; bottom: 28px; left: 28px; right: 28px;
+    background: var(--accent);
+    color: var(--primary);
+    font-family: var(--font-headline);
+    padding: 18px 26px;
+    font-size: 52px;
+    text-align: center;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    transform: skewX(-10deg);
+    box-shadow: 0 8px 0 #000;
+    z-index: 2;
+    display: none;
+  }
+  .photo .yellow.on { display: block; }
+
+  /* --- Haber yazısı: SABİT, video boyunca ekranda --- */
+  .body {
+    flex: 1; min-height: 0;
+    margin-bottom: 54px;
+    padding: 34px 44px;
+    color: var(--text-main);
+    display: grid; place-items: center;
+    overflow: hidden;
+  }
+  .body-text {
+    width: 100%;
+    font-size: 58px;
+    line-height: 1.32;
+    font-weight: 600;
+  }
+
+  .progress { height: 10px; width: 0%; background: var(--accent); }
+
+  /* Kaynak satırı mutlak konumlu ve en altta; handle'a alt dolgu verilmezse
+     ikisi ÜST ÜSTE biniyor (ilk render'da öyle çıktı). */
+  .handle {
+    text-align: center; padding: 14px 0 46px;
+    font-size: 38px; font-weight: 700;
+    color: var(--text-muted);
+  }
+  .source-credit {
+    position: absolute; bottom: 12px; left: 0; right: 0;
+    text-align: center; font-size: 20px; color: var(--text-muted);
+  }
+  {{ dna_css }}
+</style>
+</head>
+<body>
+<div class="stage dna-anim-{{ animation_style|default('none') }}">
+  <div class="stage-badge">{{ ui_breaking }}</div>
+
+  <div class="header">
+    <span class="top" data-fit-width="40" data-fit-min="56" data-fit-max="110">{{ script.header_top }}</span>
+    <span class="bot">{{ script.header_bottom }}</span>
+  </div>
+
+  <div class="photo">
+    <div class="bg-img"></div>
+    {# Sarı bant = o an konuşulan beat'in ekran kartı. Beat değiştikçe değişir:
+       40 saniye boyunca hiç değişmeyen bir ekran durgun kalırdı. #}
+    {% for b in narration.beats %}
+    <div class="yellow card" data-s="{{ b.start_s }}" data-e="{{ b.end_s }}">{{ b.on_screen }}</div>
+    {% endfor %}
+  </div>
+
+  <div class="body">
+    <div class="body-text" data-fit-min="40" data-fit-max="72" data-fit-pad="20">{{ body_html|safe }}</div>
+  </div>
+
+  <div class="progress" id="__progress"></div>
+  <div class="handle">{{ handle }}</div>
+  {% if rss_source %}
+  <div class="source-credit">{{ ui_source }}: {{ rss_source }}</div>
+  {% endif %}
+</div>
+
+{% include "_auto_fit.js.j2" %}
+<script>
+// renderer.py, narration varsa her kare için __seek(t_ms) çağırır. Karaoke
+// olmadığı için burada yalnız iki şey zamanlanır: beat sarı bandı ve ilerleme
+// çubuğu. __seek tanımlı olmazsa ikisi de video boyunca donuk kalır.
+const CARDS = Array.from(document.querySelectorAll('.card'));
+const PROGRESS = document.getElementById('__progress');
+const DURATION_S = {{ narration.duration_s }};
+
+window.__seek = function (tMs) {
+  const t = tMs / 1000;
+  for (const c of CARDS) {
+    const s = parseFloat(c.dataset.s), e = parseFloat(c.dataset.e);
+    c.classList.toggle('on', t >= s && t < e);
+  }
+  PROGRESS.style.width = Math.min(100, (t / DURATION_S) * 100) + '%';
+};
+window.__seek(0);
+</script>
+</body>
+</html>

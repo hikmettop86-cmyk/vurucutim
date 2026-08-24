@@ -5,6 +5,7 @@ from short_bot.claude_cli import run_json
 import logging
 
 from short_bot.fact_gate import unverified_claims
+from short_bot.kart_uyumu import ayni_olay_mi
 from short_bot.narration_lint import dangling_fragments, fragment_feedback
 from short_bot.locale import LANGUAGE_NAMES
 from short_bot.narration import Narration
@@ -79,6 +80,16 @@ def build_narration_prompt(item, body: str, channel) -> str:
     from short_bot.reel_narration import budget_unit as _bu
     birim = "characters" if _bu(channel.language) == "characters" else "words"
     lo_s, hi_s = voice.target_duration_s
+    beat_lo, beat_hi = beat_araligi(voice.target_duration_s, lo_w)
+    # BEAT BAŞINA HEDEF. Toplam bütçe modele SOYUT geliyor: persona 'kısa
+    # cümle' istediği için model her parçayı kısa yazıyor ve toplam tabanın
+    # altında kalıyor. Beat SAYISINI artırmak YETMEDİ — ölçüldü (2026-08-22):
+    # 4 beat'e çıkınca model parçaları daha da kısalttı (166 karakter =
+    # parça başına 33). Parça başına somut sayı istenen şeyi doğrudan söyler:
+    # cümleler KISA kalsın ama beat başına BİRKAÇ tane olsun.
+    # TABANI değil ORTAYI hedefle: taban bölünürse (219/6=36) model zaten
+    # yazdığı 33'ün kenarında kalır ve altına düşer. Orta nokta pay bırakır.
+    beat_hedef = max(10, ((lo_w + hi_w) // 2) // (beat_lo + 2))
     lang_name = LANGUAGE_NAMES.get(channel.language, "Turkish")
 
     return f"""You are writing a spoken-narration script for a {lo_s}-{hi_s} second
@@ -96,7 +107,7 @@ ARTICLE BODY:
 OUTPUT a JSON object with exactly these fields:
 - "hook": the FIRST spoken sentence. It must create curiosity in under 2 seconds
   — a question or a shocking claim. Never start with "Bugün" / "Today" / a date.
-- "beats": 3-5 narrative beats. Each beat is an object with:
+- "beats": {beat_lo}-{beat_hi} narrative beats. Each beat is an object with:
     - "text": the spoken sentence(s) for that beat (10-400 chars)
     - "on_screen": a SHORT ALL-CAPS card shown while that beat is spoken
       (max 60 chars, 2-5 words, a fact/number/action — NOT a description of a photo)
@@ -125,6 +136,27 @@ def _budget_feedback(actual: int, lo_w: int, hi_w: int,
                 f"budget is {lo_w}-{hi_w}. Cut to fit.")
     return (f"\n\nUZAT: previous attempt had only {actual} spoken {birim}, "
             f"budget is {lo_w}-{hi_w}. Add detail to fit.")
+
+
+def _butce_hatirlat(lo_w: int, hi_w: int, birim: str) -> str:
+    """Düzeltme turuna eklenen uzunluk hatırlatması.
+
+    NEDEN GEREKTİ (canlı, 2026-08-22): anlatım bütçe turlarını GEÇMİŞTİ; sonra
+    olgu kapısı 「NHKの報道によると」yı yakalayıp yeniden yazdırdı ve metin 127
+    karaktere düştü — taban 219, video 22,7 saniye. Düzeltme prompt'ları yalnız
+    KUSURU anlatıyor, uzunluğu hiç anmıyordu; model "yalnız kaynakta olanı
+    kullan" uyarısını alınca temkinli davranıp metni yarıya indiriyor.
+
+    Son cümle kritik: "at" değil "DEĞİŞTİR" demek gerekiyor — yoksa model
+    sorunlu iddiayı siliyor ve yerine bir şey koymuyor.
+    """
+    return (f"{chr(10)}LENGTH IS STILL BINDING: total spoken {birim} across hook + "
+            f"beats + loop_close should stay between {lo_w} and {hi_w}. Fixing the "
+            f"problem above must not COLLAPSE the script — keep the parts that were "
+            f"already fine and expand on facts ALREADY IN THE SOURCES (add context, "
+            f"explain what a number means). "
+            f"NEVER invent a name, number or quote to fill space: if the sources do "
+            f"not carry enough material, write SHORT rather than inventing.{chr(10)}")
 
 
 def _fact_feedback(eksik: list[str]) -> str:
@@ -183,7 +215,8 @@ def write_narration(
         return narration
 
     log.warning(f"[olgu] haberde geçmeyen isim/sayı: {eksik} → yeniden yazdırılıyor")
-    narration = _uret(prompt + _fact_feedback(eksik))
+    narration = _uret(prompt + _fact_feedback(eksik)
+                      + _butce_hatirlat(lo_w, hi_w, birim))
     eksik = unverified_claims(narration.full_text(), body,
                               language=channel.language)
     if eksik:
@@ -340,6 +373,21 @@ def card_mismatch(narration_text: str, card) -> bool:
     for parca in re.split(r"[^0-9A-Za-z\u3040-\u30ff\u4e00-\u9fff]+", o):
         if len(parca) >= 3 and parca in n:
             return False
+    # YAZI SİSTEMİ SINIRI. Japoncada bileşik ad neredeyse HER ZAMAN kısaltılır
+    # ve kısaltma tam da yazı sisteminin değiştiği yerdedir:
+    #     鹿島アントラーズ → 鹿島   (kanji | katakana)
+    #     浦和レッズ      → 浦和
+    # Anlatım 「鹿島」 diyor, kart 「鹿島アントラーズ」 yazıyor — üstteki 3'lük
+    # pencere bunu YAKALAYAMIYOR çünkü ortak parça 2 karakter. Canlı yanlış
+    # pozitif (short 1806, 2026-08-22): anlatım baştan sona konudaydı, kapı
+    # "sapmış" dedi, İKİ düzeltme turu boşa gitti ve metin 179 karaktere düştü.
+    #
+    # Sınır parçaları 2 karakterden itibaren geçerli sayılır: bir yazı sistemi
+    # koşusu rastgele bir metinde tesadüfen eşleşmez, oysa gelişigüzel bir
+    # 2'li pencere eşleşir. Bu yüzden pencere DEĞİL, koşu kullanılıyor.
+    for parca in _yazi_kosulari(o):
+        if len(parca) >= 2 and parca in n:
+            return False
     # CJK adları 2-4 karakter; kayan pencere onları yakalar. Pencere uzun
     # öznede 3 (yanlış "uyumlu" demesin), kısa öznede 2.
     pencere = 3 if len(o) >= 5 else 2
@@ -347,6 +395,56 @@ def card_mismatch(narration_text: str, card) -> bool:
         if o[i:i + pencere] in n:
             return False
     return True
+
+
+_YAZI_SINIFLARI = (
+    ("kanji", "\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff"),
+    ("kana", "\u3040-\u309f\u30a0-\u30ff\u31f0-\u31ff\uff66-\uff9f"),
+    ("latin", "0-9A-Za-z"),
+)
+
+
+def _yazi_kosulari(metin: str) -> list[str]:
+    """Metni yazı sistemine göre koşulara böl: '鹿島アントラーズ' → ['鹿島', 'アントラーズ'].
+
+    Japonca bileşik adların kırılma noktası budur; kısaltma hemen hemen her
+    zaman ilk koşudur.
+    """
+    import re
+    if not hasattr(_yazi_kosulari, "_desen"):
+        _yazi_kosulari._desen = re.compile(
+            "|".join(f"[{araliklar}]+" for _, araliklar in _YAZI_SINIFLARI))
+    return _yazi_kosulari._desen.findall(metin or "")
+
+
+# Doğal bir konuşma cümlesinin süresi. Beat sayısı bundan türer.
+_BEAT_SANIYE = 7.5
+
+
+def beat_araligi(target_duration_s: tuple[int, int], lo_w: int) -> tuple[int, int]:
+    """Bu bütçeyi DOĞAL cümlelerle dolduran beat sayısı (min, max).
+
+    NEDEN SABİT "3-5" YETMEDİ (ölçüldü, nippon-hankyou 9 video, 2026-08-22):
+    bütçe tabanının altında kalan anlatımların HEPSİ 3 beat'liydi (5/7 taban
+    altı, medyan 203); 4 beat olan ikisi de bütçeye girdi (medyan 252).
+    Model kuralı çiğnemiyordu — hook + 3 beat + kapanış = 5 parça ve Japoncada
+    doğal bir cümle ~41 karakter; 5x41 = 205, taban 219'un hemen ALTI. Yani
+    İSKELET bütçeye yetmiyordu; model ya kuralı ya doğallığı çiğneyecekti.
+
+    Hız BÜTÇENİN KENDİSİNDEN türetilir (lo_w / lo_s), çünkü `lo_w` zaten dilin
+    biriminde (CJK'de karakter, ötekinde kelime). Böylece bu hesapla
+    `word_budget` HİÇBİR ZAMAN ayrışamaz — birinde CJK dalı değişse öteki
+    kendiliğinden uyar.
+
+    Üst sınır 5: `Narration.beats` modelinde max_length=5.
+    """
+    import math
+    lo_s = max(1, int(target_duration_s[0]))
+    birim_sn = max(0.1, lo_w / lo_s)           # saniyede kaç birim
+    dogal_parca = max(1.0, birim_sn * _BEAT_SANIYE)
+    # -2: hook ve loop_close da birer konuşma parçasıdır.
+    gerekli = math.ceil(lo_w / dogal_parca) - 2
+    return max(3, min(5, gerekli)), 5
 
 
 def build_yorum_prompt(item, body: str, channel, *, extra_sources: list[tuple[str, str]],
@@ -365,6 +463,16 @@ def build_yorum_prompt(item, body: str, channel, *, extra_sources: list[tuple[st
     from short_bot.reel_narration import budget_unit as _bu
     birim = "characters" if _bu(channel.language) == "characters" else "words"
     lo_s, hi_s = voice.target_duration_s
+    beat_lo, beat_hi = beat_araligi(voice.target_duration_s, lo_w)
+    # BEAT BAŞINA HEDEF. Toplam bütçe modele SOYUT geliyor: persona 'kısa
+    # cümle' istediği için model her parçayı kısa yazıyor ve toplam tabanın
+    # altında kalıyor. Beat SAYISINI artırmak YETMEDİ — ölçüldü (2026-08-22):
+    # 4 beat'e çıkınca model parçaları daha da kısalttı (166 karakter =
+    # parça başına 33). Parça başına somut sayı istenen şeyi doğrudan söyler:
+    # cümleler KISA kalsın ama beat başına BİRKAÇ tane olsun.
+    # TABANI değil ORTAYI hedefle: taban bölünürse (219/6=36) model zaten
+    # yazdığı 33'ün kenarında kalır ve altına düşer. Orta nokta pay bırakır.
+    beat_hedef = max(10, ((lo_w + hi_w) // 2) // (beat_lo + 2))
     lang_name = LANGUAGE_NAMES.get(channel.language, "Turkish")
     primary_src = getattr(item, "source", None) or "unknown"
 
@@ -433,7 +541,9 @@ PRIMARY SOURCE ({primary_src}):
 {extra_block}{followup}{shape}
 OUTPUT a JSON object with exactly these fields:
 - "hook": the FIRST spoken sentence, written in the OPENING style above.
-- "beats": 3-5 beats. Each beat: {{"text": spoken sentence(s) (10-400 chars),
+- "beats": {beat_lo}-{beat_hi} beats. Each beat: {{"text": spoken sentence(s)
+  (10-400 chars; aim for about {beat_hedef} {birim} per beat — keep each SENTENCE
+  short, but put SEVERAL sentences in a beat),
   "on_screen": SHORT ALL-CAPS caption (max 60 chars, 2-5 words: a fact, number or claim)}}
 - "loop_close": the LAST spoken sentence, written in the CLOSING style above. It must also
   read as a natural set-up for the hook when the video loops.
@@ -510,6 +620,7 @@ def write_yorum_narration(
     # sayısı anlamsız), ötekinde kelime.
     from short_bot.reel_narration import budget_unit as _bu
     birim = "characters" if _bu(channel.language) == "characters" else "words"
+    beat_lo, _beat_hi = beat_araligi(voice.target_duration_s, lo_w)
     prompt = build_yorum_prompt(item, body, channel, extra_sources=extra_sources,
                                 variation=variation, card=card)
     reference = fact_reference(item, body, extra_sources)
@@ -520,28 +631,98 @@ def write_yorum_narration(
 
     narration = _uret(prompt)
     actual = narration_length(narration.full_text(), channel.language)
-    if not (lo_w <= actual <= hi_w):
-        narration = _uret(prompt + _budget_feedback(actual, lo_w, hi_w,
-                                            channel.language))
+    # BÜTÇE TURLARI. Eski hâli TEK tur denerdi ve SONUCU HİÇ DENETLEMEZDİ —
+    # düzeltme işe yaramasa da sessizce kabul ediliyordu, üstelik tek satır
+    # log bile yoktu. Ölçüldü (nippon-hankyou, ilk 6 video): 3'ü tabanın
+    # altında kaldı ve 26,9-27,5 sn'lik video çıktı; hedef 40-55 sn. Hangi
+    # videonun neden kısa olduğu HİÇBİR YERDE görünmüyordu.
+    #
+    # Hâlâ HATA FIRLATMIYORUZ: kısa video, uydurma bilgiden farklı olarak
+    # yayınlanabilir bir kusur. Ama artık sessiz değil.
+    # BEAT SAYISI DA DENETLENİR. Prompt "4-5 beat" diyor ama `Narration`
+    # şemasında `min_length=3` — ve ŞEMA BAĞLAYICI, PROMPT TAVSİYE. Model
+    # şemanın tabanını alıyordu: 4-5 istenen koşularda 3 beat'lik anlatımlar
+    # geldi ve hepsi bütçe tabanının altında kaldı (163, 158 karakter →
+    # 27 saniye; ölçüldü 2026-08-22).
+    #
+    # Şemanın min_length'ini yükseltmek DOĞRU DEĞİL: `Narration` bütün
+    # kanallarca paylaşılıyor ve kısa hedefli kanallarda 3 beat gerçekten
+    # yeterli. Kanala özgü taban ancak burada, üretimden SONRA denetlenebilir.
+    def _yetersiz(n, uzunluk: int) -> str:
+        """Neden düzeltme gerekiyor? Boş dize = gerek yok."""
+        if len(n.beats) < beat_lo:
+            return f"beat ({len(n.beats)} < {beat_lo})"
+        if not (lo_w <= uzunluk <= hi_w):
+            return f"uzunluk ({uzunluk}, hedef {lo_w}-{hi_w})"
+        return ""
+
+    for _ in range(2):
+        neden = _yetersiz(narration, actual)
+        if not neden:
+            break
+        log.info(f"  [bütçe] {neden} → düzeltme turu")
+        ek = _budget_feedback(actual, lo_w, hi_w, channel.language)
+        if len(narration.beats) < beat_lo:
+            ek += (f"{chr(10)}You returned {len(narration.beats)} beats. "
+                   f"Return AT LEAST {beat_lo} beats — split the material into "
+                   f"more beats instead of making each one longer.{chr(10)}")
+        narration = _uret(prompt + ek)
+        actual = narration_length(narration.full_text(), channel.language)
+    _son_neden = _yetersiz(narration, actual)
+    if _son_neden:
+        # Süre yorumu YALNIZ uzunluk kaçtıysa yazılır: bütçedeki bir metne
+        # "UZUN çıkacak" demek operatörü yanlış yere bakmaya iter.
+        _sure = ""
+        if actual < lo_w:
+            _sure = " — video beklenenden KISA çıkacak"
+        elif actual > hi_w:
+            _sure = " — video beklenenden UZUN çıkacak"
+        log.warning(
+            f"  [bütçe] iki turda da tutturulamadı — {_son_neden}; "
+            f"{actual} {birim} (hedef {lo_w}-{hi_w}), "
+            f"{len(narration.beats)} beat (en az {beat_lo}){_sure}")
 
     # KART UYUMU: anlatım kartın anlattığı olaydan saptıysa BİR düzeltme turu.
     # Sert reddetmiyoruz — yanlış pozitif üretimi tamamen durdurur (Burhan
     # dersi) ve yükleme zaten elle yapılıyor. Israr ederse gürültülü uyarı.
-    if card_mismatch(narration.full_text(), card):
-        _ozne = (card or {}).get('header_top', '')
+    #
+    # İKİ AŞAMA. Mekanik kapı (card_mismatch) kartın ÖZNESİ anlatımda hiç
+    # geçmiyorsa konuşur — bedavadır ve anlatımın bambaşka bir habere kaymasını
+    # yakalar. Ama AYNI ÖZNE / FARKLI OLAY halini göremez: #1848'de "BLEACH"
+    # iki yanda da geçiyordu (kart Koshien turnuvası, ses seiyuu röportajı),
+    # #1810'da "ソフトバンク" (kart home run'lar, ses başka maçın galibiyeti).
+    # O ayrımı metin benzerliği yapamıyor (ölçüm: kart_uyumu modül başlığı),
+    # ikisini de OKUYAN bir yargıç gerekiyor.
+    _ozne = (card or {}).get('header_top', '')
+
+    def _kart_sapmasi(metin: str) -> str:
+        """Sapma sebebi ya da "". Mekanik kapı ÖNCE — bedava ve kesin; yargıca
+        yalnız o temiz derse gidilir."""
+        if card_mismatch(metin, card):
+            return f"anlatım '{_ozne}' öznesinden sapmış"
+        _k = ayni_olay_mi(card, metin, backend=backend, model=model,
+                          api_key=api_key, claude_path=claude_path)
+        return f"kart ile ses farklı olayı anlatıyor — {_k.sapma}" if _k else ""
+
+    _sapma = _kart_sapmasi(narration.full_text())
+    if _sapma:
+        log.info(f"  [kart uyumu] {_sapma} → düzeltme turu")
         narration = _uret(
             prompt + f"{chr(10)}{chr(10)}DÜZELT: the narration drifted to a different "
-            f"story. It MUST be about '{_ozne}' — the subject on the card. "
-            "Rewrite it about that event only.")
-        if card_mismatch(narration.full_text(), card):
+            f"story. It MUST be about '{_ozne}' — the subject on the card — and "
+            f"about the SAME event the card describes. Rewrite it about that "
+            f"event only."
+            + _butce_hatirlat(lo_w, hi_w, birim))
+        if _kart_sapmasi(narration.full_text()):
             log.warning(
-                f"  [kart uyumu] anlatım '{_ozne}' öznesinden sapmış; iki denemede "
-                f"de düzelmedi. Video üretiliyor ama YÜKLEMEDEN ÖNCE OKUNMALI.")
+                f"  [kart uyumu] {_sapma}; düzeltme turunda da giderilmedi. "
+                f"Video üretiliyor ama YÜKLEMEDEN ÖNCE OKUNMALI.")
 
     eksik = unverified_claims(narration.full_text(), reference, language=channel.language)
     if eksik:
         log.warning(f"[olgu] kaynaklarda geçmeyen isim/sayı: {eksik} → yeniden yazdırılıyor")
-        narration = _uret(prompt + _fact_feedback(eksik))
+        narration = _uret(prompt + _fact_feedback(eksik)
+                          + _butce_hatirlat(lo_w, hi_w, birim))
         eksik = unverified_claims(narration.full_text(), reference, language=channel.language)
         if eksik:
             raise RuntimeError(
@@ -555,7 +736,8 @@ def write_yorum_narration(
     parcali = dangling_fragments(narration.full_text())
     if parcali:
         log.warning(f"[üslup] dayanaksız kısa cümle: {parcali} → yeniden yazdırılıyor")
-        aday = _uret(prompt + fragment_feedback(parcali))
+        aday = _uret(prompt + fragment_feedback(parcali)
+                     + _butce_hatirlat(lo_w, hi_w, birim))
         kalan = dangling_fragments(aday.full_text())
         if unverified_claims(aday.full_text(), reference, language=channel.language):
             log.warning("[üslup] düzeltme turu olgu kapısını bozdu — ilk metin korunuyor")
@@ -565,4 +747,13 @@ def write_yorum_narration(
         else:
             log.info("[üslup] düzeltme turu temiz ✓")
             narration = aday
+
+    # SON DENETİM: kart/olgu/üslup turları TABAN prompt'undan yeniden yazdırır
+    # ve bütçe geri bildirimini TAŞIMAZ — düzelen bir anlatım bütçe dışına
+    # çıkabilir. Yeniden yazdırmıyoruz (olgu kapısını bozma riski), ama
+    # operatör bunu bilmeli.
+    son = narration_length(narration.full_text(), channel.language)
+    if son != actual and not (lo_w <= son <= hi_w):
+        log.warning(f"  [bütçe] düzeltme turlarından sonra bütçe dışına çıktı: "
+                    f"{son} {birim} (hedef {lo_w}-{hi_w})")
     return narration

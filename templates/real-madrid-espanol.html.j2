@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="{{ language }}">
+<head>
+<meta charset="utf-8">
+<title>Short — Real Madrid Español</title>
+<style>
+  /* 1. Google Fonts import: Oswald (Manşetler), Inter (Gövde) */
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap');
+
+  /* 2. DNA override (zorunlu) */
+  {{ dna_css|safe }}
+
+  /* 3. Reset + viewport (zorunlu 1080x1920) */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { 
+    width: 1080px; 
+    height: 1920px; 
+    overflow: hidden;
+    font-family: var(--font-body, 'Inter'), -apple-system, system-ui, sans-serif;
+    color: var(--text-main, #ffffff);
+    background: #0a0a0f;
+  }
+
+  .stage { 
+    position: relative; 
+    width: 1080px; 
+    height: 1920px; 
+    display: flex; 
+    flex-direction: column; 
+    background: linear-gradient(180deg, #0a0a0f 0%, #1a1a2e 100%);
+  }
+
+  /* 4. Şablonun Özgün Ferrari-Editorial & Real Madrid Kimliği CSS'i */
+  
+  /* Kategori Rozeti (Üst Sağ / Sol) */
+  .stage-badge {
+    position: absolute;
+    top: 64px;
+    left: 64px;
+    background: rgba(254, 190, 16, 0.15);
+    border: 1px solid var(--primary, #febe10);
+    color: var(--primary, #febe10);
+    font-family: var(--font-headline, 'Oswald'), sans-serif;
+    font-size: 20px;
+    font-weight: 650;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    padding: 8px 24px;
+    border-radius: 0px; /* Ferrari-design-analysis sharp 0px */
+    z-index: 20;
+  }
+
+  /* Manşet Alanı (Ferrari Cinematic Editorial Top Header) */
+  .header {
+    position: absolute;
+    top: 140px;
+    left: 64px;
+    right: 64px;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .header .top {
+    font-family: var(--font-headline, 'Oswald'), sans-serif;
+    font-size: 72px;
+    font-weight: 700;
+    line-height: 1.05;
+    letter-spacing: -1px;
+    text-transform: uppercase;
+    color: var(--text-main, #ffffff);
+    text-shadow: 0 4px 16px rgba(0,0,0,0.8);
+  }
+
+  .header .bot {
+    font-family: var(--font-headline, 'Oswald'), sans-serif;
+    font-size: 48px;
+    font-weight: 500;
+    line-height: 1.1;
+    letter-spacing: -0.5px;
+    color: var(--primary, #febe10);
+    text-transform: uppercase;
+    text-shadow: 0 2px 12px rgba(0,0,0,0.8);
+  }
+
+  /* Full-Bleed Cinematic Hero Photograph (Orta Alan) */
+  .photo {
+    position: absolute;
+    top: 420px;
+    left: 64px;
+    right: 64px;
+    height: 720px;
+    background-color: #181818;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 0px; /* Sharp precision */
+    overflow: hidden;
+    z-index: 10;
+  }
+
+  .bg-img {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    filter: brightness(0.9) contrast(1.05);
+  }
+
+  /* Fotoğraf Üstü Derinlik Veren Degrade Perde */
+  .photo::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(10,10,15,0.2) 0%, rgba(10,10,15,0.85) 100%);
+  }
+
+  /* Fotoğraf Üstü Vurgu / Stat Kicker (Ferrari Stili) */
+  .photo .yellow {
+    position: absolute;
+    bottom: 32px;
+    left: 32px;
+    right: 32px;
+    z-index: 12;
+    font-family: var(--font-headline, 'Oswald'), sans-serif;
+    font-size: 32px;
+    font-weight: 600;
+    line-height: 1.2;
+    color: #ffffff;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-left: 4px solid var(--primary, #febe10);
+    padding-left: 16px;
+  }
+
+  /* Gövde Alanı (Alt Kısım - Kesinlikle Sınırlı ve Taşmaz) */
+  .body {
+    position: absolute;
+    top: 1180px;
+    left: 64px;
+    right: 64px;
+    bottom: 160px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    overflow: hidden;
+    z-index: 20;
+    background: rgba(26, 26, 46, 0.6);
+    border-left: 2px solid var(--accent, #00529f);
+    padding: 32px;
+  }
+
+  .body-text {
+    width: 100%;
+    color: #e0e0e0;
+    font-family: var(--font-body, 'Inter'), sans-serif;
+    font-weight: 400;
+    line-height: 1.5; /* Satır aralığı güvenli üst uzantı payı ile */
+  }
+
+  /* Highlight (Vurgu) Renkleri - Real Madrid Paleti */
+  .body .hl-r { 
+    background: var(--primary, #febe10); 
+    color: #0a0a0f; 
+    padding: 2px 8px; 
+    font-weight: 700;
+    border-radius: 0px;
+  }
+  
+  .body .hl-y { 
+    background: var(--accent, #00529f); 
+    color: #ffffff; 
+    padding: 2px 8px; 
+    font-weight: 600;
+    border-radius: 0px;
+  }
+
+  /* 5. STANDART ALT ÖĞELER (Zorunlu) */
+  .progress { 
+    position: absolute; 
+    left: 0; 
+    right: 0; 
+    bottom: 84px; 
+    height: 6px; 
+    background: rgba(255,255,255,.15); 
+    z-index: 30; 
+  }
+  
+  .progress::after { 
+    content: ''; 
+    position: absolute; 
+    left: 0; 
+    top: 0; 
+    bottom: 0; 
+    background: var(--primary, #febe10); 
+    animation: fill {{ duration_s }}s linear forwards; 
+  }
+  
+  @keyframes fill { 
+    from { width: 0; } 
+    to { width: 100%; } 
+  }
+
+  .handle { 
+    position: absolute; 
+    left: 0; 
+    right: 0; 
+    bottom: 30px; 
+    text-align: center; 
+    font-family: var(--font-headline, 'Oswald'), sans-serif;
+    font-size: 26px; 
+    font-weight: 600; 
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text-muted, #8f8f8f); 
+    z-index: 30;
+  }
+
+  .source-credit { 
+    position: absolute; 
+    bottom: 6px; 
+    left: 50%; 
+    transform: translateX(-50%); 
+    background: rgba(10,10,15,0.8); 
+    color: rgba(255,255,255,.85); 
+    font-size: 14px; 
+    padding: 3px 10px; 
+    border-radius: 0px; 
+    z-index: 50; 
+    white-space: nowrap; 
+  }
+</style>
+</head>
+<body>
+<div class="stage dna-anim-{{ animation_style|default('none') }}">
+
+  {% if script.category %}<div class="stage-badge">{{ script.category }}</div>{% endif %}
+
+  <div class="header">
+    <span class="top" data-fit-width="128" data-fit-min="42" data-fit-max="72">{{ script.header_top }}</span>
+    <span class="bot" data-fit-width="128" data-fit-min="32" data-fit-max="48">{{ script.header_bottom }}</span>
+  </div>
+
+  <div class="photo">
+    <div class="bg-img" style="background-image: url('{{ bg_image_url|default("") }}');
+         {% if not bg_image_url %}display: none;{% endif %}"></div>
+    {% if script.photo_overlay %}<div class="yellow">{{ script.photo_overlay }}</div>{% endif %}
+  </div>
+
+  <div class="body">
+    <div class="body-text" data-fit-min="26" data-fit-max="40" data-fit-pad="24">
+      {{ body_html|safe }}
+    </div>
+  </div>
+
+  <div class="progress"></div>
+  <div class="handle">{{ handle }}</div>
+  {% if rss_source %}<div class="source-credit">{{ ui_source }}: {{ rss_source }}</div>{% endif %}
+</div>
+
+{% include "_auto_fit.js.j2" %}
+</body>
+</html>

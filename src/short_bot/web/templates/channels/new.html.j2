@@ -31,11 +31,8 @@
     <label class="block">
       <span class="text-xs text-claude-muted uppercase">Dil</span>
       <select name="language" class="bg-claude-surface border border-claude-border px-3 py-2 rounded-lg w-full mt-1 text-sm text-claude-text">
-        <option value="tr">Türkçe</option>
-        <option value="en">English</option>
-        <option value="de">Deutsch</option>
-        <option value="es">Español</option>
-        <option value="fr">Français</option>
+        {% for code, label in LANGUAGES %}<option value="{{ code }}">{{ label }}</option>
+        {% endfor %}
       </select>
     </label>
 
@@ -73,9 +70,9 @@
         </label>
       </div>
       {% if not pexels_key_set %}
-      <div class="bg-amber-900/30 border border-amber-700 text-amber-200 text-xs rounded px-3 py-2 mb-3">
+      <div class="bg-claude-wait/30 border border-claude-wait text-claude-wait text-xs rounded px-3 py-2 mb-3">
         ⚠ Pexels API key tanımlı değil.
-        <a href="/settings" class="underline hover:text-amber-100">Ayarlar sayfasından gir</a>.
+        <a href="/settings" class="underline hover:text-claude-wait-soft">Ayarlar sayfasından gir</a>.
       </div>
       {% endif %}
       <div class="grid grid-cols-3 gap-3">

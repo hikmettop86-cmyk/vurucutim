@@ -21,7 +21,8 @@ import unicodedata
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 
-from short_bot.text_normalize import current_language, locale_fold
+from short_bot.locale import CJK_LANGUAGES
+from short_bot.text_normalize import current_language, locale_fold, split_words
 
 # Bitişik kayıp bu uzunluğa ulaşırsa TTS parça düşürmüştür. 3: tek kelimelik ASR
 # ıskaları (ve bir-iki kelimelik yanlış duyumlar) altında kalsın, gerçek öbek
@@ -57,11 +58,24 @@ def normalize_tokens(text: str, lang: str | None = None) -> list[str]:
     dili elden ele taşımasını gereksiz kılıyor — ve o zincirde biri unutulursa hata
     SESSİZ olurdu.
     """
+    lg = lang or current_language()
+    cjk = lg in CJK_LANGUAGES
     out: list[str] = []
-    for raw in _fold(text, lang).split():
+    # split() DEĞİL: Japoncada senaryo tarafı 1 token, whisper tarafı 20 token olur
+    # ve sadakat denetimi OLMAYAN bir kayıp bildirip TTS'i boşuna iki kez yeniler.
+    for raw in split_words(_fold(text, lg), lg):
         # Kesme işareti: senaryo "Amerika'nın", whisper "Amerika 'nın" verebilir.
         w = re.sub(r"[^\w]", "", unicodedata.normalize("NFC", raw), flags=re.UNICODE)
         if not w:
+            continue
+        if cjk:
+            # CJK'de ÖLÇÜT KARAKTER. İki taraf farklı tanelikte gelir ve bu KAÇINILMAZ:
+            # senaryoyu biz altyazı öbeklerine bölüyoruz ('ずぶ濡れの'), whisper ise
+            # karakter karakter döküyor ('ず ぶ 濡 れ の'). Öbek-öbek karşılaştırmak
+            # ölçüldü: TTS metnin TAMAMINI okuduğu hâlde '9 kelime okunmadı' dedi ve
+            # sesi iki kez boşuna ürettirdi — üstelik GERÇEK kaybı da kaçırıyordu.
+            # Karakter, iki tarafın da üzerinde anlaştığı tek birim.
+            out.extend(w)
             continue
         out.append(_NUMBERS.get(w, w))
     return out

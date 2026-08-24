@@ -18,21 +18,46 @@
   </form>
 </div>
 <script>
-async function confirmBulkDelete(form) {
+/* SÜZGEÇLER EKRANDAN OKUNUR, gizli alanlardan DEĞİL.
+   Kusur: süzgeç kutuları HTMX ile yalnız ızgarayı tazeliyor; adres çubuğu
+   (hx-push-url yok) ve dolayısıyla sunucudan gelen gizli alanlar hiç
+   değişmiyordu. Kullanıcı "galatasaray"a süzüp ızgarada 10 video
+   görürken bu düğme BÜTÜN kanalları siliyordu — düğmenin kendi
+   ipucu ise "Filtreye uyan tüm shortları sil" diyordu.
+   Çözüm: gönderimden ÖNCE ekrandaki değerler gizli alanlara yazılır. */
+const BULK_ALANLAR = ['channel', 'q', 'since', 'youtube'];
+
+function suzgecDegeri(ad) {
+  const el = document.querySelector(`[name="${ad}"]:not([type=hidden])`);
+  return el ? (el.value || '').trim() : '';
+}
+
+function bulkAlanlariEsitle(form) {
   const params = new URLSearchParams();
-  for (const el of form.querySelectorAll('input[type=hidden]')) {
-    if (el.value) params.set(el.name, el.value);
+  for (const ad of BULK_ALANLAR) {
+    const deger = suzgecDegeri(ad);
+    const gizli = form.querySelector(`input[type=hidden][name="${ad}"]`);
+    if (gizli) gizli.value = deger;
+    if (deger) params.set(ad, deger);
   }
+  return params;
+}
+
+async function confirmBulkDelete(form) {
+  const params = bulkAlanlariEsitle(form);
   let count = null;
   try {
     const r = await fetch('/shorts/count?' + params.toString());
     const j = await r.json();
     count = j.count;
-  } catch (e) { /* network fallback */ }
-  const scope = params.toString() ? 'filtreye uyan' : 'TÜM';
+  } catch (e) { /* ağ hatası — sayısız sor */ }
+  const suzuluyor = params.toString() !== '';
+  const kapsam = suzuluyor
+    ? 'filtreye uyan (' + [...params].map(([k, v]) => k + '=' + v).join(', ') + ')'
+    : 'TÜM kanallardaki TÜM';
   const msg = count !== null
-    ? `${count} adet ${scope} short silinecek. Devam edilsin mi?`
-    : `${scope} shortlar silinecek. Devam edilsin mi?`;
+    ? `${count} adet ${kapsam} short silinecek. Devam edilsin mi?`
+    : `${kapsam} shortlar silinecek. Devam edilsin mi?`;
   return confirm(msg);
 }
 </script>

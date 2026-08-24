@@ -10,6 +10,10 @@ import requests
 from PIL import Image, ImageFilter, UnidentifiedImageError
 
 
+# Kart genişliği (px). `blur_radius` bu ölçüde tanımlıdır.
+_KART_GENISLIK = 1080
+
+
 def download_and_blur_thumb(
     url: str,
     cache_dir: Path,
@@ -29,7 +33,13 @@ def download_and_blur_thumb(
     """
     cache_dir = Path(cache_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
-    key = hashlib.sha1(url.encode("utf-8")).hexdigest()[:16]
+    # ANAHTAR BLUR'U DA İÇERİR. İçermezse ayar SESSİZCE UYGULANMAZ: kanalın
+    # blur değeri değiştirilir, ama daha önce indirilmiş her URL önbellekten
+    # ESKİ (bulanıklaştırılmamış) hâliyle döner ve fark yalnız YENİ haberlerde
+    # görülür. Yarısı bulanık yarısı net bir kanal, hiç bulanık olmayandan
+    # daha kötüdür.
+    key = hashlib.sha1(
+        f"{url}|blur={blur_radius}".encode("utf-8")).hexdigest()[:16]
     cached = cache_dir / f"{key}.jpg"
     if cached.exists():
         return cached
@@ -52,7 +62,18 @@ def download_and_blur_thumb(
         return None
 
     if blur_radius > 0:
-        img = img.filter(ImageFilter.GaussianBlur(radius=blur_radius))
+        # BULANIKLIK KART ÖLÇÜSÜNDE TANIMLIDIR, kaynak ölçüsünde değil.
+        #
+        # Görsel karta `background-size: cover` ile ölçeklenir. Ham çözünürlükte
+        # uygulanan sabit bir yarıçap, ölçekten sonra kaynak boyutuna göre
+        # BAMBAŞKA görünür: 600 piksellik bir görsel karta BÜYÜTÜLÜR (blur de
+        # büyür), 2000 piksellik KÜÇÜLTÜLÜR (blur kaybolur). Aynı ayarla bir
+        # video buğulu, öteki net çıkardı.
+        #
+        # Yarıçap `_KART_GENISLIK` referansına göre ölçeklenir; böylece
+        # `blur_radius` "kartta kaç piksel" demektir ve kaynaktan bağımsızdır.
+        etkin = blur_radius * (img.width / _KART_GENISLIK)
+        img = img.filter(ImageFilter.GaussianBlur(radius=max(0.5, etkin)))
     img.save(cached, "JPEG", quality=92)
     return cached
 

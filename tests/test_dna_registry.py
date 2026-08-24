@@ -155,12 +155,24 @@ def test_create_app_KAYIT_YOLUNU_config_dizinine_kurar(tmp_path):
 # hangi arketipte kullanıldığını BİLMEK gerekiyor; kayıtta tutulmuyordu.
 
 def _yalit(monkeypatch, tmp_path):
+    """Kayıt defterini BOŞ bir dünyayla yalıt.
+
+    `_DESIGNED_ARCHETYPES` ÜRETİM KAYDININ KOPYASI OLARAK yalıtılıyordu; dosya
+    boşaltılıyor ama bellekteki liste `config/archetypes.json`in tamamını
+    taşımaya devam ediyordu. Test bir süre yeşil kaldı çünkü o dosyada
+    `design_language` alanı yoktu; gerçek tasarım dilleri (binance, ibm, miro,
+    linear.app) kayda girer girmez `kullanilan_tasarim_dilleri` onları da
+    döndürdü ve test kırmızıya döndü. Yalıtım demek KOPYA değil, TEMİZ SAYFA.
+    """
     import short_bot.dna as dna
     yol = tmp_path / "archetypes.json"
     yol.write_text("[]", encoding="utf-8")
     monkeypatch.setattr(dna, "_REGISTRY_PATH", yol)
-    for ad in ("ARCHETYPES", "ARCHETYPE_LABELS", "ARCHETYPE_DEFAULTS",
-               "_DESIGNED_ARCHETYPES"):
+    # Kayda bağlı olanlar sıfırlanır — dosyadaki boşlukla aynı dünya.
+    monkeypatch.setattr(dna, "_DESIGNED_ARCHETYPES", [])
+    # Bunlar üretim arketiplerini de taşıyor (`_EXISTING_ARCHETYPES`); kopya
+    # doğru, çünkü testler yalnız EKLEME yapıyor ve mevcutları bozmamalı.
+    for ad in ("ARCHETYPES", "ARCHETYPE_LABELS", "ARCHETYPE_DEFAULTS"):
         monkeypatch.setattr(dna, ad, type(getattr(dna, ad))(getattr(dna, ad)))
     return dna, yol
 

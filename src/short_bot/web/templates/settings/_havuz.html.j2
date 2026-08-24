@@ -1,0 +1,227 @@
+{# Google AI Studio ücretsiz havuzu — durum + YÖNETİM.
+
+   NEDEN BU DÜZEN (faceless-2'nin 2026-07-14 adli incelemesinden):
+   Oradaki eski panel yanlış hikâyeyi anlatıyordu — anahtar başına uydurma bir
+   günlük-kota barı çiziyor, asıl dramı (EŞZAMANLILIK: Google'ın paylaşılan
+   kapasitesi 429 ile kapanınca havuz bir anda boşalır ve vision ÜCRETLİ koşar)
+   hiç göstermiyor, sahibin sorduğu tek sayıyı (BEDAVA/ÜCRETLİ) hiç yazmıyordu.
+   Burada manşet o oran; kota ikinci planda.
+
+   Günlük tavan UYDURMA DEĞİL: 500/anahtar·model, google_studio.DAILY_CAP,
+   canlı 429 ölçümünden geliyor.
+
+   NOT: .html.j2 uzantısında autoescape KAPALI — dış veri |e ile kaçırılır. #}
+<div id="havuz" class="bg-white border border-claude-border rounded-xl overflow-hidden">
+
+  {% if not h.var %}
+  <div class="p-5 text-sm text-claude-muted">
+    Havuz bulunamadı{% if h.hata %} — {{ h.hata|e }}{% endif %}.
+    İlk anahtarı ekleyince <code class="font-mono text-xs">{{ h.dizin|e }}</code>
+    altında oluşturulur.
+  </div>
+  {% else %}
+
+  {# ── MANŞET: sahibin sorduğu tek sayı ── #}
+  {% set toplam = h.bedava + h.ucretli %}
+  {% set oran = (h.bedava / toplam * 100) if toplam else 100 %}
+  <div class="grid md:grid-cols-2 gap-5 p-5 border-b border-claude-border">
+    <div>
+      <div class="text-[10.5px] font-semibold uppercase tracking-wider text-claude-subtle">
+        Bu kurulumda AI çağrılarının
+      </div>
+      <div class="flex items-baseline gap-3 flex-wrap mt-1">
+        <span class="text-[44px] font-semibold leading-none tabular-nums
+                     {% if oran >= 85 %}text-claude-success{% else %}text-claude-error{% endif %}">
+          %{{ oran|round(0)|int if oran >= 99.5 or oran == oran|round(0) else oran|round(1) }}
+        </span>
+        <span class="text-xs text-claude-subtle leading-snug">
+          <b class="text-claude-text tabular-nums">{{ "{:,}".format(h.bedava).replace(',', '.') }}</b> bedava ·
+          <b class="text-claude-text tabular-nums">{{ "{:,}".format(h.ucretli).replace(',', '.') }}</b> ücretli<br>
+          {% if h.ucretli == 0 %}havuz hiç tükenmedi — ücretliye hiç düşülmedi
+          {% else %}{{ h.ucretli }} çağrı ücretli sağlayıcıya düştü{% endif %}
+        </span>
+      </div>
+      <div class="flex h-2.5 rounded-full overflow-hidden bg-claude-surface-alt mt-3"
+           role="img" aria-label="Bedava/ücretli çağrı payı">
+        <i class="block h-full bg-claude-success" style="width:{{ oran }}%"></i>
+        <i class="block h-full bg-claude-error" style="width:{{ 100 - oran }}%"></i>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-2 gap-2.5 content-start">
+      {% macro olcu(deger, alt, ipucu='') -%}
+      <div class="bg-claude-surface border border-claude-border rounded-lg px-3 py-2.5"
+           {% if ipucu %}title="{{ ipucu|e }}"{% endif %}>
+        <div class="text-[22px] font-semibold leading-tight tabular-nums">{{ deger }}</div>
+        <div class="text-[11.5px] text-claude-subtle mt-0.5">{{ alt }}</div>
+      </div>
+      {%- endmacro %}
+      {{ olcu(h.etkin ~ ' / ' ~ h.anahtar, 'etkin anahtar') }}
+      {{ olcu("{:,}".format(h.bugun).replace(',', '.'),
+              'bugünkü çağrı' ~ (' (' ~ h.gun ~ ')' if h.gun else '')) }}
+      {{ olcu("{:,}".format(h.gunluk_tavan).replace(',', '.'),
+              'günlük tavan · ' ~ h.gunluk_cap ~ '/anahtar',
+              'Tavan canlı 429 ölçümünden geliyor, varsayım değil.') }}
+      {{ olcu(h.soguyan + h.tukenen + h.banli, 'soğuyan / tükenen / banlı') }}
+    </div>
+  </div>
+
+  {# ── ASIL RİSK: eşzamanlılık, günlük kota değil ── #}
+  {% if h.tukenen or h.banli %}
+  <div class="flex gap-3 px-4 py-3 text-sm bg-claude-error-soft border-b border-claude-error/30">
+    <span class="text-claude-error">⚠</span>
+    <span><b>{{ h.tukenen + h.banli }} anahtar devre dışı</b>
+      ({{ h.tukenen }} kota doldu, {{ h.banli }} banlı).
+      Havuz inceldikçe vision çağrıları ücretliye kayar.</span>
+  </div>
+  {% elif h.soguyan %}
+  <div class="flex gap-3 px-4 py-3 text-sm bg-claude-wait-soft border-b border-claude-wait/30">
+    <span class="text-claude-wait">⏱</span>
+    <span><b>{{ h.soguyan }} anahtar dakika-soğumasında.</b>
+      Asıl risk günlük kota değil <b>eşzamanlılık</b>: Google paylaşılan kapasiteyi
+      429 ile kapatınca havuz bir anda boşalır. Soğuma sayısı artıyorsa
+      eşzamanlılık tavanını düşür.</span>
+  </div>
+  {% else %}
+  <div class="flex gap-3 px-4 py-3 text-sm bg-claude-success-soft border-b border-claude-success/30">
+    <span class="text-claude-success">✓</span>
+    <span>Bütün anahtarlar çalışıyor, kota dolmadı, ban yok.
+      İzlenecek sayı <b>soğumadaki anahtar</b> — o artarsa eşzamanlılık tavanı yüksektir.</span>
+  </div>
+  {% endif %}
+
+  {# ── EKLEME ── #}
+  <form hx-post="/settings/pool/ekle" hx-target="#havuz" hx-swap="outerHTML"
+        class="flex gap-2 items-end flex-wrap px-4 py-3 bg-claude-surface border-b border-claude-border"
+        x-data="{ toplu: false }">
+    <div class="flex flex-col gap-1" x-show="!toplu">
+      <label for="hv-etiket" class="text-[11px] font-semibold uppercase tracking-wide text-claude-subtle">Etiket</label>
+      <input id="hv-etiket" name="etiket" type="text" placeholder="hesap@gmail.com"
+             class="w-48 px-3 py-1.5 rounded-lg border border-claude-border bg-white text-sm">
+    </div>
+    <div class="flex flex-col gap-1 flex-1 min-w-[230px]" x-show="!toplu">
+      <label for="hv-anahtar" class="text-[11px] font-semibold uppercase tracking-wide text-claude-subtle">Gemini API anahtarı</label>
+      <input id="hv-anahtar" name="anahtar" type="password" autocomplete="off"
+             placeholder="AQ.Ab8RN6…"
+             class="w-full px-3 py-1.5 rounded-lg border border-claude-border bg-white text-sm font-mono">
+    </div>
+    <div class="flex flex-col gap-1 flex-1 min-w-[280px]" x-show="toplu" x-cloak>
+      <label for="hv-toplu" class="text-[11px] font-semibold uppercase tracking-wide text-claude-subtle">
+        Her satıra bir anahtar — <span class="normal-case font-normal">“etiket,anahtar” ya da yalnız anahtar</span>
+      </label>
+      <textarea id="hv-toplu" name="toplu" rows="4"
+                class="w-full px-3 py-1.5 rounded-lg border border-claude-border bg-white text-xs font-mono"
+                placeholder="bir@gmail.com,AQ.Ab8RN6…&#10;iki@gmail.com,AQ.Ab8RN6…"></textarea>
+    </div>
+    <button type="submit" hx-disabled-elt="this"
+            class="px-4 py-1.5 rounded-lg bg-claude-accent hover:bg-claude-accent-hover text-white text-sm font-semibold">
+      + Ekle<span class="htmx-indicator">…</span>
+    </button>
+    <button type="button" x-on:click="toplu = !toplu"
+            class="px-3 py-1.5 rounded-lg border border-claude-border bg-white text-sm">
+      <span x-text="toplu ? 'Tek anahtar' : 'Toplu yapıştır…'">Toplu yapıştır…</span>
+    </button>
+    {% if mesaj %}
+    <span class="text-sm font-semibold {{ 'text-claude-error' if mesaj_hata else 'text-claude-success' }}">
+      {{ mesaj|e }}
+    </span>
+    {% endif %}
+  </form>
+
+  {# ── KOTA İŞLEMLERİ ── #}
+  <div class="flex gap-2 items-center flex-wrap px-4 py-2.5 border-b border-claude-border text-sm">
+    <span class="text-claude-subtle mr-auto">
+      {{ h.anahtar }} anahtar · {{ h.etkin }} etkin ·
+      bugün {{ "{:,}".format(h.bugun).replace(',', '.') }} çağrı
+    </span>
+    {% for islem, ad, ipucu in [
+        ('soguma', 'Soğumaları temizle', 'Dakika-soğumasındaki girişleri hemen serbest bırakır.'),
+        ('gun', 'Günü sıfırla', 'BİZİM sayacımızı sıfırlar; Google gerçekten doluysa çağrılar yine 429 döner.'),
+        ('ban', 'Banları kaldır', 'Ban listesini temizler.')] %}
+    <form hx-post="/settings/pool/kota/{{ islem }}" hx-target="#havuz" hx-swap="outerHTML">
+      <button type="submit" title="{{ ipucu }}" hx-disabled-elt="this"
+              class="px-3 py-1.5 rounded-lg border border-claude-border bg-white text-sm">{{ ad }}</button>
+    </form>
+    {% endfor %}
+    <form hx-post="/settings/pool/kota/pasif-sil" hx-target="#havuz" hx-swap="outerHTML"
+          hx-confirm="Kapalı anahtarlar havuzdan tamamen silinecek. Emin misin?">
+      <button type="submit" hx-disabled-elt="this"
+              class="px-3 py-1.5 rounded-lg border border-claude-error/35 text-claude-error text-sm">
+        Pasifleri sil</button>
+    </form>
+  </div>
+
+  {# ── ANAHTAR TABLOSU ── #}
+  <div class="max-h-[420px] overflow-auto">
+    <table class="w-full text-sm">
+      <thead class="sticky top-0 bg-white">
+        <tr class="border-b border-claude-border">
+          <th class="w-10"></th>
+          <th class="text-left px-3 py-2">Etiket</th>
+          <th class="text-left px-3 py-2">Anahtar</th>
+          <th class="text-left px-3 py-2">Durum</th>
+          <th class="text-right px-3 py-2"
+              title="Bugün bu anahtarla yapılan çağrı. Tavan {{ h.gunluk_cap }}/anahtar·model — canlı 429 ölçümünden.">Bugün ⓘ</th>
+          <th class="text-right px-3 py-2">Model</th>
+          <th class="w-12"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% set DURUM_AD = {'active': 'çalışıyor', 'rpm-cooldown': 'soğuyor',
+                           'daily-exhausted': 'kota doldu', 'banned': 'banlı',
+                           'disabled': 'kapalı'} %}
+        {% set DURUM_SINIF = {'active': 'text-claude-success bg-claude-success-soft',
+                              'rpm-cooldown': 'text-claude-wait bg-claude-wait-soft',
+                              'daily-exhausted': 'text-claude-error bg-claude-error-soft',
+                              'banned': 'text-claude-error bg-claude-error-soft',
+                              'disabled': 'text-claude-muted bg-claude-surface-alt'} %}
+        {% for a in h.anahtarlar %}
+        <tr class="border-b border-claude-border/50 hover:bg-claude-surface {% if not a.etkin %}opacity-50{% endif %}">
+          <td class="px-3 py-2">
+            <form hx-post="/settings/pool/{{ a.id|e }}/ac-kapa" hx-target="#havuz" hx-swap="outerHTML">
+              <input type="hidden" name="etkin" value="{{ 0 if a.etkin else 1 }}">
+              <button type="submit" hx-disabled-elt="this"
+                      title="{{ 'Kapat' if a.etkin else 'Aç' }}"
+                      aria-label="{{ 'Kapat' if a.etkin else 'Aç' }}"
+                      class="w-9 h-5 rounded-full relative transition-colors
+                             {{ 'bg-claude-success' if a.etkin else 'bg-claude-border-strong' }}">
+                <span class="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all
+                             {{ 'left-[18px]' if a.etkin else 'left-0.5' }}"></span>
+              </button>
+            </form>
+          </td>
+          <td class="px-3 py-2 font-medium">{{ a.etiket|e or '(etiketsiz)' }}</td>
+          <td class="px-3 py-2 font-mono text-xs text-claude-subtle">{{ a.maske|e }}</td>
+          <td class="px-3 py-2">
+            <span class="text-[10.5px] font-semibold px-2 py-0.5 rounded
+                         {{ DURUM_SINIF.get(a.durum, 'text-claude-muted bg-claude-surface-alt') }}">
+              {{ DURUM_AD.get(a.durum, a.durum) }}
+            </span>
+          </td>
+          <td class="px-3 py-2 text-right">
+            <div class="tabular-nums">{{ a.bugun }}</div>
+            <div class="h-1 w-16 ml-auto mt-1 rounded-full bg-claude-surface-alt overflow-hidden">
+              <i class="block h-full bg-claude-idle rounded-full"
+                 style="width:{{ [100, (a.bugun / h.gunluk_cap * 100)|round(0)|int]|min }}%"></i>
+            </div>
+          </td>
+          <td class="px-3 py-2 text-right tabular-nums text-claude-subtle">{{ a.model }}</td>
+          <td class="px-3 py-2 text-right">
+            <form hx-post="/settings/pool/{{ a.id|e }}/sil" hx-target="#havuz" hx-swap="outerHTML"
+                  hx-confirm="“{{ a.etiket|e or a.maske|e }}” havuzdan silinecek. Emin misin?">
+              <button type="submit" hx-disabled-elt="this" title="Anahtarı sil"
+                      class="px-2 py-0.5 rounded border border-claude-error/35 text-claude-error text-xs">✕</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+        {% if not h.anahtarlar %}
+        <tr><td colspan="7" class="px-4 py-6 text-center text-sm text-claude-muted">
+          Havuzda anahtar yok. Yukarıdan ekle — vision çağrıları o zaman ücretsiz koşar.
+        </td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>

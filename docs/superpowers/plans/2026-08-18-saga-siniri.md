@@ -106,6 +106,11 @@ def test_empty_never_matches():
 
 def test_disjoint_subjects_do_not_match():
     assert subject_matches("leao", "osimhen") is False
+
+
+def test_matches_same_words_in_different_order():
+    """Aynı özne iki kovaya bölünmemeli; sıra farkı anlam farkı değil."""
+    assert subject_matches("real madrid", "madrid real") is True
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -156,9 +161,15 @@ def subject_matches(a: str, b: str) -> bool:
     if a == b:
         return True
     ta, tb = set(a.split()), set(b.split())
-    kisa, uzun = (ta, tb) if len(ta) <= len(tb) else (tb, ta)
-    if not kisa or kisa == uzun:
+    if not ta or not tb:
         return False
+    if ta == tb:
+        # Aynı kelimeler, farklı sıra: "real madrid" / "madrid real".
+        # Erken dönüş `a == b` bunu YAKALAMAZ (dizgeler farklı) ve alt-küme
+        # testi de yakalamaz (öz alt-küme değil, eşit) — ayrıca ele alınmalı,
+        # yoksa aynı özne iki kovaya bölünür ve sayaç sessizce hiç dolmaz.
+        return True
+    kisa, uzun = (ta, tb) if len(ta) < len(tb) else (tb, ta)
     if any(len(t) < _SUBJECT_MIN_TOKEN for t in kisa):
         return False
     return kisa < uzun
@@ -167,7 +178,7 @@ def subject_matches(a: str, b: str) -> bool:
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd D:\short; python -m pytest tests/test_saga_subject.py -v`
-Expected: PASS — 10 passed
+Expected: PASS — 11 passed
 
 - [ ] **Step 5: Commit**
 

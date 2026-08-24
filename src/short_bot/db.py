@@ -1,5 +1,7 @@
 """SQLite via SQLAlchemy Core. Plain functions, no ORM session ceremony."""
 from datetime import datetime, timedelta, timezone
+from bisect import bisect_left, bisect_right
+from collections import Counter
 from difflib import SequenceMatcher
 from pathlib import Path
 
@@ -344,6 +346,12 @@ feeds = Table(
     Column("added_at", DateTime, default=_utcnow, nullable=False),
     Column("last_fetched_at", DateTime),
     Column("last_error", Text),
+    # SON ÇEKİLEN HABERLER (JSON dizisi). Panelde bir feed'e her tıklanışta RSS'i
+    # yeniden indirmek + her haberin og:image'ını makale sayfasından çekmek
+    # saniyeler sürüyordu; sayfa değiştirip dönünce liste sıfırlanıyordu. Artık
+    # çekim sonucu buraya yazılır, tıklama cache'ten anında açılır ve tazeleme
+    # kullanıcının "Yenile" düğmesine bağlıdır.
+    Column("cached_items_json", Text),
 )
 
 
@@ -390,6 +398,8 @@ def _migrate_add_columns(eng: Engine) -> None:
         # Dönüşüm metrikleri (bkz. youtube_video_stats tablo tanımı).
         ("youtube_video_stats", "subscribers_gained", "INTEGER DEFAULT 0"),
         ("youtube_video_stats", "avg_view_percentage", "REAL DEFAULT 0.0"),
+        # RSS Havuzu haber cache'i (bkz. feeds tablo tanımı).
+        ("feeds", "cached_items_json", "TEXT"),
     ]
     with eng.begin() as conn:
         for table, col, coltype in migrations:
@@ -506,6 +516,78 @@ def similar_title_exists(
     return False
 
 
+def processed_index(eng: Engine, *, lookback_days: int = 30):
+    """TÜM kanallar için (guid kümesi, başlık listesi) — TEK sorgu.
+
+    NEDEN VAR: RSS Havuzu her haberi her kanal için tek tek `is_processed` +
+    `similar_title_exists` ile soruyordu. ÖLÇÜLDÜ (2026-08-24, 8 kanal):
+    `similar_title_exists` tek haber için 118-164 ms — 110 haberlik bir kaynağı
+    açmak 13-14 saniye sürüyordu ve süre haber×kanal ile çarpılarak büyüyordu
+    (birleşik görünümde 464 haber = dakikalar). Sorgunun kendisi ucuz; pahalı
+    olan onu 880 kez tekrarlamaktı.
+
+    Dönen yapı çağıranda bellekte kullanılır: {"guid": {...}, "titles": [...]}.
+    """
+    cutoff = _utcnow() - timedelta(days=lookback_days)
+    with eng.connect() as conn:
+        rows = conn.execute(
+            select(processed_items.c.guid, processed_items.c.title)
+            .where(processed_items.c.processed_at >= cutoff)
+        ).fetchall()
+    guidler = {g for g, _ in rows if g}
+    # UZUNLUĞA GÖRE SIRALI: `benzer_baslik_var_mi` aday aralığını bisect ile
+    # kesip ötesine hiç bakmaz (aşağıdaki uzunluk sınırı matematiksel olarak
+    # kesin, bu yüzden eleme eşleşme KAÇIRMAZ).
+    basliklar = sorted((t.lower() for _, t in rows if t), key=len)
+    return {"guid": guidler, "titles": basliklar,
+            "lens": [len(t) for t in basliklar],
+            # Karakter sayımları BURADA bir kez kurulur. `SequenceMatcher.set_seq2`
+            # her adayda `__chain_b` indeksini yeniden inşa ediyordu ve bu, ucuz
+            # olması gereken ön elemenin en pahalı parçasıydı (profil: 34.538
+            # çağrıda 1,48 sn — `quick_ratio`'nun kendisi kadar).
+            "counts": [Counter(t) for t in basliklar]}
+
+
+def benzer_baslik_var_mi(index, title: str, threshold: float) -> bool:
+    """`processed_index` çıktısına karşı bellekte fuzzy eşleşme.
+
+    ÜÇ KADEMELİ ELEME, en ucuzdan pahalıya:
+      1. UZUNLUK — `ratio()` tanımı gereği 2·ortak/(l1+l2) ile sınırlı, yani
+         ortak en fazla min(l1,l2) olduğundan eşleşmenin olabilmesi için
+         2·min/(l1+l2) ≥ threshold olmalı. Bu, uzunluğu
+         [l·k, l/k] (k=threshold/(2-threshold)) dışında kalan her başlığı
+         hesaplamadan eler. Liste uzunluğa göre sıralı olduğu için aralık
+         bisect ile bulunur.
+      2. ORTAK KARAKTER SAYISI — `quick_ratio` ile aynı üst sınır, ama sayımlar
+         indekste hazır olduğu için `SequenceMatcher` hiç kurulmaz.
+      3. `ratio` — asıl karşılaştırma, yalnız ilk ikisini geçenlerde.
+    Üçü de üst sınır olduğu için eleme eşleşme KAÇIRMAZ (3.000 rastgele girdide
+    kaba kuvvetle birebir aynı sonuç).
+    """
+    t = (title or "").lower()
+    if not t:
+        return False
+    basliklar, lens, counts = index["titles"], index["lens"], index["counts"]
+    l = len(t)
+    k = threshold / (2.0 - threshold)     # bkz. 1. kademe türetimi
+    alt = bisect_left(lens, l * k)
+    ust = bisect_right(lens, l / k) if k > 0 else len(basliklar)
+    aday = Counter(t)
+    aday_items = aday.items()
+    for i in range(alt, ust):
+        cb = counts[i]
+        ortak = 0
+        for ch, adet in aday_items:
+            b = cb.get(ch)
+            if b:
+                ortak += adet if adet < b else b
+        if (2.0 * ortak) / (l + lens[i]) < threshold:
+            continue
+        if SequenceMatcher(None, t, basliklar[i]).ratio() >= threshold:
+            return True
+    return False
+
+
 def record_rss_item(
     eng: Engine, *, guid, channel, title, link, source,
     pub_date, thumb_url, score, status,
@@ -583,6 +665,61 @@ def store_youtube_meta(eng: Engine, short_id: int, meta: dict) -> None:
         data["youtube_meta"] = {"title": meta.get("title", ""),
                                 "description": meta.get("description", ""),
                                 "tags": list(meta.get("tags") or [])}
+        conn.execute(shorts.update().where(shorts.c.id == short_id)
+                     .values(script_json=_json.dumps(data, ensure_ascii=False)))
+
+
+def son_uretilen_hikayeler(eng: Engine, channel: str, *, saat: int = 72,
+                            limit: int = 40) -> list[tuple[int, str]]:
+    """Kanalın son `saat` saatte ÜRETTİĞİ videolar — (short_id, script_json).
+
+    Yeniden eskiye sıralı; mükerrerlik yargıcı en yakın olayı önce görsün.
+
+    SİLİNMİŞLER DE SAYILIR. Operatör videoyu listeden kaldırmış olabilir ama
+    yayına çıkmış olabilir; aynı haberi ikinci kez üretmemek için üretilmiş
+    saymak doğru taraf (`produced_guids_since` ile aynı gerekçe).
+    """
+    from datetime import datetime, timedelta, timezone
+    esik = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=saat)
+    with eng.connect() as conn:
+        rows = conn.execute(
+            select(shorts.c.id, shorts.c.script_json)
+            .where(shorts.c.channel == channel)
+            .where(shorts.c.created_at >= esik)
+            .order_by(shorts.c.created_at.desc())
+            .limit(limit)
+        ).all()
+    return [(int(r.id), r.script_json or "{}") for r in rows]
+
+
+def store_kart_turkcesi(eng: Engine, short_id: int, tr: dict) -> None:
+    """Kartın ekran metninin Türkçesini short'un script_json'una yaz.
+
+    `youtube_meta` ile AYNI kalıp ve aynı gerekçe: çeviri bir LLM çağrısıyla
+    üretiliyor, her sayfa açılışında yenilemek hem para harcar hem her seferinde
+    başka bir metin gösterir. Bir kez yazılır, panel onu okur.
+
+    `Script` alanı DEĞİL, script_json'a ek anahtar: çeviri render sözleşmesinin
+    parçası değil, sonradan eklenen bir not. Şemaya alan eklemek dört üretim
+    yolunu da ilgilendirirdi.
+
+    Bozuk/eksik script_json sessizce atlanır; çeviri bir kolaylıktır, üretimi
+    ya da yüklemeyi düşürmez.
+    """
+    import json as _json
+    with eng.begin() as conn:
+        row = conn.execute(
+            select(shorts.c.script_json).where(shorts.c.id == short_id)).first()
+        if row is None:
+            return
+        try:
+            data = _json.loads(row[0] or "{}") or {}
+        except (ValueError, TypeError):
+            data = {}
+        data["kart_tr"] = {"header_top": tr.get("header_top", ""),
+                           "header_bottom": tr.get("header_bottom", ""),
+                           "photo_overlay": tr.get("photo_overlay", ""),
+                           "body": tr.get("body", "")}
         conn.execute(shorts.update().where(shorts.c.id == short_id)
                      .values(script_json=_json.dumps(data, ensure_ascii=False)))
 
@@ -868,16 +1005,48 @@ def reclaim_producing_slots(eng: Engine) -> int:
             .values(status="planned")).rowcount
 
 
+#: `videos.insert` bir çağrıda 1600 unit yakar (Google'ın yayımladığı maliyet).
+#: Varsayılan proje kotası 10.000/gün, yani günde 6 yükleme.
+QUOTA_VIDEO_INSERT = 1600
+
+
 def record_youtube_upload(
     eng: Engine, *, short_id: int, video_id: str | None,
     status: str, error: str | None, video_url: str | None,
 ) -> int:
+    """Yükleme satırını yaz VE kotayı işle.
+
+    KOTA BURADA SAYILIR, çağıranlarda değil: yükleme sekiz ayrı yerden
+    kaydediliyor (panel, otomatik yükleme, yeniden deneme...) ve her birine
+    ayrı bir sayaç koymak, birinin unutulmasıyla sayacı sessizce yanlışlar.
+
+    Kusur şuydu: `incr_quota` YALNIZ istatistik tazelemesinden çağrılıyordu.
+    Panel «Quota bugün: 20 unit (10000/gün limit)» yazarken o gün aynı kanaldan
+    7 video yüklenmişti — gerçek maliyet 11.200 unit. Yani ekrandaki sayı
+    operatöre bolca yer varmış gibi gösteriyordu.
+
+    Yalnız BAŞARILI yükleme sayılır: başarısız istek de kota yakabilir ama
+    hata sebebi belli değil (ağ hatası hiç kota yakmaz), fazla saymak da eksik
+    saymak kadar yanıltıcı olurdu.
+    """
     with eng.begin() as conn:
         result = conn.execute(youtube_uploads.insert().values(
             short_id=short_id, video_id=video_id, video_url=video_url,
             status=status, error=error, uploaded_at=_utcnow(),
         ))
-        return result.inserted_primary_key[0]
+        yeni_id = result.inserted_primary_key[0]
+        if status == "success":
+            kanal = conn.execute(
+                select(shorts.c.channel).where(shorts.c.id == short_id)).scalar()
+        else:
+            kanal = None
+    if kanal:
+        # Ayrı işlem: kota bir NOTTUR, yazılamazsa yükleme kaydı düşmemeli.
+        try:
+            incr_quota(eng, channel=kanal, units=QUOTA_VIDEO_INSERT)
+        except Exception:  # noqa: BLE001
+            pass
+    return yeni_id
 
 
 def get_youtube_upload_for_short(eng: Engine, *, short_id: int):
@@ -1251,9 +1420,10 @@ def set_feed_meta(
     last_error: str | None = None,
     title: str | None = None,
     enabled: int | None = None,
+    cached_items_json: str | None = None,
 ) -> None:
-    """Patch fetch-state / enabled / title. Only non-None args are written.
-    To CLEAR a prior error, pass last_error="" (empty string is written;
+    """Patch fetch-state / enabled / title / item cache. Only non-None args are
+    written. To CLEAR a prior error, pass last_error="" (empty string is written;
     None means 'leave unchanged')."""
     values: dict = {}
     if last_fetched_at is not None:
@@ -1264,6 +1434,8 @@ def set_feed_meta(
         values["title"] = title
     if enabled is not None:
         values["enabled"] = enabled
+    if cached_items_json is not None:
+        values["cached_items_json"] = cached_items_json
     if not values:
         return
     with eng.begin() as conn:

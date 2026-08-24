@@ -42,7 +42,7 @@ def test_gunluk_kullanim_ve_kapasite(tmp_path):
     (d / "state.json").write_text(json.dumps({
         "ptDate": "2026-08-21",
         "usage": {"k0:gemini": {"dayCount": 120, "status": "active"},
-                  "k1:gemini": {"dayCount": 500, "status": "exhausted"}},
+                  "k1:gemini": {"dayCount": 500, "status": "daily-exhausted"}},
         "banned": {}}), encoding="utf-8")
     s = pool_durumu(d)
     assert s["bugun"] == 620
@@ -63,3 +63,29 @@ def test_bozuk_state_KIRILMAZ(tmp_path):
     (d / "state.json").write_text("{bozuk", encoding="utf-8")
     s = pool_durumu(d)
     assert s["var"] is True and s["bugun"] == 0
+
+
+def test_TUKENDI_havuzun_yazdigiyla_AYNI(tmp_path, monkeypatch):
+    """Sayaç, `Pool`un GERÇEKTEN yazdığı dizgeyi görmeli.
+
+    NEDEN (2026-08-23): `pool_durumu` "exhausted" arıyordu, `Pool` her yerde
+    "daily-exhausted" yazıyordu. Sayaç HER ZAMAN 0 dönüyordu — yani tam da
+    uyarması gereken anda sessizdi. Bu testin fixture'ı da yanlış dizgeyi
+    yazdığı için hata yıllarca yeşil göründü.
+
+    Burada dizge elle yazılmaz: havuzun kendisi bir anahtarı tüketene kadar
+    koşturulur ve diske ne yazdığına BAKILIR.
+    """
+    import json as _json
+    from short_bot.google_studio import TUKENDI, Pool, pool_durumu
+
+    d = _havuz(tmp_path, anahtar=1)
+    havuz = Pool(d, daily_cap=1)
+    havuz.acquire("gemini")          # 1. çağrı → sayaç dolar
+    assert havuz.acquire("gemini") is None, "kota dolunca anahtar verilmemeli"
+    havuz._save()
+
+    diskte = _json.loads((d / "state.json").read_text(encoding="utf-8"))
+    yazilan = {v.get("status") for v in diskte["usage"].values()}
+    assert TUKENDI in yazilan, f"havuz {yazilan} yazdı, sabit {TUKENDI!r}"
+    assert pool_durumu(d)["tukenen"] == 1, "sayaç havuzun yazdığını görmeli"

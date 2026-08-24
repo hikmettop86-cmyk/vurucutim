@@ -14,6 +14,7 @@ import logging
 from pathlib import Path
 
 from short_bot.narration import Narration, NarrationTimeline, TimedBeat, TimedWord
+from short_bot.text_normalize import split_words
 
 log = logging.getLogger(__name__)
 
@@ -103,7 +104,7 @@ def transcribe_words(
 
 
 def _segment_word_counts(narration: Narration) -> list[int]:
-    return [len(s.split()) for s in narration.segments()]
+    return [len(split_words(s)) for s in narration.segments()]
 
 
 
@@ -127,7 +128,7 @@ def build_timeline(
     words_flat: list[str] = []
     segs_flat: list[int] = []
     for seg_idx, seg_text in enumerate(narration.segments()):
-        for w in seg_text.split():
+        for w in split_words(seg_text):
             words_flat.append(w)
             segs_flat.append(seg_idx)
 

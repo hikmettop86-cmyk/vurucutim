@@ -251,8 +251,15 @@ def _build_tasks(*, prod, stalled, empties, failures, channels_by_slug,
         })
 
     # 2) Üretiyor ama yayınlanamıyor: bağlantısı olmayan kanal.
+    #
+    # `c.slug in channels_by_slug` ŞART: üretim tablosu veritabanından gelir ve
+    # orada YAPILANDIRMASI SİLİNMİŞ kanallar da var (ölçüldü: 30 slug'ın 22'si).
+    # Silinmiş bir kanal için "üretim kasada birikiyor, bağla" demek, kapatılması
+    # İMKÂNSIZ bir kırmızı madde üretir — üretimde kokpitin bir numaralı acil
+    # maddesi 'latidoblanco' idi ve o kanalın yapılandırması yoktu.
     bagsiz = [c for c in prod.channels
-              if c.produced > 0 and not yt_conn.get(c.slug, False)]
+              if c.produced > 0 and c.slug in channels_by_slug
+              and not yt_conn.get(c.slug, False)]
     if bagsiz:
         tasks.append({
             "kind": "unconnected",
@@ -312,8 +319,10 @@ def _build_tasks(*, prod, stalled, empties, failures, channels_by_slug,
         })
 
     # 5) Üretimin çoğu çöpe gidiyor — para ve zaman yakan sessiz sorun.
+    # Yapılandırması olmayan kanal için "eşiği gözden geçir" denemez (bkz. 2).
     dusuk = [c for c in prod.channels
-             if c.decided >= LOW_ACCEPT_MIN_DECIDED
+             if c.slug in channels_by_slug
+             and c.decided >= LOW_ACCEPT_MIN_DECIDED
              and (c.accept_rate or 0) < LOW_ACCEPT_RATE]
     if dusuk:
         tasks.append({
@@ -333,6 +342,8 @@ def _build_tasks(*, prod, stalled, empties, failures, channels_by_slug,
         })
 
     # 6) Çökmeden, aday bulamadan biten koşular — hata sayacına düşmezler.
+    # Yapılandırması silinmiş kanal bir daha koşmayacağı için elenir (bkz. 2).
+    empties = [(s_, n) for s_, n in empties if s_ in channels_by_slug]
     if empties:
         tasks.append({
             "kind": "empty",
@@ -467,7 +478,12 @@ def index():
         tasks=tasks,
         rows=rows,
         hours=hourly_production(eng, hours=WINDOW_HOURS),
-        growth=channel_growth(eng, days=SPARK_DAYS),
+        # Şerit "bağlı kanallar" diyor; yapılandırması silinmiş bir kanal bağlı
+        # OLAMAZ. `youtube_channel_stats` geçmişteki her slug'ı taşıyor ve süzgeç
+        # olmadan panelin ana ekranında `gundem` gibi ölü kanallar «0 toplam
+        # görüntüleme · 19 abone» diye duruyordu.
+        growth=[g for g in channel_growth(eng, days=SPARK_DAYS)
+                if g["channel"] in by_slug],
         top=top_videos(eng, days=SPARK_DAYS, limit=5),
         windows=WINDOWS,
         win_key=win_key,

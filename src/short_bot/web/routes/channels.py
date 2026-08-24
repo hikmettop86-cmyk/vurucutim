@@ -38,7 +38,7 @@ def run_status(run_id):
 @bp.route("/runs/<int:run_id>/cancel", methods=["POST"])
 def cancel_run(run_id):
     """Mark a running job as cancelled. The underlying daemon thread will finish but UI reflects cancellation."""
-    from datetime import datetime
+    from short_bot.db import _utcnow
     from short_bot.web.extensions import db
     run = Run.query.filter_by(id=run_id).first()
     if run is None:
@@ -47,7 +47,9 @@ def cancel_run(run_id):
         flash(f"Run zaten '{run.status}' durumunda.", "error")
     else:
         run.status = "cancelled"
-        run.ended_at = datetime.utcnow()
+        # `runs.ended_at` naif UTC; `_utcnow` tz-aware UTC üretir, SQLite
+        # dialect'i tzinfo'yu düşürür — tablodaki diğer damgalarla aynı eksen.
+        run.ended_at = _utcnow()
         db.session.commit()
         flash(f"Run #{run_id} iptal işaretlendi.", "success")
     return _htmx_redirect(request.referrer or url_for("channels.list_view"))

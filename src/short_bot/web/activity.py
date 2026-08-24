@@ -82,12 +82,18 @@ def _build_run_events(eng: Engine, *, since: datetime) -> list[ActivityEvent]:
 
 
 def _build_short_events(eng: Engine, *, since: datetime) -> list[ActivityEvent]:
-    """One event per short produced (deleted_at IS NULL only)."""
+    """Üretilen her video için bir olay — KARAR VERİLMİŞ olanlar DAHİL.
+
+    ``deleted_at`` çöp değil, operatörün KARARIDIR (bkz. ``dashboard_stats``
+    başlığı): beğendiğini YÜKLEYİP listeden siler. ``deleted_at IS NULL``
+    süzen bir akış «üretimi» değil «gelen kutusunu» gösterir ve sayfa kendi
+    kendisiyle çelişir — ölçüldü (2026-08-23): başlıkta 66 koşu ✓, 26 YouTube
+    yüklemesi ve 1 video yazıyordu. 1 videodan 26 yükleme çıkamaz.
+    """
     out: list[ActivityEvent] = []
     with eng.connect() as conn:
         rows = conn.execute(
             select(shorts_table)
-            .where(shorts_table.c.deleted_at.is_(None))
             .where(shorts_table.c.created_at >= since)
             .order_by(shorts_table.c.created_at.desc())
         ).fetchall()
@@ -214,9 +220,11 @@ def compute_summary_24h(eng: Engine) -> ActivitySummary:
             .where(runs.c.status == "failed")
             .where(runs.c.ended_at >= since)
         ).scalar() or 0
+        # `deleted_at` süzülmez: koşu ve yükleme sayaçları da süzmüyor,
+        # süzen tek sayaç sayfayı çelişkiye düşürüyordu (bkz.
+        # `_build_short_events` gerekçesi).
         shorts_count = conn.execute(
             select(func.count()).select_from(shorts_table)
-            .where(shorts_table.c.deleted_at.is_(None))
             .where(shorts_table.c.created_at >= since)
         ).scalar() or 0
         yt_success = conn.execute(

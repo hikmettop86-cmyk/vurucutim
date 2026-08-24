@@ -60,3 +60,23 @@ def _arketip_kaydi_yalitimi(tmp_path_factory, monkeypatch):
     for ad in ("ARCHETYPES", "ARCHETYPE_LABELS", "ARCHETYPE_DEFAULTS",
                "_DESIGNED_ARCHETYPES"):
         monkeypatch.setattr(dna, ad, type(getattr(dna, ad))(getattr(dna, ad)))
+
+
+@pytest.fixture(autouse=True)
+def _kart_uyumu_yargici_kapali(monkeypatch):
+    """Kart-uyumu YARGICINI birim testlerde KAPAT — GERÇEK LLM çağrısı yapıyor.
+
+    `write_yorum_narration` artık kart ile anlatımın aynı olayı anlatıp
+    anlatmadığını bir yargıca soruyor (kart_uyumu.ayni_olay_mi). Kapı `run_json`u
+    KENDİ modülünden çağırıyor; `narration_writer.run_json`u mock'layan testler
+    onu kaçırıyor. Ölçüldü (2026-08-23): test_narration_butce_turu.py 20 testte
+    0,5 saniyeden 89 saniyeye çıktı — her test claude CLI'yi ayağa kaldırıp
+    zaman aşımına düşüyordu. (Aynı tuzak `_olgu_denetimi_kapali`da yaşanmıştı.)
+
+    Kapıyı SINAYAN testler (tests/test_kart_uyumu_yargici.py) `ayni_olay_mi`ı
+    kendileri monkeypatch'liyor ve bu fixture'ı EZİYOR.
+    """
+    import short_bot.narration_writer as NW
+    from short_bot.kart_uyumu import KartKarari
+    monkeypatch.setattr(NW, "ayni_olay_mi", lambda *a, **kw: KartKarari(),
+                        raising=False)

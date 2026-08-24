@@ -52,6 +52,14 @@ class Settings:
     trends: TrendsSettings = field(default_factory=_default_trends_settings)
     whisper_quality: str = "auto"
     whisper_device: str = "auto"
+    # RSS Havuzu'nda yabancı dilli başlık/özetler panelde Türkçeye çevrilsin mi.
+    # Yalnız GÖSTERİM: videoya her hâlde orijinal metin gider (feed_translate).
+    # Kapatmak isteyen olur diye ayar: feed başına ~1 LLM çağrısı (yenilemede,
+    # sonuç cache'e yazılır).
+    feed_translate: bool = True
+    # RSS Havuzu saat başı arka planda tazelensin mi (görsel çözümü dahil).
+    # Kapatılırsa liste yalnız 'Yenile'ye basıldığında güncellenir.
+    feed_refresh_hourly: bool = True
     footage_priority: list = field(default_factory=lambda: ["pexels"])
 
 
@@ -380,6 +388,19 @@ class ChannelConfig:
     max_age_hours: int = 24
     dynamic_dna: bool = False
     negative_keywords: list[str] = field(default_factory=list)
+    # blocked_sources: YAYINCI kara listesi. `negative_keywords` BAŞLIĞA bakar,
+    # bu ise RSS'in `source` alanına — ölçüldü (2026-08-23, latidoblanco-flash
+    # 7 gün): havuzun en büyük tek kaynağı kulübün KENDİ sitesiydi (39/410) ve
+    # ürettiği şey "Onces iniciales", "Se cumplen 29 años…" gibi kurumsal
+    # dolguydu. Bu başlıklar puanlayıcıdan 7-8 alıyor çünkü kanala gerçekten
+    # UYGUNLAR; eleyen tek şey kaynağın kendisi olabilir. Aynı liste rakip
+    # cepheden yayın yapan medyayı da keser (madridista kanalında Mundo
+    # Deportivo/SPORT çerçevesi Barça'nındır).
+    # Eşleşme küçültülmüş `source` üzerinde KELİME SINIRINDA: "Mundo
+    # Deportivo" hem kendini hem "mundodeportivo.com"u yakalar, ama "SPORT"
+    # (Barça gazetesinin kaynak adı) "Sports Illustrated"ı kesmez. Bkz.
+    # pipeline._filter_blocked_sources.
+    blocked_sources: list[str] = field(default_factory=list)
     # categories: script'in seçebileceği canonical konu etiketleri. Boş
     # bırakılırsa LLM serbest etiket yazar (eski davranış). Dolu olduğunda
     # prompt listeyi dayatır — serbest etiket learning/aggregator'ın kova
@@ -434,6 +455,22 @@ class ChannelConfig:
     # kalırsa koşu boş biter. Havuzu SESSİZCE genişletmek yasak — tam da
     # düzeltilen sorunu geri getirir ve görünmez yapar.
     trends_min_candidates: int = 4
+    # trends_focus: dikeyin İÇİNDEKİ tercih. Dikey "hangi konu bizim işimiz"i
+    # çözer ama içeride hâlâ kalite eğimi var: JP spor havuzunda 大谷/山本 gibi
+    # yurt dışı haberleriyle J-League kadro duyurusu aynı torbada geliyor,
+    # oysa ölçülen medyan 11.500'e karşı 6.000 (2026-08-22).
+    #
+    # SERBEST METİN, kanalın dilinde yazılır ve kapı prompt'una TERCİH olarak
+    # girer — KAPI DEĞİL. Uyan haber 1-2 puan yukarı çıkar; uymayan kendi
+    # değerinden puan alır, cezalandırılmaz. Boş = etkisiz (mevcut kanallar
+    # sessizce değişmesin).
+    trends_focus: str = ""
+    # scope: kanalın KAPSAMI — puanlayıcıya verilen bir KAPI (bkz.
+    # scorer._scope_block). `keywords` kapsam ifadesi DEĞİL: "Real Madrid"
+    # anahtar kelimesi kulübün BASKETBOL haberini de karşılıyor ve merkez
+    # kuralını da geçiyor (haberin merkezinde sahiden Real Madrid var).
+    # Çok branşlı kulüplerde kapsamı ayrıca söylemek gerekiyor.
+    scope: str = ""
     # brand_safety: YouTube'da neredeyse kesin para kazandırmayan konuları eler
     # (bkz. brand_safety.py). "off" VARSAYILAN — mevcut kanalların davranışı
     # sessizce değişmesin; yeni kanallar kurulumda "normal" alır.
@@ -491,6 +528,8 @@ def load_settings(path: Path) -> Settings:
         trends=trends,
         whisper_quality=wh_data.get("quality", "auto"),
         whisper_device=wh_data.get("device", "auto"),
+        feed_translate=bool(data.get("feed_translate", True)),
+        feed_refresh_hourly=bool(data.get("feed_refresh_hourly", True)),
         # Eski config'lerde 'storyblocks' kalmış olabilir (2026-07-16'da kaldırıldı)
         # → build_footage_sources tanımadığı adı zaten atlar, burada temizlemek şart değil.
         footage_priority=list(ft_data.get("priority", ["pexels"])),
@@ -674,6 +713,7 @@ def load_channel(path: Path) -> ChannelConfig:
         max_age_hours=int(data.get("max_age_hours", 24)),
         dynamic_dna=bool(data.get("dynamic_dna", False)),
         negative_keywords=list(data.get("negative_keywords") or []),
+        blocked_sources=list(data.get("blocked_sources") or []),
         categories=list(data.get("categories") or []),
         category_quota_per_day={str(k): int(v) for k, v
                                 in (data.get("category_quota_per_day") or {}).items()},
@@ -683,6 +723,8 @@ def load_channel(path: Path) -> ChannelConfig:
         trends_min_volume=int(data.get("trends_min_volume") or 1000),
         trends_intent=_trends_intent(data.get("trends_intent"), slug),
         trends_vertical=_trends_vertical(data.get("trends_vertical"), slug),
+        trends_focus=(data.get("trends_focus") or "").strip(),
+        scope=(data.get("scope") or "").strip(),
         trends_min_candidates=int(data.get("trends_min_candidates") or 4),
         brand_safety=_brand_safety(data.get("brand_safety"), slug),
         reference_channels=list(data.get("reference_channels") or []),
@@ -732,6 +774,8 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
         data["dynamic_dna"] = True
     if cfg.negative_keywords:
         data["negative_keywords"] = list(cfg.negative_keywords)
+    if cfg.blocked_sources:
+        data["blocked_sources"] = list(cfg.blocked_sources)
     if cfg.categories:
         data["categories"] = list(cfg.categories)
     if cfg.category_quota_per_day:
@@ -753,6 +797,10 @@ def save_channel(path: Path, cfg: ChannelConfig) -> None:
         data["trends_intent"] = cfg.trends_intent
     if cfg.trends_vertical:
         data["trends_vertical"] = cfg.trends_vertical
+    if cfg.trends_focus:
+        data["trends_focus"] = cfg.trends_focus
+    if cfg.scope:
+        data["scope"] = cfg.scope
     if cfg.trends_min_candidates != 4:
         data["trends_min_candidates"] = cfg.trends_min_candidates
     if cfg.brand_safety != "off":

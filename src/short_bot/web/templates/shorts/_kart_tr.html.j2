@@ -1,0 +1,77 @@
+{# Kartın Türkçesi — YABANCI DİLLİ kanallarda yayın kararının verilebildiği yer.
+
+   6 saniyelik kartta ekranda görünen her şey manşet, foto şeridi ve gövdedir.
+   İspanyolca/Japonca/Almanca bir kartın karşısına oturan operatör bunları
+   okuyamıyor ve "bu yayınlanır mı" sorusunu cevaplayamıyordu. Seslendirmeli
+   formatta anlatımın Türkçesi zaten yazılıyordu; kart formatında hiçbir şey
+   yoktu.
+
+   `youtube_meta` ile AYNI kalıp: çeviri BİR KEZ üretilir ve saklanır. Her sayfa
+   açılışında LLM çağırmak hem para harcar hem her seferinde başka bir metin
+   gösterir.
+
+   NOT: .html.j2 uzantısında autoescape KAPALI — dış veri |e ile kaçırılır. #}
+<div id="kart-tr" class="bg-claude-surface border border-claude-wait/40 rounded-lg p-4">
+  <div class="flex items-baseline justify-between mb-2">
+    <div class="text-xs text-claude-wait uppercase tracking-wider">
+      Kartın Türkçesi
+      <span class="normal-case text-claude-muted">(otomatik çeviri — yayından önce oku)</span>
+    </div>
+    {% if kart_tr %}
+    <form hx-post="/shorts/{{ s.id }}/turkce" hx-target="#kart-tr" hx-swap="outerHTML" class="inline">
+      <input type="hidden" name="force" value="1">
+      <button type="submit" class="text-xs text-claude-muted hover:text-claude-text"
+              hx-disabled-elt="this">↻ yeniden çevir</button>
+    </form>
+    {% endif %}
+  </div>
+
+  {% if kart_tr_error %}
+  <div class="text-sm text-claude-error">Çevrilemedi: {{ kart_tr_error|e }}</div>
+  <form hx-post="/shorts/{{ s.id }}/turkce" hx-target="#kart-tr" hx-swap="outerHTML" class="mt-2">
+    <button type="submit" class="px-3 py-1.5 rounded-lg bg-claude-surface-alt border border-claude-border text-sm">
+      Tekrar dene
+    </button>
+  </form>
+
+  {% elif not kart_tr %}
+  <div class="text-sm text-claude-muted mb-2">
+    Kart dili: <b>{{ kart_dil|default('yabancı')|e }}</b> — henüz çevrilmedi.
+  </div>
+  <form hx-post="/shorts/{{ s.id }}/turkce" hx-target="#kart-tr" hx-swap="outerHTML">
+    <button type="submit" hx-disabled-elt="this"
+            class="px-3 py-1.5 rounded-lg bg-claude-accent hover:bg-claude-accent-hover text-white text-sm font-semibold">
+      ⇄ Türkçesini çıkar
+      <span class="htmx-indicator">…</span>
+    </button>
+  </form>
+
+  {% else %}
+  {# Alanlar kartın üstten alta sırasıyla — operatör ekrandakiyle birebir eşlesin. #}
+  <div class="space-y-2.5">
+    {% if kart_tr.header_top or kart_tr.header_bottom %}
+    <div>
+      <div class="text-[11px] text-claude-subtle uppercase tracking-wider">Manşet</div>
+      <div class="text-[15px] font-semibold leading-snug mt-0.5">
+        {{ kart_tr.header_top|e }}{% if kart_tr.header_bottom %}
+        <span class="text-claude-muted font-normal">— {{ kart_tr.header_bottom|e }}</span>{% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if kart_tr.photo_overlay %}
+    <div>
+      <div class="text-[11px] text-claude-subtle uppercase tracking-wider">Foto şeridi</div>
+      <div class="text-sm mt-0.5">{{ kart_tr.photo_overlay|e }}</div>
+    </div>
+    {% endif %}
+
+    {% if kart_tr.body %}
+    <div>
+      <div class="text-[11px] text-claude-subtle uppercase tracking-wider">Gövde</div>
+      <div class="text-sm whitespace-pre-wrap leading-relaxed mt-0.5">{{ kart_tr.body|e }}</div>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>

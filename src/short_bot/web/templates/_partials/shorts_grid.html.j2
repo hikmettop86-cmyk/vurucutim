@@ -16,7 +16,7 @@
             title="Sil">×</button>
     <div class="p-4 text-xs">
       <div class="font-semibold truncate">{{ s.title }}</div>
-      <div class="text-claude-muted mt-1">{{ s.channel }} · {{ s.created_at.strftime('%d %b %H:%M') }}</div>
+      <div class="text-claude-muted mt-1">{{ s.channel }} · {{ s.created_at | tr_tarih('gun_ay_saat') }}</div>
     </div>
   </div>
   {% else %}

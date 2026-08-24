@@ -37,7 +37,7 @@ def filter_new(
     fuzzy_threshold: float,
     openai_api_key: str | None = None,
     embeddings_out: dict[str, list[float]] | None = None,
-    topic_threshold: float = 0.72,
+    topic_threshold: float = 0.68,
     produced_threshold: float = 0.78,
     lookback_days: int = 14,
 ) -> list[NewsItem]:
@@ -55,8 +55,23 @@ def filter_new(
          output before; even if (3) misses, (4) anchors on the actual
          video output our channel published.
 
-    Thresholds (smaller = stricter):
-      topic_threshold     0.72  RSS-side title vs RSS-side history
+    Thresholds (LARGER = looser; a pair must score ABOVE the threshold to be
+    treated as the same story):
+      topic_threshold     0.68  RSS-side title vs RSS-side history
+
+        ÖLÇÜLDÜ (2026-08-09, galatasaray geçmişi: 220 başlık, 24.090 çift).
+        Eşik 0.72'ydi ve aynı haberin farklı gazetelerdeki başlıkları TAM
+        ALTINDA kümeleniyordu — yani hepsi geçiyor, aynı haber tekrar tekrar
+        video oluyordu (kullanıcının bildirdiği asıl sorun):
+          0.720 "Rodrigo Mora gelişmesi! Anlaşma sağlandı"
+             vs "Rodrigo Mora sürprizi! U23 10 numara için harekete geçildi"
+          0.698 "Alen Smailagić Galatasaray MCT Technic'te!"
+             vs "…Ve Alen Smailagić Galatasaray'da"
+          0.691 "Okan Buruk üstünü çizdi, sözleşmesi feshedildi"
+             vs "Okan Buruk üstünü çizdi! Nelsson'a veda vakti"
+        0.66-0.68 bandı KARIŞIK, 0.64-0.66 çoğunlukla FARKLI haber
+        ("Arsenal çıkarması" vs "Manchester City'nin kalbini istiyor" = 0.651),
+        bu yüzden daha aşağı inilmedi: yanlış eleme kanalı adaysız bırakır.
       produced_threshold  0.78  RSS-side title vs Claude-side history
                                   (higher because Claude normalizes — the
                                   produced text clusters tighter so a same-

@@ -141,6 +141,11 @@ def create_app(
     # "Bilim" → "BILIM". Türkçede "i"nin büyüğü "İ"dir. Şablonlarda |tr_upper kullan.
     from short_bot.text_normalize import turkish_upper
     app.jinja_env.filters["tr_upper"] = turkish_upper
+    # Tarihler de Türkçe. `strftime('%b')` C yerelini kullanıyor ve bu
+    # kurulumda İngilizce dönüyordu: baştan sona Türkçe panelde «22 Aug
+    # 18:11», cron çizelgesinde «23 August Sunday».
+    from short_bot.tarih_tr import tr_tarih
+    app.jinja_env.filters["tr_tarih"] = tr_tarih
 
     def kisa_sayi(n) -> str:
         """679826 → '680 B'. Dar sütunda tam sayı okunmuyor; tam hâli
@@ -232,5 +237,10 @@ def create_app(
         init_scheduler(app)
         from short_bot.web.scheduler_stats import init_stats_scheduler
         init_stats_scheduler(app)
+        # RSS Havuzu saat başı tazelensin: panel cache'ten açılsın, bekleme
+        # operatöre değil arka plana düşsün (bkz. scheduler_feeds modül notu).
+        if app.config["SHORTBOT_SETTINGS"].feed_refresh_hourly:
+            from short_bot.web.scheduler_feeds import init_feed_scheduler
+            init_feed_scheduler(app)
 
     return app

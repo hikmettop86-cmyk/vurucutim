@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from flask import (Blueprint, abort, current_app, flash, make_response,
                    redirect, render_template, request, url_for)
@@ -12,6 +12,22 @@ from short_bot.web.runs import launch_pipeline
 bp = Blueprint("shorts", __name__)
 
 
+def _simdi() -> datetime:
+    """Naif UTC — `shorts.created_at` ile AYNI eksen.
+
+    (`datetime.utcnow()` Python 3.12'den beri kullanımdan kalktı; `db._utcnow`
+    ile aynı gövde.)
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _yerel_gun_basi_utc() -> datetime:
+    """Yerel günün başlangıcı, tablodaki naif-UTC eksenine çevrilmiş."""
+    yerel = datetime.now().astimezone()
+    bas = yerel.replace(hour=0, minute=0, second=0, microsecond=0)
+    return bas.astimezone(timezone.utc).replace(tzinfo=None)
+
+
 def _apply_filters(query, *, channel, q, since, youtube):
     """Apply optional filters used by both /shorts and /shorts/grid."""
     if channel:
@@ -19,12 +35,16 @@ def _apply_filters(query, *, channel, q, since, youtube):
     if q:
         query = query.filter(Short.title.ilike(f"%{q}%"))
     if since == "1h":
-        query = query.filter(Short.created_at >= datetime.utcnow() - timedelta(hours=1))
+        query = query.filter(Short.created_at >= _simdi() - timedelta(hours=1))
     elif since == "today":
-        today_start = datetime.combine(datetime.utcnow().date(), datetime.min.time())
-        query = query.filter(Short.created_at >= today_start)
+        # "Bugün" YEREL gündür. Eskiden UTC gece yarısından sayılıyordu ve
+        # Türkiye'de (UTC+3) gece 00:00-03:00 arasında üretilen videolar
+        # "bugün" süzgecine HİÇ girmiyordu — cron 00:00'da koştuğu için tam
+        # o pencereye düşen üretim vardı. `compilation.day_bounds_utc` aynı
+        # işi zaten doğru yapıyor.
+        query = query.filter(Short.created_at >= _yerel_gun_basi_utc())
     elif since == "week":
-        query = query.filter(Short.created_at >= datetime.utcnow() - timedelta(days=7))
+        query = query.filter(Short.created_at >= _simdi() - timedelta(days=7))
     if youtube == "yes":
         query = (query.join(YoutubeUpload, YoutubeUpload.short_id == Short.id)
                        .filter(YoutubeUpload.status == "success")
@@ -78,8 +98,15 @@ def grid_partial():
 @bp.route("/shorts/<int:short_id>")
 def detail(short_id):
     s = Short.query.filter_by(id=short_id).first()
-    if s is None or s.deleted_at is not None:
+    if s is None:
         abort(404)
+    # SİLİNMİŞ VİDEO 404 DEĞİL. `deleted_at` operatörün gelen-kutusu
+    # kararıdır, kaydın yok sayılması değil: beğendiğini YÜKLEYİP
+    # listeden siliyor. Akış sayfası, YouTube hata olayları ve dışarıya
+    # verilmiş bağlantılar bu id'ye gidiyor ve hepsi 404 alıyordu —
+    # yayına çıkmış bir videonun sayfası açılmıyordu. Sayfa açılır,
+    # üstünde durumu söyleyen bir şerit çıkar.
+    silinmis = s.deleted_at is not None
     from short_bot.youtube import auth as _yt_auth
     from short_bot.web.models import YoutubeUpload
     yt_root = current_app.config.get("SHORTBOT_YT_CREDS_DIR")
@@ -113,6 +140,7 @@ def detail(short_id):
     except Exception:  # noqa: BLE001 — bozuk JSON detay sayfasını çökertmesin
         script = {}
     return render_template("shorts/detail.html.j2", s=s,
+                           silinmis=silinmis,
                            yt_connected=yt_connected, yt_upload=yt_upload,
                            yt_video_stats=yt_video_stats,
                            # Seslendirmeli üretimde KONUŞULAN metin `narration_text`tir;
@@ -124,6 +152,13 @@ def detail(short_id):
                            narration=(script.get("narration_text")
                                       or script.get("body_paragraph") or ""),
                            narration_tr=(script.get("body_paragraph_tr") or ""),
+                           # 6 SANİYELİK KART FORMATI: ekranda görünen her şey
+                           # manşet/foto şeridi/gövdedir ve yabancı dilli kanalda
+                           # operatör bunları okuyamıyordu. Seslendirmeli formatın
+                           # `body_paragraph_tr`si burada yok — kartın konuşulan
+                           # metni yok ki. Kutu YALNIZ yabancı dilli kanalda çıkar.
+                           kart_tr=(script.get("kart_tr") or None),
+                           kart_dil=_dil_adi(s.channel, current_app),
                            # Elle yükleyecek operatör için: başlık/açıklama/etiket.
                            # Kayıtlıysa gösterilir; yoksa sayfada "üret" düğmesi
                            # çıkar — her açılışta LLM çağırmak hem para harcar
@@ -156,6 +191,76 @@ def metadata(short_id):
                                meta_error=str(e)[:200])
     return render_template("shorts/_yt_meta.html.j2", s=s, yt_meta=meta,
                            meta_error=None)
+
+
+def _dil_adi(slug: str, app) -> str:
+    """Kanalın dili ("İspanyolca" gibi) — kutu neden var olduğunu söylesin."""
+    try:
+        cfg = load_channel(app.config["SHORTBOT_CONFIG_DIR"] / "channels" / f"{slug}.yaml")
+    except Exception:  # noqa: BLE001 — yapılandırma yoksa kutu yine çalışır
+        return ""
+    from short_bot.locale import LANGUAGE_NAMES
+    return "" if cfg.language == "tr" else LANGUAGE_NAMES.get(cfg.language, cfg.language)
+
+
+@bp.route("/shorts/<int:short_id>/turkce", methods=["POST"])
+def kart_turkcesi_uret(short_id):
+    """Kartın ekran metnini Türkçeye çevir (ve sakla).
+
+    Üretim sırasında otomatik yazılıyor (`pipeline._kart_turkcesini_yaz`); bu
+    rota ESKİ shortlar ve yeniden çeviri için. `youtube_meta` ile aynı kalıp:
+    sonuç script_json'a yazılır, her açılışta yeni çağrı yapılmaz.
+    """
+    s = Short.query.filter_by(id=short_id).first()
+    if s is None or s.deleted_at is not None:
+        abort(404)
+    cfg_path = current_app.config["SHORTBOT_CONFIG_DIR"] / "channels" / f"{s.channel}.yaml"
+    if not cfg_path.exists():
+        return render_template("shorts/_kart_tr.html.j2", s=s, kart_tr=None,
+                               kart_tr_error="Kanal yapılandırması bulunamadı.")
+    cfg = load_channel(cfg_path)
+    if cfg.language == "tr":
+        return render_template("shorts/_kart_tr.html.j2", s=s, kart_tr=None,
+                               kart_tr_error="Kanal zaten Türkçe.")
+
+    script = json.loads(s.script_json or "{}")
+    if request.form.get("force") != "1" and script.get("kart_tr"):
+        return render_template("shorts/_kart_tr.html.j2", s=s,
+                               kart_tr=script["kart_tr"], kart_tr_error=None)
+
+    from pathlib import Path as _Path
+    from short_bot.config import resolve_ai_call
+    from short_bot.db import init_db, store_kart_turkcesi
+    from short_bot.lang_review import kart_turkcesi
+    from short_bot.pexels import load_secrets as _load_secrets
+    try:
+        secrets_path = current_app.config.get("SHORTBOT_SECRETS_PATH")
+        secrets = _load_secrets(_Path(secrets_path)) if secrets_path else {}
+        call = resolve_ai_call(current_app.config["SHORTBOT_SETTINGS"], secrets, "default")
+        tr = kart_turkcesi(
+            header_top=script.get("header_top", ""),
+            header_bottom=script.get("header_bottom", ""),
+            photo_overlay=script.get("photo_overlay", ""),
+            body=script.get("body_paragraph", ""),
+            language=cfg.language, backend=call.backend, model=call.model,
+            api_key=call.api_key, claude_path=call.claude_path,
+            # Panelde sebep GÖRÜNSÜN: havuz tükenmesi, model reddi ve ağ kopması
+            # fail-open'da aynı boş cümleye çıkıyordu.
+            strict=True)
+    except Exception as e:  # noqa: BLE001 — kutu hata gösterir, sayfa düşmez
+        current_app.logger.warning("kart Türkçesi üretilemedi (short %s): %s", short_id, e)
+        return render_template("shorts/_kart_tr.html.j2", s=s, kart_tr=None,
+                               kart_tr_error=str(e)[:200])
+    if tr is None:
+        return render_template("shorts/_kart_tr.html.j2", s=s, kart_tr=None,
+                               kart_tr_error="Çeviri boş döndü.")
+    veri = tr.model_dump()
+    try:
+        store_kart_turkcesi(init_db(current_app.config["SHORTBOT_DB_PATH"]), s.id, veri)
+    except Exception:  # noqa: BLE001 — saklayamamak göstermeyi engellemesin
+        pass
+    return render_template("shorts/_kart_tr.html.j2", s=s, kart_tr=veri,
+                           kart_tr_error=None)
 
 
 @bp.route("/shorts/run-now", methods=["POST"])
@@ -234,7 +339,7 @@ def delete(short_id):
     s = Short.query.filter_by(id=short_id).first()
     if s is None or s.deleted_at is not None:
         abort(404)
-    s.deleted_at = datetime.utcnow()
+    s.deleted_at = _simdi()
     db.session.commit()
     flash(f"'{s.title}' silindi.", "success")
     if request.headers.get("HX-Request"):
@@ -254,7 +359,7 @@ def delete_all():
     query = Short.query.filter(Short.deleted_at.is_(None))
     query = _apply_filters(query, **f)
     matched = query.all()
-    now = datetime.utcnow()
+    now = _simdi()
     count = 0
     for s in matched:
         s.deleted_at = now

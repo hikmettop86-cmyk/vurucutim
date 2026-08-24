@@ -76,11 +76,14 @@ def topic_index(rows: Iterable[dict], *,
     for cat, items in by_cat.items():
         if len(items) < min_samples:
             continue
+        endeksler = [x["index"] for x in items]
         out.append({
             "category": cat,
             "n": len(items),
-            "index": round(st.median(x["index"] for x in items), 2),
+            "index": round(st.median(endeksler), 2),
             "median_views": int(st.median(x["views"] for x in items)),
+            # Kota kararı için ham endeksler — çağıran belirsizliği hesaplasın.
+            "_indices": endeksler,
         })
     out.sort(key=lambda x: -x["index"])
     return out
@@ -178,13 +181,44 @@ def headline_truncation_rate(rows: Iterable[dict]) -> dict[str, Any]:
     return {"rate": round(kesik / total, 3), "truncated": kesik, "total": total}
 
 
-# Kota eşiği: bu endeksin altındaki konu "kanıtlı zayıf" sayılır. Kota ancak
+# Kota eşiği: bu endeksin altındaki konu "zayıf" sayılır. Kota ancak
 # performansı düşük konuya konur — en çok üretilene DEĞİL. Gerçek hata buydu:
 # ilk kota en çok üretilen konuya konuldu, oysa o konu iki kanalda da ortalama
 # performanslıydı (GS 0.99, FB 1.07) ve kısıtlamak üretimi daha zayıf konulara
 # itti (kadro-karari 0.63).
 _QUOTA_INDEX_THRESHOLD = 0.85
 _QUOTA_MIN_SAMPLES = 6
+
+# NOKTA TAHMİNİ KANIT DEĞİLDİR. Endeks tek bir sayıdır ve izlenme dağılımı
+# çarpık: 893 videoluk ölçümde σ/µ = 1,05 ve üst %10'luk dilim tüm izlenmenin
+# %34'ünü taşıyor. Böyle bir dağılımda 6 gözlemli bir medyanın hata payı
+# kanalın medyanından büyük olabiliyor — yani "endeks 0,84" ile "endeks 1,00"
+# arasındaki fark çoğu zaman ölçüm gürültüsü.
+#
+# İki yönde de yanılıyordu (fenerbahce, 2026-08-23):
+#   mac-skor      n=14 endeks 0,49 → önerildi, ama %90 aralığı 0,34–1,18:
+#                                     kanal medyanını İÇERİYOR, kanıt yok
+#   kadro-karari  n=25 endeks 0,87 → önerilmedi (0,85 eşiğinin üstü), ama
+#                                     %90 aralığı tamamen 1,00'ın ALTINDA
+# Bu yüzden kota artık aralığa bakıyor: üst sınır 1,00'ın altında kalmalı.
+_BOOTSTRAP_N = 3000
+_CI_UST_YUZDE = 95          # tek taraflı %95 → iki taraflı %90 aralığın üstü
+
+
+def _zayif_kaniti(endeksler: list[float], *, tohum: int) -> float | None:
+    """Kategorinin endeks medyanının %90 güven aralığının ÜST sınırı.
+
+    1,00'ın altındaysa "bu konu kanalın medyanının altında" demek için kanıt
+    var. Tohum sabit — aynı veri aynı öneriyi versin, rapor koşudan koşuya
+    oynamasın.
+    """
+    if len(endeksler) < 2:
+        return None
+    import random
+    rnd = random.Random(tohum)
+    medyanlar = sorted(st.median(rnd.choices(endeksler, k=len(endeksler)))
+                       for _ in range(_BOOTSTRAP_N))
+    return medyanlar[int(len(medyanlar) * _CI_UST_YUZDE / 100)]
 
 
 def load_channel_rows(eng, channel: str) -> list[dict]:
@@ -235,25 +269,41 @@ def load_channel_rows(eng, channel: str) -> list[dict]:
     return out
 
 
-def audit_channel(eng, channel: str) -> dict[str, Any]:
+def audit_channel(eng, channel: str, *,
+                  canonical: Iterable[str] | None = None) -> dict[str, Any]:
     """Kanalın ayarları için veriye dayalı rapor + öneriler.
 
     Elle yapılan analizi tekrarlanabilir kılar. Öneriler UYGULANMAZ; operatör
     görüp karar verir, çünkü küçük örneklem yanıltabilir.
+
+    ``canonical``: kanalın şu an ÜRETTİĞİ kategori listesi (`channel.categories`).
+    Verilirse kota önerisi bununla sınırlanır. Gerekçe: geçmiş veride artık
+    üretilmeyen etiketler duruyor ("transfer", "futbol", "spor" — canonical
+    listeden önceki dönemden). Onlara kota koymak hiçbir şey yapmaz; kota
+    üretim ANINDAKİ etiketle eşleşir, ölü etiket hiç eşleşmez. Ölçüldü
+    (2026-08-23): fenerbahce'nin son 7 günündeki 168 videonun %100'ü canonical
+    etiketliydi, ama rapor hâlâ 'transfer: 1' öneriyordu.
     """
     rows = load_channel_rows(eng, channel)
     olculebilir = [r for r in rows if r["views"]]
     topics = topic_index(rows)
-    quota = [
-        {"category": t["category"], "index": t["index"], "n": t["n"],
-         "suggested_limit": 1}
-        for t in topics
-        if t["index"] < _QUOTA_INDEX_THRESHOLD and t["n"] >= _QUOTA_MIN_SAMPLES
-    ]
+    izinli = {c for c in canonical} if canonical else None
+    quota = []
+    for t in topics:
+        if izinli is not None and t["category"] not in izinli:
+            continue
+        if t["n"] < _QUOTA_MIN_SAMPLES:
+            continue
+        ust = _zayif_kaniti(t.get("_indices") or [], tohum=hash(t["category"]) & 0xffff)
+        if ust is None or ust >= 1.0:
+            continue          # aralık kanal medyanına değiyor → kanıt yok
+        quota.append({"category": t["category"], "index": t["index"],
+                      "n": t["n"], "ci_ust": round(ust, 2),
+                      "suggested_limit": 1})
     return {
         "channel": channel,
         "sample_size": len(olculebilir),
-        "topics": topics,
+        "topics": [{k: v for k, v in t.items() if k != "_indices"} for t in topics],
         "quota_suggestions": quota,
         "worn_phrases": [w for w in worn_phrases(rows) if w["worn"]][:10],
         "headline_truncation": headline_truncation_rate(rows),

@@ -73,8 +73,10 @@ def test_baslik_kurali_varlik_artı_niyet():
     ('gs transfer', 'galatasaray transfer son dakika'). 'Anahtar kelime başta'
     kuralı bunu söylemiyordu."""
     p = _prompt(trends_vertical="para")
-    assert "VARLIK + NİYET" in p
-    assert "ÖZNEYİ yaz" in p
+    # Kural İngilizce yazılıyor (bkz. build_metadata_prompt notu: istem gövdesi
+    # Türkçe kaldığında model YABANCI kanallarda da Türkçe üretiyordu).
+    assert "ENTITY + INTENT" in p
+    assert "lead with the SUBJECT" in p
 
 
 # --- CJK başlık bütçesi -------------------------------------------------------

@@ -81,7 +81,24 @@ from short_bot.locale import trend_region_for
 from short_bot.models import ScoredItem
 
 _GENERATOR_TOPIC_DIST_DAYS = 7   # window for topic_distribution Sonnet hint
-_IMAGE_RETRY_MAX = 3   # try this many top candidates before giving up on image
+_IMAGE_RETRY_MAX = 3   # GÖRSELİ bulunamayan kaç aday denenir
+# Kaç aday DENENİR (toplam). _IMAGE_RETRY_MAX'ten AYRI olmak zorunda:
+#
+# O sabit "görsel bulunamazsa kaç kez daha dene" diye konmuştu. Sonradan
+# KAPSAM ve MÜKERRERLİK kapıları eklendi (senaryo yazıldıktan sonra çalışırlar)
+# ve aynı 3'lük bütçeyi yemeye başladılar — oysa gerekçeleri bambaşka.
+#
+# ÖLÇÜLDÜ (2026-08-23, latidoblanco-flash koşu #2114): eşiği geçen 11 haber
+# vardı, liste 3'e kırpıldı, üçü de "aynı olay zaten anlatıldı" diye elendi ve
+# koşu VİDEOSUZ bitti. Havuzda bekleyen 4. ve 5. adaylar (Sergio Martínez
+# transferi, Mourinho'nun 'köstebek' hikâyesi) BAŞKA olaylardı ve hiç
+# denenmedi.
+#
+# Görsel sayacı ayrı tutuluyor: üst üste görsel bulunamaması sistemik bir
+# arızadır (ağ/vision düştü) ve orada 8 deneme yakmanın anlamı yok. İçerik
+# kapılarının elemesi ise normaldir ve bir sonraki aday gerçekten farklı
+# olabilir.
+_CANDIDATE_MAX = 8
 
 
 def _is_recent(pub_date: datetime | None, cutoff: datetime) -> bool:
@@ -119,6 +136,45 @@ def _filter_negative_keywords(items: list, negative_keywords: list[str],
     return [
         i for i in items
         if not any(n in locale_fold(i.title, language) for n in needles)
+    ]
+
+
+def _filter_blocked_sources(items: list, blocked_sources: list[str],
+                            language: str) -> list:
+    """Kara listedeki YAYINCIDAN gelen haberleri eler.
+
+    `_filter_negative_keywords` BAŞLIĞA bakar ve bu vakayı hiçbir zaman
+    yakalayamaz: elenmesi gereken şey başlığın kendisi değil, KİMİN yazdığıdır.
+    Ölçüldü (2026-08-23, latidoblanco-flash, 7 gün / 410 haber): havuzun en
+    büyük tek kaynağı `Real Madrid CF | Web Oficial` (39) ve ürettiği başlıklar
+    ("Onces iniciales del Real Madrid y el Espanyol", "Se cumplen 29 años de la
+    quinta Supercopa") puanlayıcıdan 7-8 alıyor — kanala GERÇEKTEN uygunlar,
+    içlerinde yalnız olay yok.
+
+    Eşleşme KELİME SINIRINDA, düz alt dize DEĞİL. Tam eşitlik yetmez: Google
+    News aynı yayıncıyı bazen "Mundo Deportivo", bazen "mundodeportivo.com"
+    diye veriyor (ikisi de aynı havuzda görüldü). Ama düz alt dize de
+    tehlikeli: Barça gazetesinin kaynak adı yalnızca "SPORT" ve o dize
+    "Sports Illustrated" ile "dsports" içinde de geçiyor — ikisi de aynı
+    havuzda var ve ikisi de meşru. Sınır kontrolü "sport"u yakalar,
+    "sports"/"dsports"u bırakır.
+
+    `language` zorunlu — küçültme dile duyarlı olmalı; bkz.
+    `_filter_negative_keywords` gerekçesi.
+    """
+    if not blocked_sources:
+        return items
+    desenler = [
+        re.compile(r"(?<!\w)" + re.escape(locale_fold(k.strip(), language))
+                   + r"(?!\w)")
+        for k in blocked_sources if k.strip()
+    ]
+    if not desenler:
+        return items
+    return [
+        i for i in items
+        if not any(d.search(locale_fold(i.source or "", language))
+                   for d in desenler)
     ]
 
 
@@ -490,6 +546,30 @@ def unique_output_path(out_dir: Path, stem: str, suffix: str = ".mp4") -> Path:
         f"çıktı adı üretilemedi: {out_dir / stem}{suffix} ve -2..-{MAX_OUTPUT_SUFFIX} dolu")
 
 
+def _yayinlanan_sure_s(out_path: Path, ffmpeg_path: str, varsayilan: int | None) -> int | None:
+    """YAYINLANAN dosyanın süresi — `channel.duration_s` DEĞİL.
+
+    `channel.duration_s` KART süresidir (6). Seslendirmeli kanallarda video o
+    kadar değil, anlatım kadar sürer; ölçüldü: 11 videonun 11'i 6sn kayıtlıydı,
+    gerçek süreler 23,8 / 26,9 / 27,1 / 31,8 / 35,5 / 38,4 / 38,7 / 39,7 / 40,3 /
+    40,6 / 40,7 saniye. Panel de akış da o 6'yı okuyup yazıyordu.
+
+    `compilation` bu yalanı zaten biliyor ve süreleri ffprobe'dan alıyor
+    (compilation.py başlığı) — ama yalnız kendisi için. Kaynağı düzeltmek
+    diğer bütün tüketicileri (detay sayfası, ızgara, akış, analiz) de düzeltir.
+    Aynı düzeltme kürate yolunda zaten var (`curated_pipeline`, short 1140).
+
+    PENCERE, KAPI DEĞİL: ffprobe okunamazsa kanal süresine düşülür — üretim
+    kaydı süre yüzünden düşmez.
+    """
+    from short_bot.reel import _clip_duration_s
+    try:
+        olculen = _clip_duration_s(out_path, ffmpeg_path)
+    except Exception:  # noqa: BLE001 — süre bir not, üretimi düşürmez
+        return varsayilan
+    return int(round(olculen)) if olculen > 0 else varsayilan
+
+
 # _build_cta_sfx KALDIRILDI (2026-07-16): CTA kapanış kartı silindi.
 
 
@@ -774,9 +854,19 @@ def _run_pipeline_inner(
                     defer_upload=defer_upload,
                 )
         except Timeout:
-            finish_run(eng, run_id, status="failed", short_id=None,
+            # KİLİT MEŞGUL = ATLAMA, HATA DEĞİL. Aynı kanal için bir üretim
+            # zaten sürüyor; bu koşunun yapacak işi yok. 'failed' yazmak iki
+            # şeyi birden bozuyordu:
+            #   * `dashboard_stats.failed_runs` kendini "gerçekten çöken
+            #     koşular" diye tanımlıyor ve operatörün hata paneline sahte
+            #     arıza basıyordu (son 14 günün 13 "hatası" buydu),
+            #   * cron bir elle üretimin üstüne denk geldiğinde kanal arızalı
+            #     görünüyordu — oysa doğru davranışı sergilemişti.
+            # Hemen aşağıdaki RunCancelled kolu bu gerekçenin aynısını taşıyor.
+            log.info("kilit meşgul — bu kanal için üretim zaten sürüyor, atlandı")
+            finish_run(eng, run_id, status="skipped", short_id=None,
                        error="lock busy: pipeline already running for this channel")
-            return RunResult(run_id=run_id, status="failed", short_path=None,
+            return RunResult(run_id=run_id, status="skipped", short_path=None,
                              error="lock busy")
         except RunCancelled:
             # Kullanıcı panelden durdurdu — HATA DEĞİL. 'failed' yazmak yanıltır ve
@@ -793,6 +883,128 @@ def _run_pipeline_inner(
         _clear_active_run_log_path()
         # Dispose engine to release the SQLite connection pool (CLI use case)
         eng.dispose()
+
+
+
+
+
+def _mukerrer_sebebi(script, channel, eng, settings, secrets, log) -> tuple[str, str]:
+    """Bu senaryo son 72 saatte anlatılmış bir olayı mı tekrarlıyor? Sebep ya da "".
+
+    `dedup.filter_new` dört katmanının DÖRDÜ DE adayı RSS BAŞLIĞINDAN okuyor;
+    video ise makalenin gövdesinden yazılıyor ve başka bir şey anlatabiliyor
+    (#1783: RSS "Uğurcan Çakır'dan net mesaj" → video "4-0 ERZURUM DEPLASMANI").
+    Yani filtre videonun anlatacağı şeyi hiç görmüyor ve aynı transfer 32 saatte
+    üç kez video oldu.
+
+    Bu kapı senaryo YAZILDIKTAN sonra, render'dan ÖNCE çalışır — artık videonun
+    ne diyeceği belli ve pahalı adım henüz başlamadı.
+
+    (sebep, saga_öznesi) döner. ÖZNE MÜKERRERLİKTEN BAĞIMSIZ: video geçse de
+    kaydedilir. Puanlayıcının verdiği özne çoğu zaman BOŞ, çünkü o yalnız RSS
+    başlığını görüyor ve Türkçe tıklama tuzağı başlıkçılığı ismi bile bile
+    saklıyor ("Galatasaray'da bir ayrılık daha! Yeni takımı belli oldu").
+    Ölçüldü: öznesi boş sekiz videonun yedisinde isim başlıkta HİÇ geçmiyordu.
+    Bu yargı senaryoyu okuduğu için ismi görüyor.
+
+    PENCERE, KAPI DEĞİL: yargı alınamazsa üretim devam eder. Yanlış eleme,
+    yanlış geçirmeden pahalı — kanal o koşuda videosuz kalır.
+    """
+    try:
+        import json as _json
+        from short_bot.db import son_uretilen_hikayeler
+        from short_bot.models import Script as _Script
+        from short_bot.story_dedup import (
+            GecmisHikaye, PENCERE_SAAT, hikaye_ozeti, mukerrer_mi)
+
+        gecmis = []
+        for sid, sj in son_uretilen_hikayeler(eng, channel.slug, saat=PENCERE_SAAT):
+            try:
+                gecmis.append(GecmisHikaye(sid, hikaye_ozeti(
+                    _Script.model_validate(_json.loads(sj)))))
+            except Exception:  # noqa: BLE001 — bozuk kayıt kapıyı düşürmesin
+                continue
+        if not gecmis:
+            return "", ""
+        call = resolve_ai_call(settings, secrets, "default")
+        karar = mukerrer_mi(script, gecmis, backend=call.backend, model=call.model,
+                            api_key=call.api_key, claude_path=call.claude_path)
+        if karar.ozne:
+            log.info(f"  [saga] özne (senaryodan): '{karar.ozne}'")
+        if not karar:
+            return "", karar.ozne
+        return f"#{karar.mukerrer_id} ile aynı olay — {karar.gerekce}", karar.ozne
+    except Exception as e:  # noqa: BLE001
+        log.info(f"  mükerrerlik kapısı çalışmadı ({e})")
+        return "", ""
+
+
+def _kapsam_disi_sebebi(script, channel) -> str:
+    """Üretilen senaryo kanalın kapsamı dışında mı? Sebep ya da boş dize.
+
+    `_filter_negative_keywords` YALNIZ RSS BAŞLIĞINA bakıyor. Ölçüldü
+    (2026-08-22, galatasaray 25 gün): çok branşlı kulüplerde spor başlıktan
+    çoğu zaman BİLİNEMİYOR — "Galatasaray yeni forvetini duyurdu" ve
+    "Galatasaray resmen açıkladı: Sözleşme imzalandı" başlıklarının ikisi de
+    basketbol haberiydi ve puanlayıcı, kapsam kapısı verilse bile onları
+    ayıramadı (7'de 5'ini eledi, 2'si geçti).
+
+    Ama senaryo yazıldıktan SONRA biliniyor: kaçan yedi videonun YEDİSİNDE de
+    `script.category` doğru sporu yazmıştı ('basketbol' / 'voleybol'). Sistem
+    sporu biliyordu, kimse ona bakmıyordu.
+
+    Bu yüzden aynı liste üretilen metne de uygulanır: kategori + manşet +
+    gövde. Render'dan ÖNCE çalışır — pahalı adım odur.
+    """
+    if not channel.negative_keywords:
+        return ""
+    needles = [locale_fold(k.strip(), channel.language)
+               for k in channel.negative_keywords if k.strip()]
+    if not needles:
+        return ""
+    alanlar = {
+        "kategori": script.category or "",
+        "manşet": f"{script.header_top} {script.header_bottom}",
+        "gövde": script.body_paragraph or "",
+    }
+    for ad, metin in alanlar.items():
+        katlanmis = locale_fold(metin, channel.language)
+        for n in needles:
+            if n in katlanmis:
+                return f"{ad}: '{n}'"
+    return ""
+
+
+def _kart_turkcesini_yaz(*, eng, short_id: int, script, channel, settings,
+                         secrets: dict, log) -> None:
+    """Yabancı dilli KART formatının Türkçesini üret ve script_json'a yaz.
+
+    NEDEN: seslendirmeli formatta anlatımın Türkçesi zaten yazılıyor
+    (`voiced.py` → `back_translate`), ama 6 saniyelik kart formatında hiçbir şey
+    yazılmıyordu. Panelde İspanyolca/Japonca/Almanca bir kartın karşısına oturan
+    operatör manşeti okuyamıyor ve yayın kararı veremiyordu.
+
+    PENCERE, KAPI DEĞİL: çeviri alınamazsa video yine kaydedilmiş, yine
+    yüklenebilir durumdadır. `finish_run`dan SONRA çağrılır — dört saniyelik bir
+    çeviri koşunun "başarılı" damgasını geciktirmesin.
+    """
+    if (channel.language or "tr") == "tr":
+        return
+    try:
+        from short_bot.db import store_kart_turkcesi
+        from short_bot.lang_review import kart_turkcesi
+        call = resolve_ai_call(settings, secrets, "default")
+        tr = kart_turkcesi(
+            header_top=script.header_top, header_bottom=script.header_bottom,
+            photo_overlay=script.photo_overlay, body=script.body_paragraph,
+            language=channel.language, backend=call.backend, model=call.model,
+            api_key=call.api_key, claude_path=call.claude_path)
+        if tr is None:
+            return
+        store_kart_turkcesi(eng, short_id, tr.model_dump())
+        log.info(f"  kart TR: {tr.header_top} — {tr.header_bottom}")
+    except Exception as e:  # noqa: BLE001 — çeviri yokluğu videoyu düşürmez
+        log.info(f"  kart Türkçesi yazılamadı ({e})")
 
 
 def _produce_from_item(
@@ -847,10 +1059,15 @@ def _produce_from_item(
             article_url = resolved
 
     log.info("  extract_article")
-    body = extract_article(article_url)
-    if body is None:
-        body = item.description or item.title
-        log.warning("  trafilatura empty → fallback description")
+    body = _makale_govdesi(item, article_url, log=log)
+    log.info(f"  → body {len(body)} chars")
+    if len(body) < _MIN_BODY_CHARS:
+        # Tek öğeyle çağrıldık: geçilecek sonraki aday yok. Uydurma bir video
+        # üretmektense hiç üretmemek yeğdir (bkz. _MIN_BODY_CHARS).
+        raise RuntimeError(
+            f"Makale metni çıkarılamadı ({len(body)} karakter, en az "
+            f"{_MIN_BODY_CHARS} gerekli): {article_url}. Bu kadar az metinle "
+            f"senaryo yazdırmak modele olayı UYDURTUR — üretim yapılmadı.")
 
     log.info(f"  write_script (model={script_model})")
     if channel.template in ARCHETYPE_OVERFLOW_FIELDS:
@@ -870,6 +1087,35 @@ def _produce_from_item(
             channel=channel, model=script_model,
             backend=script_call.backend, api_key=script_call.api_key,
         )
+
+    # KAPSAM KAPISI — render'dan önce. Başlıktan anlaşılmayan branş sızıntısını
+    # burada keser (bkz. _kapsam_disi_sebebi).
+    _md, _ozne = _mukerrer_sebebi(script, channel, eng, settings, secrets, log)
+    # Puanlayıcının öznesi boşsa senaryodan geleni kullan — saga sayacı ancak
+    # anahtar varsa çalışır.
+    subject = subject or _ozne
+    if _md:
+        msg = f"mükerrer ({_md})"
+        log.warning(f"  {msg} → atlanıyor")
+        record_rss_item(eng, guid=item.guid, channel=channel.slug,
+                        title=item.title, link=item.link, source=item.source,
+                        pub_date=item.pub_date, thumb_url=item.thumb_url,
+                        score=score, status="duplicate_rejected")
+        finish_run(eng, run_id, status="no_candidates", short_id=None, error=msg)
+        return RunResult(run_id=run_id, status="no_candidates",
+                         short_path=None, error=msg)
+
+    _kd = _kapsam_disi_sebebi(script, channel)
+    if _kd:
+        msg = f"kapsam dışı ({_kd})"
+        log.warning(f"  {msg} → atlanıyor")
+        record_rss_item(eng, guid=item.guid, channel=channel.slug,
+                        title=item.title, link=item.link, source=item.source,
+                        pub_date=item.pub_date, thumb_url=item.thumb_url,
+                        score=score, status="scope_rejected")
+        finish_run(eng, run_id, status="no_candidates", short_id=None, error=msg)
+        return RunResult(run_id=run_id, status="no_candidates",
+                         short_path=None, error=msg)
 
     log.info("  assets/image")
     bg = None
@@ -985,13 +1231,17 @@ def _produce_from_item(
     short_id = record_short(
         eng, channel=channel.slug, rss_item_guid=item.guid,
         title=script.header_top + " " + script.header_bottom,
-        file_path=str(out_path), duration_s=channel.duration_s,
+        file_path=str(out_path),
+        duration_s=_yayinlanan_sure_s(out_path, settings.ffmpeg_path,
+                                      channel.duration_s),
         script_json=script.model_copy(update={
             "subject": subject,
             "search_queries": list(getattr(item, "trend_related", ()) or ())[:10],
         }).model_dump_json(),
         render_ms=render_ms)
     finish_run(eng, run_id, status="success", short_id=short_id, error=None)
+    _kart_turkcesini_yaz(eng=eng, short_id=short_id, script=script,
+                         channel=channel, settings=settings, secrets=secrets, log=log)
 
     score_call = resolve_ai_call(settings, secrets, "default")
     yt_creds_root = (Path(eng.url.database).parent / "youtube_credentials").resolve() \
@@ -1008,6 +1258,36 @@ def _produce_from_item(
 
 
 _EXTRA_SOURCE_MAX_CHARS = 1500
+
+
+# ANLAMLI GÖVDE ALT SINIRI. Senaryo yazarına kırıntı metin vermek, modele boş
+# sayfa vermektir: 2026-08-23'te bir Oricon FOTO GALERİSİ sayfasından 38 karakter
+# çıktı ve model tamamen başka bir olay uydurdu (McDonald's Koshien turnuvası,
+# short #1848) — haber ise Bleach'ti. Uydurma sonra kendini pekiştirdi: vision
+# görsel kapısı uydurma metni gerçek sayıp DOĞRU og:image'ı reddetti.
+# Ölçüm: 316 üretimde gövde medyanı 1299 karakter, 150'nin altı yalnız 6 vaka.
+# Eşik aday ELEMEK için, koşu düşürmek için değil — sıradaki adaya geçilir.
+_MIN_BODY_CHARS = 150
+
+
+def _makale_govdesi(item, article_url: str, *, log) -> str:
+    """Senaryonun yaslanacağı metin: makale gövdesi, yoksa haberin açıklaması.
+
+    İKİSİNDEN UZUN OLANI döner — trafilatura bir galeri/paywall sayfasından
+    kırıntı çıkarınca, dolu bir RSS açıklaması ondan iyidir. Dönen metin
+    ``_MIN_BODY_CHARS`` altındaysa çağıran adayı ATLAMALI."""
+    body = extract_article(article_url)
+    if body is None:
+        log.warning("  trafilatura empty → fallback description")
+        body = ""
+    body = body.strip()
+    aciklama = (item.description or "").strip()
+    if len(aciklama) > len(body):
+        if body:
+            log.info(f"  gövde kırıntı ({len(body)} char) → haberin açıklaması "
+                     f"kullanılıyor ({len(aciklama)} char)")
+        body = aciklama
+    return body or (item.title or "")
 
 
 def _extra_source_bodies(item, *, log) -> list[tuple[str, str]]:
@@ -1169,6 +1449,17 @@ def _run_rss(*, channel, run_id, log, eng, settings,
         if before != len(items):
             log.info(f"  → {len(items)} after negative keyword filter (dropped {before - len(items)})")
 
+    # YAYINCI kara listesi. Başlık süzgecinden AYRI: kulübün kendi sitesinin
+    # kurumsal dolgusu ve rakip cepheden yayın yapan medya ancak kaynaktan
+    # elenebilir (bkz. _filter_blocked_sources).
+    if getattr(channel, "blocked_sources", None):
+        before = len(items)
+        items = _filter_blocked_sources(items, channel.blocked_sources,
+                                        channel.language)
+        if before != len(items):
+            log.info(f"  → {len(items)} after blocked source filter "
+                     f"(dropped {before - len(items)})")
+
     log.info("[2/8] dedup")
     # Topic-level dedup via OpenAI embeddings (in addition to GUID + fuzzy
     # title) — catches the multi-publisher-same-story case where two
@@ -1258,12 +1549,12 @@ def _run_rss(*, channel, run_id, log, eng, settings,
     if is_trends:
         # Puan kapı, hacim sıra: ülkenin en çok aradığı OLAY önce.
         top_n_candidates = select_by_volume(
-            scored, min_score=channel.min_score, n=_IMAGE_RETRY_MAX,
+            scored, min_score=channel.min_score, n=_CANDIDATE_MAX,
             intent=getattr(channel, "trends_intent", "any"),
             language=channel.language)
     else:
         top_n_candidates = select_top(scored, min_score=channel.min_score,
-                                      n=_IMAGE_RETRY_MAX)
+                                      n=_CANDIDATE_MAX)
     if not top_n_candidates:
         log.info(f"no item ≥ {channel.min_score} → finish")
         for s in scored:
@@ -1279,7 +1570,7 @@ def _run_rss(*, channel, run_id, log, eng, settings,
         return RunResult(run_id=run_id, status="no_candidates", short_path=None, error=None)
 
     log.info(f"  → {len(top_n_candidates)} candidate(s) ≥ {channel.min_score} "
-             f"(retry-on-no-image up to {_IMAGE_RETRY_MAX})")
+             f"(en çok {_CANDIDATE_MAX} aday, görselsiz en çok {_IMAGE_RETRY_MAX})")
     top_guids = {c.item.guid for c in top_n_candidates}
 
     # Resolve the script-role AI backend. In claude_cli mode keep the existing
@@ -1302,6 +1593,10 @@ def _run_rss(*, channel, run_id, log, eng, settings,
     body = None
     script = None
     bg = None
+    _elenen = {"kapsam": 0, "mükerrer": 0, "gövdesiz": 0, "görselsiz": 0}
+    # Döngüye hiç girilmezse (aday listesi boş) `record_short`a kadar
+    # tanımsız kalırdı. Seçilen adayınki `break`ten önce yazılır.
+    _saga_ozne = ""
     for attempt, candidate in enumerate(top_n_candidates, 1):
         vol = (f" volume={candidate.item.trend_volume}" if is_trends else "")
         log.info(f"[4-6/8] candidate {attempt}/{len(top_n_candidates)} "
@@ -1325,11 +1620,26 @@ def _run_rss(*, channel, run_id, log, eng, settings,
                 log.info("  gnews resolve failed — using raw URL (body/og may be empty)")
 
         log.info("  extract_article")
-        body_try = extract_article(article_url)
-        if body_try is None:
-            body_try = candidate.item.description or candidate.item.title
-            log.warning("  trafilatura empty → fallback description")
+        body_try = _makale_govdesi(candidate.item, article_url, log=log)
         log.info(f"  → body {len(body_try)} chars")
+
+        # GÖVDE KAPISI — senaryo YAZILMADAN önce. Diğer kapılar yazılan
+        # senaryoya bakar; bu kapı yazarın önündeki kâğıdın boş olmadığına
+        # bakar. Boşsa model uydurur ve uydurma aşağıdaki hiçbir kapıya
+        # takılmaz: kapsam/mükerrer kapıları metnin İÇ tutarlılığına bakar,
+        # habere değil.
+        if len(body_try) < _MIN_BODY_CHARS:
+            _elenen["gövdesiz"] += 1
+            log.warning(f"  gövde yetersiz ({len(body_try)} char < "
+                        f"{_MIN_BODY_CHARS}) → sonraki aday (modele boş sayfa "
+                        f"verilmez)")
+            record_rss_item(eng, guid=candidate.item.guid, channel=channel.slug,
+                            title=candidate.item.title, link=candidate.item.link,
+                            source=candidate.item.source,
+                            pub_date=candidate.item.pub_date,
+                            thumb_url=candidate.item.thumb_url,
+                            score=candidate.score, status="bodyless_rejected")
+            continue
 
         log.info(f"  write_script (model={script_model})")
         if channel.template in ARCHETYPE_OVERFLOW_FIELDS:
@@ -1362,6 +1672,37 @@ def _run_rss(*, channel, run_id, log, eng, settings,
             )
         log.info(f"  → {script_try.header_top} | {script_try.header_bottom}")
 
+        # KAPSAM ve MÜKERRERLİK kapıları — senaryo YAZILDIKTAN, görsel ve
+        # render'a girilmeden ÖNCE. İkisi de ancak burada sorulabilir: aday
+        # seçilirken videonun ne diyeceği henüz bilinmiyor.
+        #
+        # Bu kolda kapı koşuyu DÜŞÜRMEZ, SONRAKİ ADAYA geçer — elde zaten
+        # puanlanmış bir aday listesi var. (`_produce_from_item` tek öğeyle
+        # çağrıldığı için orada koşu biter; başka seçenek yok.)
+        _kd = _kapsam_disi_sebebi(script_try, channel)
+        if _kd:
+            _elenen["kapsam"] += 1
+            log.warning(f"  kapsam dışı ({_kd}) → sonraki aday")
+            record_rss_item(eng, guid=candidate.item.guid, channel=channel.slug,
+                            title=candidate.item.title, link=candidate.item.link,
+                            source=candidate.item.source,
+                            pub_date=candidate.item.pub_date,
+                            thumb_url=candidate.item.thumb_url,
+                            score=candidate.score, status="scope_rejected")
+            continue
+        _md, _ozne = _mukerrer_sebebi(script_try, channel, eng, settings, secrets, log)
+        _saga_ozne = _ozne
+        if _md:
+            _elenen["mükerrer"] += 1
+            log.warning(f"  mükerrer ({_md}) → sonraki aday")
+            record_rss_item(eng, guid=candidate.item.guid, channel=channel.slug,
+                            title=candidate.item.title, link=candidate.item.link,
+                            source=candidate.item.source,
+                            pub_date=candidate.item.pub_date,
+                            thumb_url=candidate.item.thumb_url,
+                            score=candidate.score, status="duplicate_rejected")
+            continue
+
         log.info("  assets/image")
         bg_try = None
         original_was_gnews = _is_google_news_url(candidate.item.link)
@@ -1375,8 +1716,27 @@ def _run_rss(*, channel, run_id, log, eng, settings,
             bg_try = download_and_blur_thumb(og_url, cache_dir,
                                              blur_radius=channel.bg_image_blur)
             if bg_try:
-                log.info(f"  og:image accepted: {bg_try.name} "
-                         f"(blur={channel.bg_image_blur})")
+                # VISION KAPISI. Buraya kadar og:image HİÇ denetlenmiyordu:
+                # yalnız boyut/indirme kontrolü vardı. Yayıncının kapak
+                # görseli çoğu zaman doğrudur ama iki tuzak var —
+                # (a) yazı basılı haber grafiği / logo kartı arka plana
+                #     gömülüyor (canlı: SoftBank logo kartı, short 1804),
+                # (b) makale GENEL bir konudaysa kapak fotoğrafı kartın
+                #     öznesinden başkasını gösterir.
+                # Vision servisi düşerse ÜRETİMİ DURDURMA (fail-open).
+                from short_bot.image_picker import (verify_image,
+                                                    gorsel_reddedilmeli)
+                _vc = resolve_ai_call(settings, secrets, "vision")
+                _v = verify_image(bg_try, script_try,
+                                  claude_path=_vc.claude_path,
+                                  backend=_vc.backend, api_key=_vc.api_key,
+                                  model=_vc.model)
+                if gorsel_reddedilmeli(_v):
+                    log.info(f"  og:image REDDEDİLDİ (vision): {_v.reason[:90]}")
+                    bg_try = None
+                else:
+                    log.info(f"  og:image accepted: {bg_try.name} "
+                             f"(blur={channel.bg_image_blur})")
             else:
                 log.info(f"  og:image rejected (too small or fetch failed)")
         # 2. RSS thumb fallback (publisher media:thumbnail). Still skipped
@@ -1400,12 +1760,20 @@ def _run_rss(*, channel, run_id, log, eng, settings,
                 log.info(f"  ddg image accepted: {bg_try.name}")
 
         if bg_try is None:
+            _elenen["görselsiz"] += 1
             log.warning(f"  candidate {attempt} no image → image_rejected, trying next")
             record_rss_item(eng, guid=candidate.item.guid, channel=channel.slug,
                             title=candidate.item.title, link=candidate.item.link,
                             source=candidate.item.source, pub_date=candidate.item.pub_date,
                             thumb_url=candidate.item.thumb_url, score=candidate.score,
                             status="image_rejected")
+            # Üst üste görsel bulunamaması sistemik arızadır (ağ/vision düştü);
+            # kalan adayları yakmanın anlamı yok. İçerik kapıları için böyle bir
+            # sınır YOK — bkz. _CANDIDATE_MAX notu.
+            if _elenen["görselsiz"] >= _IMAGE_RETRY_MAX:
+                log.warning(f"  {_IMAGE_RETRY_MAX} adayda üst üste görsel yok "
+                            f"→ görsel tarafı arızalı sayılıyor, koşu bitiriliyor")
+                break
             continue
 
         picked = candidate
@@ -1424,7 +1792,12 @@ def _run_rss(*, channel, run_id, log, eng, settings,
                             score=s.score, status="below_threshold")
 
     if picked is None:
-        msg = f"no usable image after {len(top_n_candidates)} candidates"
+        # SEBEBİ SÖYLE. Eskiden her aday düşüşü "no usable image" diye
+        # raporlanıyordu; kapsam/mükerrerlik kapıları eklendikten sonra bu
+        # doğrudan yanlış olurdu ve operatör görseli suçlardı.
+        _ek = ", ".join(f"{k}: {v}" for k, v in _elenen.items() if v)
+        msg = (f"no usable candidate after {len(top_n_candidates)}"
+               + (f" ({_ek})" if _ek else " (görsel bulunamadı)"))
         log.warning(f"{msg} → finish")
         finish_run(eng, run_id, status="no_candidates", short_id=None, error=msg)
         return RunResult(run_id=run_id, status="no_candidates",
@@ -1541,14 +1914,19 @@ def _run_rss(*, channel, run_id, log, eng, settings,
     short_id = record_short(eng,
         channel=channel.slug, rss_item_guid=picked.item.guid,
         title=script.header_top + " " + script.header_bottom,
-        file_path=str(out_path), duration_s=channel.duration_s,
+        file_path=str(out_path),
+        duration_s=_yayinlanan_sure_s(out_path, settings.ffmpeg_path,
+                                      channel.duration_s),
         script_json=script.model_copy(update={
-            "subject": picked.subject,
+            # Puanlayıcının öznesi boşsa senaryodan türetilen kullanılır.
+            "subject": picked.subject or _saga_ozne,
             "search_queries": list(getattr(picked.item, "trend_related", ()) or ())[:10],
         }).model_dump_json(),
         render_ms=render_ms,
     )
     finish_run(eng, run_id, status="success", short_id=short_id, error=None)
+    _kart_turkcesini_yaz(eng=eng, short_id=short_id, script=script,
+                         channel=channel, settings=settings, secrets=secrets, log=log)
     yt_creds_root = (Path(eng.url.database).parent / "youtube_credentials").resolve() \
         if eng.url.database else Path("data/youtube_credentials").resolve()
     secrets_path = (Path(eng.url.database).parent / "secrets.yaml").resolve() \
@@ -1820,7 +2198,8 @@ def _run_generator(*, channel, run_id, log, eng, settings,
         short_id = record_short(
             eng, channel=channel.slug, rss_item_guid=None,
             title=video_title, file_path=str(reel_out),
-            duration_s=channel.duration_s,
+            duration_s=_yayinlanan_sure_s(reel_out, settings.ffmpeg_path,
+                                          channel.duration_s),
             script_json=chosen_result.script.model_dump_json(), render_ms=render_ms,
         )
         update_generated_short_id(eng, generated_id, short_id)
@@ -1947,7 +2326,9 @@ def _run_generator(*, channel, run_id, log, eng, settings,
     short_id = record_short(
         eng, channel=channel.slug, rss_item_guid=None,
         title=chosen_result.script.header_top + " " + chosen_result.script.header_bottom,
-        file_path=str(out_path), duration_s=channel.duration_s,
+        file_path=str(out_path),
+        duration_s=_yayinlanan_sure_s(out_path, settings.ffmpeg_path,
+                                      channel.duration_s),
         script_json=chosen_result.script.model_dump_json(),
         render_ms=render_ms,
     )

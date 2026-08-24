@@ -2,6 +2,18 @@
 {% block title %}Vurucu TİM — {{ s.title }}{% endblock %}
 {% block content %}
 <a href="/shorts" class="text-claude-muted hover:text-claude-text text-sm">← Shorts</a>
+{% if silinmis %}
+{# Gelen kutusundan çıkarılmış kayıt. 404 vermek yanlıştı: video YouTube'da
+   yayında olabilir ve akıştaki/dışarıdaki bağlantılar buraya geliyor. #}
+<div class="mt-3 flex items-start gap-2.5 bg-claude-wait-soft border border-claude-wait/30 rounded-xl px-4 py-3">
+  <span class="text-claude-wait mt-0.5">◍</span>
+  <div class="text-[13.5px] leading-relaxed">
+    <span class="font-semibold text-claude-text">Bu video listeden kaldırılmış.</span>
+    <span class="text-claude-muted">Kayıt duruyor; dosya diskten silinmiş olabilir.
+    {% if yt_upload and yt_upload.status == 'success' %}YouTube'da yayında.{% endif %}</span>
+  </div>
+</div>
+{% endif %}
 <div class="flex flex-col gap-3 mt-2 mb-1">
   <h1 class="font-serif text-3xl font-bold break-words line-clamp-2" title="{{ s.title }}">{{ s.title }}</h1>
   <div class="flex flex-wrap gap-2">
@@ -77,7 +89,7 @@
   </div>
 </div>
 <div class="text-claude-muted text-sm mb-6">
-  {{ s.channel }} · {{ s.created_at.strftime('%d %b %Y, %H:%M') }} · {{ s.duration_s }}s · render {{ s.render_ms }}ms
+  {{ s.channel }} · {{ s.created_at | tr_tarih('tam') }} · {{ s.duration_s }}s · render {{ s.render_ms }}ms
 </div>
 
 {% if yt_video_stats %}
@@ -151,6 +163,9 @@
       <div class="text-sm whitespace-pre-wrap leading-relaxed">{{ narration_tr }}</div>
     </div>
     {% endif %}
+    {# Kart formatı: yabancı dilli kanalda ekran metninin Türkçesi. Türkçe
+       kanalda `kart_dil` boş kalır ve kutu HİÇ çıkmaz. #}
+    {% if kart_dil %}{% include "shorts/_kart_tr.html.j2" %}{% endif %}
     {% include "shorts/_yt_meta.html.j2" %}
     <div class="bg-claude-surface border border-claude-border rounded-lg p-4">
       <div class="text-xs text-claude-muted uppercase tracking-wider mb-1">Script JSON</div>

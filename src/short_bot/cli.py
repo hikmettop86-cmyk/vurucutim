@@ -78,7 +78,16 @@ def _cmd_analyze(args) -> int:
     from short_bot.channel_audit import audit_channel
 
     eng = init_db(Path(args.data_dir) / "short_bot.sqlite")
-    rapor = audit_channel(eng, args.channel)
+    # Kanalın ŞU AN ürettiği etiketler — kota önerisi bununla sınırlanır,
+    # yoksa artık üretilmeyen eski etiketlere kota önerilir (bkz. audit_channel).
+    kanonik = None
+    try:
+        _yol = Path(args.config_dir) / "channels" / f"{args.channel}.yaml"
+        if _yol.exists():
+            kanonik = load_channel(_yol).categories or None
+    except Exception:      # noqa: BLE001 — rapor config okunamadı diye düşmesin
+        kanonik = None
+    rapor = audit_channel(eng, args.channel, canonical=kanonik)
 
     if not rapor["sample_size"]:
         print(f"{args.channel}: yayınlanmış video verisi yok "
@@ -111,9 +120,14 @@ def _cmd_analyze(args) -> int:
         print("  category_quota_per_day:")
         for q in rapor["quota_suggestions"]:
             print(f"    {q['category']}: {q['suggested_limit']}"
-                  f"   # endeks {q['index']}, n={q['n']}")
+                  f"   # endeks {q['index']}, n={q['n']}, "
+                  f"%90 aralığın üstü {q['ci_ust']} < 1.00")
     else:
         print("  (kanıtlı zayıf konu yok — kota gerekmiyor)")
+    if kanonik:
+        print(f"  öneriler kanalın canonical listesiyle sınırlandı "
+              f"({len(kanonik)} kategori); artık üretilmeyen eski etiketler "
+              f"rapordaki tabloda görünür ama kota almaz")
 
     _print_keyword_health(args)
 
@@ -222,6 +236,7 @@ def _cmd_run(args) -> int:
     data_dir = Path(args.data_dir)
     db_path = data_dir / "short_bot.sqlite"
 
+    basarili = 0
     for i in range(args.max):
         print(f"--- run {i+1}/{args.max} ---")
         result = run_pipeline(
@@ -236,9 +251,19 @@ def _cmd_run(args) -> int:
             trigger="cli",
         )
         print(f"status={result.status} short={result.short_path} error={result.error}")
-        if result.status != "success":
-            return 1 if result.status == "failed" else 0
-    return 0
+        if result.status == "success":
+            basarili += 1
+            continue
+        if result.status == "failed":
+            # BİR HABERİN DÜŞMESİ KALAN ÜRETİMİ İPTAL ETMEZ. Canlı vaka
+            # (2026-08-22): `--max 3` istendi, ilk haber olgu kapısına takıldı
+            # (kaynakta olmayan sayı) ve kalan İKİ video hiç denenmedi — oysa
+            # havuzda 30+ aday vardı. Olgu kapısının o haberi düşürmesi doğru;
+            # yanlış olan tüm koşuyu düşürmesiydi.
+            print("  (bu haber düştü, sıradakine geçiliyor)")
+            continue
+        break   # aday yok / atlandı — devam etmenin anlamı yok
+    return 0 if basarili else 1
 
 
 def _slug_from_name(name: str) -> str:
@@ -560,6 +585,44 @@ def _cmd_web(args) -> int:
     return 0
 
 
+def _add_sure_onar(sub):
+    p = sub.add_parser(
+        "sure-onar",
+        help="shorts.duration_s'i yayınlanan dosyadan ölçüp düzelt (seslendirmeli "
+             "kanallarda kart süresi 6 kaydedilmişti)")
+    p.add_argument("--uygula", action="store_true",
+                   help="Yazmadan önce ne değişeceğini görmek için bu bayrağı VERME")
+    p.add_argument("--limit", type=int, default=0, help="Son N kaydı tara (0 = hepsi)")
+    p.add_argument("--config-dir", default="config")
+    p.add_argument("--data-dir", default="data")
+    p.set_defaults(func=_cmd_sure_onar)
+
+
+def _cmd_sure_onar(args) -> int:
+    from short_bot.db import init_db
+    from short_bot.reel import _ffprobe_path
+    from short_bot.sure_onarim import onarim_listesi, uygula
+
+    settings = load_settings(Path(args.config_dir) / "settings.yaml")
+    eng = init_db(Path(args.data_dir) / "short_bot.sqlite")
+    liste = onarim_listesi(eng, proje_koku=Path.cwd(),
+                           ffprobe=_ffprobe_path(settings.ffmpeg_path),
+                           limit=args.limit or None)
+    if not liste:
+        print("Düzeltilecek kayıt yok.")
+        return 0
+    for o in liste[:40]:
+        print(f"  #{o.short_id} {o.channel:24} {o.eski} -> {o.yeni} sn")
+    if len(liste) > 40:
+        print(f"  ... ve {len(liste) - 40} kayıt daha")
+    if not args.uygula:
+        print(f"\n{len(liste)} kayıt düzeltilecek. Yazmak için: --uygula")
+        return 0
+    n = uygula(eng, liste)
+    print(f"\n{n} kayıt düzeltildi.")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="short-bot")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -573,6 +636,7 @@ def main(argv: list[str] | None = None) -> int:
     _add_rebuild_css(sub)
     _add_migrate_channel(sub)
     _add_web(sub)
+    _add_sure_onar(sub)
     args = parser.parse_args(argv)
     return args.func(args)
 

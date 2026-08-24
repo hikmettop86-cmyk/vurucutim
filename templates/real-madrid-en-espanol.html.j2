@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="{{ language }}">
+<head>
+<meta charset="utf-8">
+<title>Short — Real Madrid En Español</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap');
+
+  {{ dna_css|safe }}
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  
+  html, body {
+    width: 1080px;
+    height: 1920px;
+    overflow: hidden;
+    font-family: var(--font-body, 'Inter'), sans-serif;
+    color: var(--text-main, #f7f8f8);
+    background-color: var(--body-bg-1, #0B0E14);
+  }
+
+  .stage {
+    position: relative;
+    width: 1080px;
+    height: 1920px;
+    display: flex;
+    flex-direction: column;
+    padding: 64px 54px;
+    background: linear-gradient(180deg, #0B0E14 0%, #1A2332 100%);
+  }
+
+  /* Top Bar & Category */
+  .top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    z-index: 10;
+  }
+
+  .stage-badge {
+    background: rgba(0, 82, 159, 0.4);
+    border: 1px solid var(--primary, #00529f);
+    color: var(--accent, #febe10);
+    font-family: var(--font-headline, 'Oswald'), sans-serif;
+    font-size: 20px;
+    font-weight: 600;
+    padding: 8px 20px;
+    border-radius: 9999px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  .brand-tag {
+    color: var(--text-muted, #8a8f98);
+    font-family: var(--font-body, 'Inter'), sans-serif;
+    font-size: 18px;
+    font-weight: 500;
+    letter-spacing: -0.2px;
+  }
+
+  /* Header / Headlines */
+  .header {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 32px;
+    z-index: 10;
+  }
+
+  .header .top {
+    font-family: var(--font-headline, 'Oswald'), sans-serif;
+    font-size: 64px;
+    font-weight: 700;
+    line-height: 1.05;
+    letter-spacing: -0.6px;
+    text-transform: uppercase;
+    color: var(--accent, #febe10);
+  }
+
+  .header .bot {
+    font-family: var(--font-headline, 'Oswald'), sans-serif;
+    font-size: 46px;
+    font-weight: 600;
+    line-height: 1.15;
+    letter-spacing: -0.4px;
+    color: var(--text-main, #f7f8f8);
+  }
+
+  /* Photo Container - Linear Panel Style with absolute fallback visibility */
+  .photo {
+    position: relative;
+    width: 100%;
+    height: 680px;
+    background: #0f1011;
+    border: 1px solid #23252a;
+    border-radius: 16px;
+    overflow: hidden;
+    margin-bottom: 36px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+  }
+
+  .bg-img {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-size: cover;
+    background-position: center;
+    z-index: 1;
+  }
+
+  /* Fallback gradient if bg_image_url is missing, ensuring the container is never dead/black */
+  .photo::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: linear-gradient(135deg, rgba(0,82,159,0.3) 0%, rgba(254,190,16,0.15) 100%);
+    z-index: 2;
+  }
+
+  .photo-overlay-content {
+    position: relative;
+    z-index: 3;
+    padding: 32px;
+    background: linear-gradient(to top, rgba(11,14,20,0.95) 0%, rgba(11,14,20,0.6) 70%, transparent 100%);
+  }
+
+  .yellow {
+    font-family: var(--font-headline, 'Oswald'), sans-serif;
+    font-size: 28px;
+    font-weight: 600;
+    line-height: 1.25;
+    letter-spacing: -0.2px;
+    color: var(--accent, #febe10);
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+  }
+
+  /* Body Container */
+  .body {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background: #0f1011;
+    border: 1px solid #23252a;
+    border-radius: 16px;
+    padding: 36px;
+    margin-bottom: 60px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+  }
+
+  .body-text {
+    font-family: var(--font-body, 'Inter'), sans-serif;
+    font-size: 32px;
+    font-weight: 400;
+    line-height: 1.5;
+    color: var(--text-main, #f7f8f8);
+  }
+
+  /* Linear Highlighting System adapted with brand palette */
+  .body .hl-r {
+    background: rgba(0, 82, 159, 0.4);
+    color: var(--text-main, #ffffff);
+    padding: 2px 8px;
+    border-radius: 6px;
+    border-bottom: 2px solid var(--primary, #00529f);
+    font-weight: 500;
+  }
+
+  .body .hl-y {
+    background: rgba(254, 190, 16, 0.2);
+    color: var(--accent, #febe10);
+    padding: 2px 8px;
+    border-radius: 6px;
+    border-bottom: 2px solid var(--accent, #febe10);
+    font-weight: 500;
+  }
+
+  /* Progress & Footer */
+  .progress {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 84px;
+    height: 6px;
+    background: rgba(255,255,255,0.1);
+    z-index: 11;
+  }
+
+  .progress::after {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    background: var(--accent, #febe10);
+    animation: fill {{ duration_s }}s linear forwards;
+  }
+
+  @keyframes fill {
+    from { width: 0; }
+    to { width: 100%; }
+  }
+
+  .handle {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 24px;
+    text-align: center;
+    font-family: var(--font-body, 'Inter'), sans-serif;
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: -0.2px;
+    color: var(--text-muted, #8a8f98);
+  }
+
+  .source-credit {
+    position: absolute;
+    bottom: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.6);
+    color: rgba(255,255,255,0.85);
+    font-family: var(--font-body, 'Inter'), sans-serif;
+    font-size: 14px;
+    padding: 3px 10px;
+    border-radius: 4px;
+    z-index: 50;
+    white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+<div class="stage">
+
+  <div class="top-bar">
+    {% if script.category %}<div class="stage-badge">{{ script.category }}</div>{% endif %}
+    <div class="brand-tag">Real Madrid En Español</div>
+  </div>
+
+  <div class="header">
+    <span class="top" data-fit-width="20" data-fit-min="36" data-fit-max="64">{{ script.header_top }}</span>
+    <span class="bot" data-fit-width="20" data-fit-min="28" data-fit-max="46">{{ script.header_bottom }}</span>
+  </div>
+
+  <div class="photo">
+    <div class="bg-img" style="{% if bg_image_url %}background-image: url('{{ bg_image_url }}');{% endif %}"></div>
+    {% if script.photo_overlay %}
+    <div class="photo-overlay-content">
+      <div class="yellow">{{ script.photo_overlay }}</div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="body">
+    <div class="body-text" data-fit-min="24" data-fit-max="34" data-fit-pad="16">
+      {{ body_html|safe }}
+    </div>
+  </div>
+
+  <div class="progress"></div>
+  <div class="handle">{{ handle }}</div>
+  {% if rss_source %}<div class="source-credit">{{ ui_source }}: {{ rss_source }}</div>{% endif %}
+</div>
+
+{% include "_auto_fit.js.j2" %}
+</body>
+</html>

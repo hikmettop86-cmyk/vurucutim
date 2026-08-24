@@ -92,27 +92,52 @@ def test_build_activity_events_includes_short_event(eng):
     assert s.link.startswith("/shorts/")
 
 
-def test_build_activity_events_excludes_deleted_shorts(eng):
-    """Soft-deleted shorts must NOT appear in the feed."""
+def _sil(eng, sid):
     from datetime import datetime, timezone
+    from short_bot.db import shorts as shorts_table
+    with eng.begin() as conn:
+        conn.execute(shorts_table.update()
+                     .where(shorts_table.c.id == sid)
+                     .values(deleted_at=datetime.now(timezone.utc)))
+
+
+def test_karar_verilmis_video_AKISTA_KALIR(eng):
+    """`deleted_at` çöp değil, operatörün KARARI.
+
+    Akış eskiden `deleted_at IS NULL` süzüyordu; koşu ve yükleme sayaçları
+    süzmüyordu. Üretimde ölçüldü (2026-08-23): sayfanın başlığında 66 koşu ✓,
+    26 YouTube yüklemesi ve **1 video** yazıyordu — bir videodan 26 yükleme
+    çıkamaz. Sayfa kendi kendisiyle çelişiyordu.
+    """
+    from datetime import datetime, timedelta, timezone
     sid = record_short(eng, channel="ch1", rss_item_guid="g1", title="Del",
                        file_path="output/ch1/d.mp4", duration_s=6,
                        script_json="{}", render_ms=1)
-    # Soft-delete it directly via SQL
-    from short_bot.db import shorts as shorts_table
-    with eng.begin() as conn:
-        conn.execute(
-            shorts_table.update().where(shorts_table.c.id == sid).values(
-                deleted_at=datetime.now(timezone.utc),
-            )
-        )
+    _sil(eng, sid)
 
     from short_bot.web.activity import build_activity_events
-    from datetime import timedelta
     events = build_activity_events(
-        eng, since=datetime.now(timezone.utc) - timedelta(hours=1),
-    )
-    assert all(e.type != "short" for e in events)
+        eng, since=datetime.now(timezone.utc) - timedelta(hours=1))
+    assert [e.type for e in events if e.type == "short"] == ["short"]
+
+
+def test_sayaclar_AYNI_EVRENI_sayar(eng):
+    """Video sayacı yüklemeyle çelişmemeli: yüklenen her video üretilmiştir."""
+    from datetime import datetime, timezone
+    from short_bot.db import youtube_uploads
+    sid = record_short(eng, channel="ch1", rss_item_guid="g1", title="t",
+                       file_path="output/ch1/a.mp4", duration_s=6,
+                       script_json="{}", render_ms=1)
+    with eng.begin() as conn:
+        conn.execute(youtube_uploads.insert().values(
+            short_id=sid, video_id="v", video_url="u", status="success",
+            error=None, uploaded_at=datetime.now(timezone.utc)))
+    _sil(eng, sid)   # operatör yükledi ve listeden kaldırdı
+
+    from short_bot.web.activity import compute_summary_24h
+    o = compute_summary_24h(eng)
+    assert o.youtube_success_24h == 1
+    assert o.shorts_24h >= o.youtube_success_24h,         "yüklenen video sayısı üretilen video sayısını aşamaz"
 
 
 def test_build_activity_events_youtube_success_emits_youtube_event(eng):

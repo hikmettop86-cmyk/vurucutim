@@ -62,7 +62,12 @@
               class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors
                      {% if c.archived %}bg-claude-idle-soft text-claude-idle hover:bg-claude-idle hover:text-white
                      {% else %}bg-claude-accent-soft text-claude-accent hover:bg-claude-accent hover:text-white{% endif %}">
-        {{ 'PASİF' if c.archived else 'AKTİF' }}
+        {# Etiket ROZETİN NE DENETLEDİĞİNİ söyler. Eskiden "AKTİF/PASİF" idi ve
+           yandaki "Cron kapalı" rozetiyle yan yana çelişki gibi okunuyordu
+           ("cron kapalı ama AKTİF"); üstelik Kokpit AYNI kanala "Kapalı"
+           diyordu. Bu düğme cron'u değil, kanalın Kokpit listesinde görünüp
+           görünmediğini değiştiriyor. #}
+        {{ 'GİZLİ' if c.archived else 'LİSTEDE' }}
       </button>
     </div>
   </td>

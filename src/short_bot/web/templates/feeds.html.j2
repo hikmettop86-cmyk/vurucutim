@@ -20,20 +20,72 @@
     </form>
 
     <div class="text-xs uppercase tracking-wide text-claude-subtle mb-2 pt-3 border-t border-claude-border">Kaynaklar</div>
+
+    {% if feeds %}
+    <a class="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 mb-1 cursor-pointer transition"
+       data-feed-link="tumu"
+       :class="active === 'tumu' ? 'bg-claude-accent-soft ring-1 ring-claude-accent/30' : 'hover:bg-claude-surface-alt'"
+       @click="active = 'tumu'"
+       hx-get="{{ url_for('feeds.all_items') }}"
+       hx-target="#feed-items" hx-swap="innerHTML" hx-indicator="#feed-spin">
+      <span class="font-medium text-sm text-claude-text">Tüm Kaynaklar</span>
+      <span class="text-[11px] text-claude-subtle">tarihe göre</span>
+    </a>
+    <div class="h-px bg-claude-border my-1.5"></div>
+    {% endif %}
+
     {% for f in feeds %}
-    <div class="flex items-start gap-1 rounded-lg px-2 py-1.5 cursor-pointer transition"
+    {% set s = saglik.get(f.id) %}
+    <div class="flex items-start gap-1 rounded-lg px-2 py-1.5 cursor-pointer transition{% if not f.enabled %} opacity-50{% endif %}"
+         x-data="{ ad: false }"
          :class="active === {{ f.id }} ? 'bg-claude-accent-soft ring-1 ring-claude-accent/30' : 'hover:bg-claude-surface-alt'"
          @click="active = {{ f.id }}">
-      <a class="flex-1 min-w-0 block"
+      <a class="flex-1 min-w-0 block" data-feed-link="{{ f.id }}"
          hx-get="{{ url_for('feeds.items', feed_id=f.id) }}"
          hx-target="#feed-items" hx-swap="innerHTML" hx-indicator="#feed-spin">
-        <div class="font-medium text-sm text-claude-text truncate">{{ f.title|e }}</div>
-        <div class="text-xs text-claude-subtle truncate">{{ f.url|e }}</div>
+        <div class="font-medium text-sm text-claude-text truncate">
+          {{ f.title|e }}{% if not f.enabled %} <span class="text-[10px] text-claude-subtle">(kapalı)</span>{% endif %}
+        </div>
+        {# SAĞLIK SATIRI: kaynağın ölü ya da bayat olduğu buradan görünür.
+           Önce yalnız URL yazıyordu ve iki ayrı FOTOMAÇ beslemesi (galatasaray +
+           fenerbahce) listede birbirinin aynısıydı. #}
+        <div class="text-[11px] flex items-center gap-1.5 flex-wrap mt-0.5">
+          {% if f.last_error %}
+          <span class="text-claude-error" title="{{ f.last_error|e }}">⚠ çekilemedi</span>
+          {% elif s and s.durum == 'bos' %}
+          <span class="text-claude-error">⚠ hiç haber yok</span>
+          {% elif s and s.durum == 'bayat' %}
+          <span class="text-claude-wait" title="24 saat içinde hiç yeni haber yok">◷ bayat</span>
+          {% elif s %}
+          <span class="text-claude-muted">{{ s.taze }} taze</span>
+          {% endif %}
+          {% if s and s.sayi %}<span class="text-claude-subtle">· {{ s.sayi }} haber</span>{% endif %}
+          {% if f.last_fetched_at %}
+          <span class="text-claude-subtle">· {{ yas_etiketi(f.last_fetched_at) }}</span>
+          {% endif %}
+        </div>
+        <div class="text-[11px] text-claude-subtle truncate">{{ f.url|e }}</div>
       </a>
-      <form method="post" action="{{ url_for('feeds.delete', feed_id=f.id) }}"
-            onsubmit="return confirm('Bu feed silinsin mi?')">
-        <button type="submit" title="Sil" @click.stop
-                class="text-claude-subtle hover:text-claude-error w-6 h-6 rounded-full hover:bg-claude-surface flex items-center justify-center text-sm">×</button>
+      <div class="flex flex-col items-center gap-0.5">
+        <button type="button" title="Yeniden adlandır" @click.stop="ad = !ad"
+                class="text-claude-subtle hover:text-claude-text w-6 h-6 rounded-full hover:bg-claude-surface flex items-center justify-center text-xs">✎</button>
+        <form method="post" action="{{ url_for('feeds.toggle', feed_id=f.id) }}">
+          <button type="submit" @click.stop
+                  title="{% if f.enabled %}Geçici olarak kapat{% else %}Aç{% endif %}"
+                  class="text-claude-subtle hover:text-claude-text w-6 h-6 rounded-full hover:bg-claude-surface flex items-center justify-center text-xs">{% if f.enabled %}◉{% else %}○{% endif %}</button>
+        </form>
+        <form method="post" action="{{ url_for('feeds.delete', feed_id=f.id) }}"
+              onsubmit="return confirm('Bu feed silinsin mi?')">
+          <button type="submit" title="Sil" @click.stop
+                  class="text-claude-subtle hover:text-claude-error w-6 h-6 rounded-full hover:bg-claude-surface flex items-center justify-center text-sm">×</button>
+        </form>
+      </div>
+      <form x-show="ad" x-cloak method="post" @click.stop
+            action="{{ url_for('feeds.rename', feed_id=f.id) }}"
+            class="basis-full flex gap-1 mt-1.5">
+        <input name="title" value="{{ f.title|e }}" required maxlength="120"
+               class="flex-1 min-w-0 border border-claude-border rounded-lg px-2 py-1 text-xs bg-white text-claude-text focus:outline-none focus:ring-2 focus:ring-claude-accent/30">
+        <button type="submit" class="rounded-lg px-2 py-1 text-xs bg-claude-accent text-white hover:bg-claude-accent-hover transition">Kaydet</button>
       </form>
     </div>
     {% else %}
@@ -54,4 +106,29 @@
     </div>
   </section>
 </div>
+
+<script>
+  // SON AÇILAN FEED'İ HATIRLA. Başka sayfaya gidip dönünce sağ taraf boşalıyordu
+  // ve haberleri yeniden çekmek gerekiyordu; artık liste sunucuda cache'lendiği
+  // için geri yükleme tek DB okuması (görseller yeniden indirilmez). Tazeleme
+  // kullanıcının "Yenile" düğmesine bağlı.
+  (function () {
+    var KEY = 'shortbot.lastFeedId';
+    var links = document.querySelectorAll('[data-feed-link]');
+    links.forEach(function (a) {
+      a.addEventListener('click', function () {
+        try { localStorage.setItem(KEY, a.dataset.feedLink); } catch (e) {}
+      });
+    });
+    // load (DOMContentLoaded değil): Alpine defer ile yükleniyor, seçim vurgusu
+    // için @click bind'inin hazır olmasını bekliyoruz.
+    window.addEventListener('load', function () {
+      var last = null;
+      try { last = localStorage.getItem(KEY); } catch (e) {}
+      if (!last) return;
+      var el = document.querySelector('[data-feed-link="' + last + '"]');
+      if (el) el.click();   // htmx hx-get'i tetikler → cache'ten anında gelir
+    });
+  })();
+</script>
 {% endblock %}

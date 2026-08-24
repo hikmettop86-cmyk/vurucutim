@@ -38,8 +38,8 @@ config/channels/*.yaml
 !config/channels/example.yaml
 
 # Panel logs (root)
-panel_stdout.log
-panel_stderr.log
+panel_stdout*.log
+panel_stderr*.log
 
 # Generated CSS
 templates/css/*.css
@@ -85,3 +85,18 @@ remotion/.cache/
 # Git worktrees (project-local, isolated dev branches)
 .worktrees/
 assets/music/_profiles.json
+
+# Çalışma logları (kökte biriken tek seferlik koşu çıktıları)
+_*.log
+_score_diag.py
+_ses_ornekleri/
+
+# Scratch ölçüm dosyaları
+scratch_*/
+scratch_*.json
+
+# Yerel veritabanı kopyaları
+data/*.db
+data/*.sqlite3
+data/trends_cache/
+data/storyblocks_session.json

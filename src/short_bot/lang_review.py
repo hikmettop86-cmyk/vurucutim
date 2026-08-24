@@ -178,3 +178,93 @@ def back_translate(text: str, *, language: str, backend: str = "claude_cli",
     except Exception as e:  # noqa: BLE001 — pencere, kapı değil: üretimi durdurmaz
         log.info(f"  kürate[dil]: geri çeviri alınamadı ({e})")
         return ""
+
+
+class KartTurkcesi(BaseModel):
+    """6 saniyelik kartın EKRANDA GÖRÜNEN metninin Türkçesi.
+
+    Alan alan, çünkü operatör kartı okurken hangi Türkçenin hangi kutuya ait
+    olduğunu görmeli. Tek blok dönseydi manşetle gövde birbirine karışırdı ve
+    "manşet ne diyor" sorusu cevapsız kalırdı — kartın en çok görülen parçası o.
+    """
+    header_top: str = Field(default="", max_length=160)
+    header_bottom: str = Field(default="", max_length=200)
+    photo_overlay: str = Field(default="", max_length=240)
+    body: str = Field(default="", max_length=1400)
+
+    def bos_mu(self) -> bool:
+        return not any((self.header_top, self.header_bottom,
+                        self.photo_overlay, self.body))
+
+
+_KART_PROMPT = """You are translating the ON-SCREEN TEXT of a 6-second vertical news
+card (YouTube Shorts) from {lang} into TURKISH.
+
+The operator who reads your translation does NOT speak {lang}. They decide whether to
+publish this video based ONLY on what you write. Therefore:
+  - Translate the MEANING faithfully, field by field.
+  - Do NOT improve, shorten, embellish or "fix" it. If the original overstates a
+    transfer rumour as fact, the Turkish must overstate it too — that is exactly the
+    thing the operator needs to catch.
+  - Headlines are ALLCAPS fragments without articles. Render them as natural Turkish
+    headline fragments, not as full sentences.
+  - Keep proper nouns (people, clubs, competitions) in their original form.
+  - Plain text only. No notes, no commentary, no quotation marks around fields.
+  - A field that is empty in the input stays empty in the output.
+
+Return JSON:
+{{"header_top": "...", "header_bottom": "...", "photo_overlay": "...", "body": "..."}}
+
+CARD ({lang}):
+HEADLINE TOP: {header_top}
+HEADLINE BOTTOM: {header_bottom}
+PHOTO STRIP: {photo_overlay}
+BODY: {body}
+"""
+
+
+def kart_turkcesi(*, header_top: str = "", header_bottom: str = "",
+                  photo_overlay: str = "", body: str = "",
+                  language: str, backend: str = "claude_cli",
+                  model: str = "default", api_key: str | None = None,
+                  claude_path: str = "claude",
+                  strict: bool = False) -> KartTurkcesi | None:
+    """Kartın ekran metnini Türkçeye çevir. Hata → None (fail-open).
+
+    NEDEN VAR: seslendirmeli formatta anlatımın Türkçesi zaten yazılıyordu
+    (`voiced.py` → `back_translate`), ama 6 saniyelik KART formatında hiçbir
+    şey yazılmıyordu. Panelin detay sayfasında İspanyolca/Japonca/Almanca bir
+    kartın karşısına oturan operatör manşeti okuyamıyor ve yayın kararını
+    veremiyordu.
+
+    `back_translate` buraya UYMUYOR: onun istemi seslendirme metni için yazılmış
+    ("WHAT the video says") ve tek blok döndürüyor. Kartta dört ayrı kutu var ve
+    hangisinin hangisi olduğu görünmeli.
+
+    Türkçe kaynakta None: çevrilecek bir şey yok, çağrı israf olur.
+
+    ``strict``: hatayı YUTMA, yükselt. Üretim boru hattı fail-open istiyor —
+    çeviri yokluğu videoyu düşürmemeli. Ama PANELDE operatör düğmeye basıp
+    "Çeviri boş döndü" görürse elinde hiçbir şey kalmıyor: anahtar havuzunun
+    tükenmesi, modelin reddi ve ağın kopması üçü de aynı boş cümleye çıkıyor.
+    Panel ``strict=True`` geçer ve gerçek sebebi kutuda gösterir.
+    """
+    if language == "tr":
+        return None
+    alanlar = (header_top or "", header_bottom or "",
+               photo_overlay or "", body or "")
+    if not any(a.strip() for a in alanlar):
+        return None
+    lang = _language_en(language)
+    prompt = _KART_PROMPT.format(
+        lang=lang, header_top=header_top or "-", header_bottom=header_bottom or "-",
+        photo_overlay=photo_overlay or "-", body=(body or "-")[:1500])
+    try:
+        cikti = run_json(prompt, KartTurkcesi, claude_path=claude_path, model=model,
+                         backend=backend, api_key=api_key, retries=2, timeout_s=90)
+        return None if cikti.bos_mu() else cikti
+    except Exception as e:  # noqa: BLE001 — pencere, kapı değil: üretimi durdurmaz
+        log.info(f"  kart Türkçesi alınamadı ({e})")
+        if strict:
+            raise
+        return None

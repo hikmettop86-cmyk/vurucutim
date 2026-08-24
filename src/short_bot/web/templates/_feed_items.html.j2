@@ -1,12 +1,81 @@
-<div class="mb-4 flex items-baseline gap-2">
-  <span class="font-serif text-lg font-semibold text-claude-text">{{ feed.title|e }}</span>
-  <span class="text-xs text-claude-muted">{{ items|length }} haber</span>
+{# Süzme ARAMA + 'yapıldı' gizleme tarayıcıda çalışır: liste zaten DOM'da ve
+   sunucuya gitmek her tuşta yeni bir istek demekti. Sayaç da canlı güncellenir,
+   yoksa "0 sonuç" ile "hepsi gizlendi" ayırt edilemez. #}
+<div x-data="{ q: '', gizle: false, gorunur: 0,
+               say() { this.$nextTick(() => { this.gorunur =
+                 this.$root.querySelectorAll('[data-haber]:not(.hidden)').length }) },
+               uyar(t, d) { const s = (this.q||'').trim().toLowerCase();
+                 if (this.gizle && d) return false;
+                 return !s || t.toLowerCase().includes(s) } }"
+     x-init="say()">
+<div class="mb-4 flex items-center gap-2 flex-wrap">
+  <span class="font-serif text-lg font-semibold text-claude-text">
+    {% if birlesik %}Tüm Kaynaklar{% else %}{{ feed.title|e }}{% endif %}</span>
+  <span class="text-xs text-claude-muted">
+    <span x-text="gorunur"></span> / {{ items|length }} haber
+    {% if birlesik %}· {{ kaynak_sayisi }} kaynak{% endif %}</span>
+  {% if translated %}
+  <span class="text-[10px] bg-claude-surface-alt text-claude-muted ring-1 ring-claude-border rounded px-1.5 py-0.5"
+        title="Yabancı dilli kaynak — başlık ve özet panelde Türkçeye çevrildi. Videoya orijinal metin gider.">🌐 Türkçeleştirildi</span>
+  {% endif %}
+  {% if fetched_label %}
+  <span class="text-xs text-claude-subtle">·
+    {% if from_cache %}kayıtlı liste{% else %}yeni çekildi{% endif %}, {{ fetched_label }}</span>
+  {% endif %}
+  {% if not birlesik %}
+  <button type="button" title="RSS'i yeniden indir"
+          hx-get="{{ url_for('feeds.items', feed_id=feed.id, refresh=1) }}"
+          hx-target="#feed-items" hx-swap="innerHTML" hx-indicator="#feed-spin"
+          class="ml-auto rounded-lg px-3 py-1.5 text-xs font-medium bg-claude-surface-alt text-claude-text ring-1 ring-claude-border hover:bg-claude-border transition">⟳ Yenile</button>
+  {% endif %}
 </div>
+
+<div class="mb-3 flex items-center gap-2 flex-wrap">
+  <input type="search" x-model="q" x-on:input="say()" placeholder="Başlıkta ara…"
+         class="flex-1 min-w-[180px] border border-claude-border rounded-lg px-3 py-1.5 text-sm bg-white
+                text-claude-text focus:outline-none focus:ring-2 focus:ring-claude-accent/30 placeholder:text-claude-subtle">
+  <label class="flex items-center gap-1.5 text-xs text-claude-muted cursor-pointer select-none
+                rounded-lg px-2.5 py-1.5 ring-1 ring-claude-border hover:bg-claude-surface-alt transition">
+    <input type="checkbox" x-model="gizle" x-on:change="say()" class="accent-claude-accent">
+    Yapılmışları gizle
+  </label>
+  {# YAŞ PENCERESİ sunucuda süzer (istemcide değil): eski haberler hiç
+     gönderilmezse 'yapıldı' hesabı da onlar için hiç çalışmaz. #}
+  <div class="flex items-center gap-0.5 rounded-lg ring-1 ring-claude-border p-0.5">
+    {% for saat, etiket in yas_secenekleri %}
+    <button type="button"
+            hx-get="{% if birlesik %}{{ url_for('feeds.all_items', yas=saat) }}{% else %}{{ url_for('feeds.items', feed_id=feed.id, yas=saat) }}{% endif %}"
+            hx-target="#feed-items" hx-swap="innerHTML" hx-indicator="#feed-spin"
+            class="px-2 py-1 rounded-md text-xs transition
+                   {% if saat == yas_saat %}bg-claude-accent text-white{% else %}text-claude-muted hover:bg-claude-surface-alt{% endif %}">{{ etiket }}</button>
+    {% endfor %}
+  </div>
+</div>
+{% if elenen %}
+<div class="mb-3 text-xs text-claude-subtle">{{ elenen }} eski haber gizlendi.</div>
+{% endif %}
+
+{% if fetch_error %}
+<div class="mb-3 text-xs text-claude-error bg-claude-surface border border-claude-border rounded-lg px-3 py-2">
+  Yenileme başarısız: {{ fetch_error|e }}{% if from_cache %} — aşağıdaki liste kayıtlı sürüm.{% endif %}
+</div>
+{% endif %}
 
 <div class="space-y-3">
 {% for row in items %}
 {% set n = row.item %}
-<div class="flex gap-3 bg-claude-surface border border-claude-border rounded-lg p-3 transition hover:border-claude-border-strong hover:shadow-soft{% if row.done %} opacity-60{% endif %}">
+{# Süzme anahtarı Türkçe başlık + kaynak metni: operatör gördüğü kelimeyi arar.
+   Orijinal başlık da dahil, yabancı kaynakta ismi kaynak diliyle aratabilsin.
+
+   Anahtar bir data-* niteliğinde durur, Alpine ifadesine GÖMÜLMEZ: `|tojson`
+   ile gömüldüğünde ürettiği çift tırnak HTML niteliğini erkenden kapatıyor ve
+   ifade "uyar(" diye kesiliyordu (Alpine: Unexpected token '}') — süzgeç
+   sessizce hiç çalışmıyordu. #}
+<div data-haber
+     data-ara="{{ (row.title_tr ~ ' ' ~ n.title ~ ' ' ~ (row.feed_title or '') ~ ' ' ~ (n.source or ''))|e }}"
+     data-yapildi="{{ '1' if row.done else '' }}"
+     x-bind:class="uyar($el.dataset.ara, $el.dataset.yapildi) ? '' : 'hidden'"
+     class="flex gap-3 bg-claude-surface border border-claude-border rounded-lg p-3 transition hover:border-claude-border-strong hover:shadow-soft{% if row.done %} opacity-60{% endif %}">
   <div class="relative w-20 h-20 flex-shrink-0 rounded-md bg-claude-surface-alt flex items-center justify-center overflow-hidden">
     <span class="text-claude-subtle text-xl" title="Görsel, video üretiminde otomatik seçilir">🖼</span>
     {% if row.image %}
@@ -14,13 +83,20 @@
     {% endif %}
   </div>
   <div class="flex-1 min-w-0">
-    <div class="font-semibold text-sm text-claude-text leading-snug">{{ n.title|e }}</div>
+    <div class="font-semibold text-sm text-claude-text leading-snug">{{ (row.title_tr or n.title)|e }}</div>
+    {% if row.title_tr %}
+    <div class="text-[11px] text-claude-subtle leading-snug mt-0.5" title="Kaynak başlık">{{ n.title|e }}</div>
+    {% endif %}
     <div class="text-xs text-claude-muted mt-1 flex items-center gap-1.5 flex-wrap">
       {% if n.pub_date %}<span>{{ n.pub_date.strftime('%d.%m %H:%M') }}</span>{% endif %}
+      {% if birlesik and row.feed_title %}
+      <span class="bg-claude-accent-soft text-claude-accent ring-1 ring-claude-accent/20 rounded px-1.5 py-0.5 text-[10px]">{{ row.feed_title|e }}</span>
+      {% endif %}
       {% if n.source %}<span class="text-claude-subtle">·</span><span>{{ n.source|e }}</span>{% endif %}
       {% if row.done %}<span class="bg-claude-surface-alt text-claude-muted ring-1 ring-claude-border rounded px-1.5 py-0.5 text-[10px]">✓ yapıldı</span>{% endif %}
     </div>
-    {% if n.description %}<div class="text-xs text-claude-muted mt-1.5 line-clamp-2">{{ n.description[:160]|e }}</div>{% endif %}
+    {% set ozet = row.desc_tr or row.desc_clean %}
+    {% if ozet %}<div class="text-xs text-claude-muted mt-1.5 line-clamp-2">{{ ozet[:160]|e }}</div>{% endif %}
   </div>
   <form method="post" action="{{ url_for('feeds.produce') }}" class="flex flex-col gap-1.5 flex-shrink-0 w-36 self-center">
     <input type="hidden" name="guid" value="{{ n.guid|e }}">
@@ -28,7 +104,10 @@
     <input type="hidden" name="link" value="{{ n.link|e }}">
     <input type="hidden" name="source" value="{{ (n.source or '')|e }}">
     <input type="hidden" name="thumb_url" value="{{ (row.image or '')|e }}">
-    <input type="hidden" name="description" value="{{ (n.description or '')|e }}">
+    {# Başlık ve özet ORİJİNAL dilde gider: senaryo yazarı kaynağı kendi okur,
+       araya çeviri koymak ayrıntıyı inceltir (bkz. feed_translate modül notu).
+       Özet yalnız HTML/entity artığından arındırılmış hâliyle taşınır. #}
+    <input type="hidden" name="description" value="{{ (row.desc_clean or n.description or '')|e }}">
     {% if n.pub_date %}<input type="hidden" name="pub_date" value="{{ n.pub_date.isoformat() }}">{% endif %}
     <select name="channel_slug" required
             class="border border-claude-border rounded-lg px-2 py-1.5 text-xs bg-white text-claude-text focus:outline-none focus:ring-2 focus:ring-claude-accent/30">
@@ -39,6 +118,17 @@
   </form>
 </div>
 {% else %}
-<div class="text-claude-muted text-center py-12">Bu feed'de haber bulunamadı.</div>
+<div class="text-claude-muted text-center py-12">
+  {% if birlesik %}Hiçbir kaynakta kayıtlı haber yok — soldan bir kaynak seçip “Yenile” de.
+  {% else %}Bu feed'de haber bulunamadı.{% endif %}
+</div>
 {% endfor %}
+</div>
+{% if items %}
+<div x-show="gorunur === 0" x-cloak class="text-claude-muted text-center py-10">
+  Süzgece uyan haber yok.
+  <button type="button" x-on:click="q=''; gizle=false; say()"
+          class="ml-1 underline hover:text-claude-text">Süzgeci temizle</button>
+</div>
+{% endif %}
 </div>

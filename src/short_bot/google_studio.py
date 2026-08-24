@@ -26,6 +26,10 @@ import requests
 log = logging.getLogger(__name__)
 
 DAILY_CAP = 500          # key:model başına bedava/gün (canlı 429 ölçümü)
+#: Günlük kotası dolan girişin durumu. TEK YERDE tanımlı: dizge iki yerde elle
+#: yazılınca `pool_durumu` "exhausted" arayıp havuzun yazdığı "daily-exhausted"i
+#: hiç görmüyordu (2026-08-23'te düzeltildi).
+TUKENDI = "daily-exhausted"
 RPM = 15                 # Google bedava PerMinute
 RPM_MARGIN = 0.8         # güvenli pace payı → ceil(12)/dk/key
 # ÖLÇÜLDÜ (2026-07-18 canlı): ücretsiz-tier'ın 429'u genelde DETAYSIZ 'RESOURCE_EXHAUSTED'
@@ -94,7 +98,7 @@ def _maybe_reset_day(state: dict, *, now: float) -> bool:
         state["ptDate"] = today
         for e in state.get("usage", {}).values():
             e["dayCount"] = 0
-            if e.get("status") == "daily-exhausted":
+            if e.get("status") == TUKENDI:
                 e["status"] = "active"
         return True
     return False
@@ -229,10 +233,10 @@ class Pool:
                     continue
                 e = self._entry(k["id"], model)
                 st = self._eff_status(e)
-                if st in ("daily-exhausted", "rpm-cooldown"):
+                if st in (TUKENDI, "rpm-cooldown"):
                     continue
                 if e["dayCount"] >= self._cap:
-                    e["status"] = "daily-exhausted"
+                    e["status"] = TUKENDI
                     e["lastEvent"] = "cap"
                     continue
                 self._trim(e)
@@ -255,7 +259,7 @@ class Pool:
                     continue
                 e = self._entry(k["id"], model)
                 st = self._eff_status(e)
-                if st == "daily-exhausted" or e["dayCount"] >= self._cap:
+                if st == TUKENDI or e["dayCount"] >= self._cap:
                     continue
                 if st == "rpm-cooldown":
                     w = max(0.0, e["cooldownUntil"] - self._now())
@@ -296,10 +300,10 @@ class Pool:
                 self._save()
                 return
             if cls == "daily":
-                e["status"] = "daily-exhausted"
+                e["status"] = TUKENDI
                 e["cooldownUntil"] = 0   # gün-ölüsüne cooldown YOK (retryDelay çöp)
                 e["lastEvent"] = "429 RPD"
-            elif e["status"] != "daily-exhausted":   # gün-ölüsünü DİRİLTME (yarış)
+            elif e["status"] != TUKENDI:   # gün-ölüsünü DİRİLTME (yarış)
                 e["status"] = "rpm-cooldown"
                 cd = (retry_ms / 1000.0) if retry_ms is not None else RPM_FALLBACK_COOLDOWN_S
                 e["cooldownUntil"] = self._now() + cd
@@ -310,7 +314,7 @@ class Pool:
     def report_transient(self, key_id: str, model: str):
         with self._lock:
             e = self._entry(key_id, model)
-            if e["status"] != "daily-exhausted":
+            if e["status"] != TUKENDI:
                 e["status"] = "rpm-cooldown"
                 e["cooldownUntil"] = self._now() + 60.0
                 e["lastEvent"] = "transient"
@@ -500,8 +504,256 @@ def pool_durumu(pool_dir=None) -> dict:
     kullanim = state.get("usage") or {}
     out["bugun"] = sum(int(v.get("dayCount") or 0)
                        for v in kullanim.values() if isinstance(v, dict))
+    # DİZGE HAVUZUN YAZDIĞIYLA AYNI OLMALI. Burada "exhausted" aranıyordu ama
+    # `Pool` her yerde "daily-exhausted" yazıyor (bkz. acquire/report429) — sayaç
+    # HER ZAMAN 0 dönüyordu, yani tam da uyarması gereken anda sessizdi.
     out["tukenen"] = sum(1 for v in kullanim.values()
-                         if isinstance(v, dict) and v.get("status") == "exhausted")
+                         if isinstance(v, dict) and v.get("status") == TUKENDI)
     out["banli"] = len(state.get("banned") or {})
     out["gun"] = state.get("ptDate", "")
     return out
+
+
+# ── Havuz yönetimi (panel) ───────────────────────────────────────────────────
+#
+# NEDEN VAR: havuz 38 anahtarla çalışıyordu ama panel yalnız ÜÇ SAYI gösteriyordu
+# ve hiçbir yönetim yoktu — anahtar eklemek/çıkarmak için `google-keys.json` elle
+# düzenleniyordu. Yönetim, faceless-2'deki `ui/js/google-keys-panel.js`ten taşındı.
+#
+# YAZMA ATOMİK OLMAK ZORUNDA: dosyayı CANLI bir boru hattı okuyor. Yarım yazılmış
+# bir `google-keys.json` havuzu tamamen düşürür (JSON parse hatası → Pool kurulamaz
+# → vision sessizce ÜCRETLİYE düşer). Geçici dosya + `os.replace` bunu imkânsız
+# kılar; kısmi dosya asla görünmez.
+
+def _keys_dosyasi(pool_dir=None) -> Path:
+    return (Path(pool_dir) if pool_dir is not None else _POOL_DIR) / "google-keys.json"
+
+
+def _state_dosyasi(pool_dir=None) -> Path:
+    return (Path(pool_dir) if pool_dir is not None else _POOL_DIR) / "state.json"
+
+
+def _json_oku(yol: Path, varsayilan):
+    try:
+        return json.loads(yol.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return varsayilan
+
+
+def _json_yaz(yol: Path, nesne) -> None:
+    """Atomik yazma — yarım dosya havuzu düşürür (bkz. bölüm notu)."""
+    import os
+    import tempfile
+    yol.parent.mkdir(parents=True, exist_ok=True)
+    fd, gecici = tempfile.mkstemp(dir=str(yol.parent), suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(nesne, f, ensure_ascii=False)
+        os.replace(gecici, yol)
+    except BaseException:
+        try:
+            os.unlink(gecici)
+        except OSError:
+            pass
+        raise
+
+
+def _anahtarlari_oku(pool_dir=None) -> list:
+    ham = _json_oku(_keys_dosyasi(pool_dir), {"version": 1, "keys": []})
+    keys = ham.get("keys", ham) if isinstance(ham, dict) else ham
+    return [k for k in (keys or []) if isinstance(k, dict)]
+
+
+def _anahtarlari_yaz(keys: list, pool_dir=None) -> None:
+    """Anahtar listesini diske yaz ve CANLI HAVUZU TAZELE.
+
+    Tazelenmezse panel anahtarı siler, kullanıcı silindiğini görür, ama koşan
+    süreç `Pool.__init__`te önbelleklenen listeyi kullanmaya devam eder — hata
+    yalnız yeniden başlatınca düzelir ve arada silinmiş bir anahtara çağrı gider.
+    """
+    global _POOL
+    _json_yaz(_keys_dosyasi(pool_dir), {"version": 1, "keys": keys})
+    _POOL = None
+
+
+def havuz_detay(pool_dir=None) -> dict:
+    """Panelin anahtar tablosu — anahtar başına durum, bugünkü çağrı, model sayısı.
+
+    `pool_durumu` toplamları verir, bu tekil satırları. `pool_durumu` gibi hiçbir
+    hata YÜKSELTMEZ: bozuk bir state.json yüzünden ayarlar sayfası açılmamalı.
+    """
+    out = dict(pool_durumu(pool_dir))
+    out["anahtarlar"] = []
+    state = _json_oku(_state_dosyasi(pool_dir), {})
+    if not isinstance(state, dict):
+        state = {}
+    usage = state.get("usage") or {}
+    banned = state.get("banned") or {}
+    for k in _anahtarlari_oku(pool_dir):
+        kid = k.get("id") or ""
+        kayit = {m.split(":", 1)[1]: v for m, v in usage.items()
+                 if isinstance(v, dict) and m.startswith(kid + ":")}
+        durumlar = {v.get("status") for v in kayit.values()}
+        etkin = k.get("enabled") is not False
+        anahtar = k.get("key") or ""
+        out["anahtarlar"].append({
+            "id": kid,
+            "etiket": k.get("label") or "",
+            # TAM ANAHTAR PANELE GİTMEZ. Sayfa ekran görüntüsü alınabiliyor,
+            # paylaşılabiliyor; maskeleme burada, taşımadan önce yapılır.
+            "maske": ("•" * 6 + anahtar[-4:]) if len(anahtar) >= 4 else "•" * 6,
+            "etkin": etkin,
+            "bugun": sum(int(v.get("dayCount") or 0) for v in kayit.values()),
+            "model": len(kayit),
+            "durum": ("banned" if kid in banned else
+                      TUKENDI if TUKENDI in durumlar else
+                      "rpm-cooldown" if "rpm-cooldown" in durumlar else
+                      "active" if etkin else "disabled"),
+        })
+    # Soğuma sayısı ASIL ERKEN UYARI: günlük kota değil, eşzamanlılık.
+    # Google paylaşılan kapasiteyi 429 ile kapatınca havuz bir anda boşalır.
+    out["soguyan"] = sum(1 for a in out["anahtarlar"] if a["durum"] == "rpm-cooldown")
+    out["bedava"] = int((state.get("stats") or {}).get("freeCalls") or 0)
+    out["ucretli"] = int((state.get("stats") or {}).get("fallbackCalls") or 0)
+    out["gunluk_cap"] = DAILY_CAP
+    return out
+
+
+def anahtar_ekle(anahtar: str, *, etiket: str = "", pool_dir=None) -> dict:
+    """Havuza yeni bir Gemini anahtarı ekle. Döner: {"ok", "hata", "id"}.
+
+    AYNI ANAHTAR İKİ KEZ EKLENMEZ: kopya rotasyonu bozmaz ama panelde iki satır
+    çıkarır ve kullanıcı hangisini sileceğini bilemez; üstelik "38 anahtarım var"
+    sanırken 37 anahtarlık kapasiteyle koşar.
+    """
+    anahtar = (anahtar or "").strip()
+    if not anahtar:
+        return {"ok": False, "hata": "Anahtar boş.", "id": ""}
+    if len(anahtar) < 20:
+        return {"ok": False, "hata": "Anahtar çok kısa — eksik yapıştırılmış olabilir.",
+                "id": ""}
+    keys = _anahtarlari_oku(pool_dir)
+    if any((k.get("key") or "") == anahtar for k in keys):
+        return {"ok": False, "hata": "Bu anahtar zaten havuzda.", "id": ""}
+    import secrets as _secrets
+    kid = _secrets.token_hex(6)
+    keys.append({"id": kid, "key": anahtar, "label": (etiket or "").strip(),
+                 "enabled": True, "addedAt": int(time.time() * 1000)})
+    _anahtarlari_yaz(keys, pool_dir)
+    return {"ok": True, "hata": "", "id": kid}
+
+
+def toplu_ekle(metin: str, *, pool_dir=None) -> dict:
+    """Çok satırlı yapıştırmadan anahtar ekle. Satır: "etiket,anahtar" ya da "anahtar".
+
+    38 anahtar tek tek eklenmez; havuz zaten toplu üretiliyor. Kısmi başarı
+    NORMALDİR: geçerli olanlar eklenir, ötekiler sebebiyle birlikte döner.
+    """
+    eklenen, atlanan = 0, []
+    for ham in (metin or "").splitlines():
+        satir = ham.strip()
+        if not satir:
+            continue
+        if "," in satir:
+            etiket, _, anahtar = satir.partition(",")
+        else:
+            etiket, anahtar = "", satir
+        sonuc = anahtar_ekle(anahtar.strip(), etiket=etiket.strip(), pool_dir=pool_dir)
+        if sonuc["ok"]:
+            eklenen += 1
+        else:
+            atlanan.append(f"{satir[:22]}… — {sonuc['hata']}")
+    return {"eklenen": eklenen, "atlanan": atlanan}
+
+
+def anahtar_sil(key_id: str, *, pool_dir=None) -> bool:
+    """Anahtarı havuzdan çıkar ve KULLANIM KAYITLARINI da temizle.
+
+    Kayıt bırakılsaydı `pool_durumu` silinmiş anahtarların çağrılarını saymaya
+    devam ederdi: "bugün" sayısı anahtar silinse bile hiç düşmezdi.
+    """
+    keys = _anahtarlari_oku(pool_dir)
+    kalan = [k for k in keys if k.get("id") != key_id]
+    if len(kalan) == len(keys):
+        return False
+    _anahtarlari_yaz(kalan, pool_dir)
+    state = _json_oku(_state_dosyasi(pool_dir), None)
+    if isinstance(state, dict):
+        u = state.get("usage") or {}
+        state["usage"] = {m: v for m, v in u.items()
+                          if not m.startswith(str(key_id) + ":")}
+        if isinstance(state.get("banned"), dict):
+            state["banned"].pop(key_id, None)
+        _json_yaz(_state_dosyasi(pool_dir), state)
+    return True
+
+
+def anahtar_ac_kapa(key_id: str, etkin: bool, *, pool_dir=None) -> bool:
+    """Anahtarı geçici olarak devre dışı bırak / geri al (silmeden).
+
+    Silmekten farkı: kullanım geçmişi ve kimlik korunur. Şüpheli bir anahtarı
+    kapatıp havuzun düzelip düzelmediğini görmek için.
+    """
+    keys = _anahtarlari_oku(pool_dir)
+    bulundu = False
+    for k in keys:
+        if k.get("id") == key_id:
+            k["enabled"] = bool(etkin)
+            bulundu = True
+    if bulundu:
+        _anahtarlari_yaz(keys, pool_dir)
+    return bulundu
+
+
+#: `kota_islemi` için geçerli işlemler — panelin düğmeleriyle birebir.
+KOTA_ISLEMLERI = ("soguma", "gun", "ban", "pasif-sil")
+
+
+def kota_islemi(islem: str, *, pool_dir=None) -> dict:
+    """Kota/durum bakımı. Döner: {"ok", "hata", "etkilenen"}.
+
+      soguma    — dakika-soğumasındaki girişleri hemen serbest bırak
+      gun       — günlük sayaçları sıfırla (kota dolmuşları da diriltir)
+      ban       — ban listesini temizle
+      pasif-sil — kapalı anahtarları havuzdan tamamen çıkar
+
+    `gun` GOOGLE'IN KOTASINI SIFIRLAMAZ, bizim sayacımızı sıfırlar. Google
+    gerçekten doluysa çağrılar yine 429 döner ve durum yeniden `daily-exhausted`
+    olur. Bu düğme, yanlış-pozitif kalmış bir sayaçtan kurtulmak içindir; kota
+    kazandırmaz.
+    """
+    if islem not in KOTA_ISLEMLERI:
+        return {"ok": False, "hata": f"bilinmeyen işlem: {islem!r}", "etkilenen": 0}
+    global _POOL
+    n = 0
+    if islem == "pasif-sil":
+        keys = _anahtarlari_oku(pool_dir)
+        kalan = [k for k in keys if k.get("enabled") is not False]
+        n = len(keys) - len(kalan)
+        if n:
+            _anahtarlari_yaz(kalan, pool_dir)
+        return {"ok": True, "hata": "", "etkilenen": n}
+
+    state = _json_oku(_state_dosyasi(pool_dir), None)
+    if not isinstance(state, dict):
+        return {"ok": True, "hata": "", "etkilenen": 0}
+    if islem == "ban":
+        n = len(state.get("banned") or {})
+        state["banned"] = {}
+    else:
+        for v in (state.get("usage") or {}).values():
+            if not isinstance(v, dict):
+                continue
+            if islem == "soguma" and v.get("status") == "rpm-cooldown":
+                v["status"] = "active"
+                v["cooldownUntil"] = 0
+                n += 1
+            elif islem == "gun":
+                if v.get("dayCount") or v.get("status") == TUKENDI:
+                    n += 1
+                v["dayCount"] = 0
+                if v.get("status") == TUKENDI:
+                    v["status"] = "active"
+    _json_yaz(_state_dosyasi(pool_dir), state)
+    _POOL = None
+    return {"ok": True, "hata": "", "etkilenen": n}

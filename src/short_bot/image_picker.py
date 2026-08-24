@@ -45,6 +45,37 @@ class _Verdict(BaseModel):
     has_text_overlay: bool = False
 
 
+def gorsel_reddedilmeli(verdict) -> bool:
+    """Bu vision kararı görseli reddettiriyor mu?
+
+    Kural TEK YERDE dursun: og:image yolu (pipeline) ve arama yolu aynı
+    ölçütü kullanmalı, yoksa biri sıkı biri gevşek olur ve fark GÖRÜNMEZ.
+
+    `verdict is None` (servis hatası) → REDDETME. Vision düşünce üretim
+    durmamalı; kapı bir güvenlik ağıdır, zorunlu bir adım değil.
+    """
+    if verdict is None:
+        return False
+    if getattr(verdict, "has_text_overlay", False):
+        return True           # yazı basılı grafik: kesin ret
+    return not (getattr(verdict, "appropriate", False)
+                or getattr(verdict, "is_safe", False))
+
+
+def verify_image(image_path: Path, script: Script, *, claude_path: str = "claude",
+                 backend: str = "claude_cli", api_key: str | None = None,
+                 model: str = "default"):
+    """Tek bir görseli vision kapısından geçir. Hata durumunda None.
+
+    NEDEN DIŞA AÇIK: `og:image` yolu (pipeline) bu denetimden HİÇ geçmiyordu —
+    yalnız DDG/Wikimedia adayları doğrulanıyordu. Yayıncının kapak görseli
+    genelde doğrudur AMA "yazı basılı haber grafiği" riski orada da var:
+    canlı vakada bir kulüp logo kartı arka plan oldu (2026-08-22, short 1804).
+    """
+    return _verify_with_claude(image_path, script, claude_path,
+                               backend=backend, api_key=api_key, model=model)
+
+
 def build_search_query(script: Script) -> str:
     """Build image search query from script header + category."""
     parts = [script.header_top, script.header_bottom, script.category]

@@ -208,13 +208,55 @@ def _proper_nouns(text: str, language: str = "tr") -> list[str]:
             if not cumle_basi or _fold(k) in ic_konumda]
 
 
-def _gecer_mi(aday: str, kaynak_fold: str, kaynak_kelimeler: list[str]) -> bool:
+# EKLEMELİ (bitişken) DİLLER: ek KESME İŞARETİ OLMADAN köke yapışır.
+#
+# CANLI VAKA (2026-08-23, gundem-yorum koşu #2110 — bu listedeki en YENİ olgu
+# kapısı kaybı): anlatım "Merkez Bankasının faiz kararı" dedi, kaynak "Merkez
+# Bankası" yazıyordu. Kapı 'Bankasının'ı UYDURMA ilan etti ve iki turda da
+# düzelmeyince VİDEO ÜRETİLMEDİ.
+#
+# Neden mevcut kollar yakalamıyor:
+#   * `a in kaynak_fold` — 'bankasinin' kaynakta yok (kaynak 'bankasi' yazmış),
+#   * kesme kolu — Türkçede ek çoğu zaman kesmesizdir ('Bankasının', 'Fener-
+#     bahçenin'), `split("'")` hiçbir şey kırpmaz,
+#   * fuzzy — ratio('bankasinin','bankasi') = %82, eşik %88. Ek uzadıkça oran
+#     DÜŞER, yani eşiği indirmek çözüm değil: %82'ye inmek 'Chelsea'/'Charles'
+#     sınıfını da içeri alırdı.
+#
+# Doğru değişmez: EK SONA GELİR, yani aday kaynak sözcüğüyle BAŞLAR. Ters yön
+# (anlatım kök, kaynak ekli) zaten `a in kaynak_fold` ile geçiyor.
+#
+# DAR TUTULDU: yalnız ölçülmüş dil (tr). Almancada aynı kural körlük yaratırdı
+# — bileşik sözcükler ('Bankgeschäft' 'Bank' ile başlar) uydurma adı kaynakta
+# varmış gibi gösterirdi.
+_EKLEMELI_DILLER: frozenset[str] = frozenset({"tr"})
+# Kök en az bu kadar uzun olmalı.
+#
+# 4'te KALDI, 5 DEĞİL: gerçek kulüp adlarının bir kısmı dört harflidir (Roma,
+# Ajax, Lyon, Nice) ve 5'e çıkarmak "Romanın ← Roma"yı yeniden yanlış pozitif
+# yapardı — yani düzeltilen sınıfın ta kendisini geri getirirdi.
+#
+# KABUL EDİLEN BOŞLUK: kaynakta dört harfli bir sözcük varsa, onunla BAŞLAYAN
+# uydurma bir ad kaçar ('Bank' kaynakta → 'Bankrupt' geçer). Takas bilinçli:
+# uydurmanın kaynaktaki bir sözcüğün tam olarak baş harflerinden başlaması
+# gerekir, bu da pratikte nadirdir; buna karşılık Türkçede ek almış ad HER
+# cümlede geçer. Testle yazılı: tests/test_fact_gate_ekler.py
+_EK_MIN_KOK = 4
+
+
+def _gecer_mi(aday: str, kaynak_fold: str, kaynak_kelimeler: list[str],
+              *, ek_alan_dil: bool = False) -> bool:
     a = _fold(aday)
     if a in kaynak_fold:            # düz geçiş: en sık durum
         return True
     # Ek almış / harfi düşmüş biçimler: 'Osimhen'i' ↔ 'Osimhen'
     a_cek = a.split("'")[0]
     if len(a_cek) >= 3 and a_cek in kaynak_fold:
+        return True
+    # Kesmesiz ek: aday kaynaktaki bir sözcükle BAŞLIYOR mu ('Bankasının' ←
+    # 'Bankası'). Bkz. _EKLEMELI_DILLER notu.
+    if ek_alan_dil and any(len(k) >= _EK_MIN_KOK and a_cek.startswith(k)
+                           for k in kaynak_kelimeler):
         return True
     return any(fuzz.ratio(a_cek, k) >= _ESIK for k in kaynak_kelimeler)
 
@@ -284,16 +326,38 @@ def unverified_claims(narration_text: str, source_text: str, *,
 
     eksik: list[str] = []
     gorulen: set[str] = set()
+    cjk = (language or "").split("-")[0].lower() in _CJK_DILLER
+    ek_alan_dil = (language or "").split("-")[0].lower() in _EKLEMELI_DILLER
 
-    for aday in _proper_nouns(narration_text, language):
-        anahtar = _fold(aday)
-        if anahtar in gorulen:
-            continue
-        gorulen.add(anahtar)
-        if not _gecer_mi(aday, kaynak_fold, kaynak_kelimeler):
-            eksik.append(aday)
+    # BÜYÜK-HARF SEZGİSİ CJK'DE GEÇERSİZ VE ZARARLI.
+    #
+    # `_proper_nouns` cümleyi `\w+` ile böler ve büyük harfle başlayan
+    # parçaları özel isim sayar. Japoncada BOŞLUK YOKTUR: tüm cümle tek bir
+    # `\w+` parçasıdır. O parça Latin bir büyük harfle başlarsa — kaynak
+    # atfında sık olur — CÜMLENİN TAMAMI özel isim adayı oluyor ve kaynakta
+    # birebir bulunamadığı için "uydurma" ilan ediliyor:
+    #
+    #   「Webの報道によると、監督は起用を見送りました。」
+    #     → aday: 'Webの報道によると'  (ek ve edatlar dahil)
+    #
+    # Bu İKİ ÜRETİMİ öldürdü (2026-08-22): 'Webの報道によると' ve
+    # 'NHKの報道によると'. Olgu kapısı iki turda düzelmeyince videoyu iptal
+    # ediyor — yani yanlış pozitif doğrudan üretim kaybı.
+    #
+    # CJK'de KAYIP YOK: Latin adlar zaten `_LATIN_DIZI` ile, sayılar
+    # `_KANJI_SAYI` ile aşağıda taranıyor. Kanji/katakana özel isimler bu
+    # sezgiye zaten görünmüyordu (büyük harfleri yok).
+    if not cjk:
+        for aday in _proper_nouns(narration_text, language):
+            anahtar = _fold(aday)
+            if anahtar in gorulen:
+                continue
+            gorulen.add(anahtar)
+            if not _gecer_mi(aday, kaynak_fold, kaynak_kelimeler,
+                             ek_alan_dil=ek_alan_dil):
+                eksik.append(aday)
 
-    if (language or "").split("-")[0].lower() in _CJK_DILLER:
+    if cjk:
         for aday in _KANJI_SAYI.findall(narration_text):
             anahtar = _fold(aday)
             if anahtar in gorulen:

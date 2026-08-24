@@ -3,8 +3,8 @@ import logging
 from pathlib import Path
 
 import yaml
-from flask import (Blueprint, current_app, flash, redirect, render_template,
-                   request, url_for)
+from flask import (Blueprint, abort, current_app, flash, redirect,
+                   render_template, request, url_for)
 
 from short_bot.ai_providers import ROLLER, SAGLAYICILAR
 from short_bot.config import load_settings
@@ -66,16 +66,20 @@ def _gecerli_cagrilar(data: dict, secrets: dict) -> dict:
 
 
 def _havuz_durumu() -> dict:
-    """Ücretsiz Google havuzunun özeti — ayarlar sayfası bunu gösterir.
+    """Ücretsiz Google havuzunun TAM durumu — özet + anahtar satırları.
+
+    Eskiden yalnız `pool_durumu` (üç sayı) taşınıyordu ve panelde hiçbir yönetim
+    yoktu; anahtar eklemek için `google-keys.json` elle düzenleniyordu.
 
     Hata YÜKSELTMEZ: bozuk bir state.json yüzünden ayarlar açılmamalı.
     """
     try:
-        from short_bot.google_studio import pool_durumu
-        return pool_durumu()
+        from short_bot.google_studio import havuz_detay
+        return havuz_detay()
     except Exception as e:   # noqa: BLE001
         return {"var": False, "anahtar": 0, "etkin": 0, "bugun": 0,
-                "gunluk_tavan": 0, "tukenen": 0, "banli": 0,
+                "gunluk_tavan": 0, "gunluk_cap": 0, "tukenen": 0, "banli": 0,
+                "soguyan": 0, "bedava": 0, "ucretli": 0, "anahtarlar": [],
                 "dizin": "", "hata": str(e)}
 
 
@@ -188,7 +192,7 @@ def view():
                             saglayici_anahtar={
                                 ad: _mask_key(secrets.get(sg.gizli_anahtar, "") or "")
                                 for ad, sg in SAGLAYICILAR.items() if sg.gizli_anahtar},
-                            google_havuz=_havuz_durumu(),
+                            h=_havuz_durumu(),
                             gecerli_cagrilar=_gecerli_cagrilar(data, secrets),
                             asset_library=_library_inventory(),
                             library_building=_LIB_BUILD.get("running", False),
@@ -451,3 +455,103 @@ def assets_build():
     flash(f"Kütüphane kurulumu başladı (kategori başına {per_sfx} SFX, "
           f"{per_music} müzik). Sayfayı birkaç dakika sonra yenile.", "success")
     return redirect(url_for("settings.view"))
+
+
+# ── Google ücretsiz havuzu: YÖNETİM ROTALARI ─────────────────────────────────
+#
+# Hepsi HTMX; her biri `settings/_havuz.html.j2` parçasını tazeleyip döner, yani
+# sayfa yeniden yüklenmez ve kullanıcı işlemin sonucunu ANINDA aynı tabloda görür.
+#
+# Havuz dizini `google_studio._POOL_DIR`ten gelir; `create_app` onu db_path'in
+# yanına kurar (web/__init__.py). Buradan ayrıca yol geçilmez — iki yerde
+# çözülen bir yol, ikisi ayrışınca panel başka dosyayı düzenler.
+
+
+def _havuz_parcasi(mesaj: str = "", hata: bool = False):
+    """Havuz parçasını güncel durumla render et."""
+    return render_template("settings/_havuz.html.j2", h=_havuz_durumu(),
+                           mesaj=mesaj, mesaj_hata=hata)
+
+
+@bp.route("/settings/pool/ekle", methods=["POST"])
+def havuz_ekle():
+    """Tek anahtar ya da toplu yapıştırma.
+
+    Toplu alan doluysa o kazanır: kullanıcı toplu moda geçtiyse tek-anahtar
+    alanları formda gizli kalmış olabilir ama DEĞERLERİ hâlâ gönderilir.
+    """
+    from short_bot.google_studio import anahtar_ekle, toplu_ekle
+    toplu = (request.form.get("toplu") or "").strip()
+    try:
+        if toplu:
+            r = toplu_ekle(toplu)
+            if not r["eklenen"]:
+                return _havuz_parcasi("Hiçbir anahtar eklenemedi — "
+                                      + "; ".join(r["atlanan"][:3]), hata=True)
+            mesaj = f"{r['eklenen']} anahtar eklendi"
+            if r["atlanan"]:
+                mesaj += f" · {len(r['atlanan'])} satır atlandı"
+            return _havuz_parcasi(mesaj)
+        sonuc = anahtar_ekle((request.form.get("anahtar") or ""),
+                             etiket=(request.form.get("etiket") or ""))
+        if not sonuc["ok"]:
+            return _havuz_parcasi(sonuc["hata"], hata=True)
+        return _havuz_parcasi("Anahtar eklendi")
+    except Exception as e:  # noqa: BLE001 — disk/izin hatası sayfayı düşürmesin
+        current_app.logger.warning("havuz ekleme hatası: %s", e)
+        return _havuz_parcasi(f"Eklenemedi: {e}"[:180], hata=True)
+
+
+@bp.route("/settings/pool/<key_id>/sil", methods=["POST"])
+def havuz_sil(key_id):
+    from short_bot.google_studio import anahtar_sil
+    try:
+        ok = anahtar_sil(key_id)
+    except Exception as e:  # noqa: BLE001
+        current_app.logger.warning("havuz silme hatası: %s", e)
+        return _havuz_parcasi(f"Silinemedi: {e}"[:180], hata=True)
+    return _havuz_parcasi("Anahtar silindi" if ok else "Anahtar bulunamadı",
+                          hata=not ok)
+
+
+@bp.route("/settings/pool/<key_id>/ac-kapa", methods=["POST"])
+def havuz_ac_kapa(key_id):
+    from short_bot.google_studio import anahtar_ac_kapa
+    etkin = (request.form.get("etkin") or "") == "1"
+    try:
+        ok = anahtar_ac_kapa(key_id, etkin)
+    except Exception as e:  # noqa: BLE001
+        current_app.logger.warning("havuz aç/kapa hatası: %s", e)
+        return _havuz_parcasi(f"Değiştirilemedi: {e}"[:180], hata=True)
+    if not ok:
+        return _havuz_parcasi("Anahtar bulunamadı", hata=True)
+    return _havuz_parcasi("Anahtar açıldı" if etkin else "Anahtar kapatıldı")
+
+
+@bp.route("/settings/pool/kota/<islem>", methods=["POST"])
+def havuz_kota(islem):
+    """Kota/durum bakımı — soguma | gun | ban | pasif-sil.
+
+    `gun` GOOGLE'IN KOTASINI SIFIRLAMAZ, bizim sayacımızı sıfırlar; mesaj bunu
+    söyler ki kullanıcı kota kazandığını sanmasın.
+    """
+    from short_bot.google_studio import KOTA_ISLEMLERI, kota_islemi
+    if islem not in KOTA_ISLEMLERI:
+        abort(404)
+    try:
+        r = kota_islemi(islem)
+    except Exception as e:  # noqa: BLE001
+        current_app.logger.warning("havuz kota işlemi hatası: %s", e)
+        return _havuz_parcasi(f"Uygulanamadı: {e}"[:180], hata=True)
+    if not r["ok"]:
+        return _havuz_parcasi(r["hata"], hata=True)
+    n = r["etkilenen"]
+    metin = {
+        "soguma": f"{n} soğuma temizlendi" if n else "Soğumada anahtar yoktu",
+        "gun": (f"{n} girişin günlük sayacı sıfırlandı — Google'ın kotası "
+                "sıfırlanmaz, gerçekten doluysa çağrılar yine 429 döner."
+                if n else "Sıfırlanacak sayaç yoktu"),
+        "ban": f"{n} ban kaldırıldı" if n else "Ban listesi zaten boştu",
+        "pasif-sil": f"{n} kapalı anahtar silindi" if n else "Kapalı anahtar yoktu",
+    }[islem]
+    return _havuz_parcasi(metin)

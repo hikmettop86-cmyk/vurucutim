@@ -12,6 +12,10 @@ from short_bot.db import init_db, record_short
 from short_bot.models import NewsItem, ScoredItem, Script
 from short_bot.pipeline import _apply_category_quota, _apply_saga_penalty
 
+# Gerçek gövde medyanı ~1300 karakter; kırıntı metin
+# pipeline'ın gövde kapısına takılır (_MIN_BODY_CHARS).
+GOVDE = ("Tam makale gövdesi. " * 12).strip()
+
 
 def _channel(**kw) -> ChannelConfig:
     base = ChannelConfig(
@@ -224,7 +228,7 @@ def _stub_render(monkeypatch, tmp_path):
 
     fake_img = tmp_path / "bg.jpg"
     fake_img.write_bytes(b"x")
-    monkeypatch.setattr(pipeline, "extract_article", lambda url: "uzun gövde metni")
+    monkeypatch.setattr(pipeline, "extract_article", lambda url: GOVDE)
     monkeypatch.setattr(pipeline, "write_script", lambda *a, **k: _script())
     monkeypatch.setattr(pipeline, "write_script_with_overflow_check",
                         lambda **k: (_script(), 0))

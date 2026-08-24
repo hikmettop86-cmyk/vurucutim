@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="{{ language }}">
+<head>
+<meta charset="utf-8">
+<title>Short — Magazin Türkiye</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
+
+  {{ dna_css|safe }}
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { 
+    width: 1080px; 
+    height: 1920px; 
+    overflow: hidden;
+    font-family: var(--font-body, 'Inter'), sans-serif;
+    color: var(--text-main, #ffffff);
+    background: linear-gradient(180deg, #141414 0%, #2A0808 100%);
+  }
+
+  .stage { 
+    position: relative; 
+    width: 1080px; 
+    height: 1920px;
+    display: flex; 
+    flex-direction: column;
+    padding: 60px 50px;
+  }
+
+  /* Kategori / Rozet (Apple Museum / Gallery Chip Stili) */
+  .stage-badge {
+    align-self: flex-start;
+    background: var(--primary, #e60023);
+    color: #ffffff;
+    font-family: var(--font-headline, 'Inter'), sans-serif;
+    font-size: 20px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 8px 24px;
+    border-radius: 9999px;
+    margin-bottom: 24px;
+    box-shadow: 0 4px 20px rgba(230, 0, 35, 0.4);
+  }
+
+  /* Başlık Alanı (Apple Tight Manşet Felsefesi) */
+  .header {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 30px;
+    letter-spacing: -0.02em;
+  }
+
+  .header .top {
+    font-family: var(--font-headline, 'Inter'), sans-serif;
+    font-size: clamp(48px, 6vw, 68px);
+    font-weight: 900;
+    line-height: 1.05;
+    text-transform: uppercase;
+    color: #ffffff;
+    margin-bottom: 10px;
+    text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+  }
+
+  .header .bot {
+    font-family: var(--font-headline, 'Inter'), sans-serif;
+    font-size: clamp(32px, 4.5vw, 48px);
+    font-weight: 600;
+    line-height: 1.15;
+    color: var(--accent, #ffd700);
+    text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+  }
+
+  /* Görsel / Fotoğraf Alanı (Müze Galerisi Sergileme Felsefesi) */
+  .photo {
+    position: relative;
+    width: 100%;
+    height: 720px;
+    border-radius: 24px;
+    overflow: hidden;
+    background: #1a1a1a;
+    box-shadow: 0px 12px 40px rgba(0, 0, 0, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    margin-bottom: 40px;
+  }
+
+  .photo .bg-img {
+    width: 100%;
+    height: 100%;
+    background-size: cover;
+    background-position: center;
+    transform: scale(1.02);
+  }
+
+  /* Fotoğraf Üzeri Vurgu Bandı */
+  .photo .yellow {
+    position: absolute;
+    bottom: 24px;
+    left: 24px;
+    right: 24px;
+    background: rgba(20, 20, 20, 0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-left: 6px solid var(--accent, #ffd700);
+    padding: 16px 24px;
+    font-family: var(--font-headline, 'Inter'), sans-serif;
+    font-size: 24px;
+    font-weight: 700;
+    color: #ffffff;
+    border-radius: 0 12px 12px 0;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+
+  /* Gövde Alanı (Taşma Önleyici Kesin Kapsayıcı Kuralları) */
+  .body {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background: rgba(25, 25, 25, 0.6);
+    backdrop-filter: blur(10px);
+    border-radius: 24px;
+    padding: 32px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    margin-bottom: 70px;
+  }
+
+  .body-text {
+    font-family: var(--font-body, 'Inter'), sans-serif;
+    color: var(--text-main, #e0e0e0);
+    line-height: 1.45;
+  }
+
+  /* Highlight Stilleri (Magazin Vurguları) */
+  .body-text .hl-r {
+    background: var(--primary, #e60023);
+    color: #ffffff;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+  }
+
+  .body-text .hl-y {
+    background: var(--accent, #ffd700);
+    color: #141414;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+  }
+
+  /* İlerleme Çubuğu (Progress Bar) */
+  .progress { 
+    position: absolute; 
+    left: 0; 
+    right: 0; 
+    bottom: 84px; 
+    height: 6px; 
+    background: rgba(255, 255, 255, 0.15); 
+    z-index: 11; 
+  }
+  
+  .progress::after { 
+    content: ''; 
+    position: absolute; 
+    left: 0; 
+    top: 0; 
+    bottom: 0; 
+    background: var(--accent, #ffd700); 
+    animation: fill {{ duration_s }}s linear forwards; 
+  }
+  
+  @keyframes fill { 
+    from { width: 0; } 
+    to { width: 100%; } 
+  }
+
+  /* Kanal Handle Bilgisi */
+  .handle { 
+    position: absolute; 
+    left: 0; 
+    right: 0; 
+    bottom: 30px; 
+    text-align: center; 
+    font-size: 28px; 
+    font-weight: 600; 
+    color: var(--text-muted, #aaaaaa); 
+    letter-spacing: 0.05em;
+  }
+
+  /* Kaynak Bilgisi */
+  .source-credit { 
+    position: absolute; 
+    bottom: 6px; 
+    left: 50%; 
+    transform: translateX(-50%); 
+    background: rgba(0, 0, 0, 0.7); 
+    color: rgba(255, 255, 255, 0.85); 
+    font-size: 14px; 
+    padding: 3px 12px; 
+    border-radius: 4px; 
+    z-index: 50; 
+    white-space: nowrap; 
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+</style>
+</head>
+<body>
+<div class="stage dna-anim-{{ animation_style|default('none') }}">
+
+  {% if script.category %}
+  <div class="stage-badge">{{ script.category }}</div>
+  {% endif %}
+
+  <div class="header" data-fit-width="40" data-fit-min="32" data-fit-max="68">
+    <span class="top">{{ script.header_top }}</span>
+    <span class="bot">{{ script.header_bottom }}</span>
+  </div>
+
+  <div class="photo">
+    <div class="bg-img" style="background-image: url('{{ bg_image_url|default("") }}'); {% if not bg_image_url %}display: none;{% endif %}"></div>
+    {% if script.photo_overlay %}
+    <div class="yellow">{{ script.photo_overlay }}</div>
+    {% endif %}
+  </div>
+
+  <div class="body">
+    <div class="body-text" data-fit-min="26" data-fit-max="38" data-fit-pad="16">
+      {{ body_html|safe }}
+    </div>
+  </div>
+
+  <div class="progress"></div>
+  <div class="handle">{{ handle }}</div>
+  
+  {% if rss_source %}
+  <div class="source-credit">{{ ui_source }}: {{ rss_source }}</div>
+  {% endif %}
+
+</div>
+
+{% include "_auto_fit.js.j2" %}
+</body>
+</html>

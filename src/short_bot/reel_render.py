@@ -18,8 +18,12 @@ log = logging.getLogger(__name__)
 
 WIDTH, HEIGHT = 1080, 1920
 
-# Kanal-bazlı overlay fontları (7 küratörlü Google font). Anahtarlar
+# Kanal-bazlı overlay fontları (küratörlü Google font'lar). Anahtarlar
 # ReelConfig.font Literal'iyle birebir; her biri kalın/ağır ağırlık yükler.
+#
+# CJK NOTU: ilk yedisinin HİÇBİRİNDE kana/kanji glifi yok. Japonca kanalda bunlardan
+# biri seçilirse kanji tofu (□) olur ya da sessizce sistem fontuna düşer — yani
+# kanalın kimliği olan font hiç uygulanmaz. Japonca kanal 'Noto Sans JP' kullanmalı.
 _FONT_IMPORTS = {
     "Montserrat": "https://fonts.googleapis.com/css2?family=Montserrat:wght@900&display=swap",
     "Anton": "https://fonts.googleapis.com/css2?family=Anton&display=swap",
@@ -28,6 +32,7 @@ _FONT_IMPORTS = {
     "Poppins": "https://fonts.googleapis.com/css2?family=Poppins:wght@800&display=swap",
     "Inter": "https://fonts.googleapis.com/css2?family=Inter:wght@900&display=swap",
     "Archivo Black": "https://fonts.googleapis.com/css2?family=Archivo+Black&display=swap",
+    "Noto Sans JP": "https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@900&display=swap",
 }
 
 

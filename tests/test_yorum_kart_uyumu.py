@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import types
 
+import pytest
+
 from short_bot.config import ChannelConfig, VoiceConfig
 
 
@@ -117,3 +119,62 @@ def test_latin_ozne_kelimeyle_eslesir():
     from short_bot.narration_writer import card_mismatch
     assert card_mismatch("Galatasaray transferi açıkladı.",
                          {"header_top": "GALATASARAY"}) is False
+
+
+# --- Japonca kısaltma: yazı sistemi sınırı ------------------------------------
+#
+# CANLI YANLIŞ POZİTİF (short 1806, 2026-08-22): kart 「鹿島アントラーズ」,
+# anlatım 「鹿島」 — Japon spor basınının standart kısaltması. Anlatım baştan
+# sona konudaydı ama kapı "sapmış" dedi, İKİ düzeltme turu boşa gitti ve metin
+# 179 karaktere düştü (bütçe tabanı 219). Yani yanlış pozitif hem tur hem süre
+# kaybettiriyor.
+#
+# Japoncada bileşik ad neredeyse her zaman YAZI SİSTEMİ SINIRINDA kısalır:
+#     鹿島アントラーズ → 鹿島   (kanji | katakana)
+# Üstteki 3'lük kayan pencere bunu yakalayamaz: ortak parça 2 karakter.
+
+def test_japon_kulubu_kisaltmayla_anilabilir():
+    from short_bot.narration_writer import card_mismatch
+    anlatim = ("鹿島は勢いよく飛ばせないと言われていましたが、現実には強かった。"
+               "福岡を三対二で下し、十二シーズンぶりの開幕三連勝です。")
+    assert card_mismatch(anlatim, {"header_top": "鹿島アントラーズ"}) is False
+
+
+def test_yazi_kosulari_sinirda_boler():
+    from short_bot.narration_writer import _yazi_kosulari
+    assert _yazi_kosulari("鹿島アントラーズ") == ["鹿島", "アントラーズ"]
+    assert _yazi_kosulari("浦和レッズ") == ["浦和", "レッズ"]
+    assert _yazi_kosulari("M!LK塩﨑太智") == ["M", "LK", "塩﨑太智"]
+
+
+@pytest.mark.parametrize("ozne,anlatim", [
+    ("ソフトバンクホークス", "ソフトバンクの大津亮介が十勝目を挙げました。"),
+    ("横浜FCマリノス", "横浜は開幕戦で勝ち点を落としました。"),
+])
+def test_baska_kulup_kisaltmalari_da_gecer(ozne, anlatim):
+    from short_bot.narration_writer import card_mismatch
+    assert card_mismatch(anlatim, {"header_top": ozne}) is False
+
+
+# --- gevşetme GERÇEK sapmayı kaçırmamalı --------------------------------------
+
+def test_alakasiz_anlatim_hala_sapmis_sayilir():
+    from short_bot.narration_writer import card_mismatch
+    assert card_mismatch("全く別の話題です。天気の話をしましょう。",
+                         {"header_top": "鹿島アントラーズ"}) is True
+
+
+def test_1772_sapmasi_hala_yakalanir():
+    """Bu gevşetme, kapının var oluş sebebini bozmamalı."""
+    from short_bot.narration_writer import card_mismatch
+    anlatim = ("ライオンズゲートによりザハウスメイドの続編製作が正式決定されました。"
+               "キルスティンダンストやブリタニスノウら新たなキャストが加わります。")
+    assert card_mismatch(anlatim, {"header_top": "シドニー・スウィーニー"}) is True
+
+
+def test_tek_karakterlik_kosu_eslesme_saymaz():
+    """2 karakter tabanı: tek karakterlik koşu rastgele eşleşir."""
+    from short_bot.narration_writer import card_mismatch
+    # 'A' tek karakterlik latin koşusu; anlatımda A geçse bile uyumlu sayılmamalı.
+    assert card_mismatch("Aさんは全く別の出来事について話しました。",
+                         {"header_top": "A・ロドリゲス"}) is True

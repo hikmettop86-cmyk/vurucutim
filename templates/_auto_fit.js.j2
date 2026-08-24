@@ -5,8 +5,10 @@
      - data-fit-max  (default 64)  — maximum font-size px
      - data-fit-pad  (default 16)  — bottom padding to leave free
    Strips line-clamp during measurement so scrollHeight reflects real text
-   height, then restores it (mask gradient still graceful-cuts at MIN if
-   overflow). Awaits document.fonts.ready so per-glyph widths are correct
+   height, then restores it (at MIN the line-clamp cuts and adds its own
+   ellipsis — the old bottom-fade mask was removed because it sliced the last
+   line of text that FIT; see tests/test_govde_kesilmesi.py).
+   Awaits document.fonts.ready so per-glyph widths are correct
    (otherwise fallback font is used during parse, then real font replaces
    it later and layout shifts past the chosen fontSize → overflow). */
 async function _autoFit() {

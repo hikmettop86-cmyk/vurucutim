@@ -106,7 +106,19 @@ html,body{width:1080px;height:1920px;overflow:hidden;background:transparent;
 #scrim{position:absolute;left:0;right:0;bottom:0;height:820px;background:linear-gradient(0deg,rgba(0,0,0,.6),rgba(0,0,0,0))}
 .cap{position:absolute;left:0;right:0;bottom:540px;padding:0 60px;text-align:center;font-size:82px;font-weight:900;
   line-height:1.15;letter-spacing:-1px;-webkit-text-stroke:3px #000;paint-order:stroke fill;text-shadow:0 6px 26px rgba(0,0,0,.95)}
-.cap .w{display:none;margin:0 12px;color:{{ caption_color | default('#fff') }}}
+/* Vurgulanan karaoke birimi SATIR ATLAMAZ. Türkçede zaten olmuyordu (kelime içinde
+   boşluk yok); Japoncada satır sonu her karakterden düşebildiği için tarayıcı öbeği
+   ortadan bölüyordu — "降りてきてしゃ / がみました。" — ve sarı vurgu iki satıra
+   dağılıyordu. Bölünmez bir birim olmak vurgunun tanımı. */
+.cap .w{display:none;margin:0 12px;white-space:nowrap;color:{{ caption_color | default('#fff') }}}
+{% if lang in ('ja', 'zh') %}
+/* CJK'YE ÖZGÜ (禁則処理). Yalnız burada: Türkçe kanalların kanıtlanmış altyazı
+   görünümü değişmemeli.
+     line-break:strict — satır 。、」 gibi işaretlerle BAŞLAMAZ.
+     text-wrap:balance — satırları eşitler; "…残してくだ / さい。" gibi 3 karakterlik
+                         öksüz son satırı bitiren şey bu. */
+.cap{line-break:strict;text-wrap:balance}
+{% endif %}
 /* yalnız otomatik sığdırma ölçümü için: gizli kelimenin genişliği ölçülemez */
 .cap.measure .w{display:inline}
 .cap .w.vis{display:inline}

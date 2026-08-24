@@ -55,7 +55,16 @@
     padding: 30px 40px;
     position: relative;
     box-shadow: 8px 8px 0px var(--primary, #c81e1e);
+    overflow: hidden;
   }
+  /* GENİŞLİK-SIĞDIRMA ŞARTI (bkz. _auto_fit.js.j2): sığdırma döngüsü
+     `scrollWidth > parent.clientWidth` karşılaştırır. Metin KIRILIRSA
+     scrollWidth kutuya eşitlenir, döngü hiç dönmez ve punto küçülmez.
+     Japoncada kırılma her KARAKTERDE olur — canlı vakada
+     「7回途中2失点も13勝目持ち越し」manşetinin son karakteri 「し」 tek başına
+     alt satıra düştü (2026-08-22, short 1786). nowrap sığdırmayı açar;
+     .header'daki overflow:hidden ise min puntoda bile sığmayan uç durumda
+     taşmayı kutunun içinde tutar. */
 
   .header::before {
     content: '';
@@ -69,6 +78,7 @@
 
   .header .top {
     display: block;
+    white-space: nowrap;
     font-family: var(--font-headline, 'Noto Sans JP'), sans-serif;
     font-size: 52px;
     font-weight: 900;
@@ -80,6 +90,7 @@
 
   .header .bot {
     display: block;
+    white-space: nowrap;
     font-family: var(--font-headline, 'Noto Sans JP'), sans-serif;
     font-size: 64px;
     font-weight: 900;
@@ -164,6 +175,12 @@
     border-radius: 0px;
     display: inline;
     box-shadow: 3px 3px 0px #000000;
+    /* CJK satır sonunda HER KARAKTERDEN kırılır: 「柴崎岳」 vurgusu
+       「柴」/「崎岳」 diye ikiye bölündü ve kırmızı şerit de ortadan koptu
+       (2026-08-22, short 1790). nowrap ismi bir arada tutar.
+       Taşma riski yok: vurgu uzunluğu zaten sınırlı (models.py
+       _vurgu_siniri — CJK 12 / Latin 40 karakter). */
+    white-space: nowrap;
   }
 
   .body .hl-y {
@@ -174,6 +191,12 @@
     border-radius: 0px;
     display: inline;
     box-shadow: 3px 3px 0px #000000;
+    /* CJK satır sonunda HER KARAKTERDEN kırılır: 「柴崎岳」 vurgusu
+       「柴」/「崎岳」 diye ikiye bölündü ve kırmızı şerit de ortadan koptu
+       (2026-08-22, short 1790). nowrap ismi bir arada tutar.
+       Taşma riski yok: vurgu uzunluğu zaten sınırlı (models.py
+       _vurgu_siniri — CJK 12 / Latin 40 karakter). */
+    white-space: nowrap;
   }
 
   /* İlerleme Çubuğu ve Sabit Alt Öğeler (Kesinlikle 1920px İçinde Güvenli Alan) */
@@ -237,8 +260,8 @@
   {% if script.category %}<div class="stage-badge">{{ ui_breaking }}</div>{% endif %}
 
   <div class="header">
-    <span class="top" data-fit-width="80" data-fit-min="32" data-fit-max="52">{{ script.header_top }}</span>
-    <span class="bot" data-fit-width="80" data-fit-min="38" data-fit-max="64">{{ script.header_bottom }}</span>
+    <span class="top" data-fit-width="80" data-fit-min="26" data-fit-max="52">{{ script.header_top }}</span>
+    <span class="bot" data-fit-width="80" data-fit-min="28" data-fit-max="64">{{ script.header_bottom }}</span>
   </div>
 
   <div class="photo">

@@ -92,8 +92,25 @@ ARCHETYPE_PROMPTS = {
 # yazıyor, render reddediyor, 3 retry LLM çağrısı yanıyor ve sonunda kelime
 # ortadan kesiliyordu: galatasaray manşetlerinin %59'unda "…" var.
 # Ölçüm yapılmamış şablonlar eski 25 değerinde kalır.
-_HEADER_TOP_BUDGET = {"stadium": 14}
+_HEADER_TOP_BUDGET = {
+    "stadium": 14,
+    # real-madrid-blanco ÖLÇÜLDÜ (2026-08-22, gerçek İspanyolca manşetlerle):
+    # Anton 180px, kullanılabilir genişlik 904px. Manşet 13 karaktere kadar TAM
+    # puntoda kalıyor ("FICHAJE TOTAL" 13 → 180px); 16-17'de 134-148'e,
+    # 20'de 120'ye düşüyor. Auto-fit taşmayı zaten engelliyor, bu sayı
+    # "küçülmeden büyük durduğu" sınır.
+    "real-madrid-blanco": 13,
+}
 _DEFAULT_HEADER_TOP_BUDGET = 25
+
+# VURGU BÜTÇESİ. Şema vurgu için uzunluk SÖYLEMİYORDU ("exact substring of body")
+# ve model Japoncada 24 karakterlik bir öbeği tek vurgu yaptı — gövdenin %60'ı
+# kırmızıya boyandı (2026-08-22, short 1787). models.Script aynı sınırı
+# UYGULUYOR; buraya da yazmazsak model uzun üretir, validator hepsini düşürür
+# ve gövde hiç vurgusuz kalır. İki taraf da aynı sayıyı bilmeli.
+_CJK_DILLER = frozenset({"ja", "zh", "ko"})
+_VURGU_BUDGET_CJK = 12
+_VURGU_BUDGET_LATIN = 40
 
 
 def build_script_prompt_for_channel(item: NewsItem, body: str, channel: ChannelConfig) -> str:
@@ -131,6 +148,9 @@ TONE OF VOICE:
 
     header_top_budget = _HEADER_TOP_BUDGET.get(
         channel.template, _DEFAULT_HEADER_TOP_BUDGET)
+    vurgu_budget = (_VURGU_BUDGET_CJK
+                    if (channel.language or "").split("-")[0].lower() in _CJK_DILLER
+                    else _VURGU_BUDGET_LATIN)
 
     source = item.source or "—"
     trend_block, trend_rules = _trend_context(item, channel)
@@ -162,6 +182,7 @@ Rules:{category_rule}
 - FACTUAL ACCURACY (critical): Use ONLY facts present in the ARTICLE BODY above. Do NOT invent or guess names, numbers, dates, ages, fees, scores, titles, records, or events. If a specific figure is not in the source, do not state one. Never attribute quotes or actions to people not named in the source. If the article is thin, write a shorter factual script instead of padding with fabricated details.
 - All text in {lang_name}, with proper diacritics
 - highlights[i].text must appear verbatim in body_paragraph
+- highlights: give 2-4, each AT MOST {vurgu_budget} characters. A highlight marks a FACT — a name, a number, a result — never a clause or a whole sentence. Together they must cover less than a third of body_paragraph; longer ones are dropped.
 - Stay within tone constraints if specified above
 - header_top: MAX {header_top_budget} characters (hard limit, will be rejected otherwise).
   Shorter is better — one strong word beats a truncated phrase.

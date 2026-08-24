@@ -1,4 +1,5 @@
 """Domain models. Frozen dataclasses for in-pipeline data, Pydantic for LLM output."""
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -58,6 +59,24 @@ class ScoredItem:
     # sebeple SEÇİM ANINDA gerekiyor: aynı hikâyenin kaçıncı videosu olduğunu
     # bilmeden puanı düşürülemez. Kanal saga cezasını açmadıysa boş kalır.
     subject: str = ""
+
+
+# VURGU ÖLÇÜSÜ. generator.py promptu vurguyu "1-3 kelime" diye tarif ediyor.
+# CJK'DA BOŞLUK YOKTUR, dolayısıyla "kelime" ölçüsü orada hiçbir şey demek
+# değil: model 「村上宗隆の四球をきっかけに3者連続アーチで一気に同点」yı (24 karakter)
+# TEK vurgu diye üretti ve gövdenin %60'ı kırmızıya boyandı — okunmaz oldu
+# (2026-08-22, short 1787). Aynı sınıf tuzak anlatım bütçesinde de çıkmıştı.
+#
+# Vurgu bir OLGUYU işaretler: isim, sayı, sonuç. Cümleyi değil.
+_CJK_KARAKTER = re.compile(r"[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
+_VURGU_MAX_CJK = 12       # 「7回途中2失点」= 7, 「3者連続アーチ」= 7
+_VURGU_MAX_LATIN = 40     # ~3-5 kelime
+# Kapsam tavanı: tek tek kısa vurgular da toplamda gövdeyi boyayabilir.
+_VURGU_KAPSAM_ORANI = 0.35
+
+
+def _vurgu_siniri(metin: str) -> int:
+    return _VURGU_MAX_CJK if _CJK_KARAKTER.search(metin) else _VURGU_MAX_LATIN
 
 
 class Highlight(BaseModel):
@@ -130,6 +149,39 @@ class Script(BaseModel):
             return v[:limit].rstrip()
         return v
 
+    @field_validator("highlights", mode="before")
+    @classmethod
+    def _flatten_highlights(cls, v):
+        """İÇ İÇE listeyi düzle, çöpü at — üretimi DÜŞÜRME.
+
+        CANLI VAKA (2026-08-23, fenerbahce koşu #2112 ve galatasaray #2105):
+        model `highlights`'ı [[{...}, {...}]] diye SARMALAYARAK döndürdü.
+        Pydantic "Input should be a valid dictionary" der, `run_json` 3 denemeyi
+        de aynı şekilde kaybeder ve koca bir üretim iptal olur — oysa vurgular
+        tamamen KOZMETİK: vurgusuz gövde gayet okunur. Aynı gerekçeyle başlık
+        alanları kırpılıyor (bkz. _TRIM_LIMITS) ve cümle boyu vurgular hata
+        yerine düşürülüyor (bkz. highlights_mark_facts_not_sentences).
+
+        Düz dize de kabul edilir: model bazen ["Fenerbahçe"] yazıyor. Rengi
+        varsayılana çekmek, vurgunun tamamen kaybolmasından iyidir.
+        """
+        if not isinstance(v, list):
+            return v
+        duz = []
+
+        def _ekle(x, derinlik=0):
+            if isinstance(x, list) and derinlik < 4:   # 4 = makul bir taban
+                for y in x:
+                    _ekle(y, derinlik + 1)
+            elif isinstance(x, str):
+                if x.strip():
+                    duz.append({"text": x.strip(), "color": "yellow"})
+            elif x is not None:
+                duz.append(x)                          # dict / Highlight
+
+        _ekle(v)
+        return duz
+
     @model_validator(mode="after")
     def highlights_must_be_substrings(self) -> "Script":
         for h in self.highlights:
@@ -137,6 +189,33 @@ class Script(BaseModel):
                 raise ValueError(
                     f"Highlight '{h.text}' paragrafta birebir geçmiyor"
                 )
+        return self
+
+    @model_validator(mode="after")
+    def highlights_mark_facts_not_sentences(self) -> "Script":
+        """Cümle boyu ve gövdeyi kaplayan vurguları DÜŞÜR (hata FIRLATMA).
+
+        Fırlatmak koca bir üretimi (LLM + TTS + render) çöpe atardı; oysa
+        kusur yalnız kozmetik — vurgusuz gövde gayet okunur. Aynı gerekçe
+        header alanlarının kırpılmasında da geçerli (bkz. yukarıdaki not).
+        """
+        if not self.highlights:
+            return self
+        uygun = [h for h in self.highlights
+                 if len(h.text) <= _vurgu_siniri(h.text)]
+        govde = self.body_paragraph or ""
+        if govde and uygun:
+            tavan = len(govde) * _VURGU_KAPSAM_ORANI
+            # Kısa vurgu daha kesin bir işarettir: tavana önce onlar girsin.
+            tutulan, toplam = set(), 0
+            for h in sorted(uygun, key=lambda x: len(x.text)):
+                if toplam + len(h.text) > tavan:
+                    continue
+                tutulan.add(id(h))
+                toplam += len(h.text)
+            # Modelin verdiği SIRA korunur: renderer ilk eşleşmeyi sarıyor.
+            uygun = [h for h in uygun if id(h) in tutulan]
+        self.highlights = uygun
         return self
 
 

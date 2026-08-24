@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="{{ language }}">
+<head>
+<meta charset="utf-8">
+<title>Short — IBM Design Analysis</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;600&display=swap');
+
+  {{ dna_css|safe }}
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 1080px;
+    height: 1920px;
+    overflow: hidden;
+    font-family: var(--font-body, 'IBM Plex Sans'), sans-serif;
+    color: var(--text-main, #161616);
+    background-color: var(--body-bg-1, #ffffff);
+  }
+
+  .stage {
+    position: relative;
+    width: 1080px;
+    height: 1920px;
+    display: flex;
+    flex-direction: column;
+    padding: 64px 64px 96px 64px;
+    background-color: var(--body-bg-1, #ffffff);
+    border: 1px solid var(--hairline, #e0e0e0);
+  }
+
+  /* Top Bar / Category */
+  .meta-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--hairline, #e0e0e0);
+    padding-bottom: 24px;
+    margin-bottom: 32px;
+  }
+
+  .stage-badge {
+    background-color: var(--primary, #0f62fe);
+    color: #ffffff;
+    font-family: var(--font-body, 'IBM Plex Sans'), sans-serif;
+    font-size: 14px;
+    font-weight: 400;
+    letter-spacing: 0.16px;
+    padding: 8px 16px;
+    border-radius: 0px;
+    text-transform: uppercase;
+  }
+
+  .brand-tag {
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--text-muted, #525252);
+    letter-spacing: 0.16px;
+  }
+
+  /* Header / Manşet */
+  .header {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 40px;
+  }
+
+  .header .top {
+    font-family: var(--font-headline, 'IBM Plex Sans'), sans-serif;
+    font-size: 64px;
+    font-weight: 300;
+    line-height: 1.17;
+    letter-spacing: -0.4px;
+    color: var(--text-main, #161616);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  .header .bot {
+    font-family: var(--font-headline, 'IBM Plex Sans'), sans-serif;
+    font-size: 42px;
+    font-weight: 300;
+    line-height: 1.20;
+    letter-spacing: 0;
+    color: var(--text-muted, #525252);
+  }
+
+  /* Photo / Card Section */
+  .photo {
+    position: relative;
+    width: 100%;
+    height: 600px;
+    background-color: var(--body-bg-2, #f4f4f4);
+    border: 1px solid var(--hairline, #e0e0e0);
+    border-radius: 0px;
+    margin-bottom: 40px;
+    overflow: hidden;
+  }
+
+  .bg-img {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-size: cover;
+    background-position: center;
+  }
+
+  .photo::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: linear-gradient(180deg, rgba(22,22,22,0) 0%, rgba(22,22,22,0.65) 100%);
+  }
+
+  .photo .yellow {
+    position: absolute;
+    bottom: 24px;
+    left: 24px;
+    right: 24px;
+    background-color: var(--canvas, #ffffff);
+    color: var(--text-main, #161616);
+    border-left: 4px solid var(--primary, #0f62fe);
+    padding: 20px 24px;
+    font-size: 20px;
+    font-weight: 400;
+    line-height: 1.40;
+    z-index: 2;
+    border-radius: 0px;
+  }
+
+  /* Body Section */
+  .body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    overflow: hidden;
+    background-color: var(--body-bg-2, #f4f4f4);
+    border: 1px solid var(--hairline, #e0e0e0);
+    padding: 32px;
+  }
+
+  .body-text {
+    font-family: var(--font-body, 'IBM Plex Sans'), sans-serif;
+    font-size: 28px;
+    font-weight: 400;
+    line-height: 1.50;
+    letter-spacing: 0.16px;
+    color: var(--text-main, #161616);
+  }
+
+  /* Highlights */
+  .body .hl-r {
+    background-color: var(--primary, #0f62fe);
+    color: #ffffff;
+    padding: 2px 6px;
+    font-weight: 600;
+  }
+
+  .body .hl-y {
+    background-color: var(--accent, #f1c21b);
+    color: #161616;
+    padding: 2px 6px;
+    font-weight: 600;
+  }
+
+  /* Footer Chrome */
+  .progress {
+    position: absolute;
+    left: 0; right: 0; bottom: 84px;
+    height: 4px;
+    background: var(--hairline, #e0e0e0);
+    z-index: 11;
+  }
+  .progress::after {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    background: var(--primary, #0f62fe);
+    animation: fill {{ duration_s }}s linear forwards;
+  }
+  @keyframes fill { from { width: 0; } to { width: 100%; } }
+
+  .handle {
+    position: absolute;
+    left: 0; right: 0; bottom: 28px;
+    text-align: center;
+    font-size: 16px;
+    font-weight: 400;
+    letter-spacing: 0.32px;
+    color: var(--text-muted, #525252);
+  }
+
+  .source-credit {
+    position: absolute;
+    bottom: 96px;
+    right: 64px;
+    background: var(--canvas, #ffffff);
+    border: 1px solid var(--hairline, #e0e0e0);
+    color: var(--text-muted, #525252);
+    font-size: 12px;
+    font-weight: 400;
+    padding: 6px 12px;
+    z-index: 50;
+    white-space: nowrap;
+    border-radius: 0px;
+  }
+</style>
+</head>
+<body>
+<div class="stage">
+
+  <div class="meta-bar">
+    <div class="stage-badge">{{ ui_breaking }}</div>
+    <div class="brand-tag">WELTGESCHEHEN AKTUELL</div>
+  </div>
+
+  <div class="header">
+    <span class="top" data-fit-width="20" data-fit-min="38" data-fit-max="64">{{ script.header_top }}</span>
+    <span class="bot">{{ script.header_bottom }}</span>
+  </div>
+
+  <div class="photo">
+    <div class="bg-img" style="background-image: url('{{ bg_image_url|default("") }}');
+         {% if not bg_image_url %}display: none;{% endif %}"></div>
+    {% if script.photo_overlay %}<div class="yellow">{{ script.photo_overlay }}</div>{% endif %}
+  </div>
+
+  <div class="body">
+    <div class="body-text" data-fit-min="24" data-fit-max="32" data-fit-pad="16">
+      {{ body_html|safe }}
+    </div>
+  </div>
+
+  <div class="progress"></div>
+  <div class="handle">{{ handle }}</div>
+  {% if rss_source %}<div class="source-credit">{{ ui_source }}: {{ rss_source }}</div>{% endif %}
+</div>
+
+{% include "_auto_fit.js.j2" %}
+</body>
+</html>

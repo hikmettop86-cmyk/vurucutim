@@ -1,11 +1,126 @@
 {% extends "base.html.j2" %}
 {% block title %}Vurucu TİM — Ayarlar{% endblock %}
+{% block main_class %}max-w-[1500px]{% endblock %}
 {% block content %}
-<h1 class="font-serif text-3xl font-bold mb-6">Ayarlar</h1>
+<style>
+  /* AYAR SATIRI — mockup'ın düzeni, MARKUP DEĞİŞTİRMEDEN.
+     Mevcut alanlar `<label class="block"><span>Etiket</span><input></label>`
+     kalıbında ve 36 tanesi var; her birini elle yeniden yazmak alan kaybetme
+     riski demekti (POST onları ADA göre okuyor). Kalıbı stille iki sütuna
+     çeviriyoruz: etiket solda sabit genişlikte, denetim sağda. */
+  .ayar-govde > label.block{
+    display:grid; grid-template-columns:230px minmax(0,1fr); gap:16px;
+    align-items:center; padding:9px 0; border-bottom:1px solid #eeeade;
+  }
+  .ayar-govde > label.block:last-child{border-bottom:0}
+  .ayar-govde > label.block > span:first-child{
+    font-size:13.5px; font-weight:500; color:#14140f;
+    text-transform:none; letter-spacing:0; line-height:1.35;
+  }
+  /* Etiketin altındaki açıklama satırı (varsa) sönük kalsın. */
+  .ayar-govde > label.block > span:first-child small,
+  .ayar-govde > label.block > span:first-child .text-claude-subtle{
+    display:block; font-weight:400; font-size:11.5px; color:#726e64;
+  }
+  .ayar-govde > label.block > input,
+  .ayar-govde > label.block > select,
+  .ayar-govde > label.block > textarea{margin-top:0 !important; max-width:520px}
+  /* Onay kutulu satırlar ızgaraya girmesin — kendi hizasında kalsın. */
+  .ayar-govde > label.block:has(> input[type=checkbox]){
+    display:flex; align-items:center; gap:10px;
+  }
+  .ayar-govde > label.block:has(> input[type=checkbox]) > input{
+    max-width:none; width:auto; order:-1;
+  }
+  /* İÇ IZGARALARDAKİ alanlar da satır gibi görünsün. Web (host/port) ve
+     Claude Modelleri gibi bölümler alanları kendi `grid grid-cols-N`ine
+     koyuyor; onlar `.ayar-govde`nin DOĞRUDAN çocuğu olmadığı için yukarıdaki
+     kural onlara işlemiyor ve tam genişliğe yayılıyorlardı. */
+  .ayar-govde .grid > label.block{padding:4px 0}
+  .ayar-govde .grid > label.block > span:first-child{
+    display:block; font-size:11.5px; font-weight:600; color:#726e64;
+    text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;
+  }
+  .ayar-govde .grid > label.block > input,
+  .ayar-govde .grid > label.block > select{margin-top:0 !important; max-width:none}
+  /* Üç sütuna kadar rahat; dördüncüden sonra sıkışıyor. */
+  .ayar-govde .grid.grid-cols-2,
+  .ayar-govde .grid.grid-cols-3{max-width:900px}
 
-<form method="POST" class="grid grid-cols-2 gap-6">
-  <div class="space-y-4">
+  /* Kart içindeki serbest paragraflar ve yardımcı bloklar nefes alsın. */
+  .ayar-govde > p{font-size:12.5px; line-height:1.55; color:#55524a; padding:8px 0}
+</style>
+
+{# AYARLAR — 14 bölüm iki sütuna yayılmış tek form. Alanların hiçbiri
+   taşınmadı (POST onları ada göre okuyor); eklenen şey NAVİGASYON: yapışkan
+   sol ray + her başlıkta çapa. Aradığın ayarı bulmak kaydırma işi olmaktan
+   çıkıyor. #}
+<div class="flex items-start gap-7">
+
+  <nav class="hidden lg:block w-52 flex-none sticky top-20" aria-label="Ayar bölümleri">
+    <div class="text-[10px] font-semibold uppercase tracking-wider text-claude-subtle
+                px-2 pb-2">Bölümler</div>
+    {% for kimlik, ad, grup in [
+        ('b-havuz', 'Google ücretsiz havuz', 'AI'),
+        ('b-ai-saglayicilari', 'Rol başına sağlayıcı', ''),
+        ('b-ai-kaynagi', 'AI kaynağı', ''),
+        ('b-claude-modelleri', 'Claude modelleri', ''),
+        ('b-openai-api-key', 'OpenAI', 'Anahtarlar'),
+        ('b-youtube-data-api-key', 'YouTube Data', ''),
+        ('b-pexels-api', 'Pexels', ''),
+        ('b-ai33-seslendirme-tts', 'ai33', ''),
+        ('b-cartesia-seslendirme-tts-g', 'Cartesia', ''),
+        ('b-pipeline', 'Pipeline', 'Üretim'),
+        ('b-footage-kaynaklari', 'Footage kaynakları', ''),
+        ('b-trend-detection', 'Trend algılama', ''),
+        ('b-yollar-ikililer', 'Yollar / ikililer', 'Ortam'),
+        ('b-web', 'Web', ''),
+        ('b-yol-bilgileri-read-only', 'Yol bilgileri', '')] %}
+      {% if grup %}
+      <div class="text-[10px] font-semibold uppercase tracking-wider text-claude-subtle
+                  px-2 pt-3 pb-1">{{ grup }}</div>
+      {% endif %}
+      <a href="#{{ kimlik }}"
+         class="block px-2.5 py-1.5 rounded-lg text-sm text-claude-muted
+                hover:bg-claude-surface hover:text-claude-text">
+        {{ ad }}{% if kimlik == 'b-havuz' %}
+        <span class="ml-1 text-[10px] font-semibold px-1.5 py-0.5 rounded
+                     bg-claude-success-soft text-claude-success">havuz</span>{% endif %}
+      </a>
+    {% endfor %}
+  </nav>
+
+  <div class="flex-1 min-w-0">
+    <div class="flex items-center justify-between mb-6">
+      <h1 class="font-serif text-3xl font-bold">Ayarlar</h1>
+      <button type="submit" form="ayar-formu"
+              class="px-5 py-2 rounded-lg bg-claude-accent hover:bg-claude-accent-hover
+                     text-white text-sm font-semibold">Kaydet</button>
+    </div>
+
+    {# GOOGLE ÜCRETSİZ HAVUZU — form ızgarasının DIŞINDA, tam genişlikte.
+       Sayfanın en büyük ve tek etkileşimli bloğu; iki sütunlu ızgaranın içinde
+       38 satırlık tablo okunmuyordu. Ayrıca kendi HTMX uçlarına POST ediyor,
+       yani ayar formunun içinde İÇ İÇE form olurdu — HTML bunu yasaklıyor ve
+       tarayıcı iç formu sessizce atardı. #}
+    <section id="b-havuz" class="scroll-mt-24 mb-6">
+      <div class="flex items-baseline justify-between gap-3 mb-2">
+        <h2 class="font-serif text-lg font-bold">Google AI Studio — ücretsiz havuz</h2>
+        <span class="text-xs text-claude-muted">
+          Vision çağrıları önce buraya gider; havuz tükenince sistem ücretliye düşer.
+        </span>
+      </div>
+      {% include "settings/_havuz.html.j2" %}
+    </section>
+
+<form id="ayar-formu" method="POST" class="space-y-4">
+
+<section id="b-yollar-ikililer" class="scroll-mt-24 bg-white border border-claude-border rounded-xl overflow-hidden">
+  <div class="px-5 pt-4 pb-3 border-b border-claude-border">
     <h2 class="font-serif text-lg font-bold">Yollar / İkililer</h2>
+    <p class="text-xs text-claude-subtle mt-0.5 leading-relaxed">Dış ikililerin yolları. Boş bırakılırsa PATH'ten aranır.</p>
+  </div>
+  <div class="ayar-govde px-5 py-3">
 
     <label class="block">
       <span class="text-xs text-claude-muted uppercase">FFmpeg path</span>
@@ -27,7 +142,14 @@
       </select>
     </label>
 
-    <h2 class="font-serif text-lg font-bold mt-6 border-t border-claude-border pt-4">Pipeline</h2>
+    </div></section>
+
+<section id="b-pipeline" class="scroll-mt-24 bg-white border border-claude-border rounded-xl overflow-hidden">
+  <div class="px-5 pt-4 pb-3 border-b border-claude-border">
+    <h2 class="font-serif text-lg font-bold">Pipeline</h2>
+    <p class="text-xs text-claude-subtle mt-0.5 leading-relaxed">Boru hattının varsayılanları. Kanal ayarları bunları ezer.</p>
+  </div>
+  <div class="ayar-govde px-5 py-3">
     <label class="block">
       <span class="text-xs text-claude-muted uppercase">Fuzzy dedup eşiği (0.0–1.0)</span>
       <input type="number" step="0.05" min="0" max="1" name="fuzzy_dedup_threshold"
@@ -44,7 +166,14 @@
       </select>
     </label>
 
-    <h2 class="font-serif text-lg font-bold mt-6 border-t border-claude-border pt-4">Web</h2>
+    </div></section>
+
+<section id="b-web" class="scroll-mt-24 bg-white border border-claude-border rounded-xl overflow-hidden">
+  <div class="px-5 pt-4 pb-3 border-b border-claude-border">
+    <h2 class="font-serif text-lg font-bold">Web</h2>
+    <p class="text-xs text-claude-subtle mt-0.5 leading-relaxed">Panelin dinlediği adres. Değişiklik yeniden başlatma ister.</p>
+  </div>
+  <div class="ayar-govde px-5 py-3">
     <div class="grid grid-cols-2 gap-3">
       <label class="block">
         <span class="text-xs text-claude-muted uppercase">Host</span>
@@ -58,7 +187,14 @@
       </label>
     </div>
 
-    <h2 class="font-serif text-lg font-bold mt-6 border-t border-claude-border pt-4">Claude Modelleri</h2>
+    </div></section>
+
+<section id="b-claude-modelleri" class="scroll-mt-24 bg-white border border-claude-border rounded-xl overflow-hidden">
+  <div class="px-5 pt-4 pb-3 border-b border-claude-border">
+    <h2 class="font-serif text-lg font-bold">Claude Modelleri</h2>
+    <p class="text-xs text-claude-subtle mt-0.5 leading-relaxed">Claude CLI kullanılan rollerde hangi model koşacak.</p>
+  </div>
+  <div class="ayar-govde px-5 py-3">
     <div class="grid grid-cols-3 gap-3">
       <label class="block">
         <span class="text-xs text-claude-muted uppercase">DNA üretimi</span>
@@ -89,7 +225,14 @@
       </label>
     </div>
 
-    <h2 class="font-serif text-lg font-bold mt-6 border-t border-claude-border pt-4">AI Kaynağı</h2>
+    </div></section>
+
+<section id="b-ai-kaynagi" class="scroll-mt-24 bg-white border border-claude-border rounded-xl overflow-hidden">
+  <div class="px-5 pt-4 pb-3 border-b border-claude-border">
+    <h2 class="font-serif text-lg font-bold">AI Kaynağı</h2>
+    <p class="text-xs text-claude-subtle mt-0.5 leading-relaxed">Kaba anahtar. Rol başına seçim aşağıda ve onu ezer.</p>
+  </div>
+  <div class="ayar-govde px-5 py-3">
     <div class="bg-claude-surface border border-claude-border rounded-lg p-4 space-y-3">
       <label class="block">
         <span class="text-xs text-claude-muted uppercase">Kaynak</span>
@@ -136,8 +279,14 @@
       </div>
     </div>
 
-    <h2 class="font-serif text-lg font-bold mt-6 border-t border-claude-border pt-4">
-      AI Sağlayıcıları</h2>
+    </div></section>
+
+<section id="b-ai-saglayicilari" class="scroll-mt-24 bg-white border border-claude-border rounded-xl overflow-hidden">
+  <div class="px-5 pt-4 pb-3 border-b border-claude-border">
+    <h2 class="font-serif text-lg font-bold">AI Sağlayıcıları</h2>
+    <p class="text-xs text-claude-subtle mt-0.5 leading-relaxed">Her iş kendi modeline gider; boş rol yukarıdaki kaba ayarı kullanır.</p>
+  </div>
+  <div class="ayar-govde px-5 py-3">
     <p class="text-xs text-claude-muted leading-relaxed -mt-1 mb-2">
       Her iş için ayrı sağlayıcı seçebilirsin. Boş bırakılan rol yukarıdaki
       <b>AI Kaynağı</b> ayarını kullanır.
@@ -151,30 +300,10 @@
 
     <div class="bg-claude-surface border border-claude-border rounded-lg p-4 space-y-4">
 
-      {# --- ücretsiz Google havuzu --- #}
-      <div class="bg-claude-surface-alt border border-claude-border rounded-lg p-3">
-        <div class="flex items-center justify-between gap-2 flex-wrap">
-          <span class="text-xs uppercase text-claude-muted font-semibold">
-            Google AI Studio — ücretsiz havuz</span>
-          {% if google_havuz.var %}
-          <span class="text-xs text-claude-muted">
-            <b class="text-claude-text">{{ google_havuz.etkin }}</b> etkin /
-            {{ google_havuz.anahtar }} anahtar ·
-            bugün <b class="text-claude-text">{{ google_havuz.bugun }}</b>
-            / {{ google_havuz.gunluk_tavan }} çağrı
-            {% if google_havuz.tukenen %} · {{ google_havuz.tukenen }} kota doldu{% endif %}
-            {% if google_havuz.banli %} · {{ google_havuz.banli }} banlı{% endif %}
-          </span>
-          {% else %}
-          <span class="text-xs text-claude-error">havuz yok — {{ google_havuz.hata }}</span>
-          {% endif %}
-        </div>
-        <p class="text-[11px] text-claude-subtle mt-1 leading-relaxed">
-          Anahtarlar <code class="font-mono">{{ google_havuz.dizin }}</code> içinde
-          (<code class="font-mono">google-keys.json</code>). Anahtar başına günde 500
-          çağrı; tükenince sistem OpenRouter'a düşer.
-        </p>
-      </div>
+      <p class="text-[11px] text-claude-subtle">
+        Ücretsiz Google havuzu <a href="#b-havuz" class="text-claude-accent hover:underline">yukarıda</a>
+        yönetiliyor — {{ h.etkin }}/{{ h.anahtar }} anahtar etkin.
+      </p>
 
       {# --- rol başına sağlayıcı --- #}
       {% for rol, etiket in roller %}
@@ -277,7 +406,14 @@
       })();
     </script>
 
-    <h2 class="font-serif text-lg font-bold mt-6 border-t border-claude-border pt-4">Pexels API</h2>
+    </div></section>
+
+<section id="b-pexels-api" class="scroll-mt-24 bg-white border border-claude-border rounded-xl overflow-hidden">
+  <div class="px-5 pt-4 pb-3 border-b border-claude-border">
+    <h2 class="font-serif text-lg font-bold">Pexels API</h2>
+    <p class="text-xs text-claude-subtle mt-0.5 leading-relaxed">Footage ve kart görselleri için.</p>
+  </div>
+  <div class="ayar-govde px-5 py-3">
     <div class="bg-claude-surface border border-claude-border rounded-lg p-4">
       {% if pexels_key_set %}
         <div class="flex items-center gap-3">
@@ -297,7 +433,14 @@
       {% endif %}
     </div>
 
-    <h2 class="font-serif text-lg font-bold mt-6 border-t border-claude-border pt-4">Footage Kaynakları</h2>
+    </div></section>
+
+<section id="b-footage-kaynaklari" class="scroll-mt-24 bg-white border border-claude-border rounded-xl overflow-hidden">
+  <div class="px-5 pt-4 pb-3 border-b border-claude-border">
+    <h2 class="font-serif text-lg font-bold">Footage Kaynakları</h2>
+    <p class="text-xs text-claude-subtle mt-0.5 leading-relaxed">Klip sağlayıcılarının önceliği.</p>
+  </div>
+  <div class="ayar-govde px-5 py-3">
     {% set _fp = footage.get('priority', []) %}
     <div class="bg-claude-surface border border-claude-border rounded-lg p-4 space-y-4">
       <div>
@@ -393,17 +536,26 @@
       </div>
     </div>
 
-    <h2 class="font-serif text-lg font-bold mt-6 border-t border-claude-border pt-4">OpenAI API Key</h2>
+    </div></section>
+
+<section id="b-openai-api-key" class="scroll-mt-24 bg-white border border-claude-border rounded-xl overflow-hidden">
+  <div class="px-5 pt-4 pb-3 border-b border-claude-border">
+    <h2 class="font-serif text-lg font-bold">OpenAI API Key</h2>
+    <p class="text-xs text-claude-subtle mt-0.5 leading-relaxed">Embedding — mükerrer haber tespiti buna dayanıyor.</p>
+  </div>
+  <div class="ayar-govde px-5 py-3">
     {% if openai_key_set %}
     <div class="mb-3 text-xs">
-      <form method="POST" action="/system/backfill-embeddings"
-            onsubmit="return confirm('Son 14 gün üretilen shortlar için tekrar-uretim filtresi (Claude başlık embedding) hesaplanacak. ~30 saniye sürer. Devam?');"
-            class="inline">
-        <button type="submit"
-                class="bg-claude-surface-alt hover:bg-claude-surface border border-claude-border px-3 py-1.5 rounded text-claude-text">
-          🔄 Tekrar-üretim filtresi: geçmiş shortlar için backfill
-        </button>
-      </form>
+      {# İÇ İÇE FORM DEĞİL. Bu düğme ayar formunun İÇİNDE duruyor ve HTML iç
+         içe formu yasaklıyor: tarayıcı iç <form>u sessizce ATIYORDU (ölçüldü —
+         DOM'da hiç yok), yani düğme backfill'i çalıştırmıyor, bütün ayar
+         formunu gönderiyordu. `formaction` aynı işi iç form olmadan yapar. #}
+      <button type="submit" form="ayar-formu"
+              formaction="/system/backfill-embeddings" formmethod="post"
+              onclick="return confirm('Son 14 gün üretilen shortlar için tekrar-uretim filtresi (Claude başlık embedding) hesaplanacak. ~30 saniye sürer. Devam?');"
+              class="bg-claude-surface-alt hover:bg-claude-surface border border-claude-border px-3 py-1.5 rounded text-claude-text">
+        🔄 Tekrar-üretim filtresi: geçmiş shortlar için backfill
+      </button>
       <span class="text-claude-muted ml-2">
         Yeni dedup katmanı için (v0.1.68+). İdempotent — birden fazla çalıştırmak güvenli.
       </span>
@@ -430,7 +582,14 @@
       {% endif %}
     </div>
 
-    <h2 class="font-serif text-lg font-bold mt-6 border-t border-claude-border pt-4">YouTube Data API Key</h2>
+    </div></section>
+
+<section id="b-youtube-data-api-key" class="scroll-mt-24 bg-white border border-claude-border rounded-xl overflow-hidden">
+  <div class="px-5 pt-4 pb-3 border-b border-claude-border">
+    <h2 class="font-serif text-lg font-bold">YouTube Data API Key</h2>
+    <p class="text-xs text-claude-subtle mt-0.5 leading-relaxed">Trend beslemesi ve kanal istatistikleri.</p>
+  </div>
+  <div class="ayar-govde px-5 py-3">
     <div class="bg-claude-surface border border-claude-border rounded-lg p-4">
       {% if youtube_key_set %}
         <div class="flex items-center gap-3">
@@ -464,7 +623,14 @@
       </div>
     </div>
 
-    <h2 class="font-serif text-lg font-bold mt-6 border-t border-claude-border pt-4">ai33 (Seslendirme / TTS)</h2>
+    </div></section>
+
+<section id="b-ai33-seslendirme-tts" class="scroll-mt-24 bg-white border border-claude-border rounded-xl overflow-hidden">
+  <div class="px-5 pt-4 pb-3 border-b border-claude-border">
+    <h2 class="font-serif text-lg font-bold">ai33 (Seslendirme / TTS)</h2>
+    <p class="text-xs text-claude-subtle mt-0.5 leading-relaxed">Seslendirmeli formatların sesi.</p>
+  </div>
+  <div class="ayar-govde px-5 py-3">
     <div class="bg-claude-surface border border-claude-border rounded-lg p-4">
       {% if ai33_key_set %}
         <div class="flex items-center gap-3">
@@ -487,7 +653,14 @@
       {% endif %}
     </div>
 
-    <h2 class="font-serif text-lg font-bold mt-6 border-t border-claude-border pt-4">Cartesia (Seslendirme / TTS — Gündem Yorum)</h2>
+    </div></section>
+
+<section id="b-cartesia-seslendirme-tts-g" class="scroll-mt-24 bg-white border border-claude-border rounded-xl overflow-hidden">
+  <div class="px-5 pt-4 pb-3 border-b border-claude-border">
+    <h2 class="font-serif text-lg font-bold">Cartesia (Seslendirme / TTS — Gündem Yorum)</h2>
+    <p class="text-xs text-claude-subtle mt-0.5 leading-relaxed">Karakter başına ücretli — aylık bütçe burada tutulur.</p>
+  </div>
+  <div class="ayar-govde px-5 py-3">
     <div class="bg-claude-surface border border-claude-border rounded-lg p-4">
       {% if cartesia_key_set %}
         <div class="flex items-center gap-3">
@@ -516,7 +689,14 @@
       </div>
     </div>
 
-    <h2 class="font-serif text-lg font-bold mt-6 border-t border-claude-border pt-4">Trend Detection</h2>
+    </div></section>
+
+<section id="b-trend-detection" class="scroll-mt-24 bg-white border border-claude-border rounded-xl overflow-hidden">
+  <div class="px-5 pt-4 pb-3 border-b border-claude-border">
+    <h2 class="font-serif text-lg font-bold">Trend Detection</h2>
+    <p class="text-xs text-claude-subtle mt-0.5 leading-relaxed">Google Trends beslemesi ve eşikleri.</p>
+  </div>
+  <div class="ayar-govde px-5 py-3">
     <div class="bg-claude-surface border border-claude-border rounded-lg p-4 space-y-3">
       <label class="flex items-center gap-2 text-sm">
         <input type="checkbox" name="trends_enabled" value="1"
@@ -559,16 +739,17 @@
       </div>
     </div>
 
-    <button type="submit" class="bg-claude-accent hover:bg-claude-accent-hover text-white px-4 py-2 rounded-lg font-semibold mt-6 w-full">
-      Kaydet
-    </button>
     <p class="text-xs text-claude-muted">
       Not: web host/port değişikliği panel restart gerektirir.
     </p>
-  </div>
 
-  <div>
-    <h2 class="font-serif text-lg font-bold mb-4">Yol Bilgileri (read-only)</h2>
+  </div></section>
+
+<section id="b-yol-bilgileri-read-only" class="scroll-mt-24 bg-white border border-claude-border rounded-xl overflow-hidden">
+  <div class="px-5 pt-4 pb-3 border-b border-claude-border">
+    <h2 class="font-serif text-lg font-bold">Yol Bilgileri (read-only)</h2>
+  </div>
+  <div class="ayar-govde px-5 py-3">
     <table class="w-full text-xs border border-claude-border rounded-lg overflow-hidden">
       <tbody>
         {% for label, p in paths.items() %}
@@ -580,5 +761,8 @@
       </tbody>
     </table>
   </div>
+</section>
 </form>
+  </div>
+</div>
 {% endblock %}

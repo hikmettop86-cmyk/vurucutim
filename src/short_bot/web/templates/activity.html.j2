@@ -70,6 +70,7 @@
       <option value="success"        {% if f_status == 'success' %}selected{% endif %}>success</option>
       <option value="failed"         {% if f_status == 'failed' %}selected{% endif %}>failed</option>
       <option value="no_candidates"  {% if f_status == 'no_candidates' %}selected{% endif %}>no_candidates</option>
+      <option value="skipped"        {% if f_status == 'skipped' %}selected{% endif %}>skipped (kilit meşgul)</option>
     </select>
     <select name="since" class="bg-claude-surface border border-claude-border px-2 py-1 rounded text-xs text-claude-text">
       <option value="1h"  {% if f_since == '1h' %}selected{% endif %}>Son 1 saat</option>

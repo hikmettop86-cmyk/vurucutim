@@ -19,7 +19,8 @@
       <div>
         <label class="block text-sm font-medium mb-1">Dil</label>
         <select name="language" class="w-full border border-claude-border rounded-lg px-3 py-2 text-sm bg-white">
-          <option value="tr" selected>Türkçe</option>
+          {% for code, label in LANGUAGES %}<option value="{{ code }}" {% if code == 'tr' %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
         </select>
       </div>
       <div>

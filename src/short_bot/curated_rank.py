@@ -179,6 +179,7 @@ def score_curiosity(gems: list[dict], *, vision_call, top_n: int = 24,
                 return (max(1, min(10, int(res.score))), bool(res.has_text))
             except Exception as e:  # noqa: BLE001 — tek skor düşerse nötr, üretim sürsün
                 log.info(f"  cevher[merak]: skor hatası ({e}) → nötr 5")
+                gem["score_err"] = True   # geçici hata — bu skor KALICI yargı değil (hafızaya yazılmasın)
                 return (5, False)     # hata → temiz varsay (fail-open, eleme yapma)
 
         try:

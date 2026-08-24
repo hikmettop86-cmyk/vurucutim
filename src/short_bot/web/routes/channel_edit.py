@@ -239,29 +239,48 @@ def save(slug):
 
     new_dna = cfg.dna
     if cfg.dna:
-        # Apply DNA tweaks from form
-        bg1 = request.form.get("dna_bg_grad_1", cfg.dna.palette.bg_gradient[0])
-        bg2 = request.form.get("dna_bg_grad_2", cfg.dna.palette.bg_gradient[1])
-        body1 = request.form.get("dna_body_bg_1", cfg.dna.palette.body_bg[0])
-        body2 = request.form.get("dna_body_bg_2", cfg.dna.palette.body_bg[1])
+        def _renk(ad: str, mevcut: str) -> str:
+            """Renk alanı: BOŞ gelen değer "sil" demek değil, "değişmedi" demek.
+
+            `request.form.get(ad, mevcut)` yalnız alan HİÇ GÖNDERİLMEZSE
+            mevcudu korur; boş string gönderilirse paleti `""` ile ezer.
+            Renk seçicilerin değeri Alpine'in `:value` bağıyla geliyor —
+            yani JS koşmazsa (unpkg erişilemez, betik hatası, eski tarayıcı)
+            on renk alanının onu da boş gider ve kanalın paleti tek bir
+            "Kaydet" ile silinir. Hata çıkmaz; kart bir sonraki üretimde
+            renksiz çıkar.
+
+            Aynı kalıp yandaki `tone` alanlarında zaten var (`... or cfg...`);
+            palete uygulanmamıştı.
+
+            İSTİSNA: `header_top_color`/`header_bottom_color` — orada boş
+            "override yok" demektir ve bilinçlidir; onlar bu yardımcıyı
+            KULLANMAZ.
+            """
+            return (request.form.get(ad) or "").strip() or mevcut
+
+        bg1 = _renk("dna_bg_grad_1", cfg.dna.palette.bg_gradient[0])
+        bg2 = _renk("dna_bg_grad_2", cfg.dna.palette.bg_gradient[1])
+        body1 = _renk("dna_body_bg_1", cfg.dna.palette.body_bg[0])
+        body2 = _renk("dna_body_bg_2", cfg.dna.palette.body_bg[1])
 
         new_dna = cfg.dna.model_copy(update={
             "archetype": request.form.get("dna_archetype", cfg.dna.archetype),
             "palette": cfg.dna.palette.model_copy(update={
-                "primary": request.form.get("dna_primary", cfg.dna.palette.primary),
-                "accent": request.form.get("dna_accent", cfg.dna.palette.accent),
+                "primary": _renk("dna_primary", cfg.dna.palette.primary),
+                "accent": _renk("dna_accent", cfg.dna.palette.accent),
                 "bg_gradient": [bg1, bg2],
                 "body_bg": [body1, body2],
-                "text_main": request.form.get("dna_text_main", cfg.dna.palette.text_main),
-                "text_muted": request.form.get("dna_text_muted", cfg.dna.palette.text_muted),
+                "text_main": _renk("dna_text_main", cfg.dna.palette.text_main),
+                "text_muted": _renk("dna_text_muted", cfg.dna.palette.text_muted),
                 # Default to "" so toggle-off (disabled input not submitted)
                 # actually CLEARS a previously set override.
                 "header_top_color": request.form.get("dna_header_top_color", ""),
                 "header_bottom_color": request.form.get("dna_header_bottom_color", ""),
             }),
             "fonts": cfg.dna.fonts.model_copy(update={
-                "headline": request.form.get("dna_font_headline", cfg.dna.fonts.headline),
-                "body": request.form.get("dna_font_body", cfg.dna.fonts.body),
+                "headline": _renk("dna_font_headline", cfg.dna.fonts.headline),
+                "body": _renk("dna_font_body", cfg.dna.fonts.body),
                 "size_headline_top": _form_get_int("dna_size_headline_top", None),
                 "size_headline_bottom": _form_get_int("dna_size_headline_bot", None),
             }),
@@ -538,6 +557,11 @@ def save(slug):
         bg_image_blur=_form_get_int("bg_image_blur", cfg.bg_image_blur),
         dynamic_dna=("dynamic_dna" in request.form),
         negative_keywords=_form_get_list("negative_keywords"),
+        # Alan formda YOKSA dokunma. `_form_get_list` eksik anahtarda [] döner
+        # ve `replace`e boş liste geçmek kara listeyi SESSİZCE siler — yorum
+        # formatının kendi düzenleme sayfasında bu alan hiç basılmıyor.
+        **({"blocked_sources": _form_get_list("blocked_sources")}
+           if "blocked_sources" in request.form else {}),
         template=new_template,
         colors={
             "primary": new_dna.palette.primary if new_dna else cfg.colors["primary"],

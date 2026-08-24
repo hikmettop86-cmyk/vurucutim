@@ -34,7 +34,9 @@ ARCHETYPE_OVERFLOW_FIELDS: dict[str, list[OverflowField]] = {
     # Body budget yüksek (99) — channel custom_css elements (::first-letter, gradients,
     # padding override) Playwright scrollHeight ölçümünü şişirip yanlış overflow
     # raporluyordu, truncate "..." sonu sürekli aktif oluyordu. CSS line-clamp 11
-    # zaten görsel kesim yapar, mask gradient ile son satır graceful fade out.
+    # zaten görsel kesim yapar ve kendi üç noktasını koyar. (Eskiden burada bir
+    # alt-solma maskesi de vardı; KOŞULSUZ olduğu için SIĞAN metnin son satırını
+    # da kesiyordu — kaldırıldı, bkz. tests/test_govde_kesilmesi.py.)
     "stadium": [
         OverflowField("header_top",     ".header .top",      4),
         OverflowField("header_bottom",  ".header .bot",      2),

@@ -4,7 +4,7 @@ from __future__ import annotations
 import time
 from datetime import datetime
 from itertools import zip_longest
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlparse
 
 import feedparser
 import requests
@@ -104,6 +104,35 @@ def fetch_feed_url(
     return []
 
 
+def _yayinci_adi(feed, link: str) -> str:
+    """Doğrudan RSS'lerde yayıncı adı: feed başlığı → alan adı → "".
+
+    NEDEN VAR: `source` yalnız Google News'in " - Kaynak" ekinden doluyordu.
+    Doğrudan bir siteye abone olununca (RSS Havuzu'na elle eklenen feed'ler)
+    boş kalıyor ve boş `source` YOUTUBE AÇIKLAMASINI BOZUYOR: metadata istemi
+    "kaynak var mı" diye `rss_source`'a bakıyor, boş görünce videoyu "yapay
+    zekâ ile üretilmiş ÖZGÜN içerik" ilan ediyor. Ölçüldü (short #1892,
+    bernabeudigital.com): haber özeti olan bir video kaynak atfı olmadan,
+    üstelik İspanyolca açıklamanın ortasına Türkçe bir cümleyle yayına
+    hazırlandı. Yayıncı adı feed'in kendisinde zaten yazılı.
+    """
+    alan = urlparse(link or "").netloc.lower()
+    if alan.startswith("www."):
+        alan = alan[4:]
+    # TOPLAYICIYI KAYNAK DİYE YAZMA. Google News maddeleri yayıncıyı normalde
+    # <source> etiketinde taşır; taşımadığı tek tük maddede buraya düşülür ve
+    # feed başlığı ("Galatasaray - Google Haberler") kaynak sanılırdı. Yanlış
+    # atıf, atıfsızlıktan daha kötü: telif beyanı yanlış yayıncıyı gösterir.
+    if alan.endswith("news.google.com"):
+        return ""
+    ad = ""
+    try:
+        ad = (feed.get("title") or "").strip()
+    except AttributeError:
+        ad = ""
+    return ad or alan
+
+
 def _parse_feed(raw: bytes) -> list[NewsItem]:
     parsed = feedparser.parse(raw)
     items: list[NewsItem] = []
@@ -133,6 +162,9 @@ def _parse_feed(raw: bytes) -> list[NewsItem]:
                 source = e.source.get("title") or source
             except AttributeError:
                 pass
+        if not source:
+            source = _yayinci_adi(getattr(parsed, "feed", None) or {},
+                                  e.get("link", "")) or None
 
         items.append(NewsItem(
             guid=e.get("id") or e.get("guid") or e.get("link", ""),

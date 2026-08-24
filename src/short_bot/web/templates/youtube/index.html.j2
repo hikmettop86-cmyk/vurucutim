@@ -1,92 +1,1209 @@
 {% extends "base.html.j2" %}
-{% block title %}Vurucu TİM — YouTube{% endblock %}
+{% block title %}Vurucu TİM — Yayın Kokpiti{% endblock %}
 {% block content %}
-<div class="flex justify-between items-center mb-6">
-  <h1 class="font-serif text-3xl font-bold">YouTube</h1>
-  <div class="text-xs text-claude-muted">
-    {{ summaries | length }} bağlı kanal · stats günlük 03:00'da çekilir
+{#
+  YAYIN KOKPİTİ.
+
+  Sayfa "dilim" değil KARAR üzerine kurulu. Panelin kendi ölçümü (2026-08-18,
+  n=157 permütasyon testi) alışılmış analytics dilimlerinin bu veri setinde
+  gürültü olduğunu gösteriyor: kategori p=0,69 · yükleme saati p=0,15 ·
+  başlık uzunluğu p=0,45 · seçim puanı p=0,37. Yordayan tek şey hacim.
+
+  Bu yüzden burada "en iyi yayın saati" grafiği YOK. Olan:
+    01 Durum         — kanalın kendi ölçüsünde nerede durduğu
+    02 48 saat       — kaderin yazıldığı pencere + pencere eşlemeli karne
+    03 Kaldıraçlar   — hacim, dağılım, trafik, gürültü tabanı
+    04 Video defteri — tekil videolar, kanal medyanına oranla
+#}
+<style>
+  /* Panelin mevcut jetonları (base.html.j2 tailwind.config) — grafik kodu ham
+     hex yazmasın diye değişkene alınıyor. Seri renkleri AYRI bir set:
+     terracotta panelin KROM rengi, veri işareti olarak kullanılmaz; ikisi
+     karışırsa "vurgulanmış" ile "ölçülmüş" ayırt edilemez. */
+  .kokpit{
+    --ink:#14140f; --muted:#55524a; --subtle:#726e64;
+    --card:#ffffff; --sunk:#f4f1e8; --sunk2:#eae5d8;
+    --line:#e0dcce; --line-strong:#c6c0ac; --grid:#eeeade;
+    --brand:#bc5533;
+    --s1:#2a78d6; --s1-soft:#dfeafb; --s2:#eb6834; --s3:#1baf7a;
+    --good:#216745; --good-soft:#e4efe8;
+    --warn:#855808; --warn-soft:#fbf1dc;
+    --bad:#9e271f;  --bad-soft:#f9e6e3;
+    --idle:#47546a; --idle-soft:#eceef2;
+  }
+  .kokpit .num{font-variant-numeric:tabular-nums; letter-spacing:-.01em}
+  .kokpit .eyebrow{font-size:10.5px; font-weight:600; letter-spacing:.1em;
+    text-transform:uppercase; color:var(--subtle)}
+
+  /* ── şerit ── */
+  .kokpit .serit{position:sticky; top:57px; z-index:20;
+    background:rgba(250,249,245,.92); backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--line); margin:0 -1.5rem 18px; padding:10px 1.5rem;
+    display:flex; gap:8px; align-items:center}
+  .kokpit .cip{display:inline-flex; align-items:center; gap:7px; padding:5px 11px 5px 8px;
+    border-radius:999px; cursor:pointer; border:1px solid var(--line);
+    background:var(--card); color:var(--muted); font-size:13px; font-weight:500;
+    font-family:inherit; transition:all .14s ease; white-space:nowrap}
+  .kokpit .cip:hover{border-color:var(--line-strong); color:var(--ink)}
+  .kokpit .cip[aria-pressed="true"]{background:var(--brand); border-color:var(--brand);
+    color:#fff; font-weight:600}
+  .kokpit .cip .n{font-size:11px; opacity:.75; font-variant-numeric:tabular-nums}
+  .kokpit .cip .ek{font-size:10.5px; opacity:.62; padding:0 4px;
+    border-left:1px solid currentColor; margin-left:1px}
+  .kokpit .nokta{width:7px; height:7px; border-radius:99px; flex:none}
+  .kokpit .ayrac{width:1px; height:22px; background:var(--line); margin:0 4px}
+  .kokpit select.secim{padding:5px 10px; border-radius:8px; border:1px solid var(--line);
+    background:var(--card); color:var(--ink); font-family:inherit; font-size:13px}
+
+  /* ── bant başlığı ── */
+  .kokpit .bant{display:flex; align-items:baseline; gap:12px; margin:26px 0 12px}
+  .kokpit .bant:first-of-type{margin-top:0}
+  .kokpit .bant .sira{font-size:11px; font-weight:600; color:var(--brand);
+    border:1px solid var(--brand); border-radius:4px; padding:1px 5px; flex:none;
+    font-variant-numeric:tabular-nums}
+  .kokpit .bant h2{margin:0}
+  .kokpit .bant p{margin:2px 0 0; font-size:13px; color:var(--subtle); max-width:70ch}
+
+  /* ── kart ── */
+  .kokpit .kart{background:var(--card); border:1px solid var(--line); border-radius:12px;
+    box-shadow:0 1px 2px rgba(20,20,19,.05)}
+  .kokpit .kart-bas{display:flex; align-items:baseline; justify-content:space-between;
+    gap:12px; padding:14px 16px 0}
+  .kokpit .kart-bas h3{margin:0}
+  .kokpit .kart-not{font-size:12.5px; color:var(--subtle); line-height:1.45}
+
+  .kokpit .kimlik{display:flex; align-items:center; gap:12px; padding:11px 14px;
+    margin-bottom:14px}
+  .kokpit .kimlik img,.kokpit .kimlik .yer{width:38px; height:38px; border-radius:99px;
+    flex:none; object-fit:cover; background:var(--sunk2)}
+  .kokpit .kimlik .yer{display:grid; place-items:center; color:var(--subtle)}
+  .kokpit .kimlik .baglanti{font-size:12.5px; color:var(--muted); text-decoration:none;
+    border:1px solid var(--line); border-radius:7px; padding:4px 9px; white-space:nowrap}
+  .kokpit .kimlik .baglanti:hover{border-color:var(--line-strong); color:var(--ink)}
+  .kokpit .kunyeler{display:grid; grid-template-columns:repeat(4,1fr); gap:14px}
+  .kokpit .kunye{padding:15px 16px; display:flex; flex-direction:column; gap:3px}
+  .kokpit .kunye .deger{font-size:29px; font-weight:600; line-height:1.05;
+    letter-spacing:-.03em; font-variant-numeric:tabular-nums}
+  .kokpit .kunye .alt{font-size:12.5px; color:var(--subtle); display:flex;
+    align-items:center; gap:6px; flex-wrap:wrap}
+  .kokpit .delta{font-size:12px; font-weight:600; padding:1px 6px; border-radius:5px}
+  .kokpit .delta.iyi{color:var(--good); background:var(--good-soft)}
+  .kokpit .delta.kotu{color:var(--bad); background:var(--bad-soft)}
+  .kokpit .delta.duz{color:var(--muted); background:var(--sunk)}
+
+  .kokpit .hero{display:grid; grid-template-columns:1.62fr 1fr; gap:14px; align-items:stretch}
+  .kokpit .izgara{display:grid; grid-template-columns:repeat(2,1fr); gap:14px}
+  .kokpit .izgara3{display:grid; grid-template-columns:1.1fr 1fr .9fr; gap:14px}
+  .kokpit .tez{padding:13px 16px; background:var(--s1-soft); border-radius:9px;
+    border-left:3px solid var(--s1); font-size:13.5px; line-height:1.5; margin:14px 16px 0}
+
+  /* ── karne ── */
+  .kokpit .karne{display:flex; flex-direction:column; max-height:430px; overflow-y:auto}
+  .kokpit .karne-sat{display:grid; grid-template-columns:1fr auto; gap:10px;
+    align-items:center; padding:9px 16px; border-top:1px solid var(--line); cursor:pointer}
+  .kokpit .karne-sat:hover{background:var(--sunk)}
+  .kokpit .karne-sat[aria-selected="true"]{background:var(--sunk);
+    box-shadow:inset 3px 0 0 var(--s2)}
+  .kokpit .karne-sat .bas{font-size:13px; font-weight:500; line-height:1.35;
+    display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical; overflow:hidden}
+  .kokpit .karne-sat .mmeta{font-size:11px; color:var(--subtle); margin-top:1px}
+  .kokpit .durum{font-size:11px; font-weight:600; padding:2px 7px; border-radius:5px;
+    white-space:nowrap; display:inline-flex; align-items:center; gap:4px}
+  .kokpit .durum.ustunde{color:var(--good); background:var(--good-soft)}
+  .kokpit .durum.normal{color:var(--idle); background:var(--idle-soft)}
+  .kokpit .durum.altinda{color:var(--bad); background:var(--bad-soft)}
+  .kokpit .durum.erken{color:var(--warn); background:var(--warn-soft)}
+
+  /* ── grafik ── */
+  .kokpit .grafik{padding:8px 8px 12px; position:relative}
+  .kokpit svg{display:block; width:100%; height:auto; overflow:visible}
+  .kokpit .gosterge{display:flex; gap:14px; flex-wrap:wrap; padding:0 16px 12px;
+    font-size:12px; color:var(--muted)}
+  .kokpit .gosterge span{display:inline-flex; align-items:center; gap:6px}
+  .kokpit .gosterge i{width:14px; height:3px; border-radius:2px; display:inline-block}
+  .kokpit .gosterge i.nokta{width:9px; height:9px; border-radius:99px}
+  .kokpit .ipucu{position:absolute; pointer-events:none; z-index:10; opacity:0;
+    background:var(--card); border:1px solid var(--line-strong); border-radius:8px;
+    box-shadow:0 4px 14px rgba(20,20,19,.1); padding:8px 10px; font-size:12px;
+    min-width:132px; transition:opacity .1s ease}
+  .kokpit .ipucu .t{font-weight:600; margin-bottom:4px; font-size:12.5px; line-height:1.3}
+  .kokpit .ipucu .r{display:flex; justify-content:space-between; gap:14px; color:var(--muted)}
+  .kokpit .ipucu .r b{color:var(--ink); font-variant-numeric:tabular-nums; font-weight:600}
+
+  .kokpit .anahtar{font-size:11.5px; color:var(--subtle); background:none;
+    border:1px solid var(--line); border-radius:6px; padding:2px 7px; cursor:pointer;
+    font-family:inherit}
+  .kokpit .anahtar:hover{border-color:var(--line-strong); color:var(--ink)}
+  .kokpit .veri-tablo{display:none; padding:0 16px 14px; max-height:250px; overflow:auto}
+  .kokpit .veri-tablo.acik{display:block}
+  .kokpit .veri-tablo table{width:100%; border-collapse:collapse; font-size:12px}
+  .kokpit .veri-tablo th{text-align:left; font-size:10.5px; letter-spacing:.06em;
+    text-transform:uppercase; color:var(--subtle); padding:4px 8px 4px 0;
+    border-bottom:1px solid var(--line); position:sticky; top:0; background:var(--card)}
+  .kokpit .veri-tablo td{padding:3px 8px 3px 0; border-bottom:1px solid var(--grid);
+    font-variant-numeric:tabular-nums}
+
+  .kokpit .uyari{display:flex; gap:11px; padding:13px 16px; background:var(--warn-soft);
+    border:1px solid rgba(133,88,8,.28); border-radius:10px; font-size:13px;
+    line-height:1.5; margin-bottom:14px}
+  .kokpit .uyari .ikon{color:var(--warn); font-size:15px; flex:none; line-height:1.35}
+
+  /* ── defter ── */
+  .kokpit .defter-ust{display:flex; align-items:center; gap:10px; padding:14px 16px 12px;
+    flex-wrap:wrap; border-bottom:1px solid var(--line)}
+  .kokpit .ara{flex:1; min-width:180px; max-width:300px; padding:6px 11px; border-radius:8px;
+    border:1px solid var(--line); background:var(--sunk); color:var(--ink);
+    font-family:inherit; font-size:13px}
+  .kokpit table.defter{width:100%; border-collapse:collapse; font-size:13.5px}
+  .kokpit table.defter th{text-align:left; font-size:10.5px; font-weight:600;
+    letter-spacing:.07em; text-transform:uppercase; color:var(--subtle); padding:9px 12px;
+    border-bottom:1px solid var(--line); white-space:nowrap; background:var(--card);
+    position:sticky; top:0; z-index:2}
+  .kokpit table.defter th.sirali{cursor:pointer; user-select:none}
+  .kokpit table.defter th.sirali:hover{color:var(--ink)}
+  .kokpit table.defter th .ok{opacity:.35; font-size:9px; margin-left:3px}
+  .kokpit table.defter th[aria-sort] .ok{opacity:1; color:var(--brand)}
+  .kokpit table.defter td{padding:8px 12px; border-bottom:1px solid var(--grid);
+    vertical-align:middle}
+  .kokpit table.defter tbody tr{cursor:pointer}
+  .kokpit table.defter tbody tr:hover{background:var(--sunk)}
+  .kokpit table.defter tbody tr[aria-selected="true"]{background:var(--sunk);
+    box-shadow:inset 3px 0 0 var(--s2)}
+  .kokpit .sag{text-align:right}
+  .kokpit .baslik-h{font-weight:500; line-height:1.32; max-width:330px;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
+  .kokpit .kat{font-size:12px; font-weight:600; padding:2px 6px; border-radius:5px;
+    white-space:nowrap; font-variant-numeric:tabular-nums}
+  .kokpit .kat.a{color:var(--good); background:var(--good-soft)}
+  .kokpit .kat.b{color:var(--muted); background:var(--sunk2)}
+  .kokpit .kat.c{color:var(--bad); background:var(--bad-soft)}
+  .kokpit .kat.ham{color:var(--subtle); background:transparent;
+    border:1px dashed var(--line-strong); font-weight:500}
+  .kokpit .olcek{height:5px; border-radius:99px; background:var(--sunk2); overflow:hidden;
+    min-width:52px}
+  .kokpit .olcek i{display:block; height:100%; border-radius:99px; background:var(--s1)}
+
+  @media (max-width:1180px){
+    .kokpit .kunyeler{grid-template-columns:repeat(2,1fr)}
+    .kokpit .hero,.kokpit .izgara,.kokpit .izgara3{grid-template-columns:1fr}
+  }
+</style>
+
+<div class="kokpit">
+
+{% if kanallar %}
+  <div class="flex justify-between items-end mb-4">
+    <div>
+      <h1 class="font-serif text-3xl font-bold">Yayın Kokpiti</h1>
+      <div class="text-xs text-claude-muted mt-1" id="ozet-satir"></div>
+    </div>
+    <div class="text-xs text-claude-muted" id="snapshot-not"></div>
   </div>
-</div>
 
-{% if summaries %}
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-    {% for s in summaries %}
-    <a href="/channels/{{ s.slug }}/edit"
-       class="bg-white border border-claude-border rounded-xl shadow-soft hover:shadow-card transition-all overflow-hidden block">
-      {# Header — avatar + title + handle #}
-      <div class="flex items-start gap-3 p-4 border-b border-claude-border/40">
-        {% if s.has_avatar %}
-          <img src="/youtube-avatars/{{ s.slug }}" alt=""
-               class="w-12 h-12 rounded-full bg-claude-surface-alt flex-shrink-0 object-cover">
-        {% else %}
-          <div class="w-12 h-12 rounded-full bg-claude-surface-alt flex-shrink-0 flex items-center justify-center text-claude-muted">▶</div>
-        {% endif %}
-        <div class="flex-1 min-w-0">
-          <div class="font-semibold truncate">{{ s.yt_title }}</div>
-          <div class="text-xs text-claude-muted truncate">
-            {% if s.yt_handle %}@{{ s.yt_handle }} · {% endif %}{{ s.slug }}
-          </div>
-          {% if s.yt_description_short %}
-            <div class="text-[11px] text-claude-subtle mt-1 line-clamp-2">{{ s.yt_description_short }}</div>
-          {% endif %}
+  <div class="serit" role="toolbar" aria-label="Görünüm denetimleri">
+    <span class="eyebrow" style="margin-right:2px">Kanal</span>
+    <div id="cipler" style="display:flex;gap:7px"></div>
+    <select class="secim" id="digerKanal" aria-label="Diğer kanallar"></select>
+  </div>
+
+  {# ═══════════ 01 DURUM ═══════════ #}
+  <div class="bant">
+    <span class="sira">01</span>
+    <div>
+      <h2>Durum</h2>
+      <p>Karşılaştırma her zaman aynı kanalın kendi medyanına karşı — kanallar arası
+         ham izlenme kıyaslaması yanıltır.</p>
+    </div>
+  </div>
+
+  <div class="kimlik kart" id="kimlik"></div>
+
+  <div class="uyari" id="ornek-uyari" style="display:none">
+    <span class="ikon">⚠</span><span></span>
+  </div>
+  <div class="kunyeler" id="kunyeler"></div>
+
+  {# ═══════════ 02 48 SAAT ═══════════ #}
+  <div class="bant">
+    <span class="sira">02</span>
+    <div>
+      <h2>48 saat karar penceresi</h2>
+      <p>Bu sayfanın omurgası. Bir Shorts videosunun kaderi ilk iki günde yazılıyor;
+         sonrasında eğri düzleşiyor, yani beklemenin bilgi değeri yok.</p>
+    </div>
+  </div>
+
+  <div class="hero">
+    <div class="kart">
+      <div class="kart-bas">
+        <div>
+          <h3>Yükleme sonrası kümülatif izlenme</h3>
+          <div class="kart-not">Medyan video, gün gün · <span id="yorunge-n"></span></div>
+        </div>
+        <button class="anahtar" data-tablo="tbl-yorunge" aria-expanded="false">Tablo</button>
+      </div>
+      <div class="tez" id="tez"></div>
+      <div class="gosterge" id="yorunge-gosterge" style="padding-top:12px"></div>
+      <div class="grafik">
+        <div class="ipucu" id="ip-yorunge"></div>
+        <svg id="g-yorunge" viewBox="0 0 720 300" role="img"
+             aria-label="Yükleme sonrası günlere göre kümülatif medyan izlenme"></svg>
+      </div>
+      <div class="veri-tablo" id="tbl-yorunge"></div>
+    </div>
+
+    <div class="kart" style="display:flex;flex-direction:column">
+      <div class="kart-bas">
+        <div>
+          <h3>Son yüklenenlerin karnesi</h3>
+          <div class="kart-not">İlk okuma ÷ <b>aynı ölçüm penceresindeki</b> medyan</div>
         </div>
       </div>
-
-      {# Big numbers — abone & izlenme & video sayısı #}
-      <div class="grid grid-cols-3 gap-3 p-4 border-b border-claude-border/40">
-        <div>
-          <div class="text-[10px] text-claude-muted uppercase tracking-wider">Abone</div>
-          <div class="font-bold text-2xl">
-            {% if s.subscribers is not none %}{{ "{:,}".format(s.subscribers).replace(',', '.') }}{% else %}—{% endif %}
-          </div>
-          {% if s.subs_delta_7d is not none %}
-            <div class="text-xs {% if s.subs_delta_7d > 0 %}text-claude-success{% elif s.subs_delta_7d < 0 %}text-claude-error{% else %}text-claude-muted{% endif %}">
-              {% if s.subs_delta_7d > 0 %}↑ +{{ s.subs_delta_7d }}{% elif s.subs_delta_7d < 0 %}↓ {{ s.subs_delta_7d }}{% else %}→ 0{% endif %} (7g)
-            </div>
-          {% endif %}
-        </div>
-        <div>
-          <div class="text-[10px] text-claude-muted uppercase tracking-wider">İzlenme</div>
-          <div class="font-bold text-2xl">
-            {% if s.total_views is not none %}{{ "{:,}".format(s.total_views).replace(',', '.') }}{% else %}—{% endif %}
-          </div>
-          {% if s.views_delta_7d is not none %}
-            <div class="text-xs {% if s.views_delta_7d > 0 %}text-claude-success{% else %}text-claude-muted{% endif %}">
-              {% if s.views_delta_7d > 0 %}↑ +{{ "{:,}".format(s.views_delta_7d).replace(',', '.') }}{% elif s.views_delta_7d < 0 %}↓ {{ s.views_delta_7d }}{% else %}→ 0{% endif %} (7g)
-            </div>
-          {% endif %}
-        </div>
-        <div>
-          <div class="text-[10px] text-claude-muted uppercase tracking-wider">Video</div>
-          <div class="font-bold text-2xl">{{ s.video_count }}</div>
-          <div class="text-xs text-claude-muted">{{ s.bot_uploaded }} bot</div>
+      <div style="padding:10px 16px 4px">
+        <div class="uyari" style="padding:9px 12px;font-size:12.5px;margin:0">
+          <span class="ikon">⏱</span>
+          <span>İstatistik günde bir kez sabit saatte çekiliyor, “1. gün” ise takvim günü.
+            08:00'de yüklenen video 16 saatlik, 21:00'de yüklenen 3 saatlik birikimle
+            ölçülüyor. Oran bu yüzden <b>kendi penceresinin</b> medyanına bölünür.</span>
         </div>
       </div>
+      <div class="karne" id="karne"></div>
+    </div>
+  </div>
 
-      {# Footer — son upload + son snapshot #}
-      <div class="px-4 py-3 grid grid-cols-2 gap-3 text-[11px] text-claude-muted bg-claude-surface/40">
+  {# ═══════════ 03 KALDIRAÇLAR ═══════════ #}
+  <div class="bant">
+    <span class="sira">03</span>
+    <div>
+      <h2>Hangi kaldıraç gerçek?</h2>
+      <p>Panelin kendi ölçümü (n=157, permütasyon testi): kategori p=0,69 ·
+         yükleme saati p=0,15 · başlık uzunluğu p=0,45 · seçim puanı p=0,37.
+         Hepsi gürültü. Yordayan tek şey günlük üretim adedi.</p>
+    </div>
+  </div>
+
+  <div class="izgara" style="margin-bottom:14px">
+    <div class="kart">
+      <div class="kart-bas">
         <div>
-          <div class="uppercase text-[9px]">Son yüklenen</div>
-          <div class="font-medium text-claude-text">
-            {% if s.last_upload_at %}{{ s.last_upload_at.strftime('%d %b %H:%M') }}{% else %}—{% endif %}
-          </div>
+          <h3>Hacim kaldıracı</h3>
+          <div class="kart-not">Her nokta bir gün · yüklenen video sayısı → toplanan izlenme</div>
         </div>
+        <button class="anahtar" data-tablo="tbl-hacim" aria-expanded="false">Tablo</button>
+      </div>
+      <div class="grafik">
+        <div class="ipucu" id="ip-hacim"></div>
+        <svg id="g-hacim" viewBox="0 0 640 300" role="img"
+             aria-label="Günlük yüklenen video sayısına karşı toplam izlenme"></svg>
+      </div>
+      <div class="veri-tablo" id="tbl-hacim"></div>
+    </div>
+
+    <div class="kart">
+      <div class="kart-bas">
         <div>
-          <div class="uppercase text-[9px]">Son snapshot</div>
-          <div class="font-medium text-claude-text">
-            {% if s.snapshot %}{{ s.snapshot }}{% else %}—{% endif %}
-          </div>
+          <h3>İzlenme dağılımı</h3>
+          <div class="kart-not">Kaç video hangi banda düştü · medyan işaretli</div>
+        </div>
+        <button class="anahtar" data-tablo="tbl-dagilim" aria-expanded="false">Tablo</button>
+      </div>
+      <div class="grafik">
+        <div class="ipucu" id="ip-dagilim"></div>
+        <svg id="g-dagilim" viewBox="0 0 640 300" role="img"
+             aria-label="Video başına izlenme dağılımı"></svg>
+      </div>
+      <div class="veri-tablo" id="tbl-dagilim"></div>
+    </div>
+  </div>
+
+  <div class="izgara3">
+    <div class="kart">
+      <div class="kart-bas">
+        <div>
+          <h3>Kanal büyümesi</h3>
+          <div class="kart-not">İki ölçü, iki ayrı eksen — üst üste bindirilmiyor</div>
         </div>
       </div>
-    </a>
-    {% endfor %}
+      <div class="grafik" style="padding-bottom:4px">
+        <div class="eyebrow" style="padding:2px 8px 0">Abone</div>
+        <svg id="g-abone" viewBox="0 0 420 118" role="img" aria-label="Abone sayısı"></svg>
+        <div class="eyebrow" style="padding:8px 8px 0">Günlük yeni izlenme</div>
+        <svg id="g-gunluk" viewBox="0 0 420 118" role="img" aria-label="Günlük yeni izlenme"></svg>
+      </div>
+    </div>
+
+    <div class="kart">
+      <div class="kart-bas">
+        <div>
+          <h3>Trafik nereden geliyor</h3>
+          <div class="kart-not">Son 28 gün · Analytics penceresi</div>
+        </div>
+      </div>
+      <div class="grafik" style="padding:14px 16px 6px">
+        <svg id="g-trafik" viewBox="0 0 400 46" role="img" aria-label="Trafik kaynağı dağılımı"></svg>
+      </div>
+      <div style="padding:2px 16px 14px">
+        <div class="eyebrow" style="margin-bottom:8px">Bizi bulan sorgular</div>
+        <div id="arama"></div>
+      </div>
+    </div>
+
+    <div class="kart">
+      <div class="kart-bas">
+        <div>
+          <h3>Gürültü tabanı</h3>
+          <div class="kart-not">Kaç videoluk grupla gerçek fark görülür?</div>
+        </div>
+      </div>
+      <div class="grafik">
+        <svg id="g-gurultu" viewBox="0 0 380 190" role="img"
+             aria-label="Grup büyüklüğüne göre saptanabilir en küçük fark"></svg>
+      </div>
+      <div style="padding:0 16px 16px">
+        <div class="uyari" style="font-size:12.5px;padding:11px 13px;margin:0">
+          <span class="ikon">⚠</span>
+          <span>Video başına medyan <b>4 abone</b>. Bu dalgalanmanın altında kalan her
+            “fark” tesadüf. Örneklemi yetersiz kanallarda sayfa hüküm vermez.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ═══════════ 04 DEFTER ═══════════ #}
+  <div class="bant">
+    <span class="sira">04</span>
+    <div>
+      <h2>Video defteri</h2>
+      <p><b>Kat</b> sütunu her videoyu kendi kanalının medyanına böler.
+         <b>Erken</b> sütunu ilk okumayı aynı ölçüm penceresindeki medyana böler —
+         48 saat dolmadan verilebilecek tek dürüst hüküm. Satıra tıkla, videoyu
+         yörünge grafiğine bindir; başlığa tıkla, panel kaydına git.</p>
+    </div>
+  </div>
+
+  <div class="kart">
+    <div class="defter-ust">
+      <input class="ara" id="ara" type="search" placeholder="Başlıkta ara…" aria-label="Başlıkta ara">
+      <div style="display:flex;gap:7px;flex-wrap:wrap" id="suzgecler"></div>
+      <span style="margin-left:auto;font-size:12.5px;color:var(--subtle)" id="defter-sayi"></span>
+    </div>
+    <div style="max-height:640px;overflow:auto">
+      <table class="defter">
+        <thead>
+          <tr>
+            <th style="width:32%">Video</th>
+            <th class="sirali sag" data-k="views">İzlenme<span class="ok">▼</span></th>
+            <th class="sirali sag" data-k="kat">Kat<span class="ok">▼</span></th>
+            <th class="sirali sag" data-k="erken"
+                title="İlk okuma ÷ aynı ölçüm penceresindeki medyan. Yükleme saatinden bağımsızdır.">Erken <span style="opacity:.5">ⓘ</span><span class="ok">▼</span></th>
+            <th style="width:74px">İlk 7 gün</th>
+            <th class="sirali sag" data-k="sg">Abone<span class="ok">▼</span></th>
+            <th class="sirali sag" data-k="like1k">Beğeni/1B<span class="ok">▼</span></th>
+            <th class="sirali sag" data-k="avd">Ort. izleme<span class="ok">▼</span></th>
+            <th class="sirali sag" data-k="avp"
+                title="Shorts döngüye girdiği için %100'ü aşabilir — %200 ≈ video iki kez izlendi.">Tutunma <span style="opacity:.5">ⓘ</span><span class="ok">▼</span></th>
+            <th class="sirali" data-k="up">Yüklendi<span class="ok">▼</span></th>
+          </tr>
+        </thead>
+        <tbody id="defter"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="bant">
+    <span class="sira">05</span>
+    <div>
+      <h2>Bütün kanallar</h2>
+      <p>Satıra tıkla, kokpit o kanala geçsin. Ham izlenme sütunları kanalların
+         yaşı ve hacmi çok farklı olduğu için kıyas değil <b>ölçek</b> gösterir;
+         kıyaslanabilir olan <b>medyan video</b> ve <b>abone/1B</b>.</p>
+    </div>
+  </div>
+
+  <div class="kart" style="overflow:auto">
+    <table class="defter">
+      <thead>
+        <tr>
+          <th style="width:26%">Kanal</th>
+          <th class="sag">Abone</th>
+          <th class="sag" title="YouTube'un KANAL sayacı — kanaldaki bütün videolar, biz yüklemesek de. Yandaki medyan/p90 ise YALNIZ bizim ölçtüğümüz videolardan gelir; ikisi farklı evren, aritmetik olarak birbirine oturmaz. Snapshot tarihi son sütunda.">Kanal toplamı ⓘ</th>
+          <th class="sag">Video</th>
+          <th class="sag">Medyan video</th>
+          <th class="sag">p90</th>
+          <th class="sag" title="Gözlem penceresinde KAZANILAN abone ÷ kazanılan bin izlenme. Kümülatifi kümülatife bölmek, geçmişi sıfırlanmış kanallarda anlamsız sonuç veriyordu.">Abone / 1B ⓘ</th>
+          <th class="sag" title="Bu örneklemle ayırt edilebilen en küçük fark">Gürültü tabanı</th>
+          <th>Son snapshot</th>
+        </tr>
+      </thead>
+      <tbody id="kanal-tablosu"></tbody>
+    </table>
   </div>
 {% else %}
+  <h1 class="font-serif text-3xl font-bold mb-4">Yayın Kokpiti</h1>
   <div class="bg-claude-surface border border-claude-border rounded-lg p-8 text-center">
-    <div class="text-claude-muted">Henüz YouTube'a bağlı kanal yok.</div>
+    <div class="text-claude-muted">Henüz ölçüm yok — YouTube'a yüklenmiş video bulunamadı.</div>
     <a href="/channels" class="text-claude-accent hover:underline text-sm mt-2 inline-block">
-      Kanal edit sayfasından "▶ YouTube Bağla" ile başla →
+      Kanal düzenle sayfasından “▶ YouTube Bağla” ile başla →
     </a>
   </div>
+{% endif %}
+</div>
+
+{% if kanallar %}
+<script id="kokpit-veri" type="application/json">{{ veri | tojson }}</script>
+<script>
+(() => {
+const V = JSON.parse(document.getElementById('kokpit-veri').textContent);
+
+/* ── yardımcılar ─────────────────────────────────────────────────────── */
+const TR = new Intl.NumberFormat('tr-TR');
+const f = n => n == null ? '—' : TR.format(Math.round(n));
+const kisa = n => {
+  if (n == null) return '—';
+  if (n >= 1e6) return (n / 1e6).toFixed(n >= 1e7 ? 0 : 1).replace('.', ',') + ' M';
+  if (n >= 1e3) return (n / 1e3).toFixed(n >= 1e5 ? 0 : 1).replace('.', ',') + ' B';
+  return TR.format(n);
+};
+const AY = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
+const tarih = s => { const d = new Date(s); return d.getDate() + ' ' + AY[d.getMonth()]; };
+const saat = s => s.slice(11, 16);
+const oranMetni = o => o.toFixed(o >= 10 ? 0 : 1).replace('.', ',') + '×';
+const ond = n => n == null ? '—' : String(n).replace('.', ',');   // ondalık: virgül
+const SVGT = new Set(['svg','g','path','rect','circle','line','text','polyline','defs','tspan']);
+const el = (t, a = {}, ...c) => {
+  const n = SVGT.has(t)
+    ? document.createElementNS('http://www.w3.org/2000/svg', t)
+    : document.createElement(t);
+  for (const k in a) if (a[k] != null) n.setAttribute(k, a[k]);
+  c.flat().forEach(x => n.append(x));
+  return n;
+};
+
+/* ── durum ───────────────────────────────────────────────────────────── */
+const KANALLAR = V.kanallar;
+const kanalBul = s => KANALLAR.find(k => k.slug === s) || {};
+const AD = s => kanalBul(s).ad || s;
+const EK = s => { const e = kanalBul(s).ad2; return e ? (e.length > 13 ? e.slice(0, 12) + '…' : e) : ''; };
+let secili = KANALLAR[0].slug;
+let seciliVideo = null, siraK = 'views', siraY = -1, arama = '', suzgec = 'hepsi';
+const videolar = () => V.videolar.filter(v => v.ch === secili);
+
+/* ── çipler ──────────────────────────────────────────────────────────── */
+const cipRenk = ['var(--s1)','var(--s2)','var(--s3)','var(--idle)'];
+function cipleriKur() {
+  const kap = document.getElementById('cipler');
+  KANALLAR.slice(0, 4).forEach((k, i) => {
+    const b = el('button', { class: 'cip', type: 'button',
+      title: k.ad + ' — yapılandırma: ' + k.slug });
+    b.append(el('span', { class: 'nokta', style: 'background:' + cipRenk[i] }),
+             document.createTextNode(k.ad));
+    const ek = EK(k.slug);
+    if (ek) b.append(el('span', { class: 'ek' }, ek));
+    b.append(el('span', { class: 'n' }, String(k.n)));
+    b.onclick = () => { secili = k.slug; seciliVideo = null; ciz(); };
+    kap.append(b);
+  });
+  const sel = document.getElementById('digerKanal');
+  const kalan = KANALLAR.slice(4);
+  if (!kalan.length) { sel.style.display = 'none'; return; }
+  sel.replaceChildren(
+    el('option', { value: '' }, '+ ' + kalan.length + ' kanal daha'),
+    ...kalan.map(k => el('option', { value: k.slug },
+      k.ad + (EK(k.slug) ? ' · ' + EK(k.slug) : '') + '  (' + k.n + ')')));
+  sel.onchange = e => { if (e.target.value) { secili = e.target.value; seciliVideo = null; ciz(); } };
+}
+
+/* ── künyeler ────────────────────────────────────────────────────────── */
+function kunyeler() {
+  const k = kanalBul(secili);
+  const seri = V.seri[secili] || [];
+  const son = seri[seri.length - 1], onceki = seri[Math.max(0, seri.length - 8)];
+  const dSub = son && onceki && son !== onceki ? son.subs - onceki.subs : null;
+  const dViw = son && onceki && son !== onceki ? son.views - onceki.views : null;
+  const begeni1k = k.views ? (k.likes / k.views * 1000) : 0;
+
+  const kutu = (etiket, deger, altHtml) => {
+    const d = el('div', { class: 'kart kunye' });
+    d.append(el('div', { class: 'eyebrow' }, etiket), el('div', { class: 'deger' }, deger));
+    const a = el('div', { class: 'alt' }); a.innerHTML = altHtml; d.append(a);
+    return d;
+  };
+  const dl = (v, birim) => v == null ? '<span class="delta duz">—</span>'
+    : '<span class="delta ' + (v > 0 ? 'iyi' : v < 0 ? 'kotu' : 'duz') + '">'
+      + (v > 0 ? '↑ +' : v < 0 ? '↓ ' : '→ ') + kisa(Math.abs(v)) + '</span> <span>' + birim + '</span>';
+
+  document.getElementById('kunyeler').replaceChildren(
+    kutu('Abone', f(k.subs), dl(dSub, 'son 7 gün')),
+    kutu('Kanal toplamı', kisa(k.kanal_views), dl(dViw, 'son 7 gün')),
+    kutu('Medyan video', kisa(k.medyan),
+         '<span>p90 ' + kisa(k.p90) + ' · ' + k.n + ' video</span>'),
+    kutu('Abone / 1B izlenme',
+         k.abone_1k != null ? ond(k.abone_1k) : '—',
+         '<span>beğeni/1B ' + begeni1k.toFixed(2).replace('.', ',')
+          + ' · gözlem penceresi</span>')
+  );
+
+  /* Ölçülmüş gürültü tabanının altındaki kanalda sayfa hüküm vermez. */
+  const uy = document.getElementById('ornek-uyari');
+  if (!k.n) {
+    uy.style.display = '';
+    uy.querySelector('span:last-child').innerHTML =
+      '<b>' + k.ad + '</b> YouTube’a bağlı ama panelden yüklenmiş <b>ölçülü videosu yok</b>. '
+      + 'Kanal anlık görüntüsü (abone, toplam izlenme) yine gösteriliyor; video ölçüleri '
+      + 'ilk yükleme ve ertesi günkü snapshot’tan sonra dolar.';
+  } else if (k.n < V.sabitler.olcum_tabani) {
+    uy.style.display = '';
+    uy.querySelector('span:last-child').innerHTML =
+      '<b>' + k.ad + '</b> kanalında yalnız <b>' + k.n + ' video</b> var. Ölçülmüş gürültü '
+      + 'tabanında bu örneklemle ancak <b>%' + String(k.mdd).replace('.', ',')
+      + '</b> ve üstü farklar ayırt edilebilir — '
+      + 'aşağıdaki kıyasları yön göstergesi say, hüküm sayma.';
+  } else uy.style.display = 'none';
+
+  /* Kanal künyesi: hangi YouTube kanalına baktığımız ve oraya giden yollar.
+     Eski sayfada kartların kendisi ayarlara götürüyordu; o yol kaybolmasın. */
+    const kim = document.getElementById('kimlik');
+    kim.replaceChildren();
+    kim.append(k.avatar
+      ? el('img', { src: '/youtube-avatars/' + k.slug, alt: '' })
+      : el('div', { class: 'yer' }, '▶'));
+    const orta = el('div', { style: 'flex:1;min-width:0' });
+    const alt = el('div', { style: 'font-size:12px;color:var(--subtle)' });
+    alt.append(document.createTextNode(
+      (k.el ? '@' + k.el + ' · ' : '') + k.slug
+      + (k.bot_yuklemesi ? ' · ' + k.bot_yuklemesi + ' bot yüklemesi' : '')));
+    /* `channel_info.json` OAuth bağlanma anında yazılıyor ve BİR DAHA
+       tazelenmiyor. Aslan Gündem'de "1 video" yazıyor ama 546 yükleme var —
+       etiketsiz gösterilirse doğrudan yanlış okunur. */
+    if (k.yt_video)
+      alt.append(el('span', { title: 'Kanal YouTube’a bağlandığı anda bildirilen '
+        + 'video sayısı — sonradan tazelenmiyor, güncel olmayabilir.' },
+        ' · YouTube kaydı ' + k.yt_video + ' video ⓘ'));
+    orta.append(el('div', { style: 'font-weight:600;line-height:1.25' }, k.ad), alt);
+    if (k.aciklama)
+      orta.append(el('div', { style: 'font-size:11.5px;color:var(--subtle);margin-top:2px;'
+        + 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap' }, k.aciklama));
+    kim.append(orta);
+    if (k.yapilandirildi)
+      kim.append(el('a', { class: 'baglanti', href: '/channels/' + k.slug + '/edit' },
+                    'Kanal ayarları'));
+    if (k.el)
+      kim.append(el('a', { class: 'baglanti', href: 'https://youtube.com/@' + k.el,
+                           target: '_blank', rel: 'noopener' }, 'YouTube’da aç ↗'));
+
+  document.getElementById('ozet-satir').textContent =
+    KANALLAR.length + ' kanal · ' + f(KANALLAR.reduce((a, b) => a + b.n, 0)) + ' ölçülen video · '
+    + kisa(KANALLAR.reduce((a, b) => a + b.views, 0)) + ' izlenme';
+  document.getElementById('snapshot-not').textContent =
+    k.snapshot ? 'Son snapshot ' + k.snapshot : 'snapshot yok';
+}
+
+/* ── eksen ───────────────────────────────────────────────────────────── */
+function yTicks(max, adet = 4) {
+  if (!(max > 0)) return [0];
+  const us = Math.pow(10, Math.floor(Math.log10(max / adet)));
+  const adim = [1, 2, 2.5, 5, 10].map(x => x * us).find(x => x >= max / adet) || us;
+  const t = []; for (let v = 0; v <= max * 1.001; v += adim) t.push(v);
+  return t;
+}
+const bosGrafik = (svg, metin) => svg.replaceChildren(el('text', {
+  x: 20, y: 40, 'font-size': '13', fill: 'var(--subtle)' }, metin));
+
+/* ── 1. yörünge ──────────────────────────────────────────────────────── */
+function cizYorunge() {
+  const svg = document.getElementById('g-yorunge');
+  const y0 = V.yorunge[secili];
+  const gos = document.getElementById('yorunge-gosterge');
+  if (!y0 || !Object.keys(y0).length) {
+    bosGrafik(svg, 'Bu kanalda yörünge için yeterli snapshot yok (taban: '
+                   + V.sabitler.min_ornek + ' ölçüm).');
+    gos.replaceChildren();
+    document.getElementById('tez').textContent =
+      'Yörünge eğrisi ancak günde en az ' + V.sabitler.min_ornek
+      + ' ölçüm biriktiğinde çizilir — uydurulmuş bir eğri yanlış karar verdirir.';
+    document.getElementById('yorunge-n').textContent = AD(secili);
+    return;
+  }
+  const W = 720, H = 300, L = 56, R = 78, T = 14, B = 34;
+  const gunler = Object.keys(y0).map(Number).sort((a, b) => a - b);
+  const seriler = [{ ad: 'Kanal medyanı', renk: 'var(--s1)',
+    nokta: gunler.map(g => ({ x: g, y: y0[g][0], n: y0[g][1] })) }];
+  let tek = null;
+  if (seciliVideo) {
+    const sp = seciliVideo.spark.map((v, i) => v == null ? null : { x: i, y: v }).filter(Boolean);
+    if (sp.length > 1) seriler.push({ ad: 'Seçili video', renk: 'var(--s2)', nokta: sp });
+    else if (sp.length === 1) tek = sp[0];
+  }
+  const maxX = V.sabitler.yorunge_ufku;
+  const maxY = Math.max(...seriler.flatMap(s => s.nokta.map(p => p.y)),
+                        tek ? tek.y : 0) * 1.08;
+  const X = v => L + (v / maxX) * (W - L - R);
+  const Y = v => H - B - (v / maxY) * (H - T - B);
+  const g = el('g');
+
+  g.append(el('rect', { x: X(0), y: T, width: X(2) - X(0), height: H - T - B,
+                        fill: 'var(--s1)', opacity: '.055' }));
+  g.append(el('text', { x: X(2) - 6, y: T + 13, 'text-anchor': 'end', 'font-size': '10.5',
+    'letter-spacing': '.06em', fill: 'var(--s1)', 'font-weight': '600' }, 'KARAR PENCERESİ'));
+  yTicks(maxY).forEach(t => {
+    g.append(el('line', { x1: L, x2: W - R, y1: Y(t), y2: Y(t), stroke: 'var(--grid)' }));
+    g.append(el('text', { x: L - 9, y: Y(t) + 3.5, 'text-anchor': 'end', 'font-size': '11',
+                          fill: 'var(--subtle)' }, kisa(t)));
+  });
+  for (let d = 0; d <= maxX; d += 2)
+    g.append(el('text', { x: X(d), y: H - B + 17, 'text-anchor': 'middle', 'font-size': '11',
+                          fill: 'var(--subtle)' }, d + '. gün'));
+  seriler.forEach(s => {
+    g.append(el('path', { d: s.nokta.map((p, i) => (i ? 'L' : 'M') + X(p.x) + ' ' + Y(p.y)).join(' '),
+      fill: 'none', stroke: s.renk, 'stroke-width': '2',
+      'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
+    const son = s.nokta[s.nokta.length - 1];
+    g.append(el('circle', { cx: X(son.x), cy: Y(son.y), r: '5', fill: s.renk,
+                            stroke: 'var(--card)', 'stroke-width': '2' }));
+    g.append(el('text', { x: X(son.x) + 10, y: Y(son.y) + 4, 'font-size': '11.5',
+      'font-weight': '600', fill: s.renk }, kisa(son.y)));
+  });
+  if (tek) {
+    g.append(el('circle', { cx: X(tek.x), cy: Y(tek.y), r: '6', fill: 'var(--s2)',
+                            stroke: 'var(--card)', 'stroke-width': '2' }));
+    g.append(el('text', { x: X(tek.x) + 11, y: Y(tek.y) + 4, 'font-size': '11.5',
+      'font-weight': '600', fill: 'var(--s2)' }, kisa(tek.y)));
+  }
+
+  const ip = document.getElementById('ip-yorunge');
+  const imlec = el('line', { y1: T, y2: H - B, stroke: 'var(--line-strong)',
+    'stroke-width': '1', 'stroke-dasharray': '3 3', opacity: '0' });
+  g.append(imlec, el('rect', { x: L, y: T, width: W - L - R, height: H - T - B,
+    fill: 'transparent', style: 'cursor:crosshair' }));
+  svg.replaceChildren(g);
+  svg.onpointerleave = () => { ip.style.opacity = 0; imlec.setAttribute('opacity', '0'); };
+  svg.onpointermove = e => {
+    const r = svg.getBoundingClientRect(), px = (e.clientX - r.left) / r.width * W;
+    if (px < L || px > W - R) return;
+    const gun = Math.max(0, Math.min(maxX, Math.round((px - L) / (W - L - R) * maxX)));
+    imlec.setAttribute('x1', X(gun)); imlec.setAttribute('x2', X(gun));
+    imlec.setAttribute('opacity', '1');
+    let h = '<div class="t">' + gun + '. gün</div>';
+    seriler.forEach(s => {
+      const p = s.nokta.find(q => q.x === gun);
+      if (p) h += '<div class="r"><span style="color:' + s.renk + '">●</span> '
+                + s.ad + ' <b>' + f(p.y) + '</b></div>';
+    });
+    ip.innerHTML = h; ip.style.opacity = 1;
+    ip.style.left = Math.min(r.width - 175, Math.max(4, (X(gun) / W) * r.width + 14)) + 'px';
+    ip.style.top = '18px';
+  };
+
+  gos.replaceChildren(...seriler.map(s => {
+    const sp = el('span');
+    sp.append(el('i', { style: 'background:' + s.renk }), document.createTextNode(s.ad));
+    return sp;
+  }));
+  if (tek) {
+    const sp = el('span');
+    sp.append(el('i', { class: 'nokta', style: 'background:var(--s2)' }),
+      document.createTextNode('Seçili video — ' + tek.x + '. günde ' + f(tek.y)
+                              + ' (tek ölçüm, eğri için erken)'));
+    gos.append(sp);
+  }
+  document.getElementById('yorunge-n').textContent =
+    'n = ' + f(y0[gunler[0]][1]) + ' ölçüm · ' + AD(secili) + (EK(secili) ? ' / ' + EK(secili) : '');
+
+  const g2 = y0[2] ? y0[2][0] : null;
+  const sonGun = gunler[gunler.length - 1], gSon = y0[sonGun][0];
+  const g4 = y0[4] ? Math.round(y0[4][0] / gSon * 100) : null;
+  /* Sayıya göre değişen Türkçe eki (%72'si / %91'i) uydurmamak için cümle
+     ekten kaçınacak biçimde kuruldu — sayı ne çıkarsa çıksın doğru okunur. */
+  document.getElementById('tez').innerHTML = g2
+    ? 'Medyan video ' + sonGun + ' günde <b>' + f(gSon) + '</b> izlenmeye ulaşıyor. '
+      + 'İlk 48 saatte gelen pay <b>%' + Math.round(g2 / gSon * 100) + '</b>'
+      + (g4 ? ', ilk 4 günde gelen pay <b>%' + g4 + '</b>' : '') + '. '
+      + 'Sonrasında eğri düzleşiyor: <b>beklemenin bilgi değeri yok</b>.'
+    : 'Bu kanalda 2. gün ölçümü henüz yeterli değil.';
+
+  tabloYaz('tbl-yorunge', ['Gün', 'Medyan izlenme', 'n'],
+    gunler.map(d => [d + '. gün', f(y0[d][0]), y0[d][1]]));
+}
+
+/* ── 2. hacim ────────────────────────────────────────────────────────── */
+function cizHacim() {
+  const svg = document.getElementById('g-hacim');
+  const d = (V.hacim[secili] || []).filter(x => x.n > 0);
+  if (d.length < 3) { bosGrafik(svg, 'Hacim eğrisi için en az üç yayın günü gerekiyor.');
+    tabloYaz('tbl-hacim', ['Gün', 'Video', 'İzlenme'], []); return; }
+  const W = 640, H = 300, L = 56, R = 22, T = 16, B = 42;
+  const maxX = Math.max(...d.map(x => x.n)) + 1;
+  const maxY = Math.max(...d.map(x => x.views)) * 1.08;
+  const X = v => L + (v / maxX) * (W - L - R), Y = v => H - B - (v / maxY) * (H - T - B);
+  const g = el('g');
+  yTicks(maxY).forEach(t => {
+    g.append(el('line', { x1: L, x2: W - R, y1: Y(t), y2: Y(t), stroke: 'var(--grid)' }));
+    g.append(el('text', { x: L - 9, y: Y(t) + 3.5, 'text-anchor': 'end', 'font-size': '11',
+                          fill: 'var(--subtle)' }, kisa(t)));
+  });
+  const adim = Math.max(1, Math.ceil(maxX / 6));
+  for (let i = 0; i <= maxX; i += adim)
+    g.append(el('text', { x: X(i), y: H - B + 17, 'text-anchor': 'middle', 'font-size': '11',
+                          fill: 'var(--subtle)' }, i));
+  g.append(el('text', { x: (L + W - R) / 2, y: H - 6, 'text-anchor': 'middle',
+    'font-size': '11', fill: 'var(--subtle)' }, 'o gün yüklenen video sayısı'));
+
+  /* Bant medyanı — açıklama katmanı, ikinci seri değil. */
+  const kova = {};
+  d.forEach(x => { const b = Math.min(4, Math.floor(x.n / Math.max(1, maxX / 5)));
+                   (kova[b] ||= []).push(x.views); });
+  const med = Object.entries(kova).map(([b, v]) => {
+    v.sort((a, c) => a - c);
+    return { x: (+b + 0.5) * (maxX / 5), y: v[Math.floor(v.length / 2)] };
+  }).sort((a, b) => a.x - b.x);
+  if (med.length > 1) {
+    g.append(el('path', { d: med.map((p, i) => (i ? 'L' : 'M') + X(p.x) + ' ' + Y(p.y)).join(' '),
+      fill: 'none', stroke: 'var(--muted)', 'stroke-width': '2',
+      'stroke-dasharray': '5 4', 'stroke-linecap': 'round', opacity: '.7' }));
+    const s = med[med.length - 1];
+    g.append(el('text', { x: X(s.x) - 4, y: Y(s.y) - 10, 'text-anchor': 'end',
+      'font-size': '11', fill: 'var(--muted)', 'font-weight': '600' }, 'bant medyanı'));
+  }
+  d.forEach(x => {
+    const c = el('circle', { cx: X(x.n), cy: Y(x.views), r: '4.5', fill: 'var(--s1)',
+      stroke: 'var(--card)', 'stroke-width': '1.5', opacity: '.78' });
+    c.dataset.g = x.g; c.dataset.n = x.n; c.dataset.v = x.views;
+    g.append(c);
+  });
+  svg.replaceChildren(g);
+  const ip = document.getElementById('ip-hacim');
+  svg.onpointerleave = () => ip.style.opacity = 0;
+  svg.onpointerover = e => {
+    const t = e.target; if (t.tagName !== 'circle') return;
+    ip.innerHTML = '<div class="t">' + tarih(t.dataset.g) + '</div>'
+      + '<div class="r"><span>Yüklenen</span><b>' + t.dataset.n + '</b></div>'
+      + '<div class="r"><span>Toplam izlenme</span><b>' + f(+t.dataset.v) + '</b></div>'
+      + '<div class="r"><span>Video başına</span><b>' + f(t.dataset.v / t.dataset.n) + '</b></div>';
+    ip.style.opacity = 1;
+    const r = svg.getBoundingClientRect();
+    ip.style.left = Math.min(r.width - 180, (+t.getAttribute('cx') / W) * r.width + 12) + 'px';
+    ip.style.top = Math.max(4, (+t.getAttribute('cy') / H) * r.height - 44) + 'px';
+  };
+  tabloYaz('tbl-hacim', ['Gün', 'Video', 'İzlenme', 'Video başına'],
+    d.slice().reverse().map(x => [tarih(x.g), x.n, f(x.views), f(x.views / x.n)]));
+}
+
+/* ── 3. dağılım ──────────────────────────────────────────────────────── */
+const BANT = ['<10 B','10–35 B','35–60 B','60–85 B','85–110 B','110–135 B',
+              '135–160 B','160–185 B','185–210 B','210 B+'];
+function cizDagilim() {
+  const svg = document.getElementById('g-dagilim');
+  const vals = V.dagilim[secili] || [];
+  const k = kanalBul(secili);
+  if (!vals.some(v => v > 0)) { bosGrafik(svg, 'Ölçülen video yok.');
+    tabloYaz('tbl-dagilim', ['Bant', 'Video'], []); return; }
+  const W = 640, H = 300, L = 44, R = 20, T = 16, B = 52;
+  const maxY = Math.max(...vals) * 1.12, bw = (W - L - R) / vals.length;
+  const X = i => L + i * bw, Y = v => H - B - (v / maxY) * (H - T - B);
+  const g = el('g');
+  yTicks(maxY, 3).forEach(t => {
+    g.append(el('line', { x1: L, x2: W - R, y1: Y(t), y2: Y(t), stroke: 'var(--grid)' }));
+    g.append(el('text', { x: L - 9, y: Y(t) + 3.5, 'text-anchor': 'end', 'font-size': '11',
+                          fill: 'var(--subtle)' }, f(t)));
+  });
+  vals.forEach((v, i) => {
+    if (v > 0) {
+      g.append(el('rect', { x: X(i) + 1, y: Y(v), width: bw - 2, height: H - B - Y(v),
+        rx: '4', fill: 'var(--s1)', opacity: '.88', 'data-i': i }));
+      g.append(el('text', { x: X(i) + bw / 2, y: Y(v) - 6, 'text-anchor': 'middle',
+        'font-size': '11', 'font-weight': '600', fill: 'var(--muted)' }, v));
+    }
+    g.append(el('text', { x: X(i) + bw / 2, y: H - B + 15, 'text-anchor': 'middle',
+      'font-size': '9.5', fill: 'var(--subtle)' }, BANT[i]));
+  });
+  if (k.medyan > 0) {
+    const bi = k.medyan < 10000 ? 0 : Math.min(9, Math.floor(k.medyan / 25000) + 1);
+    const mx = X(bi) + bw / 2;
+    g.append(el('line', { x1: mx, x2: mx, y1: T, y2: H - B, stroke: 'var(--bad)',
+      'stroke-width': '2', 'stroke-dasharray': '4 3' }));
+    g.append(el('text', { x: mx + 7, y: T + 12, 'font-size': '11', 'font-weight': '600',
+      fill: 'var(--bad)' }, 'medyan ' + kisa(k.medyan)));
+  }
+  g.append(el('text', { x: (L + W - R) / 2, y: H - 8, 'text-anchor': 'middle',
+    'font-size': '11', fill: 'var(--subtle)' }, 'video başına toplam izlenme'));
+  svg.replaceChildren(g);
+  const ip = document.getElementById('ip-dagilim');
+  const toplam = vals.reduce((a, b) => a + b, 0);
+  svg.onpointerleave = () => ip.style.opacity = 0;
+  svg.onpointerover = e => {
+    const t = e.target; if (t.tagName !== 'rect' || t.dataset.i == null) return;
+    const i = +t.dataset.i;
+    ip.innerHTML = '<div class="t">' + BANT[i] + '</div>'
+      + '<div class="r"><span>Video</span><b>' + vals[i] + '</b></div>'
+      + '<div class="r"><span>Pay</span><b>%'
+      + (vals[i] / toplam * 100).toFixed(1).replace('.', ',') + '</b></div>';
+    ip.style.opacity = 1;
+    const r = svg.getBoundingClientRect();
+    ip.style.left = Math.min(r.width - 155, (X(i) / W) * r.width) + 'px';
+    ip.style.top = Math.max(4, (Y(vals[i]) / H) * r.height - 64) + 'px';
+  };
+  tabloYaz('tbl-dagilim', ['Bant', 'Video sayısı'], BANT.map((b, i) => [b, vals[i] || 0]));
+}
+
+/* ── 4. büyüme (iki AYRI eksen) ──────────────────────────────────────── */
+function cizBuyume() {
+  const seri = (V.seri[secili] || []).slice(-30);
+  const alan = (id, degerler, renk) => {
+    const svg = document.getElementById(id);
+    if (degerler.length < 2) { bosGrafik(svg, 'yeterli snapshot yok'); return; }
+    const W = 420, H = 118, L = 42, R = 10, T = 10, B = 18;
+    const maxY = Math.max(...degerler.map(p => p.v)) * 1.12 || 1;
+    const X = i => L + (i / (degerler.length - 1)) * (W - L - R);
+    const Y = v => H - B - (v / maxY) * (H - T - B);
+    const g = el('g');
+    [0, maxY / 2, maxY].forEach(t => {
+      g.append(el('line', { x1: L, x2: W - R, y1: Y(t), y2: Y(t), stroke: 'var(--grid)' }));
+      g.append(el('text', { x: L - 7, y: Y(t) + 3.5, 'text-anchor': 'end', 'font-size': '10',
+                            fill: 'var(--subtle)' }, kisa(t)));
+    });
+    const d = degerler.map((p, i) => (i ? 'L' : 'M') + X(i) + ' ' + Y(p.v)).join(' ');
+    g.append(el('path', { d: d + ' L ' + X(degerler.length - 1) + ' ' + Y(0)
+                            + ' L ' + X(0) + ' ' + Y(0) + ' Z', fill: renk, opacity: '.13' }));
+    g.append(el('path', { d, fill: 'none', stroke: renk, 'stroke-width': '2',
+                          'stroke-linejoin': 'round' }));
+    g.append(el('circle', { cx: X(degerler.length - 1), cy: Y(degerler[degerler.length - 1].v),
+      r: '4', fill: renk, stroke: 'var(--card)', 'stroke-width': '2' }));
+    [0, degerler.length - 1].forEach(i => g.append(el('text', { x: X(i), y: H - 4,
+      'text-anchor': i ? 'end' : 'start', 'font-size': '10', fill: 'var(--subtle)' },
+      tarih(degerler[i].d))));
+    svg.replaceChildren(g);
+  };
+  alan('g-abone', seri.map(p => ({ d: p.d, v: p.subs })), 'var(--s1)');
+  const gun = [];
+  for (let i = 1; i < seri.length; i++) {
+    const dg = Math.max(1, (new Date(seri[i].d) - new Date(seri[i - 1].d)) / 864e5);
+    gun.push({ d: seri[i].d, v: Math.round((seri[i].views - seri[i - 1].views) / dg) });
+  }
+  alan('g-gunluk', gun, 'var(--s3)');
+}
+
+/* ── 5. trafik + arama ───────────────────────────────────────────────── */
+function cizTrafik() {
+  const svg = document.getElementById('g-trafik'), kap = document.getElementById('arama');
+  const t = V.trafik[secili];
+  if (!t) bosGrafik(svg, 'bu kanal için trafik ölçümü yok');
+  else {
+    const W = 400, HB = 16;
+    const p = [{ ad: 'Shorts akışı', v: t.feed_pct, renk: 'var(--s1)' },
+               { ad: 'Arama', v: t.search_pct, renk: 'var(--s2)' },
+               { ad: 'Diğer',
+                 v: Math.max(0, +(100 - t.feed_pct - t.search_pct).toFixed(1)),
+                 renk: 'var(--line-strong)' }];
+    const g = el('g'); let x = 0;
+    p.forEach(s => { const w = Math.max(2, s.v / 100 * W - 2);
+      g.append(el('rect', { x, y: 0, width: w, height: HB, rx: '3', fill: s.renk })); x += w + 2; });
+    /* Doğrudan etiket: turuncu ve aqua zeminde 3:1 kontrastın altında; renk
+       doğrulayıcısı bu durumda görünür etiketi ŞART koşuyor. */
+    p.forEach((s, i) => {
+      const tx = i * 133;
+      g.append(el('circle', { cx: tx + 4, cy: 30, r: '4', fill: s.renk }));
+      const tt = el('text', { x: tx + 13, y: 34, 'font-size': '11.5', fill: 'var(--muted)' });
+      tt.append(el('tspan', {}, s.ad + ' '));
+      tt.append(el('tspan', { 'font-weight': '600', fill: 'var(--ink)' },
+                    '%' + String(s.v).replace('.', ',')));
+      g.append(tt);
+    });
+    svg.replaceChildren(g);
+  }
+  const terimler = V.arama.filter(a => a.channel === secili).slice(0, 7);
+  if (!terimler.length) {
+    kap.innerHTML = '<div style="font-size:12.5px;color:var(--subtle)">bu kanal için sorgu kaydı yok</div>';
+    return;
+  }
+  const max = terimler[0].views;
+  kap.replaceChildren(...terimler.map(a => {
+    const d = el('div', { style: 'margin-bottom:7px' });
+    const ust = el('div', { style: 'display:flex;justify-content:space-between;gap:10px;font-size:12.5px;margin-bottom:3px' });
+    ust.append(el('span', {}, a.term),
+               el('span', { class: 'num', style: 'color:var(--muted);font-size:11.5px' }, kisa(a.views)));
+    const bar = el('div', { class: 'olcek', style: 'height:4px' });
+    bar.append(el('i', { style: 'width:' + (a.views / max * 100) + '%;background:var(--s2)' }));
+    d.append(ust, bar); return d;
+  }));
+}
+
+/* ── 6. gürültü tabanı ───────────────────────────────────────────────── */
+/* MDD ≈ 85/√n — panelin iki ölçülmüş noktasından: n=20 → %19, n=40 → %13. */
+function cizGurultu() {
+  const svg = document.getElementById('g-gurultu');
+  const W = 380, H = 190, L = 40, R = 34, T = 14, B = 36, maxY = 40, maxX = 200;
+  const X = v => L + (v / maxX) * (W - L - R), Y = v => H - B - (v / maxY) * (H - T - B);
+  const g = el('g');
+  [0, 10, 20, 30, 40].forEach(t => {
+    g.append(el('line', { x1: L, x2: W - R, y1: Y(t), y2: Y(t), stroke: 'var(--grid)' }));
+    g.append(el('text', { x: L - 7, y: Y(t) + 3.5, 'text-anchor': 'end', 'font-size': '10',
+                          fill: 'var(--subtle)' }, '%' + t));
+  });
+  [0, 50, 100, 150, 200].forEach(t => g.append(el('text', { x: X(t), y: H - B + 15,
+    'text-anchor': 'middle', 'font-size': '10', fill: 'var(--subtle)' }, t)));
+  g.append(el('text', { x: (L + W - R) / 2, y: H - 4, 'text-anchor': 'middle',
+    'font-size': '10.5', fill: 'var(--subtle)' }, 'gruptaki video sayısı'));
+  g.append(el('rect', { x: L, y: Y(maxY), width: X(V.sabitler.olcum_tabani) - L,
+    height: Y(0) - Y(maxY), fill: 'var(--bad)', opacity: '.07' }));
+  g.append(el('text', { x: L + 5, y: T + 26, 'font-size': '9.5', fill: 'var(--bad)',
+    'font-weight': '600' }, 'n < ' + V.sabitler.olcum_tabani));
+  const N = []; for (let n = 5; n <= maxX; n += 5) N.push({ n, mdd: 85 / Math.sqrt(n) });
+  g.append(el('path', { d: N.map((p, i) => (i ? 'L' : 'M') + X(p.n) + ' ' + Y(p.mdd)).join(' '),
+    fill: 'none', stroke: 'var(--s1)', 'stroke-width': '2', 'stroke-linecap': 'round' }));
+  const k = kanalBul(secili);
+  [20, 40, 100].forEach(n => {
+    const m = 85 / Math.sqrt(n);
+    g.append(el('circle', { cx: X(n), cy: Y(m), r: '4.5', fill: 'var(--s1)',
+      stroke: 'var(--card)', 'stroke-width': '2' }));
+    g.append(el('text', { x: X(n) + 8, y: Y(m) - 6, 'font-size': '10.5', 'font-weight': '600',
+      fill: 'var(--muted)' }, n + ' → %' + m.toFixed(0)));
+  });
+  /* Seçili kanalın nerede durduğu — soyut eğri değil, KENDİ konumun.
+     Eğri 200 videoda bitiyor; daha büyük kanallar kenara SABİTLENİR ve gerçek
+     sayı etikete yazılır (yoksa 542 videoluk kanal grafikte hiç görünmüyordu). */
+  if (k.n) {
+    const kx = Math.min(k.n, maxX), ky = Math.min(maxY, k.mdd);
+    const sagda = kx > maxX * 0.66;
+    g.append(el('circle', { cx: X(kx), cy: Y(ky), r: '5', fill: 'var(--brand)',
+      stroke: 'var(--card)', 'stroke-width': '2' }));
+    g.append(el('text', { x: X(kx) + (sagda ? -9 : 9), y: Y(ky) + 15,
+      'text-anchor': sagda ? 'end' : 'start', 'font-size': '10.5', 'font-weight': '600',
+      fill: 'var(--brand)' },
+      'bu kanal · ' + k.n + ' video · %' + String(k.mdd).replace('.', ',')));
+  }
+  svg.replaceChildren(g);
+}
+
+/* ── karne ───────────────────────────────────────────────────────────── */
+function karne() {
+  const kap = document.getElementById('karne');
+  const liste = videolar().slice()
+    .sort((a, b) => b.up.localeCompare(a.up)).slice(0, 14);
+  if (!liste.length) {
+    kap.innerHTML = '<div style="padding:20px 16px;color:var(--subtle);font-size:13px">bu kanal için kayıt yok</div>';
+    return;
+  }
+  const olcekVar = (kanalBul(secili).erken_ornek || 0) > 0;
+  kap.replaceChildren(...liste.map(v => {
+    let sinif = 'erken', metin = 'Veri bekleniyor', ikon = '⏱', ipuc = '';
+    if (v.erken != null) {
+      metin = oranMetni(v.erken);
+      const kk = kanalBul(secili);
+      ipuc = ond(v.pencere) + ' saatlik ölçüm penceresi · en yakın ' + kk.erken_k
+           + ' ölçümün medyanına oran'
+           + (kk.erken_yerel ? '' : ' — DİKKAT: komşuluk havuzun tamamı ('
+              + kk.erken_ornek + ' ölçüm), pencere düzeltmesi henüz etkin değil');
+      if (v.erken >= 1.3)      { sinif = 'ustunde'; ikon = '▲'; }
+      else if (v.erken >= 0.7) { sinif = 'normal';  ikon = '●'; }
+      else                     { sinif = 'altinda'; ikon = '▼'; }
+    } else if (v.d1 == null) {
+      ipuc = 'İlk snapshot henüz alınmadı.';
+    } else if (!olcekVar) {
+      metin = 'Kıyas yok';
+      ipuc = 'Bu kanalda henüz ' + V.sabitler.min_ornek
+           + ' ölçüm birikmedi — uydurulmuş bir payda yanlış karar verdirir.';
+    } else {
+      metin = 'Kıyas yok';
+      ipuc = 'Bu videonun ölçüm penceresi kıyaslanabilir değil.';
+    }
+    const d = el('div', { class: 'karne-sat', role: 'button', tabindex: '0',
+      'aria-selected': !!(seciliVideo && seciliVideo.vid === v.vid) });
+    const sol = el('div');
+    sol.append(el('div', { class: 'bas' }, v.title),
+      el('div', { class: 'mmeta' },
+        tarih(v.up) + ' ' + saat(v.up) + ' · ' + kisa(v.views) + ' izlenme'));
+    const cip = el('span', { class: 'durum ' + sinif, title: ipuc });
+    cip.append(el('span', {}, ikon), document.createTextNode(metin));
+    d.append(sol, cip);
+    const sec = () => { seciliVideo = (seciliVideo && seciliVideo.vid === v.vid) ? null : v; ciz(); };
+    d.onclick = sec;
+    d.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sec(); } };
+    return d;
+  }));
+}
+
+/* ── defter ──────────────────────────────────────────────────────────── */
+function sparkline(v) {
+  const p = v.spark.slice(0, 8).map((x, i) => x == null ? null : { i, x }).filter(Boolean);
+  const svg = el('svg', { viewBox: '0 0 64 20', width: '64', height: '20',
+    role: 'img', 'aria-label': 'ilk 7 gün' });
+  if (p.length < 2) {
+    svg.append(el('text', { x: 0, y: 14, 'font-size': '9', fill: 'var(--subtle)' }, '—'));
+    return svg;
+  }
+  const max = Math.max(...p.map(q => q.x)) || 1;
+  const X = i => (i / 7) * 60 + 2, Y = x => 18 - (x / max) * 15;
+  const d = p.map((q, i) => (i ? 'L' : 'M') + X(q.i) + ' ' + Y(q.x)).join(' ');
+  svg.append(el('path', { d: d + ' L ' + X(p[p.length - 1].i) + ' 19 L ' + X(p[0].i) + ' 19 Z',
+    fill: 'var(--s1)', opacity: '.15' }));
+  svg.append(el('path', { d, fill: 'none', stroke: 'var(--s1)', 'stroke-width': '1.5',
+    'stroke-linejoin': 'round' }));
+  svg.append(el('circle', { cx: X(p[p.length - 1].i), cy: Y(p[p.length - 1].x), r: '2',
+    fill: 'var(--s1)' }));
+  return svg;
+}
+function defter() {
+  const med = kanalBul(secili).medyan || 0;
+  let liste = videolar().map(v => ({
+    ...v,
+    kat: med > 0 ? v.views / med : null,
+    like1k: v.views ? v.likes / v.views * 1000 : 0,
+  }));
+  if (arama) liste = liste.filter(v => v.title.toLocaleLowerCase('tr').includes(arama));
+  if (suzgec === 'ustunde') liste = liste.filter(v => v.kat != null && v.kat >= 1.3);
+  if (suzgec === 'altinda') liste = liste.filter(v => v.kat != null && v.kat < 0.7);
+  if (suzgec === 'abone')   liste = liste.filter(v => v.sg >= 5);
+  liste.sort((a, b) => {
+    const x = a[siraK], y = b[siraK];
+    if (typeof x === 'string') return siraY * x.localeCompare(y, 'tr');
+    return siraY * ((x ?? -1) - (y ?? -1));
+  });
+
+  document.getElementById('defter').replaceChildren(...liste.slice(0, 200).map(v => {
+    const tr = el('tr', { 'aria-selected': !!(seciliVideo && seciliVideo.vid === v.vid) });
+    const td = (c, cls) => { const t = el('td', cls ? { class: cls } : {}); t.append(c); return t; };
+
+    const bas = el('div');
+    const link = el('a', { href: '/shorts/' + v.sid, class: 'baslik-h',
+      style: 'text-decoration:none', title: 'panel kaydını aç' }, v.title);
+    link.onclick = e => e.stopPropagation();
+    bas.append(link, el('div', { style: 'font-size:12px;color:var(--subtle);margin-top:3px' },
+      v.vid + ' · ' + (v.dur ? v.dur + ' sn' : '—')));
+    tr.append(td(bas));
+
+    const iz = el('div');
+    iz.append(el('div', { class: 'num', style: 'font-weight:600' }, kisa(v.views)));
+    if (v.kat != null) {
+      const o = el('div', { class: 'olcek', style: 'margin-top:4px;margin-left:auto;width:56px' });
+      o.append(el('i', { style: 'width:' + Math.min(100, v.kat / 3 * 100) + '%' }));
+      iz.append(o);
+    }
+    tr.append(td(iz, 'sag'));
+
+    /* KAT: 4 günden genç videoda oran OLGUNLAŞMAMIŞTIR — izlenmenin %91'i
+       4. güne kadar geliyor, öncesinde kırmızı damga yanlış karar verdirir. */
+    let katMetin, katSinif, katBaslik;
+    if (v.kat == null) {
+      katMetin = '—'; katSinif = 'b'; katBaslik = 'kanal medyanı 0 — oran tanımsız';
+    } else if (!v.olgun) {
+      katMetin = '⏱ ' + oranMetni(v.kat); katSinif = 'b ham';
+      katBaslik = 'video ' + V.sabitler.olgunluk_gun + ' günden genç — oran henüz olgunlaşmadı';
+    } else {
+      katMetin = oranMetni(v.kat);
+      katSinif = v.kat >= 1.3 ? 'a' : v.kat < 0.7 ? 'c' : 'b';
+      katBaslik = 'kanal medyanına oran';
+    }
+    tr.append(td(el('span', { class: 'kat ' + katSinif, title: katBaslik }, katMetin), 'sag'));
+
+    tr.append(td(el('span', {
+      class: 'kat ' + (v.erken == null ? 'b ham'
+                     : v.erken >= 1.3 ? 'a' : v.erken < 0.7 ? 'c' : 'b'),
+      title: v.erken == null ? 'ölçüm penceresinde yeterli kıyas yok'
+             : ond(v.pencere) + ' saatlik pencere · en yakın ' + kanalBul(secili).erken_k
+               + ' ölçümün medyanına oran' },
+      v.erken == null ? '—' : oranMetni(v.erken)), 'sag'));
+
+    tr.append(td(sparkline(v)));
+    tr.append(td(el('span', { class: 'num',
+      style: v.sg >= 8 ? 'color:var(--good);font-weight:600' : '' },
+      v.sg ? '+' + v.sg : '0'), 'sag'));
+    tr.append(td(el('span', { class: 'num' }, v.like1k.toFixed(1).replace('.', ',')), 'sag'));
+    tr.append(td(el('span', { class: 'num' },
+      v.avd ? v.avd.toFixed(1).replace('.', ',') + ' sn' : '—'), 'sag'));
+    tr.append(td(el('span', { class: 'num', style: 'color:var(--muted)' },
+      v.avp ? '%' + Math.round(v.avp) : '—'), 'sag'));
+    tr.append(td(el('span', { style: 'font-size:12.5px;color:var(--muted);white-space:nowrap' },
+      tarih(v.up) + ' ' + saat(v.up))));
+
+    tr.onclick = () => { seciliVideo = (seciliVideo && seciliVideo.vid === v.vid) ? null : v; ciz(); };
+    return tr;
+  }));
+  document.getElementById('defter-sayi').textContent = med > 0
+    ? liste.length + ' video · medyan ' + kisa(med) + ' izlenme'
+    : liste.length + ' video · medyan 0 — kat hesaplanamıyor';
+}
+
+/* ── bütün kanallar ──────────────────────────────────────────────────── */
+function kanalTablosu() {
+  document.getElementById('kanal-tablosu').replaceChildren(...KANALLAR.map(k => {
+    const tr = el('tr', { 'aria-selected': k.slug === secili });
+    const td = (c, cls) => { const t = el('td', cls ? { class: cls } : {}); t.append(c); return t; };
+    const ad = el('div');
+    ad.append(el('div', { style: 'font-weight:500' }, k.ad),
+      el('div', { style: 'font-size:12px;color:var(--subtle)' },
+        (k.el ? '@' + k.el + ' · ' : '') + k.slug));
+    tr.append(td(ad));
+    tr.append(td(el('span', { class: 'num' }, f(k.subs)), 'sag'));
+    tr.append(td(el('span', { class: 'num' }, kisa(k.kanal_views)), 'sag'));
+    tr.append(td(el('span', { class: 'num' }, String(k.n)), 'sag'));
+    tr.append(td(el('span', { class: 'num' }, kisa(k.medyan)), 'sag'));
+    tr.append(td(el('span', { class: 'num', style: 'color:var(--muted)' }, kisa(k.p90)), 'sag'));
+    tr.append(td(el('span', { class: 'num' },
+      k.abone_1k != null ? ond(k.abone_1k) : '—'), 'sag'));
+    tr.append(td(el('span', {
+      class: 'kat ' + (k.n >= V.sabitler.olcum_tabani ? 'b' : 'c'),
+      title: k.n >= V.sabitler.olcum_tabani
+        ? 'örneklem karşılaştırma için yeterli'
+        : 'örneklem yetersiz — bu kanalda dilim karşılaştırması hüküm sayılmaz' },
+      '±%' + ond(k.mdd)), 'sag'));
+    tr.append(td(el('span', { style: 'font-size:12.5px;color:var(--muted)' },
+      k.snapshot || '—')));
+    tr.onclick = () => { secili = k.slug; seciliVideo = null; ciz();
+      document.querySelector('.kokpit .serit').scrollIntoView({ block: 'start' }); };
+    return tr;
+  }));
+}
+
+/* ── süzgeçler, tablo görünümü, sıralama ─────────────────────────────── */
+function suzgecleriKur() {
+  const kap = document.getElementById('suzgecler');
+  [['hepsi','Hepsi'],['ustunde','▲ Medyan üstü'],['altinda','▼ Medyan altı'],['abone','+5 abone']]
+    .forEach(([k, ad]) => {
+      const b = el('button', { class: 'cip', type: 'button', 'aria-pressed': suzgec === k }, ad);
+      b.onclick = () => { suzgec = k; defter();
+        [...kap.children].forEach(c => c.setAttribute('aria-pressed', c === b)); };
+      kap.append(b);
+    });
+}
+function tabloYaz(id, basliklar, satirlar) {
+  const t = el('table'), thead = el('tr');
+  basliklar.forEach(b => thead.append(el('th', {}, b)));
+  const tb = el('tbody');
+  satirlar.forEach(s => { const tr = el('tr');
+    s.forEach(c => tr.append(el('td', {}, String(c)))); tb.append(tr); });
+  t.append(el('thead', {}, thead), tb);
+  document.getElementById(id).replaceChildren(t);
+}
+document.querySelectorAll('.kokpit .anahtar').forEach(b => b.onclick = () => {
+  const acik = document.getElementById(b.dataset.tablo).classList.toggle('acik');
+  b.setAttribute('aria-expanded', acik);
+  b.textContent = acik ? 'Grafik' : 'Tablo';
+});
+document.querySelectorAll('.kokpit th.sirali').forEach(th => th.onclick = () => {
+  siraY = (siraK === th.dataset.k) ? -siraY : -1;
+  siraK = th.dataset.k;
+  document.querySelectorAll('.kokpit th.sirali').forEach(x => {
+    x.removeAttribute('aria-sort'); x.querySelector('.ok').textContent = '▼';
+  });
+  th.setAttribute('aria-sort', siraY === -1 ? 'descending' : 'ascending');
+  th.querySelector('.ok').textContent = siraY === -1 ? '▼' : '▲';
+  defter();
+});
+document.getElementById('ara').oninput = e => {
+  arama = e.target.value.toLocaleLowerCase('tr'); defter();
+};
+
+/* ── çizdir ──────────────────────────────────────────────────────────── */
+function ciz() {
+  document.querySelectorAll('#cipler .cip').forEach((c, i) =>
+    c.setAttribute('aria-pressed', KANALLAR[i].slug === secili));
+  const sel = document.getElementById('digerKanal');
+  sel.value = KANALLAR.slice(0, 4).some(k => k.slug === secili) ? '' : secili;
+  kunyeler(); cizYorunge(); cizHacim(); cizDagilim();
+  cizBuyume(); cizTrafik(); cizGurultu(); karne(); defter(); kanalTablosu();
+}
+cipleriKur(); suzgecleriKur(); ciz();
+document.querySelector('.kokpit th[data-k="views"]').setAttribute('aria-sort', 'descending');
+})();
+</script>
 {% endif %}
 {% endblock %}

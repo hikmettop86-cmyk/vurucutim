@@ -25,7 +25,7 @@
       <div>
         <h2 class="font-serif text-lg font-semibold mb-3 flex items-center gap-2">
           <span>📅</span>
-          {{ f.time.strftime('%d %B %A') }}
+          {{ f.time | tr_tarih('gun_ay_gunadi') }}
           {% if fire_date == generated_at.strftime('%Y-%m-%d') %}
             <span class="text-xs bg-claude-accent text-white px-2 py-0.5 rounded-full">Bugün</span>
           {% endif %}

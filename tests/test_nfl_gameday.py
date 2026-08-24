@@ -126,14 +126,22 @@ def test_nfl_gameday_renders():
 
 
 def test_body_has_graceful_clamp_safety_net():
-    """Uzun NFL body metni taşmasın diye stadium-pattern güvenlik ağı şart:
-    .body-text line-clamp:9 + mask fade + overflow:hidden (taşma kesilir).
-    Bu eksikse uzun içerik fotoğraf bandına / progress bara taşar (text-fit bug,
-    2026-06-19 düzeltmesi). Auto-fit min'e inse bile graceful kesim kalmalı."""
+    """Uzun NFL body metni fotoğraf bandına / progress bara TAŞMAMALI.
+
+    Güvenlik ağı: `.body-text` line-clamp:9 + overflow:hidden (text-fit bug,
+    2026-06-19). Auto-fit min'e inse bile kesim kalmalı.
+
+    ALT SOLMA MASKESİ ARTIK ARANMIYOR — 2026-08-23'te sekiz şablondan birden
+    kaldırıldı. Maske KOŞULSUZDU: taşma olmasa bile elemanın alt %8-14'ünü
+    siliyordu ve yayınlanan karede SIĞAN metnin son satırı yarıdan kesik
+    çıkıyordu (ölçüldü, fenerbahce #1830: scrollHeight = clientHeight = 436).
+    Taşan metni zaten line-clamp kesiyor ve kendi üç noktasını koyuyor.
+    Bkz. tests/test_govde_kesilmesi.py.
+    """
     html = Path("templates/nfl-gameday.html.j2").read_text(encoding="utf-8")
     assert "-webkit-line-clamp: 9" in html, "body-text line-clamp güvenlik ağı kayıp"
-    assert "mask-image" in html, "body-text mask fade kayıp"
     assert "overflow: hidden" in html, "taşma kesimi (overflow:hidden) kayıp"
+    assert "-webkit-box-orient: vertical" in html,         "line-clamp -webkit-box olmadan çalışmaz — güvenlik ağı fiilen yok"
 
 
 def test_nfl_gameday_has_special_prompt():

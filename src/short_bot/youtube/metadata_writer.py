@@ -10,10 +10,15 @@ instead of source attribution.
 """
 from __future__ import annotations
 
+import logging
+
 from pydantic import BaseModel, Field
 
 from short_bot.claude_cli import run_json
 from short_bot.locale import LANGUAGE_NAMES
+from short_bot.text_normalize import turkce_gorunuyor_mu
+
+log = logging.getLogger(__name__)
 
 
 class YoutubeMetadata(BaseModel):
@@ -73,6 +78,21 @@ _VERTICAL_META_RULES: dict[str, str] = {
 # zaten 25 karakter ve tam bir cümle. 60-100 karakter dayatmak modeli DOLGU
 # yapmaya iter — tam da kaçındığımız AI-slop.
 _CJK_DILLER = frozenset({"ja", "zh", "ko"})
+
+# YAPAY ZEKÂ NOTU dile özgü olmalı. Örnek Türkçe SABİT kalınca model onu OLDUĞU
+# GİBİ kopyalıyordu: ölçüldü (short #1892, latidoblanco-flash) — İspanyolca bir
+# açıklamanın ortasına "Bu içerik yapay zeka ile özgün olarak üretilmiştir."
+# düştü. Hashtag örneği ve kaynak etiketi aynı dersle zaten dile bağlanmıştı;
+# bu üçüncü sabit gözden kaçmıştı. Kuralın kendisi Türkçe kalabilir — model
+# KURALI değil ÖRNEĞİ kopyalar.
+_AI_NOTU: dict[str, str] = {
+    "tr": "Bu içerik yapay zeka ile özgün olarak üretilmiştir.",
+    "de": "Dieser Inhalt wurde mithilfe künstlicher Intelligenz erstellt.",
+    "en": "This content was originally created with artificial intelligence.",
+    "es": "Este contenido ha sido creado de forma original con inteligencia artificial.",
+    "fr": "Ce contenu a été créé de manière originale avec l'intelligence artificielle.",
+    "ja": "このコンテンツはAIによってオリジナル制作されています。",
+}
 
 
 def _baslik_butcesi(language: str) -> str:
@@ -134,7 +154,11 @@ def _search_block(script: dict, search_terms, language: str) -> str:
     parts.append(
         "\nARAMA KURALLARI (title/description/tags bunlara göre kurulur):\n"
         "1. BAŞLIK: yukarıdaki sorgulardan HABERLE ÖRTÜŞEN en üsttekinin "
-        "kelimelerini BİREBİR ve BAŞTA taşı. Örtüşmeyeni ZORLAMA.\n"
+        "kelimelerini başlıkta GEÇİR — ama DOĞAL BİR MANŞETİN İÇİNDE, "
+        "cümlenin parçası olarak. Sorguyu başlığın önüne etiket gibi "
+        "YAPIŞTIRMA: '<sorgu>: <manşet>' kalıbı YASAK. Sorgunun kendi "
+        "yazımını (küçük harf) TAŞIMA — başlık dilin normal büyük harf "
+        "kurallarına uyar. Örtüşmeyeni ZORLAMA.\n"
         "2. Konuyla ilgisiz sorguyu EKLEME — yanlış eşleşme izlenmeyi düşürür, "
         "tıklayan kişi hemen çıkar.\n"
         "3. KISALTMAYI da yaz (gs, fb, ŞL gibi): başlığa sığmıyorsa açıklamanın "
@@ -144,6 +168,35 @@ def _search_block(script: dict, search_terms, language: str) -> str:
         "5. Açıklamanın İLK SATIRI sorgunun karşılığını doğrudan versin "
         "(arayan kişi cevabı ilk satırda görsün).")
     return "\n".join(parts) + "\n"
+
+
+def ilk_harfi_buyut(title: str, language: str) -> str:
+    """Başlık küçük harfle başlıyorsa ilk harfi büyüt — DİLE GÖRE.
+
+    NEDEN KODDA: prompt kuralı YETMEDİ. Arama bloğu sorguyu "BİREBİR ve BAŞTA"
+    taşımayı emrediyordu; sorgular izleyicinin yazdığı gibi küçük harfli gelir
+    ve üç video "akaryakıt fiyatları zam: ..." / "altın fiyatları uçuşta: ..."
+    diye YAYINLANDI (Gündem TR, 2026-08-22). Prompt düzeltildi ama tek savunma
+    bırakmıyoruz — bu kusur yayına çıkınca geri alınamıyor.
+
+    TÜRKÇE TUZAĞI: 'i'nin büyüğü 'İ'dir; str.upper() 'I' üretir ve kelimeyi
+    bozar (bkz. text_normalize.turkish_upper).
+
+    MARKA İSTİSNASI: ilk kelimede büyük harf VARSA dokunulmaz — 'iPhone',
+    'eBay' gibi adlar kasıtlı küçük harfle başlar ve düzeltmek onları bozar.
+    """
+    t = (title or "").lstrip()
+    if not t or not t[0].isalpha() or not t[0].islower():
+        return title
+    ilk_kelime = t.split(maxsplit=1)[0]
+    if any(c.isupper() for c in ilk_kelime):
+        return title
+    if (language or "").split("-")[0].lower() == "tr":
+        from short_bot.text_normalize import turkish_upper
+        bas = turkish_upper(t[0])
+    else:
+        bas = t[0].upper()
+    return bas + t[1:]
 
 
 def build_metadata_prompt(*, channel, script: dict,
@@ -211,18 +264,32 @@ def build_metadata_prompt(*, channel, script: dict,
                       f"bırak; mümkünse somut sayı kullan. Kanal tonunun "
                       f"yasaklarına uy.\n\n")
 
-    if rss_source and rss_link:
+    # KAYNAK KARARI LİNKE BAKAR, OUTLET ADINA DEĞİL.
+    #
+    # Eskiden koşul `rss_source and rss_link` idi ve outlet adı boş olan her
+    # haber "AI ile üretilmiş özgün içerik" ilan ediliyordu. Outlet adı Google
+    # News DIŞINDAKİ feed'lerde tanım gereği boştu (bkz. fetcher._yayinci_adi),
+    # yani RSS Havuzu'na elle eklenen HER kaynak bu dala düşüyordu: haber özeti
+    # olan video kaynak atfı olmadan, yanlış bir özgünlük beyanıyla yayına
+    # hazırlanıyordu (ölçüldü: short #1892, bernabeudigital.com). Link varsa bu
+    # bir haber özetidir — outlet adının eksikliği bunu değiştirmez.
+    if rss_link:
+        outlet_satiri = (f"- Outlet: {rss_source}\n" if rss_source else
+                         "- The feed carries no outlet name: use the link's domain "
+                         "as the source.\n")
         source_block = (
-            f"KAYNAK BİLGİSİ:\n"
-            f"- Outlet: {rss_source}\n"
-            f"- Orijinal link: {rss_link}\n"
-            f"- Bu içerik bir haber özetidir. Açıklamada kaynak mutlaka belirt.\n"
+            f"SOURCE:\n"
+            f"{outlet_satiri}"
+            f"- Original link: {rss_link}\n"
+            f"- This is a news summary. The description MUST credit the source.\n"
         )
     else:
+        ai_notu = _AI_NOTU.get(channel.language) or _AI_NOTU["en"]
         source_block = (
-            "KAYNAK BİLGİSİ:\n"
-            "- Bu kanal AI ile özgün kısa içerik üretiyor (haber özeti DEĞİL).\n"
-            "- Açıklamada 'Bu içerik yapay zeka ile özgün olarak üretilmiştir' notu olsun.\n"
+            "SOURCE:\n"
+            "- This channel produces original short-form content with AI "
+            "(NOT a news summary).\n"
+            f"- Put this note in the description, in {lang_name}: \"{ai_notu}\"\n"
         )
 
     body = script.get("body_paragraph", "")
@@ -247,69 +314,120 @@ def build_metadata_prompt(*, channel, script: dict,
     else:
         hashtag_ornek = _dil_ornek
 
-    return f"""Sen bir YouTube Shorts kanalı için SEO-uyumlu metadata üreticisisin.
+    # BAŞLIK ÖRNEĞİ KANALIN DİLİNDEN. Kalıbı Türkçe örneklerle ('galatasaray
+    # transfer') anlatmak modele Türkçe KELİME enjekte ediyordu.
+    _ornek_kw = [k.strip() for k in (channel.keywords or []) if k and k.strip()][:2]
+    if _ornek_kw and channel.language != "tr":
+        varlik_ornek = ", ".join(f"'{k.lower()}'" for k in _ornek_kw)
+    else:
+        varlik_ornek = "'galatasaray transfer', 'gs transfer son dakika'"
 
-KANAL:
-- Adı: {channel.name}
+    # İSTEMİN GÖVDESİ İNGİLİZCE — ÖLÇÜLDÜ, TALİMAT YETMEDİ.
+    #
+    # Kurallar önceden baştan sona Türkçeydi ve çıktı dili tek satırla
+    # ("- {lang_name} dilinde") söyleniyordu. Model bunu tutmuyordu: İspanyolca
+    # latidoblanco-flash kanalında 6 üretimin 6'sı Türkçe başlıkla döndü
+    # ("Real Madrid gündeminde Enzo Fernández ve Álvaro Carreras gelişmeleri").
+    # Denenip ELENEN çareler — her biri 5-6 üretimle ölçüldü:
+    #   • istemin başına + sonuna büyük harfli "DİL KİLİDİ" bloğu → 0/6
+    #   • kilidi hedef dilde yazmak ("ESCRIBE TODO EN ESPAÑOL") → 1/6
+    #   • kaynak haber başlığını "dil demiri" örneği olarak vermek → 0/6
+    #   • Türkçe çıktıyı yakalayıp yeniden istemek → 2. deneme de Türkçe
+    # Kural gövdesi İngilizceye çevrilince 5/5 hedef dilde geldi: talimat dili
+    # nötr olunca modelin varsayılanı "istemin dilini taklit et" olmaktan çıkıp
+    # açıkça istenen dile dönüyor. Kod yorumları ve kanaldan gelen veri
+    # (persona, yasak listesi, arama sözlüğü) Türkçe kalır — onlar operatörün
+    # ve kanalın malı, modele örnek olarak DEĞİL veri olarak gidiyor.
+    return f"""You write SEO metadata for a YouTube Shorts channel.
+
+OUTPUT LANGUAGE: {lang_name}. Write title, description and tags ONLY in
+{lang_name}. Some blocks below carry channel-specific data in other languages —
+that is data, not a language example.
+
+CHANNEL:
+- Name: {channel.name}
 - Handle: {channel.handle}
-- Dil: {lang_name}
-- Anahtar kelimeler: {keywords}
+- Language: {lang_name}
+- Keywords: {keywords}
 
-İÇERİK:
-- Başlık üst: {script.get("header_top", "")}
-- Başlık alt: {script.get("header_bottom", "")}
-- Gövde: {body}
-- Kategori: {script.get("category", "")}
+CONTENT:
+- Headline top: {script.get("header_top", "")}
+- Headline bottom: {script.get("header_bottom", "")}
+- Body: {body}
+- Category: {script.get("category", "")}
 - Mood: {script.get("mood", "")}
 
 {source_block}
 {search_block}
 {hook_block}{dikey_block}
-GÖREV: Aşağıdaki kurallara göre title + description + tags üret.
+TASK: produce title + description + tags following the rules below.
 
-TITLE KURALLARI:
-- {baslik_butcesi} karakter (max 100 ZORUNLU)
-- {lang_name} dilinde
-- VARLIK + NİYET kalıbı: başlığa önce ÖZNEYİ yaz (kişi, kurum, kulüp,
-  ürün, eser adı), hemen ardından NE OLDUĞUNU. Ölçüldü (28 gün, YouTube
-  Analytics arama terimleri): kanalı bulan ilk 25 sorgunun hiçbiri soru
-  değildi, hepsi varlık+niyet kalıbıydı ('galatasaray transfer', 'gs
-  transfer son dakika'). Genel kategori kelimesiyle ('son dakika haber')
-  BAŞLAMA.
-- Clickbait DEĞİL — dürüst, içeriği yansıtan
-- "Shocking", "You won't believe" gibi yapay heyecan KULLANMA
-- Sayı/tarih varsa başa al ("3 dakika", "2026 öncesi" gibi)
+TITLE RULES:
+- {baslik_butcesi} characters ({baslik_butcesi.split('-')[-1]} max, hard limit)
+- Written in {lang_name}
+- ENTITY + INTENT pattern: lead with the SUBJECT (person, organisation, club,
+  product, title of a work), then what happened to it. Measured over 28 days of
+  YouTube Analytics search terms: none of the top 25 queries that found the
+  channel were questions — all were entity+intent, e.g. {varlik_ornek} for this
+  channel. Do not open with a generic category word (the equivalent of
+  "breaking news").
+- The title must stand alone as a correct headline: do not drop the subject,
+  and do not glue two separate fragments together with a colon. Do not start
+  with a lowercase letter.
+- Not clickbait — honest, reflecting the actual content.
+- No manufactured excitement ("Shocking", "You won't believe").
+- If there is a number or date, put it near the front.
 
-DESCRIPTION KURALLARI ({lang_name} dilinde):
-1. İlk satır (mobile preview ~150 char): vurucu, içeriği özetleyen tek cümle
-2. Boş satır
-3. 2-4 cümlelik tam özet (haberin/içeriğin ne anlattığını detaylı açıklayan)
-4. Boş satır
-5. Kaynak bloğu — ETİKET {lang_name} dilinde: (varsa "{kaynak_etiketi}: {{outlet}} — {{link}}", yoksa AI özgün notu)
-6. Boş satır
-7. Telif/Fair Use disclaimer ({lang_name} dilinde, 2-3 cümle):
-   "Bu video haber içeriklerinin kısa özetidir. Görsel ve metin alıntıları
-   bilgilendirme amaçlı, fair use kapsamında kullanılmıştır. Telif hakları
-   ilgili kaynaklara aittir. İçeriğinin kaldırılmasını talep eden hak
-   sahipleri kanal sahibiyle iletişime geçebilir."
-8. Boş satır
-9. Hashtag bloğu: 5-10 tag, son satırda. #shorts MUTLAKA dahil. Konuyla
-   alakalı + handle. Örn: "{hashtag_ornek} #{channel.handle.replace('@', '')}"
+DESCRIPTION RULES (in {lang_name}):
+1. First line (~150 chars, the mobile preview): one punchy sentence that
+   summarises the content
+2. blank line
+3. A full summary in 2-4 sentences, explaining what the story actually says
+4. blank line
+5. Source block — the LABEL in {lang_name}: "{kaynak_etiketi}: {{outlet}} — {{link}}"
+   when a source exists, otherwise the AI-original note given above
+6. blank line
+7. Copyright / fair-use disclaimer in {lang_name}, 2-3 sentences, covering:
+   this video is a short summary of news content; image and text quotations are
+   used for information purposes under fair use; the copyright belongs to the
+   respective sources; rights holders who want the content removed can contact
+   the channel owner
+8. blank line
+9. Hashtag block: 5-10 tags on the last line, #shorts mandatory, topic-relevant
+   plus the handle. Example: "{hashtag_ornek} #{channel.handle.replace('@', '')}"
 
-TAGS KURALLARI:
-- 8-15 tag (kesinlikle ≤20)
-- {lang_name} ve İngilizce karışık olabilir
-- 1-3 kelimeli, virgülsüz
-- Genel ("haber") + spesifik (konu kelimeleri)
-- "shorts" tag'i MUTLAKA dahil
+TAGS RULES:
+- 8-15 tags (20 max)
+- may mix {lang_name} and English
+- 1-3 words each, no commas inside a tag
+- a generic one (the equivalent of "news") plus specific topic words
+- "shorts" mandatory
 {override_block}
-ÇIKTI: SADECE aşağıdaki JSON formatında, başka metin yazma:
+OUTPUT: only the JSON below, no other text:
 {{
   "title": "<{baslik_butcesi} char>",
   "description": "<full description with sections>",
   "tags": ["...", "..."]
 }}
 """
+
+
+def lang_adi(dil: str) -> str:
+    return LANGUAGE_NAMES.get(dil, dil)
+
+
+def _turkce_sizdi_mi(meta: "YoutubeMetadata", dil: str) -> bool:
+    """Türkçe DIŞI bir kanalın metadata'sına Türkçe karışmış mı.
+
+    Türkçe kanalda kapalı (kontrol edilecek bir şey yok). Başlık ve açıklama
+    BİRLİKTE bakılır: sızıntı çoğu kez ikisinden yalnız birinde oluyor —
+    ölçüldüğünde başlık tümüyle Türkçeydi ama açıklamanın gövdesi İspanyolcaydı,
+    yalnız araya "Bu içerik yapay zeka ile özgün olarak üretilmiştir." düşmüştü.
+    """
+    if (dil or "").split("-")[0].lower() == "tr":
+        return False
+    return (turkce_gorunuyor_mu(meta.title)
+            or turkce_gorunuyor_mu(meta.description))
 
 
 def generate_youtube_metadata(*, channel, script: dict,
@@ -328,9 +446,34 @@ def generate_youtube_metadata(*, channel, script: dict,
         hook_patterns=hook_patterns, base_title=base_title,
         search_terms=search_terms,
     )
-    return run_json(
-        prompt, YoutubeMetadata,
-        claude_path=claude_path, model=model,
-        backend=backend, api_key=api_key,
-        retries=2, timeout_s=120,
-    )
+    dil = getattr(channel, "language", "tr")
+    meta = None
+    for deneme in (1, 2):
+        meta = run_json(
+            prompt, YoutubeMetadata,
+            claude_path=claude_path, model=model,
+            backend=backend, api_key=api_key,
+            retries=2, timeout_s=120,
+        )
+        if not _turkce_sizdi_mi(meta, dil):
+            break
+        # DİL KİLİDİ TALİMATI TEK BAŞINA YETMİYOR. İstem baştan sona Türkçe
+        # (operatör Türkçe okuyor) ve model dili ara sıra karıştırıyor: aynı
+        # short için arka arkaya iki üretimde biri İspanyolca, öteki "Real
+        # Madrid transfer planları ve Bernabéu'da yaşanan son gelişmeler"
+        # çıktı. Talimatı tekrarlamak yerine ÇIKTIYI DENETLİYORUZ.
+        #
+        # İkinci deneme de sızdırırsa elde olan döndürülür: bu bir KAPI değil
+        # — metadata üretimini büsbütün patlatmak, kusurlu bir başlıktan daha
+        # kötü (çağıran o zaman LLM'siz `build_snippet` yedeğine düşer).
+        log.warning("youtube metadata: çıktıya Türkçe sızdı (%s kanalı %s dilinde) "
+                    "— %d. deneme", getattr(channel, "handle", "?"), dil, deneme + 1)
+        prompt += (
+            f"\n\nÖNCEKİ DENEMEN REDDEDİLDİ: çıktıda Türkçe kelimeler vardı "
+            f"(başlık: {meta.title!r}). İstemin kuralları Türkçe yazılmıştır ama "
+            f"ÇIKTI {lang_adi(dil)} olmak zorundadır. Yeniden yaz; tek bir Türkçe "
+            f"kelime bırakma.")
+    duzeltilmis = ilk_harfi_buyut(meta.title, dil)
+    if duzeltilmis != meta.title:
+        return meta.model_copy(update={"title": duzeltilmis})
+    return meta

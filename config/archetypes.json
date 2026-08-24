@@ -1026,5 +1026,60 @@
     ],
     "design_language": "",
     "defaults": {}
+  },
+  {
+    "slug": "real-madrid-blanco",
+    "label": "Real Madrid · Blanco",
+    "subtitle": "Beyaz zemin (Los Blancos) · altın taç, lacivert metin, Bernabéu lameli · tam genişlik foto bandı",
+    "defaults": {
+      "colors": {
+        "primary": "#00529F",
+        "accent": "#FEBE10",
+        "primary_light": "#1B6FC0",
+        "bg_gradient": [
+          "#FFFFFF",
+          "#F2F1F7"
+        ]
+      },
+      "body_bg": [
+        "#FFFFFF",
+        "#F2F1F7"
+      ],
+      "text_main": "#10203C",
+      "text_muted": "#00529F",
+      "font_headline": "Anton",
+      "font_body": "Inter"
+    },
+    "pexels_queries": [
+      "real madrid santiago bernabeu",
+      "football stadium white",
+      "soccer trophy gold",
+      "football crowd celebration"
+    ]
+  },
+  {
+    "slug": "manchester-united-shorts",
+    "label": "Manchester United Shorts",
+    "subtitle": "Claude tarafından tasarlandı",
+    "pexels_queries": [
+      "Old Trafford stadium exterior aerial shot daylight",
+      "football fans cheering waving scarves stadium stands",
+      "red smoke flare football stadium celebration night",
+      "soccer player walking out stadium tunnel close up"
+    ],
+    "design_language": "binance",
+    "defaults": {}
+  },
+  {
+    "slug": "der-rote-ticker",
+    "label": "Der Rote Ticker",
+    "subtitle": "Claude tarafından tasarlandı",
+    "pexels_queries": [
+      "FC Bayern Munich {header_top} football",
+      "Bayern Munich players stadium",
+      "Allianz Arena Bayern fans"
+    ],
+    "design_language": "mistral.ai",
+    "defaults": {}
   }
 ]

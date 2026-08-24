@@ -121,6 +121,7 @@
           ('/shorts', 'Shorts', p.startswith('/shorts')),
           ('/channels', 'Kanallar', p.startswith('/channels')),
           ('/gundem', 'Gündem', p.startswith('/gundem')),
+          ('/feeds', 'RSS', p.startswith('/feeds')),
           ('/youtube', 'YouTube', p.startswith('/youtube')),
         ] %}
         {% for yol, ad, etkin in nav_ana %}
@@ -145,7 +146,6 @@
                class="absolute top-full left-0 mt-2 z-50 w-56 p-1.5 rounded-xl bg-white border border-claude-border shadow-card">
             {% set nav_diger = [
               ('/activity', 'Akış', 'canlı üretim'),
-              ('/feeds', 'RSS Havuzu', 'kaynaklar'),
               (None, None, None),
               ('/curated', 'Cevher', 'Reddit kürate'),
               ('/scheduler/timeline', 'Cron', 'zamanlama'),
@@ -239,7 +239,10 @@
     {% endwith %}
   </div>
 
-  <main class="container mx-auto px-6 py-10 max-w-6xl flex-1 w-full">
+  {# Genişlik SAYFAYA bırakıldı: çoğu sayfa okunur bir ölçü ister (max-w-6xl),
+     ama yoğun konsol sayfaları (ayarlar, kokpit) o ölçüde sıkışıyor. Blok
+     olmadan tek çare negatif kenar boşluğuyla dışarı taşmaktı. #}
+  <main class="container mx-auto px-6 py-10 {% block main_class %}max-w-6xl{% endblock %} flex-1 w-full">
     {% block content %}{% endblock %}
   </main>
 
